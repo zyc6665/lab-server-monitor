@@ -2,55 +2,231 @@
 {% block title %}设置 - 服务器监控{% endblock %}
 
 {% block content %}
-<h1 class="page-title">设置</h1>
-
-<section class="card">
-  <div class="section-head">
-    <h2>运行参数</h2>
-    <span class="muted">只读</span>
+<div id="settings-root" data-csrf="{{ csrf_token() }}">
+  <div class="page-head">
+    <h1 class="page-title">设置</h1>
+    {% if not settings.writable %}
+    <span class="readonly-banner">只读：当前平台不支持在线保存敏感配置（请在 Windows 本机运行）。</span>
+    {% endif %}
   </div>
-  <dl class="kv-grid">
-    <div class="kv">
-      <dt>时区</dt>
-      <dd class="mono">{{ config.app.timezone }}</dd>
-    </div>
-    <div class="kv">
-      <dt>轮询间隔（秒）</dt>
-      <dd class="mono">{{ config.app.poll_interval_seconds }}</dd>
-    </div>
-    <div class="kv">
-      <dt>磁盘轮询间隔（秒）</dt>
-      <dd class="mono">{{ config.app.disk_poll_interval_seconds }}</dd>
-    </div>
-  </dl>
-</section>
 
-<section class="card">
-  <div class="section-head">
-    <h2>报告归属</h2>
-    <span class="muted">只读</span>
-  </div>
-  <dl class="kv-grid">
-    <div class="kv">
-      <dt>日报</dt>
-      <dd>
-        {% if config.report.daily_enabled %}
-        <span class="badge badge-online">PC</span>
-        {% else %}
-        <span class="badge badge-offline">关闭</span>
-        {% endif %}
-      </dd>
+  <!-- 监控与存储 -->
+  <section class="card settings-card" data-section="monitoring">
+    <div class="section-head">
+      <h2>监控与存储</h2>
+      {% if not settings.writable %}<span class="readonly-badge">只读</span>{% endif %}
     </div>
-    <div class="kv">
-      <dt>周报</dt>
-      <dd>
-        {% if config.report.weekly.enabled %}
-        <span class="badge badge-online">PC</span>
-        {% else %}
-        <span class="badge badge-offline">关闭</span>
-        {% endif %}
-      </dd>
+    <div class="settings-grid">
+      <label class="field"><span>时区</span>
+        <input data-field="timezone" value="{{ settings.monitoring.timezone }}" placeholder="Asia/Shanghai">
+      </label>
+      <label class="field"><span>状态轮询间隔（秒）</span>
+        <input type="number" min="10" data-field="poll_interval_seconds" value="{{ settings.monitoring.poll_interval_seconds }}">
+      </label>
+      <label class="field"><span>磁盘轮询间隔（秒）</span>
+        <input type="number" min="300" data-field="disk_poll_interval_seconds" value="{{ settings.monitoring.disk_poll_interval_seconds }}">
+      </label>
+      <label class="field"><span>并发数</span>
+        <input type="number" min="1" max="32" data-field="concurrency" value="{{ settings.monitoring.concurrency }}">
+      </label>
+      <label class="field"><span>历史保留天数</span>
+        <input type="number" min="1" data-field="retention_days" value="{{ settings.monitoring.retention_days }}">
+      </label>
     </div>
-  </dl>
-</section>
+    <button class="primary-button" data-save="monitoring" {% if not settings.writable %}disabled{% endif %}>保存监控与存储</button>
+  </section>
+
+  <!-- 主机与 SSH -->
+  <section class="card settings-card" data-section="hosts">
+    <div class="section-head">
+      <h2>主机与 SSH</h2>
+      {% if not settings.writable %}<span class="readonly-badge">只读</span>{% endif %}
+    </div>
+    <div class="settings-grid ssh-timeouts" data-section="ssh">
+      <label class="field"><span>SSH 连接超时（秒）</span>
+        <input type="number" min="1" data-field="connect_timeout" value="{{ settings.ssh.connect_timeout }}">
+      </label>
+      <label class="field"><span>SSH 命令超时（秒）</span>
+        <input type="number" min="1" data-field="command_timeout" value="{{ settings.ssh.command_timeout }}">
+      </label>
+      <button class="secondary-button" data-save="ssh" {% if not settings.writable %}disabled{% endif %}>保存 SSH 超时</button>
+    </div>
+
+    <div class="table-wrap">
+      <table class="data-table" id="host-settings-table">
+        <thead>
+          <tr><th>名称</th><th>地址</th><th>端口</th><th>用户</th><th>认证</th><th>容量目录</th><th>操作</th></tr>
+        </thead>
+        <tbody>
+          {% for host in settings.hosts %}
+          <tr>
+            <td class="mono">{{ host.name }}</td>
+            <td class="mono">{{ host.host }}</td>
+            <td>{{ host.port }}</td>
+            <td>{{ host.username }}</td>
+            <td>{{ '密码' if host.auth_type == 'password' else 'SSH 私钥' }}</td>
+            <td class="mono">{{ host.disk_mounts|join(', ') }}</td>
+            <td class="row-actions">
+              <button class="ack-btn" data-host-edit="{{ host.name }}" {% if not settings.writable %}disabled{% endif %}>编辑</button>
+              <button class="danger-button" data-host-delete="{{ host.name }}" {% if not settings.writable %}disabled{% endif %}>删除</button>
+            </td>
+          </tr>
+          {% endfor %}
+          {% if not settings.hosts %}
+          <tr><td colspan="7" class="empty-cell">还没有主机，请点击“新增主机”。</td></tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+
+    <button class="secondary-button" id="add-host-button" {% if not settings.writable %}disabled{% endif %}>新增主机</button>
+
+    <form id="host-form" class="settings-form" hidden>
+      <h3 id="host-form-title">新增主机</h3>
+      <div class="settings-grid">
+        <label class="field"><span>名称（唯一）</span><input data-host-field="name" required></label>
+        <label class="field"><span>地址 / IP</span><input data-host-field="host" required></label>
+        <label class="field"><span>端口</span><input type="number" data-host-field="port" value="22" min="1" max="65535"></label>
+        <label class="field"><span>登录用户</span><input data-host-field="username" required></label>
+        <label class="field"><span>认证方式</span>
+          <select data-host-field="auth_type">
+            <option value="key">SSH 私钥</option>
+            <option value="password">密码</option>
+          </select>
+        </label>
+        <label class="field"><span>容量监控目录（逗号分隔）</span><input data-host-field="disk_mounts" value="/, /data"></label>
+        <label class="field key-only"><span>私钥路径（本机已有文件，可选）</span><input data-host-field="key_path" placeholder="C:/Users/你/.ssh/id_ed25519"></label>
+        <label class="field key-only"><span>私钥内容（粘贴，可选）</span><textarea data-host-field="private_key" rows="4" placeholder="-----BEGIN OPENSSH PRIVATE KEY-----"></textarea></label>
+        <label class="field key-only"><span>私钥口令（可选，留空表示不改）</span><input type="password" data-host-field="passphrase" autocomplete="new-password"></label>
+        <label class="field password-only"><span>SSH 密码（留空表示不改）</span><input type="password" data-host-field="password" autocomplete="new-password"></label>
+        <label class="field"><span>标签（逗号分隔，可选）</span><input data-host-field="tags"></label>
+      </div>
+      <p class="hint key-only">已配置的密钥不会显示原文；留空表示沿用已保存的凭据。</p>
+      <p class="hint password-only">已配置的密码不会显示原文；留空表示沿用已保存的凭据。</p>
+      <div class="form-actions">
+        <button type="button" class="primary-button" id="save-host-button" {% if not settings.writable %}disabled{% endif %}>保存主机</button>
+        <button type="button" class="secondary-button" id="test-ssh-button" {% if not settings.writable %}disabled{% endif %}>测试 SSH 连接</button>
+        <button type="button" class="secondary-button" id="cancel-host-button">取消</button>
+      </div>
+      <p class="form-status" id="host-form-status"></p>
+    </form>
+  </section>
+
+  <!-- 通知 -->
+  <section class="card settings-card" data-section="alerts">
+    <div class="section-head">
+      <h2>通知</h2>
+      {% if not settings.writable %}<span class="readonly-badge">只读</span>{% endif %}
+    </div>
+    <div class="settings-grid">
+      <label class="check-row"><input type="checkbox" data-field="enabled" {% if settings.alerts.enabled %}checked{% endif %}> 启用告警</label>
+      <label class="check-row"><input type="checkbox" data-field="desktop_notification" {% if settings.alerts.desktop_notification %}checked{% endif %}> 桌面弹窗</label>
+      <label class="check-row"><input type="checkbox" data-field="email" {% if settings.alerts.email %}checked{% endif %}> 邮件</label>
+      <label class="check-row"><input type="checkbox" data-field="webhook.enabled" {% if settings.alerts.webhook.enabled %}checked{% endif %}> Webhook</label>
+      <label class="field"><span>Webhook 类型</span>
+        <select data-field="webhook.type">
+          <option value="wecom" {% if settings.alerts.webhook.type == 'wecom' %}selected{% endif %}>企业微信</option>
+          <option value="dingtalk" {% if settings.alerts.webhook.type == 'dingtalk' %}selected{% endif %}>钉钉</option>
+          <option value="generic" {% if settings.alerts.webhook.type == 'generic' %}selected{% endif %}>通用 Webhook</option>
+        </select>
+      </label>
+      <label class="field"><span>Webhook 地址（{% if settings.alerts.webhook.url_configured %}已配置，留空不改{% else %}未配置{% endif %}）</span>
+        <input data-field="webhook.url" type="password" autocomplete="new-password" placeholder="{% if settings.alerts.webhook.url_configured %}•••••• 已配置{% endif %}">
+      </label>
+      <label class="field"><span>CPU 阈值 %</span><input type="number" step="0.1" data-field="thresholds.cpu_percent" value="{{ settings.alerts.thresholds.cpu_percent }}"></label>
+      <label class="field"><span>内存阈值 %</span><input type="number" step="0.1" data-field="thresholds.memory_percent" value="{{ settings.alerts.thresholds.memory_percent }}"></label>
+      <label class="field"><span>磁盘阈值 %</span><input type="number" step="0.1" data-field="thresholds.disk_percent" value="{{ settings.alerts.thresholds.disk_percent }}"></label>
+      <label class="field"><span>GPU 显存阈值 %</span><input type="number" step="0.1" data-field="thresholds.gpu_memory_percent" value="{{ settings.alerts.thresholds.gpu_memory_percent }}"></label>
+      <label class="field"><span>磁盘温度阈值 ℃</span><input type="number" step="0.1" data-field="thresholds.disk_temperature_c" value="{{ settings.alerts.thresholds.disk_temperature_c }}"></label>
+      <label class="field"><span>冷却时间（分钟）</span><input type="number" min="0" data-field="cooldown_minutes" value="{{ settings.alerts.cooldown_minutes }}"></label>
+      <label class="field"><span>离线判定次数</span><input type="number" min="1" data-field="offline_failures" value="{{ settings.alerts.offline_failures }}"></label>
+      <label class="check-row"><input type="checkbox" data-field="repeat_while_active" {% if settings.alerts.repeat_while_active %}checked{% endif %}> 持续告警按冷却时间重复通知</label>
+    </div>
+    <div class="form-actions">
+      <button class="primary-button" data-save="alerts" {% if not settings.writable %}disabled{% endif %}>保存通知</button>
+      <button class="secondary-button" id="test-webhook-button" {% if not settings.writable %}disabled{% endif %}>测试 Webhook</button>
+    </div>
+    <p class="form-status" id="notify-status"></p>
+  </section>
+
+  <!-- 报告 -->
+  <section class="card settings-card" data-section="report">
+    <div class="section-head">
+      <h2>报告</h2>
+      {% if not settings.writable %}<span class="readonly-badge">只读</span>{% endif %}
+    </div>
+    <dl class="kv-grid report-ownership">
+      <div class="kv"><dt>日报</dt><dd>{% if settings.report.daily_enabled %}<span class="badge badge-online">PC</span>{% else %}<span class="badge badge-offline">关闭</span>{% endif %}</dd></div>
+      <div class="kv"><dt>周报</dt><dd>{% if settings.report.weekly.enabled %}<span class="badge badge-online">PC</span>{% else %}<span class="badge badge-offline">关闭</span>{% endif %}</dd></div>
+    </dl>
+    <div class="settings-grid">
+      <label class="check-row"><input type="checkbox" data-field="daily_enabled" {% if settings.report.daily_enabled %}checked{% endif %}> 启用日报</label>
+      <label class="field"><span>日报发送时间</span><input type="time" data-field="daily_time" value="{{ settings.report.daily_time }}"></label>
+      <label class="check-row"><input type="checkbox" data-field="weekly.enabled" {% if settings.report.weekly.enabled %}checked{% endif %}> 启用周报</label>
+      <label class="field"><span>周报星期（1=周一…7=周日）</span><input type="number" min="1" max="7" data-field="weekly.weekday" value="{{ settings.report.weekly.weekday }}"></label>
+      <label class="field"><span>周报发送时间</span><input type="time" data-field="weekly.time" value="{{ settings.report.weekly.time }}"></label>
+      <label class="field"><span>周报主题前缀</span><input data-field="weekly.subject_prefix" value="{{ settings.report.weekly.subject_prefix }}"></label>
+      <label class="field"><span>繁忙阈值 %</span><input type="number" step="0.1" data-field="weekly.busy_threshold" value="{{ settings.report.weekly.busy_threshold }}"></label>
+      <label class="field"><span>空闲阈值 %</span><input type="number" step="0.1" data-field="weekly.idle_threshold" value="{{ settings.report.weekly.idle_threshold }}"></label>
+    </div>
+    <p class="hint">邮件服务器与收件人请在主机所在电脑的配置文件里设置；开启邮件告警/日报前需先配置 SMTP。</p>
+    <button class="primary-button" data-save="report" {% if not settings.writable %}disabled{% endif %}>保存报告</button>
+  </section>
+
+  <!-- 磁盘健康 -->
+  <section class="card settings-card" data-section="disk_health">
+    <div class="section-head">
+      <h2>磁盘健康</h2>
+      {% if not settings.writable %}<span class="readonly-badge">只读</span>{% endif %}
+    </div>
+    <div class="settings-grid">
+      <label class="check-row"><input type="checkbox" data-field="enabled" {% if settings.disk_health.enabled %}checked{% endif %}> 启用 storcli 磁盘健康检查</label>
+      <label class="check-row"><input type="checkbox" data-field="use_sudo" {% if settings.disk_health.use_sudo %}checked{% endif %}> 使用 sudo -n 读取阵列信息</label>
+      <label class="check-row"><input type="checkbox" data-field="rules.alert_on_media_errors" {% if settings.disk_health.rules.alert_on_media_errors %}checked{% endif %}> 介质错误</label>
+      <label class="check-row"><input type="checkbox" data-field="rules.alert_on_other_errors" {% if settings.disk_health.rules.alert_on_other_errors %}checked{% endif %}> 其他错误</label>
+      <label class="check-row"><input type="checkbox" data-field="rules.alert_on_predictive_failure" {% if settings.disk_health.rules.alert_on_predictive_failure %}checked{% endif %}> 预测性故障</label>
+      <label class="check-row"><input type="checkbox" data-field="rules.alert_on_smart_flag" {% if settings.disk_health.rules.alert_on_smart_flag %}checked{% endif %}> SMART 标记</label>
+      <label class="check-row"><input type="checkbox" data-field="rules.alert_on_state_not_optimal" {% if settings.disk_health.rules.alert_on_state_not_optimal %}checked{% endif %}> 状态非正常</label>
+      <label class="check-row"><input type="checkbox" data-field="rules.alert_on_error_increase" {% if settings.disk_health.rules.alert_on_error_increase %}checked{% endif %}> 错误计数增加</label>
+      <label class="field span-2"><span>storcli 候选路径（每行一个）</span>
+        <textarea rows="4" data-field="storcli_candidates">{{ settings.disk_health.storcli_candidates|join('\n') }}</textarea>
+      </label>
+    </div>
+    <button class="primary-button" data-save="disk_health" {% if not settings.writable %}disabled{% endif %}>保存磁盘健康</button>
+  </section>
+
+  <!-- 看板与安全 -->
+  <section class="card settings-card" data-section="dashboard">
+    <div class="section-head">
+      <h2>看板与安全</h2>
+      {% if not settings.writable %}<span class="readonly-badge">只读</span>{% endif %}
+    </div>
+    <div class="settings-grid">
+      <label class="field"><span>监听地址</span><input data-field="host" value="{{ settings.dashboard.host }}"></label>
+      <label class="field"><span>端口</span><input type="number" min="1" max="65535" data-field="port" value="{{ settings.dashboard.port }}"></label>
+      <label class="field"><span>管理员用户名</span><input data-field="username" value="{{ settings.dashboard.username }}"></label>
+      <label class="field"><span>登录有效期（小时）</span><input type="number" min="1" data-field="session_lifetime_hours" value="{{ settings.dashboard.session_lifetime_hours }}"></label>
+    </div>
+    <p class="hint">监听地址/端口修改后需要重启程序才生效。</p>
+    <button class="primary-button" data-save="dashboard" {% if not settings.writable %}disabled{% endif %}>保存看板设置</button>
+
+    <hr class="divider">
+    <h3>修改管理员密码</h3>
+    <form id="password-form" class="settings-form">
+      <div class="settings-grid">
+        <label class="field"><span>当前密码</span><input type="password" data-password-field="current_password" autocomplete="current-password"></label>
+        <label class="field"><span>新密码（至少 8 位）</span><input type="password" data-password-field="new_password" autocomplete="new-password"></label>
+        <label class="field"><span>新用户名（可选）</span><input data-password-field="new_username" placeholder="留空表示不修改"></label>
+      </div>
+      <button type="submit" class="primary-button" {% if not settings.writable %}disabled{% endif %}>修改密码</button>
+      <p class="form-status" id="password-status"></p>
+    </form>
+  </section>
+</div>
+
+<script>window.__SETTINGS__ = {{ settings|tojson }};</script>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='settings.js') }}"></script>
 {% endblock %}

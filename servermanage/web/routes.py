@@ -87,6 +87,109 @@ _ALLOWED_SETTINGS_SECTIONS = frozenset(
 )
 
 
+def _settings_snapshot(config: AppConfig) -> dict[str, Any]:
+    """Best-effort settings payload for the legacy no-service dashboard.
+
+    The packaged Windows build always injects a :class:`SettingsService`; this
+    fallback keeps the read-only page (and the pre-1.1 test fixtures) rendering
+    the same values without creating a writable settings store.
+    """
+    hosts = []
+    for host in config.servers:
+        auth = host.auth
+        hosts.append(
+            {
+                "name": host.name,
+                "host": host.host,
+                "port": host.port,
+                "username": host.username,
+                "tags": list(host.tags),
+                "disk_mounts": list(host.disk_mounts),
+                "auth_type": auth.type,
+                "key_path": auth.key_path,
+                "disk_health": None,
+                "password_configured": bool(auth.password or auth.password_env),
+                "key_configured": bool(auth.key_path or auth.key_data),
+                "passphrase_configured": bool(
+                    auth.passphrase or auth.passphrase_env
+                ),
+            }
+        )
+    return {
+        "writable": False,
+        "setup_required": False,
+        "monitoring": {
+            "timezone": config.app.timezone,
+            "poll_interval_seconds": config.app.poll_interval_seconds,
+            "disk_poll_interval_seconds": config.app.disk_poll_interval_seconds,
+            "concurrency": config.app.concurrency,
+            "retention_days": config.app.retention_days,
+        },
+        "dashboard": {
+            "host": config.dashboard.host,
+            "port": config.dashboard.port,
+            "username": config.dashboard.auth.username,
+            "session_lifetime_hours": config.dashboard.session_lifetime_hours,
+        },
+        "ssh": {
+            "connect_timeout": config.ssh.connect_timeout,
+            "command_timeout": config.ssh.command_timeout,
+        },
+        "alerts": {
+            "enabled": config.alerts.enabled,
+            "desktop_notification": config.alerts.desktop_notification,
+            "email": bool(config.smtp is not None and config.alerts.email),
+            "webhook": {
+                "enabled": config.alerts.webhook.enabled,
+                "type": config.alerts.webhook.type,
+                "url_configured": bool(config.alerts.webhook.url),
+            },
+            "thresholds": {
+                "cpu_percent": config.alerts.thresholds.cpu_percent,
+                "memory_percent": config.alerts.thresholds.memory_percent,
+                "disk_percent": config.alerts.thresholds.disk_percent,
+                "gpu_memory_percent": config.alerts.thresholds.gpu_memory_percent,
+                "disk_temperature_c": config.alerts.thresholds.disk_temperature_c,
+            },
+            "cooldown_minutes": config.alerts.cooldown_minutes,
+            "repeat_while_active": config.alerts.repeat_while_active,
+            "offline_failures": config.alerts.offline_failures,
+        },
+        "report": {
+            "daily_enabled": config.report.daily_enabled,
+            "daily_time": config.report.daily_time,
+            "weekly": {
+                "enabled": config.report.weekly.enabled,
+                "subject_prefix": config.report.weekly.subject_prefix,
+                "busy_threshold": config.report.weekly.busy_threshold,
+                "idle_threshold": config.report.weekly.idle_threshold,
+                "time": config.report.weekly.time,
+                "weekday": config.report.weekly.weekday,
+            },
+        },
+        "disk_health": {
+            "enabled": config.disk_health.enabled,
+            "use_sudo": config.disk_health.use_sudo,
+            "storcli_candidates": list(config.disk_health.storcli_candidates),
+            "rules": {
+                "alert_on_media_errors": config.disk_health.rules.alert_on_media_errors,
+                "alert_on_other_errors": config.disk_health.rules.alert_on_other_errors,
+                "alert_on_predictive_failure": (
+                    config.disk_health.rules.alert_on_predictive_failure
+                ),
+                "alert_on_smart_flag": config.disk_health.rules.alert_on_smart_flag,
+                "alert_on_state_not_optimal": (
+                    config.disk_health.rules.alert_on_state_not_optimal
+                ),
+                "alert_on_error_increase": (
+                    config.disk_health.rules.alert_on_error_increase
+                ),
+            },
+        },
+        "hosts": hosts,
+    }
+
+
 def _settings_or_404(app: Flask):
     """Return ``(service, None)`` or ``(None, (response, 404))``.
 
@@ -928,6 +1031,12 @@ def register_routes(app: Flask) -> None:
 
     @app.get("/settings")
     def settings_page():
+        config = _config(app)
+        service = _settings_service(app)
+        settings = service.public_settings() if service is not None else _settings_snapshot(config)
         return render_template(
-            "settings.html", active_page="settings", config=_config(app)
+            "settings.html",
+            active_page="settings",
+            config=config,
+            settings=settings,
         )
