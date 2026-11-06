@@ -649,12 +649,17 @@ def _evaluate_controller_health(
 # SSH collection
 # ---------------------------------------------------------------------------
 
-_PERMISSION_MARKERS = ("password is required", "not in the sudoers")
+_PERMISSION_MARKERS = ("password is required", "not in the sudoers", "permission")
 _NO_CONTROLLER_MARKER = "no controller found"
 
 
-def _looks_permission_error(text: str | None) -> bool:
-    lowered = (text or "").lower()
+def _looks_permission_error(*texts: str | None) -> bool:
+    """True when any of *texts* (stdout and/or stderr) mentions a sudo failure.
+
+    Some storcli builds print permission problems to stdout rather than stderr,
+    so callers pass both streams through here instead of inspecting stderr only.
+    """
+    lowered = " ".join((text or "") for text in texts).lower()
     return any(marker in lowered for marker in _PERMISSION_MARKERS)
 
 
@@ -678,9 +683,19 @@ def collect_disk_health(
     """Collect one host's disk health over SSH using storcli.
 
     Never raises for an operational failure and never fabricates drives: any
-    problem yields a report whose ``status`` reflects the real condition
-    (``permission_denied`` / ``no_storcli`` / ``no_controller`` / ``error`` /
-    ``degraded``) with an explanatory ``message``.
+    problem yields a report whose ``status`` reflects the real condition.
+
+    Status vocabulary (consumers in Task 10/12 must treat **every** non-``ok``
+    status as "disk health unavailable", never as healthy):
+
+    - ``ok``: collection succeeded with no warnings.
+    - ``permission_denied``: storcli needs root/免密 sudo that is not available
+      (or a non-sudo run reports "No Controller found").
+    - ``no_storcli``: none of the candidate storcli binaries could be run.
+    - ``no_controller``: storcli ran but reported no controllers.
+    - ``error``: a transport/parse failure prevented collection entirely.
+    - ``degraded``: some per-controller data was collected but at least one
+      query failed; only the successfully collected drives are reported.
     """
     collected_at = now if now is not None else datetime.now(timezone.utc)
     effective = override if override is not None else host.disk_health
@@ -720,9 +735,9 @@ def collect_disk_health(
         if result.exit_status == 0:
             storcli = candidate
             break
-        detail = _brief(result.stderr) or _brief(result.stdout) or (
-            f"exit {result.exit_status}"
-        )
+        detail = " ".join(
+            part for part in (_brief(result.stderr), _brief(result.stdout)) if part
+        ) or (f"exit {result.exit_status}")
         probe_errors.append(f"{candidate}: {detail}")
 
     if storcli is None:
@@ -737,11 +752,17 @@ def collect_disk_health(
         )
 
     # 2. Enumerate controllers.
-    controllers_result = runner.run(
-        f"{prefix}{storcli} /cALL show J", command_timeout
-    )
+    try:
+        controllers_result = runner.run(
+            f"{prefix}{storcli} /cALL show J", command_timeout
+        )
+    except Exception as exc:  # SSH transport errors must not crash a poll cycle.
+        return _report("error", f"storcli /cALL show J 执行异常：{exc}")
+
     if controllers_result.exit_status != 0:
-        if _looks_permission_error(controllers_result.stderr):
+        if _looks_permission_error(
+            controllers_result.stderr, controllers_result.stdout
+        ):
             return _report(
                 "permission_denied",
                 "sudo 权限不足，无法以 root 运行 storcli；请配置免密 sudo（NOPASSWD）后重试。",
@@ -751,20 +772,29 @@ def collect_disk_health(
             "storcli /cALL show J 执行失败（exit "
             f"{controllers_result.exit_status}）：{_brief(controllers_result.stderr or controllers_result.stdout)}",
         )
+
+    # Interpret the raw stdout *before* parsing: a genuinely controller-less
+    # host reports empty output or "No Controller found" (no JSON at all), which
+    # ``parse_controllers`` would reject as a generic parse error.  A non-sudo
+    # storcli cannot see controllers, so that text is a permission artefact.
+    raw_stdout = controllers_result.stdout or ""
+    stripped_stdout = raw_stdout.strip()
+    if not stripped_stdout or _NO_CONTROLLER_MARKER in stripped_stdout.lower():
+        if not use_sudo:
+            return _report(
+                "permission_denied",
+                "storcli 未提权运行且未报告控制器（空输出 / No Controller found）；"
+                "非 root 的 storcli 无法看到控制器，请以 root（sudo）运行。",
+            )
+        return _report("no_controller", "storcli 未发现任何控制器")
+
     try:
-        controllers = parse_controllers(controllers_result.stdout)
+        controllers = parse_controllers(raw_stdout)
     except StorcliParseError as exc:
         return _report("error", f"无法解析控制器输出：{exc}")
 
     if not controllers:
-        combined = f"{controllers_result.stdout}\n{controllers_result.stderr}".lower()
-        if not use_sudo and _NO_CONTROLLER_MARKER in combined:
-            # Non-root storcli reports "No Controller found" as a permission
-            # artefact rather than a genuinely controller-less host.
-            return _report(
-                "permission_denied",
-                "storcli 未提权运行且报告 No Controller found；请以 root（sudo）运行。",
-            )
+        # Parsed cleanly (e.g. ``{"Controllers": []}``) but no controllers.
         return _report("no_controller", "storcli 未发现任何控制器")
 
     # 3. Virtual drives and physical drives per controller.
@@ -775,20 +805,30 @@ def collect_disk_health(
     for controller in controllers:
         cid = controller.controller
 
-        vd_result = runner.run(f"{prefix}{storcli} /c{cid}/vall show J", command_timeout)
-        if vd_result.exit_status != 0:
-            warnings.append(
-                f"控制器 {cid} 虚拟盘查询失败：{_brief(vd_result.stderr or vd_result.stdout)}"
+        try:
+            vd_result = runner.run(
+                f"{prefix}{storcli} /c{cid}/vall show J", command_timeout
             )
+        except Exception as exc:  # SSH transport errors must not crash a poll cycle.
+            warnings.append(f"控制器 {cid} 虚拟盘查询异常：{exc}")
         else:
-            try:
-                virtual_drives.extend(parse_virtual_drives(vd_result.stdout, cid))
-            except StorcliParseError as exc:
-                warnings.append(f"控制器 {cid} 虚拟盘解析失败：{exc}")
+            if vd_result.exit_status != 0:
+                warnings.append(
+                    f"控制器 {cid} 虚拟盘查询失败：{_brief(vd_result.stderr or vd_result.stdout)}"
+                )
+            else:
+                try:
+                    virtual_drives.extend(parse_virtual_drives(vd_result.stdout, cid))
+                except StorcliParseError as exc:
+                    warnings.append(f"控制器 {cid} 虚拟盘解析失败：{exc}")
 
-        pd_result = runner.run(
-            f"{prefix}{storcli} /c{cid}/eall/sall show all J", command_timeout
-        )
+        try:
+            pd_result = runner.run(
+                f"{prefix}{storcli} /c{cid}/eall/sall show all J", command_timeout
+            )
+        except Exception as exc:  # Skip this controller's drives, keep the rest.
+            warnings.append(f"控制器 {cid} 物理盘查询异常：{exc}")
+            continue
         if pd_result.exit_status != 0:
             warnings.append(
                 f"控制器 {cid} 物理盘查询失败：{_brief(pd_result.stderr or pd_result.stdout)}"
@@ -815,7 +855,14 @@ def collect_disk_health(
     evaluated_controllers = [_evaluate_controller_health(c) for c in controllers]
     evaluated_virtual = [evaluate_virtual_drive_health(v) for v in virtual_drives]
 
-    status = "degraded" if warnings else "ok"
+    if warnings and not physical_drives and not virtual_drives:
+        # Every controller failed and nothing usable came back: this is an
+        # error, not a healthy-looking "ok"/"degraded" empty report.
+        status = "error"
+    elif warnings:
+        status = "degraded"
+    else:
+        status = "ok"
     message = "; ".join(warnings) if warnings else None
     return _report(
         status,

@@ -36,9 +36,13 @@ def _result(stdout: str = "", stderr: str = "", code: int = 0) -> CommandResult:
 
 
 class FakeRunner:
-    """Return canned command results matched by substring, in insertion order."""
+    """Return canned command results matched by substring, in insertion order.
 
-    def __init__(self, responses: list[tuple[str, CommandResult]]):
+    A response value may also be an ``Exception`` instance; matching it raises
+    that exception to simulate an SSH transport failure.
+    """
+
+    def __init__(self, responses: list[tuple[str, object]]):
         self._responses = responses
         self.commands: list[str] = []
         self.timeouts: list[int] = []
@@ -48,6 +52,8 @@ class FakeRunner:
         self.timeouts.append(timeout)
         for needle, result in self._responses:
             if needle in command:
+                if isinstance(result, Exception):
+                    raise result
                 return result
         return _result(stderr=f"unexpected command: {command}", code=1)
 
@@ -315,6 +321,60 @@ def test_collect_no_controller():
     assert report.physical_drives == []
 
 
+def test_collect_empty_call_output_is_no_controller_with_sudo():
+    # Empty /cALL stdout must map to no_controller (not a generic parse error).
+    runner = FakeRunner(
+        [
+            ("-v", _result("storcli ver")),
+            ("/cALL show J", _result("   \n\t")),
+        ]
+    )
+    report = collect_disk_health(
+        _host(), runner, config=DiskHealthConfig(), command_timeout=30
+    )
+    assert report.status == "no_controller"
+    assert report.controllers == []
+    assert report.physical_drives == []
+
+
+def test_collect_no_controller_found_text_with_sudo():
+    # Plain-text "No Controller found" has no JSON; must not become "error".
+    runner = FakeRunner(
+        [
+            ("-v", _result("storcli ver")),
+            ("/cALL show J", _result("No Controller found\n")),
+        ]
+    )
+    report = collect_disk_health(
+        _host(), runner, config=DiskHealthConfig(), command_timeout=30
+    )
+    assert report.status == "no_controller"
+    assert report.controllers == []
+    assert report.physical_drives == []
+
+
+def test_collect_no_controller_found_text_without_sudo_is_permission_denied():
+    # Non-root storcli cannot see controllers, so the text is a permission artefact.
+    override = HostDiskHealthOverride(use_sudo=False)
+    runner = FakeRunner(
+        [
+            ("-v", _result("storcli ver")),
+            ("/cALL show J", _result("No Controller found\n")),
+        ]
+    )
+    report = collect_disk_health(
+        _host(disk_health=override),
+        runner,
+        config=DiskHealthConfig(),
+        command_timeout=30,
+    )
+    assert report.status == "permission_denied"
+    assert "root" in (report.message or "").lower() or "sudo" in (
+        report.message or ""
+    ).lower()
+
+
+
 def test_collect_ok_multi_controller():
     runner = _multi_controller_runner()
     now = datetime(2026, 11, 6, 3, 0, tzinfo=timezone.utc)
@@ -451,3 +511,80 @@ def test_collect_partial_controller_failure_degrades_without_faking_drives():
     assert report.message
     assert len(report.physical_drives) == 6
     assert {d.controller for d in report.physical_drives} == {0}
+
+
+# ---------------------------------------------------------------------------
+# Exception safety: a polling tool must degrade, never crash a cycle.
+# ---------------------------------------------------------------------------
+
+def test_collect_transport_exception_on_call_returns_error_not_raise():
+    runner = FakeRunner(
+        [
+            ("-v", _result("storcli ver")),
+            ("/cALL show J", RuntimeError("ssh connection reset by peer")),
+        ]
+    )
+    # Must not raise.
+    report = collect_disk_health(
+        _host(), runner, config=DiskHealthConfig(), command_timeout=30
+    )
+    assert report.status == "error"
+    assert report.physical_drives == []
+    assert "ssh connection reset by peer" in (report.message or "")
+
+
+def test_collect_per_controller_exception_keeps_other_controllers_drives():
+    # c0 succeeds fully; c1 physical-drive query raises a transport exception.
+    # The other controller's drives must still be collected (partial success).
+    runner = FakeRunner(
+        [
+            ("-v", _result("storcli ver")),
+            ("/cALL show J", _result(_fixture("4090_cALL_show_J.json"))),
+            ("/c0/vall show J", _result(_fixture("4090__c0_vall_show_J.json"))),
+            ("/c1/vall show J", _result(_fixture("4090__c1_vall_show_J.json"))),
+            ("/c0/eall/sall show all J", _result(_fixture("4090__c0_eall_sall_show_all_J.json"))),
+            ("/c1/eall/sall show all J", RuntimeError("channel closed")),
+        ]
+    )
+    report = collect_disk_health(
+        _host(), runner, config=DiskHealthConfig(), command_timeout=30
+    )
+    assert report.status != "error"
+    assert report.status == "degraded"
+    assert len(report.physical_drives) == 6
+    assert {d.controller for d in report.physical_drives} == {0}
+    assert len(report.virtual_drives) == 2
+
+
+def test_collect_all_controllers_fail_is_error_not_empty_ok():
+    # Every per-controller query fails -> no drives at all -> "error", not "ok".
+    runner = FakeRunner(
+        [
+            ("-v", _result("storcli ver")),
+            ("/cALL show J", _result(_fixture("4090_cALL_show_J.json"))),
+            ("/c0/vall show J", _result(stderr="boom", code=1)),
+            ("/c1/vall show J", _result(stderr="boom", code=1)),
+            ("/c0/eall/sall show all J", _result(stderr="boom", code=1)),
+            ("/c1/eall/sall show all J", _result(stderr="boom", code=1)),
+        ]
+    )
+    report = collect_disk_health(
+        _host(), runner, config=DiskHealthConfig(), command_timeout=30
+    )
+    assert report.status == "error"
+    assert report.physical_drives == []
+    assert report.virtual_drives == []
+
+
+def test_collect_permission_error_on_stdout_is_permission_denied():
+    # Some storcli builds write permission failures to stdout, not stderr.
+    runner = FakeRunner(
+        [
+            ("-v", _result("storcli ver")),
+            ("/cALL show J", _result(stdout="Permission denied\n", code=1)),
+        ]
+    )
+    report = collect_disk_health(
+        _host(), runner, config=DiskHealthConfig(), command_timeout=30
+    )
+    assert report.status == "permission_denied"
