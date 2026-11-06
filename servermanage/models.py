@@ -34,6 +34,10 @@ class HostConfig:
     tags: list[str] = field(default_factory=list)
     disk_health: HostDiskHealthOverride | None = None
     disk_mounts: list[str] = field(default_factory=lambda: ["/", "/data"])
+    group: str = "未分组"
+    owner: str = ""
+    location: str = ""
+    notes: str = ""
 
 
 @dataclass(frozen=True)
@@ -93,6 +97,9 @@ class AppRuntimeConfig:
     concurrency: int = 8
     retention_days: int = 90
     timezone: str = "Asia/Shanghai"
+    auto_port_fallback: bool = True
+    tray_enabled: bool = True
+    open_browser_on_start: bool = True
 
 
 @dataclass(frozen=True)
@@ -143,6 +150,8 @@ class AlertsConfig:
     cooldown_minutes: int = 60
     repeat_while_active: bool = False
     offline_failures: int = 2
+    aggregate_by_host: bool = True
+    notify_on_recovery: bool = True
 
 
 @dataclass(frozen=True)

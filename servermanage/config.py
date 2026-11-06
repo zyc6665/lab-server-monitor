@@ -87,6 +87,9 @@ def _load_app(data: Any) -> AppRuntimeConfig:
         concurrency=int(mapping.get("concurrency", 8)),
         retention_days=int(mapping.get("retention_days", 90)),
         timezone=str(mapping.get("timezone", "Asia/Shanghai")),
+        auto_port_fallback=bool(mapping.get("auto_port_fallback", True)),
+        tray_enabled=bool(mapping.get("tray_enabled", True)),
+        open_browser_on_start=bool(mapping.get("open_browser_on_start", True)),
     )
 
 
@@ -166,6 +169,8 @@ def _load_alerts(data: Any) -> AlertsConfig:
         cooldown_minutes=int(mapping.get("cooldown_minutes", 60)),
         repeat_while_active=bool(mapping.get("repeat_while_active", False)),
         offline_failures=int(mapping.get("offline_failures", 2)),
+        aggregate_by_host=bool(mapping.get("aggregate_by_host", True)),
+        notify_on_recovery=bool(mapping.get("notify_on_recovery", True)),
     )
 
 
@@ -324,6 +329,10 @@ def _load_host(item: Any, *, allow_missing_secrets: bool = False) -> HostConfig:
         tags=list(mapping.get("tags") or []),
         disk_health=_load_host_disk(mapping.get("disk_health")),
         disk_mounts=list(mapping.get("disk_mounts") or ["/", "/data"]),
+        group=str(mapping.get("group") or "未分组"),
+        owner=str(mapping.get("owner") or ""),
+        location=str(mapping.get("location") or ""),
+        notes=str(mapping.get("notes") or ""),
     )
 
 

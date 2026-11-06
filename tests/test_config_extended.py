@@ -1,6 +1,12 @@
 from pathlib import Path
 import pytest
 from servermanage.config import ConfigError, load_config, load_config_from_mapping
+from servermanage.models import (
+    AlertsConfig,
+    AppRuntimeConfig,
+    AuthConfig,
+    HostConfig,
+)
 
 BASE = """
 ssh: {connect_timeout: 10, command_timeout: 20}
@@ -157,3 +163,100 @@ def test_missing_key_path_allowed_for_packaged_seed(tmp_path):
     )
 
     assert cfg.servers[0].auth.key_path == missing
+
+
+# --- v1.2 host metadata (models.HostConfig) ---------------------------------
+
+
+def test_host_config_metadata_dataclass_defaults():
+    host = HostConfig(
+        name="gpu-01",
+        host="10.0.0.1",
+        port=22,
+        username="zhouyc",
+        auth=AuthConfig(type="password"),
+    )
+    assert host.group == "未分组"
+    assert host.owner == ""
+    assert host.location == ""
+    assert host.notes == ""
+
+
+def test_host_metadata_defaults_from_mapping():
+    cfg = _load({"servers": [_server()]})
+    host = cfg.servers[0]
+    assert host.group == "未分组"
+    assert host.owner == ""
+    assert host.location == ""
+    assert host.notes == ""
+
+
+def test_host_metadata_override_from_mapping():
+    cfg = _load(
+        {
+            "servers": [
+                _server(group="GPU组", owner="张三", location="机房A", notes="备注")
+            ]
+        }
+    )
+    host = cfg.servers[0]
+    assert host.group == "GPU组"
+    assert host.owner == "张三"
+    assert host.location == "机房A"
+    assert host.notes == "备注"
+
+
+# --- v1.2 runtime / alert booleans ------------------------------------------
+
+
+def test_app_runtime_new_bool_dataclass_defaults():
+    app = AppRuntimeConfig()
+    assert app.auto_port_fallback is True
+    assert app.tray_enabled is True
+    assert app.open_browser_on_start is True
+
+
+def test_app_runtime_new_bool_defaults_from_mapping():
+    cfg = _load({"servers": [_server()]})
+    assert cfg.app.auto_port_fallback is True
+    assert cfg.app.tray_enabled is True
+    assert cfg.app.open_browser_on_start is True
+
+
+def test_app_runtime_new_bool_overrides_from_mapping():
+    cfg = _load(
+        {
+            "servers": [_server()],
+            "app": {
+                "auto_port_fallback": False,
+                "tray_enabled": False,
+                "open_browser_on_start": False,
+            },
+        }
+    )
+    assert cfg.app.auto_port_fallback is False
+    assert cfg.app.tray_enabled is False
+    assert cfg.app.open_browser_on_start is False
+
+
+def test_alerts_new_bool_dataclass_defaults():
+    alerts = AlertsConfig()
+    assert alerts.aggregate_by_host is True
+    assert alerts.notify_on_recovery is True
+
+
+def test_alerts_new_bool_defaults_from_mapping():
+    cfg = _load({"servers": [_server()]})
+    assert cfg.alerts.aggregate_by_host is True
+    assert cfg.alerts.notify_on_recovery is True
+
+
+def test_alerts_new_bool_overrides_from_mapping():
+    cfg = _load(
+        {
+            "servers": [_server()],
+            "alerts": {"aggregate_by_host": False, "notify_on_recovery": False},
+        }
+    )
+    assert cfg.alerts.aggregate_by_host is False
+    assert cfg.alerts.notify_on_recovery is False
