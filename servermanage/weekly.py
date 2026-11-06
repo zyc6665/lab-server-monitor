@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import replace
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone, tzinfo
 from pathlib import Path
 
 from servermanage.models import WeeklyHostSummary, WeeklyReport, WeeklyReportConfig
@@ -66,12 +66,13 @@ def generate_weekly_report(
     *,
     reference_date: date | None = None,
     config: WeeklyReportConfig | None = None,
+    tz: tzinfo = timezone.utc,
 ) -> WeeklyReport:
     config = config or WeeklyReportConfig()
     week_start, week_end = _previous_week_range(reference_date)
 
-    rows = fetch_weekly_metrics(db_path, week_start, week_end)
-    daily_rows = fetch_daily_points_for_week(db_path, week_start, week_end)
+    rows = fetch_weekly_metrics(db_path, week_start, week_end, tz=tz)
+    daily_rows = fetch_daily_points_for_week(db_path, week_start, week_end, tz=tz)
     daily_points_by_host: dict[tuple[str, str], list[dict[str, object]]] = {}
     for row in daily_rows:
         key = (str(row["host_name"]), str(row["host"]))

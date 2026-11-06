@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import sqlite3
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone, tzinfo
 from pathlib import Path
 
 from servermanage.disk_health import AlertEvent, DiskHealthReport
@@ -247,11 +247,66 @@ def persist_host_reports(report: DailyReport, db_path: Path) -> None:
     LOGGER.info("Persisted %s host metric rows to %s", len(rows), db_path)
 
 
+def _parse_collected_at(value: str) -> datetime:
+    """Parse a stored ``collected_at`` string into an aware datetime.
+
+    The application writes ``datetime.isoformat()`` (``T`` separator, optional
+    UTC offset).  Legacy rows may be naive; those are interpreted as UTC, which
+    matches how SQLite's ``DATE(collected_at)`` treated them and keeps the
+    default ``tz=UTC`` output byte-for-byte identical to the old behaviour.
+    """
+    parsed = datetime.fromisoformat(value)
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=timezone.utc)
+    return parsed
+
+
+def _mean(values: list[float | None]) -> float | None:
+    """Arithmetic mean of the non-``None`` values, or ``None`` if there are none."""
+    numbers = [float(value) for value in values if value is not None]
+    if not numbers:
+        return None
+    return sum(numbers) / len(numbers)
+
+
+def _max_or_none(values: list[float | None]) -> float | None:
+    numbers = [float(value) for value in values if value is not None]
+    return max(numbers) if numbers else None
+
+
+def _min_or_none(values: list[float | None]) -> float | None:
+    numbers = [float(value) for value in values if value is not None]
+    return min(numbers) if numbers else None
+
+
+def _memory_percent(row: sqlite3.Row) -> float | None:
+    total = row["memory_total_mb"]
+    used = row["memory_used_mb"]
+    if total and total > 0 and used is not None:
+        return float(used) / float(total) * 100.0
+    return None
+
+
+def _gpu_memory_percent(row: sqlite3.Row) -> float | None:
+    total = row["gpu_memory_total_mb"]
+    used = row["gpu_memory_used_mb"]
+    if total and total > 0 and used is not None:
+        return float(used) / float(total) * 100.0
+    return None
+
+
 def fetch_daily_points_for_week(
     db_path: Path,
     week_start: date,
     week_end: date,
+    tz: tzinfo = timezone.utc,
 ) -> list[dict[str, object]]:
+    """Per-day averages per host for the week, bucketed by *local* day.
+
+    Raw rows in the (unchanged) UTC week range are fetched and grouped in
+    Python by ``dt.astimezone(tz).date()``.  Passing ``tz=UTC`` (the default)
+    reproduces the legacy ``DATE(collected_at)`` bucketing exactly.
+    """
     db_path = Path(db_path)
     if not db_path.exists():
         return []
@@ -261,29 +316,63 @@ def fetch_daily_points_for_week(
 
     sql = """
     SELECT
-        DATE(collected_at) AS day,
+        collected_at,
         host_name,
         host,
-        AVG(cpu_usage_percent) AS cpu_avg,
-        AVG(CASE WHEN memory_total_mb > 0 THEN CAST(memory_used_mb AS REAL) / memory_total_mb * 100 END) AS memory_percent,
-        AVG(gpu_utilization_percent) AS gpu_util
+        cpu_usage_percent,
+        memory_used_mb,
+        memory_total_mb,
+        gpu_utilization_percent
     FROM host_metrics_history
     WHERE collected_at >= ? AND collected_at <= ? AND success = 1
-    GROUP BY DATE(collected_at), host_name, host
-    ORDER BY host_name, day
     """
 
     with sqlite3.connect(db_path) as conn:
         conn.row_factory = sqlite3.Row
-        cursor = conn.execute(sql, (start_iso, end_iso))
-        return [dict(row) for row in cursor.fetchall()]
+        raw_rows = conn.execute(sql, (start_iso, end_iso)).fetchall()
+
+    buckets: dict[tuple[str, str, str], dict[str, list[float | None]]] = {}
+    for row in raw_rows:
+        day = _parse_collected_at(row["collected_at"]).astimezone(tz).date().isoformat()
+        bucket = buckets.setdefault(
+            (row["host_name"], row["host"], day),
+            {"cpu": [], "memory": [], "gpu": []},
+        )
+        bucket["cpu"].append(row["cpu_usage_percent"])
+        bucket["memory"].append(_memory_percent(row))
+        bucket["gpu"].append(row["gpu_utilization_percent"])
+
+    results = [
+        {
+            "day": day,
+            "host_name": host_name,
+            "host": host,
+            "cpu_avg": _mean(values["cpu"]),
+            "memory_percent": _mean(values["memory"]),
+            "gpu_util": _mean(values["gpu"]),
+        }
+        for (host_name, host, day), values in buckets.items()
+    ]
+    results.sort(key=lambda item: (item["host_name"], item["day"]))
+    return results
 
 
 def fetch_weekly_metrics(
     db_path: Path,
     week_start: date,
     week_end: date,
+    tz: tzinfo = timezone.utc,
 ) -> list[dict[str, object]]:
+    """Weekly per-host metrics, aggregating as the mean of daily means.
+
+    Raw rows in the (unchanged) UTC week range are bucketed by
+    ``dt.astimezone(tz).date()``.  For every host we first compute a mean per
+    local day and then average those daily means over the week, so each day
+    carries equal weight regardless of how many samples it holds.  ``*_max`` /
+    ``*_min`` stay raw extremes over every sample and ``sample_count`` stays
+    the raw sample count.  Passing ``tz=UTC`` (the default) reproduces the old
+    behaviour for evenly-sampled data.
+    """
     db_path = Path(db_path)
     if not db_path.exists():
         return []
@@ -293,34 +382,90 @@ def fetch_weekly_metrics(
 
     sql = """
     SELECT
+        collected_at,
         host_name,
         host,
-        COUNT(*) AS sample_count,
-        SUM(success) AS success_count,
-        AVG(cpu_usage_percent) AS cpu_avg,
-        MAX(cpu_usage_percent) AS cpu_max,
-        MIN(cpu_usage_percent) AS cpu_min,
-        AVG(CASE WHEN memory_total_mb > 0 THEN CAST(memory_used_mb AS REAL) / memory_total_mb * 100 END) AS memory_avg_percent,
-        MAX(CASE WHEN memory_total_mb > 0 THEN CAST(memory_used_mb AS REAL) / memory_total_mb * 100 END) AS memory_max_percent,
-        AVG(disk_used_percent) AS disk_avg_percent,
-        MAX(disk_used_percent) AS disk_max_percent,
-        AVG(gpu_utilization_percent) AS gpu_util_avg,
-        MAX(gpu_utilization_percent) AS gpu_util_max,
-        AVG(CASE WHEN gpu_memory_total_mb > 0 THEN CAST(gpu_memory_used_mb AS REAL) / gpu_memory_total_mb * 100 END) AS gpu_memory_avg_percent,
-        MAX(CASE WHEN gpu_memory_total_mb > 0 THEN CAST(gpu_memory_used_mb AS REAL) / gpu_memory_total_mb * 100 END) AS gpu_memory_max_percent,
-        AVG(load_1) AS load_avg,
-        AVG(logged_in_user_count) AS users_avg,
-        AVG(total_processes) AS processes_avg
+        success,
+        cpu_usage_percent,
+        memory_used_mb,
+        memory_total_mb,
+        disk_used_percent,
+        gpu_utilization_percent,
+        gpu_memory_used_mb,
+        gpu_memory_total_mb,
+        load_1,
+        logged_in_user_count,
+        total_processes
     FROM host_metrics_history
     WHERE collected_at >= ? AND collected_at <= ? AND success = 1
-    GROUP BY host_name, host
-    ORDER BY host_name
     """
 
     with sqlite3.connect(db_path) as conn:
         conn.row_factory = sqlite3.Row
-        cursor = conn.execute(sql, (start_iso, end_iso))
-        return [dict(row) for row in cursor.fetchall()]
+        raw_rows = conn.execute(sql, (start_iso, end_iso)).fetchall()
+
+    groups: dict[tuple[str, str], list[sqlite3.Row]] = {}
+    for row in raw_rows:
+        groups.setdefault((row["host_name"], row["host"]), []).append(row)
+
+    results: list[dict[str, object]] = []
+    for (host_name, host), host_rows in groups.items():
+        day_buckets: dict[str, list[sqlite3.Row]] = {}
+        for row in host_rows:
+            day = _parse_collected_at(row["collected_at"]).astimezone(tz).date().isoformat()
+            day_buckets.setdefault(day, []).append(row)
+
+        daily_means: dict[str, list[float | None]] = {
+            "cpu": [],
+            "memory": [],
+            "disk": [],
+            "gpu": [],
+            "gpu_memory": [],
+            "load": [],
+            "users": [],
+            "processes": [],
+        }
+        for rows_in_day in day_buckets.values():
+            daily_means["cpu"].append(_mean([r["cpu_usage_percent"] for r in rows_in_day]))
+            daily_means["memory"].append(_mean([_memory_percent(r) for r in rows_in_day]))
+            daily_means["disk"].append(_mean([r["disk_used_percent"] for r in rows_in_day]))
+            daily_means["gpu"].append(_mean([r["gpu_utilization_percent"] for r in rows_in_day]))
+            daily_means["gpu_memory"].append(_mean([_gpu_memory_percent(r) for r in rows_in_day]))
+            daily_means["load"].append(_mean([r["load_1"] for r in rows_in_day]))
+            daily_means["users"].append(_mean([r["logged_in_user_count"] for r in rows_in_day]))
+            daily_means["processes"].append(_mean([r["total_processes"] for r in rows_in_day]))
+
+        all_cpu = [r["cpu_usage_percent"] for r in host_rows]
+        all_memory = [_memory_percent(r) for r in host_rows]
+        all_disk = [r["disk_used_percent"] for r in host_rows]
+        all_gpu = [r["gpu_utilization_percent"] for r in host_rows]
+        all_gpu_memory = [_gpu_memory_percent(r) for r in host_rows]
+
+        results.append(
+            {
+                "host_name": host_name,
+                "host": host,
+                "sample_count": len(host_rows),
+                "success_count": sum(int(r["success"]) for r in host_rows),
+                "cpu_avg": _mean(daily_means["cpu"]),
+                "cpu_max": _max_or_none(all_cpu),
+                "cpu_min": _min_or_none(all_cpu),
+                "memory_avg_percent": _mean(daily_means["memory"]),
+                "memory_max_percent": _max_or_none(all_memory),
+                "disk_avg_percent": _mean(daily_means["disk"]),
+                "disk_max_percent": _max_or_none(all_disk),
+                "gpu_util_avg": _mean(daily_means["gpu"]),
+                "gpu_util_max": _max_or_none(all_gpu),
+                "gpu_memory_avg_percent": _mean(daily_means["gpu_memory"]),
+                "gpu_memory_max_percent": _max_or_none(all_gpu_memory),
+                "load_avg": _mean(daily_means["load"]),
+                "users_avg": _mean(daily_means["users"]),
+                "processes_avg": _mean(daily_means["processes"]),
+            }
+        )
+
+    results.sort(key=lambda item: item["host_name"])
+    return results
 
 
 # ---------------------------------------------------------------------------
