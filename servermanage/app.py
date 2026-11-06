@@ -133,6 +133,36 @@ def load_runtime(
     return config, db_path
 
 
+def load_runtime_with_settings(
+    config_path: Path, dotenv_path: Path | None = None
+) -> tuple[AppConfig, Path, "SettingsService"]:
+    """Load the runtime configuration through the settings store.
+
+    YAML/.env is treated as a *seed*: the SQLite ``app_settings``/``app_secrets``
+    rows saved from the browser take precedence.  The YAML loader therefore runs
+    in permissive mode so a fresh install can start before the first-run setup.
+    """
+    if dotenv_path is not None:
+        dotenv_path = Path(dotenv_path)
+        if not dotenv_path.exists():
+            raise FileNotFoundError(f"Dotenv file does not exist: {dotenv_path}")
+        load_dotenv(dotenv_path, override=True)
+
+    from servermanage.settings import SettingsService
+
+    base = load_config(
+        Path(config_path),
+        allow_empty_servers=True,
+        allow_missing_secrets=True,
+    )
+    db_path = Path(base.storage.db_path)
+    init_storage(db_path)
+    settings = SettingsService(
+        config_path=Path(config_path), db_path=db_path, base_config=base
+    )
+    return settings.load(), db_path, settings
+
+
 # ---------------------------------------------------------------------------
 # Service
 # ---------------------------------------------------------------------------
@@ -172,6 +202,30 @@ class MonitorService:
         self._tz = resolve_timezone(config.app.timezone)
         # Consecutive failed status collections per host (for the offline message).
         self._failure_counts: dict[str, int] = {}
+        self._running = False
+
+    def apply_config(self, new_config: AppConfig) -> None:
+        """Hot-apply a freshly saved configuration.
+
+        The scheduler is rebuilt from the new cadences, and the notifier/alert
+        engine are recreated so channel enable flags and thresholds take effect
+        without restarting the process.  ``dashboard.host``/``port`` are bound by
+        waitress at startup and still require a restart (the settings API reports
+        ``restart_required`` for that section).
+        """
+        was_running = self._running
+        if self._scheduler is not None:
+            self._scheduler.stop()
+            self._scheduler = None
+            self._running = False
+        self.config = new_config
+        self._tz = resolve_timezone(new_config.app.timezone)
+        self._notifier = Notifier(smtp=new_config.smtp)
+        self.engine = AlertEngine(
+            self.db_path, new_config.alerts, self._notifier, clock=self._clock
+        )
+        if was_running:
+            self.start()
 
     # -- polling jobs ------------------------------------------------------
 
@@ -430,9 +484,11 @@ class MonitorService:
             clock=self._clock,
         )
         self._scheduler.start()
+        self._running = True
 
     def stop(self) -> None:
         """Stop the scheduler thread if it was started."""
+        self._running = False
         if self._scheduler is not None:
             self._scheduler.stop()
 
@@ -467,7 +523,7 @@ def main(
     configure_logging(Path(log_dir) if log_dir is not None else Path("logs"))
 
     try:
-        config, db_path = load_runtime(
+        config, db_path, settings = load_runtime_with_settings(
             Path(args.config),
             Path(args.dotenv) if args.dotenv else None,
         )
@@ -484,7 +540,12 @@ def main(
         from servermanage.web import create_app
 
         serve(
-            create_app(config=config, db_path=db_path),
+            create_app(
+                config=config,
+                db_path=db_path,
+                settings_service=settings,
+                on_config_changed=service.apply_config,
+            ),
             host=config.dashboard.host,
             port=config.dashboard.port,
         )

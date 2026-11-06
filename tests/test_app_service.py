@@ -17,7 +17,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from servermanage import app as app_module
-from servermanage.app import MonitorService, load_runtime
+from servermanage.app import MonitorService, load_runtime, load_runtime_with_settings
 from servermanage.disk_health import DiskHealthReport, PhysicalDriveInfo
 from servermanage.models import (
     AppConfig,
@@ -727,3 +727,75 @@ def test_load_runtime_initialises_storage(tmp_path: Path, monkeypatch):
 
 def test_main_help_returns_zero():
     assert app_module.main(["--help"]) == 0
+
+
+# ---------------------------------------------------------------------------
+# Task 12: settings service wiring and hot config application
+# ---------------------------------------------------------------------------
+
+
+def test_apply_config_updates_scheduler_interval(tmp_path: Path):
+    service = MonitorService(_make_config(), db_path=tmp_path / "m.db")
+    new = replace(
+        service.config,
+        app=replace(service.config.app, poll_interval_seconds=120),
+    )
+
+    service.apply_config(new)
+
+    assert service.config.app.poll_interval_seconds == 120
+    assert service._build_tasks()[0].interval_seconds == 120
+
+
+def test_apply_config_rebuilds_notifier_and_engine(tmp_path: Path):
+    service = MonitorService(_make_config(), db_path=tmp_path / "m.db")
+    old_engine = service.engine
+
+    service.apply_config(
+        replace(service.config, alerts=replace(service.config.alerts, enabled=False))
+    )
+
+    assert service.engine is not old_engine
+
+
+def test_apply_config_restarts_running_scheduler(tmp_path: Path):
+    created = []
+
+    def factory(tasks, *, db_path, tz, clock=None):
+        scheduler = FakeScheduler(tasks, db_path=db_path, tz=tz, clock=clock)
+        created.append(scheduler)
+        return scheduler
+
+    service = MonitorService(
+        _make_config(),
+        db_path=tmp_path / "m.db",
+        collect_status=lambda config: [],
+        collect_disk=lambda host, runner, **kwargs: _warning_disk_report(host.name),
+        notifier=FakeNotifier(),
+        scheduler_factory=factory,
+    )
+    service.start()
+
+    service.apply_config(
+        replace(service.config, app=replace(service.config.app, poll_interval_seconds=120))
+    )
+
+    assert created[0].stopped is True
+    assert created[1].started is True
+    assert created[1].tasks[0].interval_seconds == 120
+    service.stop()
+
+
+def test_load_runtime_with_settings_returns_service(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("DASHBOARD_PASSWORD", "Pass!23")
+    cfg = tmp_path / "config.yaml"
+    cfg.write_text(
+        "storage:\n  db_path: " + str(tmp_path / "runtime.db").replace("\\", "/") + "\nservers: []\n",
+        encoding="utf-8",
+    )
+
+    config, db_path, settings = load_runtime_with_settings(cfg)
+
+    assert db_path.exists()
+    assert settings is not None
+    assert settings.public_settings()["writable"] is True
