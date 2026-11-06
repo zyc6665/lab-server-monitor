@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from servermanage.models import AuthConfig, HostConfig
 from servermanage.ssh_client import SSHClientWrapper
 
@@ -80,7 +82,7 @@ def test_ssh_client_uses_key_auth():
     wrapper.run("hostname", timeout=20)
     wrapper.close()
 
-    assert client.kwargs["key_filename"] == "/tmp/id_rsa"
+    assert client.kwargs["key_filename"] == str(Path("/tmp/id_rsa"))
 
 
 def test_ssh_client_reuses_connection_until_closed():
@@ -130,5 +132,5 @@ def test_ssh_client_uses_key_passphrase_when_configured():
     wrapper.run("hostname", timeout=20)
     wrapper.close()
 
-    assert client.kwargs["key_filename"] == "/tmp/id_rsa"
+    assert client.kwargs["key_filename"] == str(Path("/tmp/id_rsa"))
     assert client.kwargs["passphrase"] == "key-passphrase"

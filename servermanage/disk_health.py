@@ -36,6 +36,7 @@ __all__ = [
     "parse_physical_drives_text",
     "evaluate_drive_health",
     "evaluate_virtual_drive_health",
+    "disk_report_from_snapshot",
     "collect_disk_health",
 ]
 
@@ -675,6 +676,94 @@ def _brief(text: str | None, limit: int = 300) -> str:
     return value
 
 
+def disk_report_from_snapshot(snapshot: dict[str, Any]) -> DiskHealthReport:
+    """Rebuild a :class:`DiskHealthReport` from ``storage.get_disk_health`` output.
+
+    This lets ``run_disk_once`` feed the previous persisted batch back into
+    :func:`collect_disk_health` (and thus ``evaluate_drive_health``'s
+    ``error_increase`` comparison).  Missing values map to ``None`` / empty
+    lists, so a partial or unavailable previous batch (e.g.
+    ``permission_denied`` with no drives) round-trips without fabricating data.
+    """
+
+    def _as_int(value: Any) -> int | None:
+        return _to_int(value)
+
+    def _as_datetime(value: Any) -> datetime:
+        if isinstance(value, datetime):
+            return value if value.tzinfo is not None else value.replace(
+                tzinfo=timezone.utc
+            )
+        if isinstance(value, str) and value:
+            try:
+                parsed = datetime.fromisoformat(value)
+            except ValueError:
+                pass
+            else:
+                return (
+                    parsed
+                    if parsed.tzinfo is not None
+                    else parsed.replace(tzinfo=timezone.utc)
+                )
+        return datetime.now(timezone.utc)
+
+    def _dicts(key: str) -> list[dict[str, Any]]:
+        return [item for item in (snapshot.get(key) or []) if isinstance(item, dict)]
+
+    controllers = [
+        DiskControllerInfo(
+            controller=_as_int(item.get("controller")) or 0,
+            model=_clean(item.get("model")),
+            firmware=_clean(item.get("firmware")),
+            bbu_state=_clean(item.get("bbu_state")),
+            health=item.get("health") or "unknown",
+            reasons=list(item.get("reasons") or []),
+        )
+        for item in _dicts("controllers")
+    ]
+    virtual_drives = [
+        VirtualDriveInfo(
+            controller=_as_int(item.get("controller")) or 0,
+            vd_id=_as_int(item.get("vd_id")) or 0,
+            raid_level=_clean(item.get("raid_level")),
+            state=_clean(item.get("state")),
+            size=_clean(item.get("size")),
+            health=item.get("health") or "unknown",
+            reasons=list(item.get("reasons") or []),
+        )
+        for item in _dicts("virtual_drives")
+    ]
+    physical_drives = [
+        PhysicalDriveInfo(
+            controller=_as_int(item.get("controller")) or 0,
+            enclosure=_as_int(item.get("enclosure")),
+            slot=_as_int(item.get("slot")),
+            did=_as_int(item.get("did")),
+            model=_clean(item.get("model")),
+            serial=_clean(item.get("serial")),
+            state=_clean(item.get("state")),
+            media_errors=_as_int(item.get("media_errors")),
+            other_errors=_as_int(item.get("other_errors")),
+            predictive_failures=_as_int(item.get("predictive_failures")),
+            smart_alert=_to_bool(item.get("smart_alert")),
+            temperature_c=_as_int(item.get("temperature_c")),
+            shield_counter=_as_int(item.get("shield_counter")),
+            health=item.get("health") or "unknown",
+            reasons=list(item.get("reasons") or []),
+        )
+        for item in _dicts("physical_drives")
+    ]
+    return DiskHealthReport(
+        host_name=str(snapshot.get("host_name") or ""),
+        collected_at=_as_datetime(snapshot.get("collected_at")),
+        status=str(snapshot.get("status") or "ok"),
+        message=snapshot.get("message"),
+        controllers=controllers,
+        virtual_drives=virtual_drives,
+        physical_drives=physical_drives,
+    )
+
+
 def collect_disk_health(
     host: HostConfig,
     runner: SSHRunner,
@@ -684,6 +773,7 @@ def collect_disk_health(
     previous: DiskHealthReport | None = None,
     override: HostDiskHealthOverride | None = None,
     now: datetime | None = None,
+    temperature_threshold_c: float = 55.0,
 ) -> DiskHealthReport:
     """Collect one host's disk health over SSH using storcli.
 
@@ -854,7 +944,12 @@ def collect_disk_health(
     for drive in physical_drives:
         prior = previous_index.get((drive.controller, drive.enclosure, drive.slot))
         evaluated.append(
-            evaluate_drive_health(drive, rules=config.rules, previous=prior)
+            evaluate_drive_health(
+                drive,
+                rules=config.rules,
+                previous=prior,
+                temperature_threshold_c=temperature_threshold_c,
+            )
         )
 
     evaluated_controllers = [_evaluate_controller_health(c) for c in controllers]

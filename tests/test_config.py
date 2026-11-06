@@ -219,7 +219,7 @@ servers:
     username: "root"
     auth:
       type: "key"
-      key_path: "{key_file}"
+      key_path: "{key_file.as_posix()}"
       passphrase_env: "GPU01_KEY_PASSPHRASE"
 """.strip(),
         encoding="utf-8",
@@ -349,7 +349,7 @@ servers:
     username: "root"
     auth:
       type: "key"
-      key_path: "{key_file}"
+      key_path: "{key_file.as_posix()}"
       passphrase_env: "GPU01_KEY_PASSPHRASE"
 """.strip(),
         encoding="utf-8",

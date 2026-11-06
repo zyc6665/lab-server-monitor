@@ -31,6 +31,7 @@ from flask import (
 )
 
 from servermanage import storage
+from servermanage.timeutil import resolve_timezone
 
 LOGGER = logging.getLogger(__name__)
 
@@ -74,6 +75,28 @@ def _parse_iso(value: Any) -> datetime | None:
     if parsed.tzinfo is None:
         return parsed.replace(tzinfo=timezone.utc)
     return parsed
+
+
+def _to_local_iso(value: Any, tz) -> Any:
+    """Render a stored ISO UTC timestamp in *tz* with an explicit offset.
+
+    Non-timestamp values (``None`` / already formatted strings that cannot be
+    parsed) are returned unchanged so the templates keep degrading gracefully.
+    """
+    parsed = _parse_iso(value)
+    if parsed is None:
+        return value
+    return parsed.astimezone(tz).isoformat()
+
+
+def _localize_alerts(rows: list[dict[str, Any]], tz) -> list[dict[str, Any]]:
+    """Render alert ``created_at`` values in the configured local timezone."""
+    localized = []
+    for row in rows:
+        item = dict(row)
+        item["created_at"] = _to_local_iso(item.get("created_at"), tz)
+        localized.append(item)
+    return localized
 
 
 def _as_float(value: Any) -> float | None:
@@ -189,6 +212,7 @@ def _host_row(
     disk_health: dict[str, Any] | None,
     poll_interval_seconds: int,
     now: datetime,
+    tz,
 ) -> dict[str, Any]:
     if snapshot is None:
         return {
@@ -207,7 +231,7 @@ def _host_row(
         "name": name,
         "host": host,
         "online": _is_online(snapshot, poll_interval_seconds, now),
-        "collected_at": snapshot.get("collected_at"),
+        "collected_at": _to_local_iso(snapshot.get("collected_at"), tz),
         **_metrics_payload(metrics),
         "disk_health": _disk_health_summary(disk_health),
     }
@@ -220,6 +244,7 @@ def _build_overview(config, db_path) -> dict[str, Any]:
     polling refresh always agree on the summary counts and per-host rows.
     """
     now = datetime.now(timezone.utc)
+    tz = resolve_timezone(config.app.timezone)
 
     snapshots = {
         item["host_name"]: item for item in storage.get_all_host_snapshots(db_path)
@@ -245,6 +270,7 @@ def _build_overview(config, db_path) -> dict[str, Any]:
             disk_health=disk_reports.get(host_name),
             poll_interval_seconds=config.app.poll_interval_seconds,
             now=now,
+            tz=tz,
         )
         for host_name in sorted(names)
     ]
@@ -270,13 +296,18 @@ def _build_host_detail(name: str, config, db_path) -> dict[str, Any] | None:
         return None
 
     addresses = {server.name: server.host for server in config.servers}
+    tz = resolve_timezone(config.app.timezone)
+    disk = storage.get_disk_health(name, db_path)
+    if disk is not None:
+        disk = dict(disk)
+        disk["collected_at"] = _to_local_iso(disk.get("collected_at"), tz)
     return {
         "name": name,
         "host": addresses.get(name),
-        "collected_at": snapshot.get("collected_at"),
+        "collected_at": _to_local_iso(snapshot.get("collected_at"), tz),
         "success": snapshot.get("success"),
         "metrics": snapshot.get("metrics") or {},
-        "disk": storage.get_disk_health(name, db_path),
+        "disk": disk,
     }
 
 
@@ -350,7 +381,11 @@ def register_routes(app: Flask) -> None:
     @app.get("/api/alerts")
     def api_alerts():
         status = request.args.get("status") or None
-        return jsonify({"alerts": storage.list_alerts(_db_path(app), status=status)})
+        config = _config(app)
+        rows = storage.list_alerts(_db_path(app), status=status)
+        return jsonify(
+            {"alerts": _localize_alerts(rows, resolve_timezone(config.app.timezone))}
+        )
 
     @app.post("/api/alerts/<int:alert_id>/ack")
     def api_ack_alert(alert_id: int):
@@ -398,7 +433,11 @@ def register_routes(app: Flask) -> None:
 
     @app.get("/alerts")
     def alerts_page():
-        alerts = storage.list_alerts(_db_path(app), status="active")
+        config = _config(app)
+        alerts = _localize_alerts(
+            storage.list_alerts(_db_path(app), status="active"),
+            resolve_timezone(config.app.timezone),
+        )
         return render_template(
             "alerts.html", active_page="alerts", alerts=alerts
         )

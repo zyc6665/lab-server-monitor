@@ -29,7 +29,11 @@ from servermanage.alerts import (
 )
 from servermanage.collectors import collect_all_hosts
 from servermanage.config import load_config
-from servermanage.disk_health import collect_disk_health
+from servermanage.disk_health import (
+    DiskHealthReport,
+    collect_disk_health,
+    disk_report_from_snapshot,
+)
 from servermanage.mailer import send_report as _send_report
 from servermanage.models import AppConfig, DailyReport
 from servermanage.report import render_report as _render_report
@@ -42,6 +46,7 @@ from servermanage.scheduler import (
 from servermanage.ssh_client import SSHClientWrapper
 from servermanage.storage import (
     _extract_disk_used_percent,
+    get_disk_health,
     init_storage,
     persist_host_reports,
     purge_old_data,
@@ -54,6 +59,23 @@ from servermanage.weekly import generate_weekly_report as _generate_weekly_repor
 LOGGER = logging.getLogger(__name__)
 
 _LOGGING_CONFIGURED = False
+
+
+def _previous_disk_report(host_name: str, db_path: Path) -> DiskHealthReport | None:
+    """Load the last persisted disk batch as an ``error_increase`` baseline.
+
+    Returns ``None`` when there is no snapshot, when the previous batch was not
+    a clean ``ok`` collection (e.g. ``permission_denied`` / ``error``), or when
+    it reported zero physical drives — in those cases there is nothing
+    trustworthy to compare against.
+    """
+    snapshot = get_disk_health(host_name, db_path)
+    if snapshot is None or snapshot.get("status") != "ok":
+        return None
+    report = disk_report_from_snapshot(snapshot)
+    if not report.physical_drives:
+        return None
+    return report
 
 
 # ---------------------------------------------------------------------------
@@ -227,15 +249,36 @@ class MonitorService:
         return {"hosts": len(reports), "alerts": len(notified)}
 
     def run_disk_once(self) -> dict:
-        """Poll disk health on every host and reconcile disk alerts."""
+        """Poll disk health on every enabled host and reconcile disk alerts."""
+        if not bool(getattr(self.config.disk_health, "enabled", True)):
+            # Globally disabled: no SSH attempts at all.
+            return {"disk_reports": 0, "alerts": 0}
+
         storage_enabled = bool(getattr(self.config.storage, "enabled", True))
+        temperature_threshold_c = float(
+            self.config.alerts.thresholds.disk_temperature_c
+        )
         events: list = []
-        active: dict[str, set[str]] = {
-            host.name: set() for host in self.config.servers
-        }
+        # Only hosts actually polled this cycle take part in alert resolution;
+        # a skipped/failed host must not have its existing disk alerts closed.
+        active: dict[str, set[str]] = {}
         disk_reports = []
 
         for host in self.config.servers:
+            override = host.disk_health
+            if (
+                override is not None
+                and override.enabled is not None
+                and not override.enabled
+            ):
+                continue
+
+            previous = (
+                _previous_disk_report(host.name, self.db_path)
+                if storage_enabled
+                else None
+            )
+
             runner = SSHClientWrapper(
                 host=host, connect_timeout=self.config.ssh.connect_timeout
             )
@@ -245,7 +288,9 @@ class MonitorService:
                     runner,
                     config=self.config.disk_health,
                     command_timeout=self.config.ssh.command_timeout,
+                    previous=previous,
                     override=host.disk_health,
+                    temperature_threshold_c=temperature_threshold_c,
                 )
             except Exception:  # pragma: no cover - network path
                 LOGGER.exception("Disk health collection failed for %s", host.name)

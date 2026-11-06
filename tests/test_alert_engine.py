@@ -108,7 +108,12 @@ def test_notify_after_cooldown(tmp_path: Path):
     db_path = tmp_path / "servermanage.db"
     clock = FakeClock()
     notifier = FakeNotifier()
-    engine = _engine(db_path, clock, notifier)
+    engine = _engine(
+        db_path,
+        clock,
+        notifier,
+        config=AlertsConfig(repeat_while_active=True),
+    )
     event = _event()
 
     assert engine.process([event]) == [event]
@@ -118,6 +123,39 @@ def test_notify_after_cooldown(tmp_path: Path):
 
     assert len(notifier.calls) == 2
     assert len(list_alerts(db_path)) == 2
+
+
+def test_repeat_while_active_off_suppresses_after_cooldown(tmp_path: Path):
+    db_path = tmp_path / "servermanage.db"
+    clock = FakeClock()
+    notifier = FakeNotifier()
+    engine = _engine(db_path, clock, notifier)  # repeat_while_active defaults False
+    event = _event()
+
+    assert engine.process([event]) == [event]
+
+    clock.advance(minutes=61)
+    assert engine.process([event]) == []
+
+    assert len(notifier.calls) == 1
+    assert len(list_alerts(db_path)) == 1
+
+
+def test_repeat_while_active_off_still_notifies_on_escalation(tmp_path: Path):
+    db_path = tmp_path / "servermanage.db"
+    clock = FakeClock()
+    notifier = FakeNotifier()
+    engine = _engine(db_path, clock, notifier)
+    event = _event()
+    escalated = _event(title="CPU 使用率极高")
+    escalated.severity = "critical"
+
+    assert engine.process([event]) == [event]
+
+    clock.advance(minutes=61)
+    assert engine.process([escalated]) == [escalated]
+
+    assert len(notifier.calls) == 2
 
 
 def test_error_increase_breaks_cooldown(tmp_path: Path):
@@ -508,7 +546,12 @@ def test_ack_suppresses_when_latest_ack_but_older_row_active(tmp_path: Path):
     db_path = tmp_path / "servermanage.db"
     clock = FakeClock()
     notifier = FakeNotifier()
-    engine = _engine(db_path, clock, notifier)
+    engine = _engine(
+        db_path,
+        clock,
+        notifier,
+        config=AlertsConfig(repeat_while_active=True),
+    )
     event = _event()
 
     # Two active occurrences of the same fingerprint.

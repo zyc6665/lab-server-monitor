@@ -23,8 +23,10 @@ from servermanage.models import (
     AppConfig,
     AppRuntimeConfig,
     AuthConfig,
+    DiskHealthConfig,
     DiskUsageRow,
     HostConfig,
+    HostDiskHealthOverride,
     HostMetrics,
     HostReport,
     RenderedReport,
@@ -35,7 +37,13 @@ from servermanage.models import (
     WeeklyReport,
     WeeklyReportConfig,
 )
-from servermanage.storage import get_disk_health, get_host_snapshot, list_alerts
+from servermanage.storage import (
+    get_disk_health,
+    get_host_snapshot,
+    init_storage,
+    list_alerts,
+    save_disk_health,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -381,6 +389,129 @@ def test_run_disk_once_generates_disk_alert_and_resolves(tmp_path: Path):
     assert resolve_calls == [
         ("gpu-01", {notifier.events[0].fingerprint}, "disk")
     ]
+
+
+def test_run_disk_once_passes_previous_baseline_and_temperature(tmp_path: Path):
+    db_path = tmp_path / "monitor.db"
+    init_storage(db_path)
+    save_disk_health(
+        DiskHealthReport(
+            host_name="gpu-01",
+            collected_at=datetime.now(timezone.utc),
+            status="ok",
+            physical_drives=[
+                PhysicalDriveInfo(
+                    controller=0,
+                    enclosure=32,
+                    slot=0,
+                    did=1,
+                    media_errors=1,
+                    health="healthy",
+                )
+            ],
+        ),
+        db_path,
+    )
+    seen = {}
+
+    def collect(host, runner, **kwargs):
+        seen.update(kwargs)
+        return _warning_disk_report(host.name)
+
+    service = MonitorService(
+        _make_config(),
+        db_path=db_path,
+        collect_status=lambda config: [],
+        collect_disk=collect,
+        notifier=FakeNotifier(),
+    )
+
+    service.run_disk_once()
+
+    previous = seen["previous"]
+    assert previous is not None
+    assert previous.physical_drives[0].media_errors == 1
+    assert seen["temperature_threshold_c"] == 55.0
+
+
+def test_previous_disk_report_ignores_non_ok_or_empty_baselines(tmp_path: Path):
+    db_path = tmp_path / "monitor.db"
+    init_storage(db_path)
+
+    save_disk_health(
+        DiskHealthReport(
+            host_name="gpu-01",
+            collected_at=datetime.now(timezone.utc),
+            status="permission_denied",
+            physical_drives=[],
+        ),
+        db_path,
+    )
+    assert app_module._previous_disk_report("gpu-01", db_path) is None
+
+    save_disk_health(
+        DiskHealthReport(
+            host_name="gpu-01",
+            collected_at=datetime.now(timezone.utc),
+            status="ok",
+            physical_drives=[],
+        ),
+        db_path,
+    )
+    assert app_module._previous_disk_report("gpu-01", db_path) is None
+
+
+def test_run_disk_once_skips_host_disabled_disk_health(tmp_path: Path):
+    db_path = tmp_path / "monitor.db"
+    config = replace(
+        _make_config(),
+        servers=[
+            replace(
+                _make_config().servers[0],
+                disk_health=HostDiskHealthOverride(enabled=False),
+            )
+        ],
+    )
+    called = []
+
+    def collect(host, runner, **kwargs):
+        called.append(host.name)
+        return _warning_disk_report(host.name)
+
+    service = MonitorService(
+        config,
+        db_path=db_path,
+        collect_status=lambda config: [],
+        collect_disk=collect,
+        notifier=FakeNotifier(),
+    )
+
+    result = service.run_disk_once()
+
+    assert result == {"disk_reports": 0, "alerts": 0}
+    assert called == []
+    assert get_disk_health("gpu-01", db_path) is None
+
+
+def test_run_disk_once_globally_disabled_does_not_connect(tmp_path: Path):
+    db_path = tmp_path / "monitor.db"
+    config = replace(_make_config(), disk_health=DiskHealthConfig(enabled=False))
+    called = []
+
+    def collect(host, runner, **kwargs):
+        called.append(host.name)
+        return _warning_disk_report(host.name)
+
+    service = MonitorService(
+        config,
+        db_path=db_path,
+        collect_status=lambda config: [],
+        collect_disk=collect,
+        notifier=FakeNotifier(),
+    )
+
+    assert service.run_disk_once() == {"disk_reports": 0, "alerts": 0}
+    assert called == []
 
 
 # ---------------------------------------------------------------------------

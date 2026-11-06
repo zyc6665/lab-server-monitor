@@ -504,6 +504,15 @@ def _has_error_increase(event: AlertEvent) -> bool:
     return _ERROR_INCREASE_MARKER in event.fingerprint.lower()
 
 
+# Ordering used to detect a genuine escalation (low -> high notifies even when
+# ``repeat_while_active`` is off).  Unknown severities rank lowest.
+_SEVERITY_RANK = {"info": 0, "warning": 1, "critical": 2}
+
+
+def _severity_rank(severity: str | None) -> int:
+    return _SEVERITY_RANK.get(str(severity or "").strip().lower(), 0)
+
+
 class AlertEngine:
     """Turn raw :class:`AlertEvent` objects into "notify now" decisions.
 
@@ -702,7 +711,18 @@ class AlertEngine:
             return False
 
         elapsed = now - created_at
-        return elapsed < timedelta(minutes=self._config.cooldown_minutes)
+        if elapsed < timedelta(minutes=self._config.cooldown_minutes):
+            return True
+
+        # Cooldown elapsed on a still-active, already-notified alert.  When
+        # ``repeat_while_active`` is off, stay silent for the same condition
+        # unless the new event is a genuine escalation (strictly higher severity).
+        if not bool(getattr(self._config, "repeat_while_active", False)):
+            if _severity_rank(event.severity) <= _severity_rank(
+                latest.get("severity")
+            ):
+                return True
+        return False
 
     def _persist(self, event: AlertEvent, now: datetime) -> int | None:
         try:
