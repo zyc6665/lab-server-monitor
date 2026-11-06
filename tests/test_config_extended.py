@@ -1,6 +1,6 @@
 from pathlib import Path
 import pytest
-from servermanage.config import ConfigError, load_config
+from servermanage.config import ConfigError, load_config, load_config_from_mapping
 
 BASE = """
 ssh: {connect_timeout: 10, command_timeout: 20}
@@ -89,4 +89,58 @@ def test_webhook_url_read_without_webhook_section(tmp_path, monkeypatch):
     monkeypatch.setenv("ALERT_WEBHOOK_URL", "https://example.com/hook")
     cfg = load_config(_write(tmp_path, ""))
     assert cfg.alerts.webhook.url == "https://example.com/hook"
+
+
+@pytest.fixture(autouse=True)
+def _stub_gpu_password(monkeypatch):
+    monkeypatch.setenv("GPU01_PASSWORD", "x")
+
+
+def _server(**overrides):
+    server = {
+        "name": "gpu-01",
+        "host": "10.0.0.1",
+        "username": "zhouyc",
+        "auth": {"type": "password", "password_env": "GPU01_PASSWORD"},
+    }
+    server.update(overrides)
+    return server
+
+
+def _load(raw):
+    return load_config_from_mapping(raw)
+
+
+def test_host_disk_mounts_default_to_root_and_data():
+    cfg = _load({"servers": [_server()]})
+    assert cfg.servers[0].disk_mounts == ["/", "/data"]
+
+
+def test_host_disk_mounts_override():
+    cfg = _load({"servers": [_server(disk_mounts=["/", "/data", "/scratch"])]})
+    assert cfg.servers[0].disk_mounts == ["/", "/data", "/scratch"]
+
+
+def test_empty_servers_allowed_when_flag():
+    cfg = load_config_from_mapping({"servers": []}, allow_empty_servers=True)
+    assert cfg.servers == []
+
+
+def test_missing_env_password_allowed_when_flag(monkeypatch):
+    monkeypatch.delenv("MISSING_PW", raising=False)
+    cfg = load_config_from_mapping(
+        {"servers": [_server(auth={"type": "password", "password_env": "MISSING_PW"})]},
+        allow_missing_secrets=True,
+    )
+    assert cfg.servers[0].auth.password is None
+
+
+def test_weekly_weekday_parsed():
+    cfg = _load({"servers": [_server()], "report": {"weekly": {"weekday": 0}}})
+    assert cfg.report.weekly.weekday == 0
+
+
+def test_auth_key_data_roundtrip():
+    cfg = _load({"servers": [_server(auth={"type": "key", "key_data": "PEM"})]})
+    assert cfg.servers[0].auth.key_data == "PEM"
 

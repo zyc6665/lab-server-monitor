@@ -62,6 +62,7 @@ def _load_weekly_report_config(data: Any) -> WeeklyReportConfig:
         busy_threshold=float(mapping.get("busy_threshold", 70.0)),
         idle_threshold=float(mapping.get("idle_threshold", 20.0)),
         time=str(mapping.get("time", "16:00")),
+        weekday=int(mapping.get("weekday", 4)),
     )
 
 
@@ -94,11 +95,16 @@ def _load_dashboard_auth(data: Any) -> DashboardAuthConfig:
         data = {}
     mapping = _require_mapping(data, "dashboard.auth")
     password_env = mapping.get("password_env", "DASHBOARD_PASSWORD")
+    password_hash = mapping.get("password_hash")
+    password_salt = mapping.get("password_salt")
     return DashboardAuthConfig(
         enabled=bool(mapping.get("enabled", True)),
         username=str(mapping.get("username", "admin")),
         password_env=password_env,
         password=os.getenv(password_env) if password_env else None,
+        password_hash=str(password_hash) if password_hash is not None else None,
+        password_salt=str(password_salt) if password_salt is not None else None,
+        password_iterations=int(mapping.get("password_iterations", 200000)),
     )
 
 
@@ -215,18 +221,22 @@ def _load_host_disk(data: Any) -> HostDiskHealthOverride | None:
     )
 
 
-def _load_smtp(data: Any) -> SMTPConfig | None:
+def _load_smtp(data: Any, *, allow_missing_secrets: bool = False) -> SMTPConfig | None:
     if data is None:
         return None
     mapping = _require_mapping(data, "smtp")
     password_env = mapping.get("password_env")
     if not password_env:
         raise ConfigError("smtp.password_env is required")
+    if allow_missing_secrets:
+        password = os.getenv(password_env) or ""
+    else:
+        password = _require_env(password_env)
     smtp = SMTPConfig(
         host=_require_string(mapping, "host", "smtp"),
         port=int(mapping["port"]),
         username=_require_string(mapping, "username", "smtp"),
-        password=_require_env(password_env),
+        password=password,
         use_ssl=bool(mapping.get("use_ssl", True)),
         from_addr=_require_string(mapping, "from_addr", "smtp"),
         to_addrs=list(mapping.get("to_addrs") or []),
@@ -236,20 +246,39 @@ def _load_smtp(data: Any) -> SMTPConfig | None:
     return smtp
 
 
-def _load_auth(data: dict[str, Any]) -> AuthConfig:
+def _load_auth(data: dict[str, Any], *, allow_missing_secrets: bool = False) -> AuthConfig:
     auth_type = data.get("type")
     if auth_type == "password":
         password_env = data.get("password_env")
         if not password_env:
             raise ConfigError("password auth requires password_env")
+        if allow_missing_secrets:
+            password = os.getenv(password_env)
+        else:
+            password = _require_env(password_env)
         return AuthConfig(
             type=auth_type,
             password_env=password_env,
-            password=_require_env(password_env),
+            password=password,
         )
     if auth_type == "key":
+        key_data = data.get("key_data")
+        passphrase_env = data.get("passphrase_env")
+        if passphrase_env:
+            passphrase = os.getenv(passphrase_env) if allow_missing_secrets else _require_env(passphrase_env)
+        else:
+            passphrase = None
         key_path_raw = data.get("key_path")
         if not key_path_raw:
+            if key_data is not None:
+                return AuthConfig(
+                    type=auth_type,
+                    key_data=key_data,
+                    passphrase=passphrase,
+                    passphrase_env=passphrase_env,
+                )
+            if allow_missing_secrets:
+                return AuthConfig(type=auth_type)
             raise ConfigError("SSH key path does not exist")
         key_path = Path(key_path_raw).expanduser()
         if not key_path.exists():
@@ -258,29 +287,49 @@ def _load_auth(data: dict[str, Any]) -> AuthConfig:
             raise ConfigError(f"SSH key path is not a file: {key_path}")
         if not os.access(key_path, os.R_OK):
             raise ConfigError(f"SSH key path is not readable: {key_path}")
-        passphrase_env = data.get("passphrase_env")
-        passphrase = _require_env(passphrase_env) if passphrase_env else None
         return AuthConfig(
             type=auth_type,
             key_path=key_path,
             passphrase=passphrase,
             passphrase_env=passphrase_env,
+            key_data=key_data,
         )
     raise ConfigError(f"Unsupported auth type: {auth_type}")
 
 
-def load_config(path: str | Path) -> AppConfig:
-    config_path = Path(path)
-    with config_path.open("r", encoding="utf-8") as handle:
-        raw = yaml.safe_load(handle) or {}
+def _load_host(item: Any, *, allow_missing_secrets: bool = False) -> HostConfig:
+    mapping = _require_mapping(item, "servers[]")
+    return HostConfig(
+        name=_require_string(mapping, "name", "servers[]"),
+        host=_require_string(mapping, "host", "servers[]"),
+        port=int(mapping.get("port", 22)),
+        username=_require_string(mapping, "username", "servers[]"),
+        auth=_load_auth(
+            _require_mapping(mapping.get("auth") or {}, "servers[].auth"),
+            allow_missing_secrets=allow_missing_secrets,
+        ),
+        tags=list(mapping.get("tags") or []),
+        disk_health=_load_host_disk(mapping.get("disk_health")),
+        disk_mounts=list(mapping.get("disk_mounts") or ["/", "/data"]),
+    )
+
+
+def load_config_from_mapping(
+    raw: dict[str, Any],
+    *,
+    allow_empty_servers: bool = False,
+    allow_missing_secrets: bool = False,
+) -> AppConfig:
     raw = _require_mapping(raw, "config")
 
     smtp_raw = raw.get("smtp")
-    smtp = _load_smtp(smtp_raw) if smtp_raw else None
+    smtp = _load_smtp(smtp_raw, allow_missing_secrets=allow_missing_secrets) if smtp_raw else None
     ssh_raw = _require_mapping(raw.get("ssh") or {}, "ssh")
     report_raw = _require_mapping(raw.get("report") or {}, "report")
     servers_raw = raw.get("servers") or []
-    if not isinstance(servers_raw, list) or not servers_raw:
+    if not isinstance(servers_raw, list):
+        raise ConfigError("servers must not be empty")
+    if not servers_raw and not allow_empty_servers:
         raise ConfigError("servers must not be empty")
 
     executive = None
@@ -319,15 +368,7 @@ def load_config(path: str | Path) -> AppConfig:
     disk_cfg = _load_disk_health(raw.get("disk_health"))
 
     servers = [
-        HostConfig(
-            name=_require_string(_require_mapping(item, "servers[]"), "name", "servers[]"),
-            host=_require_string(_require_mapping(item, "servers[]"), "host", "servers[]"),
-            port=int(item.get("port", 22)),
-            username=_require_string(_require_mapping(item, "servers[]"), "username", "servers[]"),
-            auth=_load_auth(_require_mapping(item.get("auth") or {}, "servers[].auth")),
-            tags=list(item.get("tags") or []),
-            disk_health=_load_host_disk(item.get("disk_health")),
-        )
+        _load_host(item, allow_missing_secrets=allow_missing_secrets)
         for item in servers_raw
     ]
 
@@ -341,4 +382,20 @@ def load_config(path: str | Path) -> AppConfig:
         dashboard=dashboard,
         alerts=alerts_cfg,
         disk_health=disk_cfg,
+    )
+
+
+def load_config(
+    path: str | Path,
+    *,
+    allow_empty_servers: bool = False,
+    allow_missing_secrets: bool = False,
+) -> AppConfig:
+    config_path = Path(path)
+    with config_path.open("r", encoding="utf-8") as handle:
+        raw = yaml.safe_load(handle) or {}
+    return load_config_from_mapping(
+        raw,
+        allow_empty_servers=allow_empty_servers,
+        allow_missing_secrets=allow_missing_secrets,
     )

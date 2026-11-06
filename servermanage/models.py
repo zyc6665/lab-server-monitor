@@ -14,6 +14,7 @@ class AuthConfig:
     key_path: Path | None = None
     passphrase: str | None = None
     passphrase_env: str | None = None
+    key_data: str | None = None
 
 
 @dataclass(frozen=True)
@@ -32,6 +33,7 @@ class HostConfig:
     auth: AuthConfig
     tags: list[str] = field(default_factory=list)
     disk_health: HostDiskHealthOverride | None = None
+    disk_mounts: list[str] = field(default_factory=lambda: ["/", "/data"])
 
 
 @dataclass(frozen=True)
@@ -58,6 +60,7 @@ class WeeklyReportConfig:
     busy_threshold: float = 70.0
     idle_threshold: float = 20.0
     time: str = "16:00"
+    weekday: int = 4
 
 
 @dataclass(frozen=True)
@@ -98,6 +101,9 @@ class DashboardAuthConfig:
     username: str = "admin"
     password_env: str | None = "DASHBOARD_PASSWORD"
     password: str | None = None
+    password_hash: str | None = None
+    password_salt: str | None = None
+    password_iterations: int = 200000
 
 
 @dataclass(frozen=True)
