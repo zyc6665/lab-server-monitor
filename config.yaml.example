@@ -1,0 +1,50 @@
+smtp:
+  host: "smtp.example.com"
+  port: 465
+  username: "monitor@example.com"
+  password_env: "SMTP_PASSWORD"
+  use_ssl: true
+  from_addr: "monitor@example.com"
+  to_addrs:
+    - "ops@example.com"
+    - "admin@example.com"
+
+ssh:
+  connect_timeout: 10
+  command_timeout: 20
+
+storage:
+  enabled: true
+  db_path: "data/servermanage.db"
+
+report:
+  subject_prefix: "[Server Daily Report]"
+  include_failed_hosts: true
+  executive:
+    enabled: true
+    subject_prefix: "[Leader Summary]"
+    to_addrs:
+      - "leader@example.com"
+  weekly:
+    enabled: true
+    subject_prefix: "[Server Weekly Report]"
+    busy_threshold: 70.0
+    idle_threshold: 20.0
+
+servers:
+  - name: "prod-gpu-01"
+    host: "10.10.0.11"
+    port: 22
+    username: "root"
+    auth:
+      type: "password"
+      password_env: "PROD_GPU_01_SSH_PASSWORD"
+
+  - name: "prod-gpu-02"
+    host: "10.10.0.12"
+    port: 22
+    username: "ops"
+    auth:
+      type: "key"
+      key_path: "/app/ssh/id_rsa"
+      passphrase_env: "PROD_GPU_02_KEY_PASSPHRASE"

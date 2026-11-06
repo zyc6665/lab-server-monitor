@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <body style="margin:0;padding:24px;background:#eef3f8;color:#0f172a;font-family:'PingFang SC','Microsoft YaHei',Arial,sans-serif;">
+    <div style="max-width:980px;margin:0 auto;">
+      <div style="background:linear-gradient(135deg,#0f172a,#1d4ed8);color:#ffffff;border-radius:20px;padding:28px 28px 24px 28px;margin-bottom:20px;">
+        <div style="font-size:28px;font-weight:700;margin-bottom:8px;">{{ subject }}</div>
+        <div style="font-size:13px;opacity:0.85;">生成时间：{{ generated_at }}</div>
+      </div>
+
+      <table style="width:100%;border-collapse:separate;border-spacing:12px 0;margin-bottom:20px;">
+        <tr>
+          <td style="background:#ffffff;border-radius:16px;padding:18px;border:1px solid #dbe4f0;">
+            <div style="font-size:12px;color:#64748b;">服务器总数</div>
+            <div style="font-size:30px;font-weight:700;">{{ summary.total_hosts }}</div>
+          </td>
+          <td style="background:#ffffff;border-radius:16px;padding:18px;border:1px solid #dbe4f0;">
+            <div style="font-size:12px;color:#64748b;">正常</div>
+            <div style="font-size:30px;font-weight:700;color:#047857;">{{ summary.success_count }}</div>
+          </td>
+          <td style="background:#ffffff;border-radius:16px;padding:18px;border:1px solid #dbe4f0;">
+            <div style="font-size:12px;color:#64748b;">异常</div>
+            <div style="font-size:30px;font-weight:700;color:#c2410c;">{{ summary.failed_count }}</div>
+          </td>
+          <td style="background:#ffffff;border-radius:16px;padding:18px;border:1px solid #dbe4f0;">
+            <div style="font-size:12px;color:#64748b;">高风险数</div>
+            <div style="font-size:30px;font-weight:700;color:#b45309;">{{ summary.risk_count }}</div>
+          </td>
+        </tr>
+      </table>
+
+      <div style="background:#ffffff;border-radius:18px;padding:22px;border:1px solid #dbe4f0;margin-bottom:20px;">
+        <div style="font-size:18px;font-weight:700;margin-bottom:12px;">风险摘要</div>
+        <ul style="margin:0;padding-left:20px;color:#475569;">
+          {% for item in risk_items %}
+          <li style="margin-bottom:8px;">{{ item }}</li>
+          {% else %}
+          <li>当前无高风险项</li>
+          {% endfor %}
+        </ul>
+      </div>
+
+      <div style="background:#ffffff;border-radius:18px;padding:22px;border:1px solid #dbe4f0;margin-bottom:20px;">
+        <div style="font-size:18px;font-weight:700;margin-bottom:12px;">资源看板</div>
+        <table style="width:100%;border-collapse:collapse;">
+          <tr>
+            <th style="text-align:left;padding:10px 8px;background:#f8fafc;font-size:12px;color:#475569;">主机</th>
+            <th style="text-align:left;padding:10px 8px;background:#f8fafc;font-size:12px;color:#475569;">状态</th>
+            <th style="text-align:left;padding:10px 8px;background:#f8fafc;font-size:12px;color:#475569;">CPU</th>
+            <th style="text-align:left;padding:10px 8px;background:#f8fafc;font-size:12px;color:#475569;">内存</th>
+            <th style="text-align:left;padding:10px 8px;background:#f8fafc;font-size:12px;color:#475569;">总体磁盘</th>
+            <th style="text-align:left;padding:10px 8px;background:#f8fafc;font-size:12px;color:#475569;">GPU概况</th>
+          </tr>
+          {% for host in hosts %}
+          <tr>
+            <td style="padding:12px 8px;border-top:1px solid #e5e7eb;font-size:13px;">
+              <div style="font-weight:700;">{{ host.host_name }}</div>
+              <div style="color:#64748b;">{{ host.host }}</div>
+            </td>
+            <td style="padding:12px 8px;border-top:1px solid #e5e7eb;font-size:13px;">
+              <span style="display:inline-block;padding:6px 10px;border-radius:999px;background:#f8fafc;color:{{ host.status_color }};font-weight:700;">{{ host.status_text }}</span>
+            </td>
+            <td style="padding:12px 8px;border-top:1px solid #e5e7eb;font-size:13px;">{{ "%.1f%%"|format(host.cpu_percent) if host.cpu_percent is not none else "N/A" }}</td>
+            <td style="padding:12px 8px;border-top:1px solid #e5e7eb;font-size:13px;">{{ "%.1f%%"|format(host.memory_percent) if host.memory_percent is not none else "N/A" }}</td>
+            <td style="padding:12px 8px;border-top:1px solid #e5e7eb;font-size:13px;">{{ host.disk_total_text }}</td>
+            <td style="padding:12px 8px;border-top:1px solid #e5e7eb;font-size:13px;">{{ host.gpu_total_text }}</td>
+          </tr>
+          {% endfor %}
+        </table>
+      </div>
+
+      <div style="background:#ffffff;border-radius:18px;padding:22px;border:1px solid #dbe4f0;">
+        <div style="font-size:18px;font-weight:700;margin-bottom:12px;">使用归属摘要</div>
+        {% for host in hosts %}
+        <div style="border-top:1px solid #e5e7eb;padding:14px 0;">
+          <div style="font-size:16px;font-weight:700;margin-bottom:8px;">{{ host.host_name }}</div>
+          <div style="font-size:13px;color:#334155;margin-bottom:6px;">CPU 主要占用：{{ host.top_cpu_owner }}</div>
+          <div style="font-size:13px;color:#334155;margin-bottom:6px;">内存主要占用：{{ host.top_memory_owner }}</div>
+          <div style="font-size:13px;color:#334155;">用户归属：{{ host.ownership_text }}</div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </body>
+</html>

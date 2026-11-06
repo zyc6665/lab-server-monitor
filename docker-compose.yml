@@ -1,0 +1,20 @@
+services:
+  servermanage:
+    container_name: servermanage
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      TZ: Asia/Shanghai
+      CRON_SCHEDULE: "0 9 * * *"
+      WEEKLY_CRON_SCHEDULE: "0 16 * * 5"
+      APP_CONFIG_PATH: /app/config.yaml
+      APP_DOTENV_PATH: /app/.env
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro
+      - ./.env:/app/.env:ro
+      - ./ssh:/app/ssh:ro
+      - ./data:/app/data
+    # 如果 bridge 网络无法访问目标服务器，可改为 host 模式
+    # network_mode: host

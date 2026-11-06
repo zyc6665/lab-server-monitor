@@ -1,0 +1,49 @@
+{{ subject }}
+========================================================================
+生成时间: {{ generated_at }}
+统计周期: {{ week_range }}
+
+总体概览
+========================================================================
+服务器总数: {{ summary.total_hosts }}
+有数据主机: {{ summary.with_data_count }}
+数据不足主机: {{ summary.insufficient_data_count }}
+无数据主机: {{ summary.no_data_count }}
+
+高频算力服务器
+========================================================================
+{% for host in busy_hosts %}
+- {{ host.host_name }} ({{ host.host }})
+  CPU 日均/峰值: {{ "%.1f%%"|format(host.cpu_avg) if host.cpu_avg is not none else "N/A" }} / {{ "%.1f%%"|format(host.cpu_max) if host.cpu_max is not none else "N/A" }}
+  内存日均/峰值: {{ "%.1f%%"|format(host.memory_avg_percent) if host.memory_avg_percent is not none else "N/A" }} / {{ "%.1f%%"|format(host.memory_max_percent) if host.memory_max_percent is not none else "N/A" }}
+  GPU 日均/峰值: {{ "%.1f%%"|format(host.gpu_util_avg) if host.gpu_util_avg is not none else "N/A" }} / {{ "%.1f%%"|format(host.gpu_util_max) if host.gpu_util_max is not none else "N/A" }}
+  有效样本: {{ host.sample_count }}
+{% else %}
+- 本周无高频算力服务器
+{% endfor %}
+
+经常空闲服务器
+========================================================================
+{% for host in idle_hosts %}
+- {{ host.host_name }} ({{ host.host }})
+  CPU 日均/峰值: {{ "%.1f%%"|format(host.cpu_avg) if host.cpu_avg is not none else "N/A" }} / {{ "%.1f%%"|format(host.cpu_max) if host.cpu_max is not none else "N/A" }}
+  内存日均/峰值: {{ "%.1f%%"|format(host.memory_avg_percent) if host.memory_avg_percent is not none else "N/A" }} / {{ "%.1f%%"|format(host.memory_max_percent) if host.memory_max_percent is not none else "N/A" }}
+  有效样本: {{ host.sample_count }}
+{% else %}
+- 本周无经常空闲服务器
+{% endfor %}
+
+逐主机详情
+========================================================================
+{% for host in hosts %}
+- {{ host.host_name }} ({{ host.host }})
+  状态: {% if host.sample_count == 0 %}无数据{% elif host.sample_count < 3 %}数据不足{% else %}正常{% endif %}
+  CPU 日均/峰值/谷值: {{ "%.1f%%"|format(host.cpu_avg) if host.cpu_avg is not none else "N/A" }} / {{ "%.1f%%"|format(host.cpu_max) if host.cpu_max is not none else "N/A" }} / {{ "%.1f%%"|format(host.cpu_min) if host.cpu_min is not none else "N/A" }}
+  内存日均/峰值: {{ "%.1f%%"|format(host.memory_avg_percent) if host.memory_avg_percent is not none else "N/A" }} / {{ "%.1f%%"|format(host.memory_max_percent) if host.memory_max_percent is not none else "N/A" }}
+  磁盘日均/峰值: {{ "%.1f%%"|format(host.disk_avg_percent) if host.disk_avg_percent is not none else "N/A" }} / {{ "%.1f%%"|format(host.disk_max_percent) if host.disk_max_percent is not none else "N/A" }}
+  GPU 日均/峰值: {{ "%.1f%%"|format(host.gpu_util_avg) if host.gpu_util_avg is not none else "N/A" }} / {{ "%.1f%%"|format(host.gpu_util_max) if host.gpu_util_max is not none else "N/A" }}
+  平均负载: {{ "%.2f"|format(host.load_avg) if host.load_avg is not none else "N/A" }}
+  平均在线用户: {{ "%.1f"|format(host.users_avg) if host.users_avg is not none else "N/A" }}
+  平均进程数: {{ "%.0f"|format(host.processes_avg) if host.processes_avg is not none else "N/A" }}
+  有效样本: {{ host.sample_count }}
+{% endfor %}

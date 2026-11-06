@@ -1,0 +1,69 @@
+{{ subject }}
+========================================================================
+生成时间: {{ generated_at }}
+服务器总数: {{ summary.total_hosts }}
+成功: {{ summary.success_count }}
+失败: {{ summary.failed_count }}
+
+{% if failed_hosts %}
+Failed Hosts
+========================================================================
+{% for host in failed_hosts %}
+- {{ host.host_name }} ({{ host.host }}): {{ host.reason }}
+{% endfor %}
+
+{% endif %}
+{% for host in hosts %}
+========================================================================
+Host: {{ host.host_name }} ({{ host.host }})
+========================================================================
+Overview     : {{ host.overview }}
+System       : {{ host.metrics.os_pretty_name or 'Unknown OS' }} | {{ host.metrics.kernel_version or 'Unknown Kernel' }} | Uptime {{ host.metrics.uptime or 'N/A' }}
+{% if host.has_partial_errors %}
+Collection Errors
+{% for error in host.errors %}
+- {{ error.stage }}: {{ error.message }}
+{% endfor %}
+
+{% endif %}
+Load Avg     : {% if host.metrics.load_average %}{{ host.metrics.load_average.load_1 }} / {{ host.metrics.load_average.load_5 }} / {{ host.metrics.load_average.load_15 }}{% else %}N/A{% endif %}
+Users Online : {{ host.users_online }}
+Proc By User : {{ host.process_counts_text }}
+Memory       : {{ host.memory_used_gib }}/{{ host.memory_total_gib }}
+
+Disk Usage
+{% for row in host.metrics.disk_usage %}
+- {{ row.mountpoint }}  {{ row.used }} / {{ row.size }}  {{ row.percent }}
+{% else %}
+- N/A
+{% endfor %}
+
+Top CPU Processes
+{% for row in host.metrics.top_cpu_processes %}
+- {{ row.display_user }} PID={{ row.pid }} CPU={{ row.cpu_percent }} MEM={{ row.mem_percent }} CMD={{ row.command }}
+{% else %}
+- N/A
+{% endfor %}
+
+Top Memory Processes
+{% for row in host.metrics.top_memory_processes %}
+- {{ row.display_user }} PID={{ row.pid }} CPU={{ row.cpu_percent }} MEM={{ row.mem_percent }} CMD={{ row.command }}
+{% else %}
+- N/A
+{% endfor %}
+
+GPU Summary
+{% for row in host.metrics.gpu_summary %}
+- GPU{{ row.index }} {{ row.name }} util={{ row.utilization_percent }} temp={{ row.temperature_c if row.temperature_c is not none else 'N/A' }} mem={{ row.memory_used_mb }}/{{ row.memory_total_mb }} MiB
+{% else %}
+- N/A
+{% endfor %}
+
+GPU Processes
+{% for row in host.metrics.gpu_processes %}
+- GPU{{ row.index }} PID={{ row.pid }} USER={{ row.username or 'unknown' }} MEM={{ row.memory_used_mb }} CMD={{ row.command }}
+{% else %}
+- N/A
+{% endfor %}
+
+{% endfor %}

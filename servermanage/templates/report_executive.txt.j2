@@ -1,0 +1,27 @@
+{{ subject }}
+========================================================================
+生成时间: {{ generated_at }}
+服务器总数: {{ summary.total_hosts }}
+正常: {{ summary.success_count }}
+异常: {{ summary.failed_count }}
+高风险数: {{ summary.risk_count }}
+
+风险摘要
+========================================================================
+{% for item in risk_items %}
+- {{ item }}
+{% else %}
+- 当前无高风险项
+{% endfor %}
+
+资源看板
+========================================================================
+{% for host in hosts %}
+- {{ host.host_name }} | 状态={{ host.status_text }} | CPU={{ "%.1f%%"|format(host.cpu_percent) if host.cpu_percent is not none else "N/A" }} | MEM={{ "%.1f%%"|format(host.memory_percent) if host.memory_percent is not none else "N/A" }} | DISK={{ host.disk_total_text }} | GPU={{ host.gpu_total_text }}
+{% endfor %}
+
+使用归属摘要
+========================================================================
+{% for host in hosts %}
+- {{ host.host_name }} | CPU={{ host.top_cpu_owner }} | MEM={{ host.top_memory_owner }} | 用户归属={{ host.ownership_text }}
+{% endfor %}

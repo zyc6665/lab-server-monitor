@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <body style="margin:0;padding:24px;background:#eef3f8;color:#0f172a;font-family:'PingFang SC','Microsoft YaHei',Arial,sans-serif;">
+    <div style="max-width:980px;margin:0 auto;">
+      <div style="background:linear-gradient(135deg,#0f172a,#1d4ed8);color:#ffffff;border-radius:20px;padding:28px 28px 24px 28px;margin-bottom:20px;">
+        <div style="font-size:28px;font-weight:700;margin-bottom:8px;">{{ subject }}</div>
+        <div style="font-size:13px;opacity:0.85;">生成时间：{{ generated_at }} | 统计周期：{{ week_range }}</div>
+      </div>
+
+      <table style="width:100%;border-collapse:separate;border-spacing:12px 0;margin-bottom:20px;">
+        <tr>
+          <td style="background:#ffffff;border-radius:16px;padding:18px;border:1px solid #dbe4f0;">
+            <div style="font-size:12px;color:#64748b;">服务器总数</div>
+            <div style="font-size:30px;font-weight:700;">{{ summary.total_hosts }}</div>
+          </td>
+          <td style="background:#ffffff;border-radius:16px;padding:18px;border:1px solid #dbe4f0;">
+            <div style="font-size:12px;color:#64748b;">有数据</div>
+            <div style="font-size:30px;font-weight:700;color:#047857;">{{ summary.with_data_count }}</div>
+          </td>
+          <td style="background:#ffffff;border-radius:16px;padding:18px;border:1px solid #dbe4f0;">
+            <div style="font-size:12px;color:#64748b;">数据不足</div>
+            <div style="font-size:30px;font-weight:700;color:#b45309;">{{ summary.insufficient_data_count }}</div>
+          </td>
+          <td style="background:#ffffff;border-radius:16px;padding:18px;border:1px solid #dbe4f0;">
+            <div style="font-size:12px;color:#64748b;">无数据</div>
+            <div style="font-size:30px;font-weight:700;color:#c2410c;">{{ summary.no_data_count }}</div>
+          </td>
+        </tr>
+      </table>
+
+      <div style="background:#ffffff;border-radius:18px;padding:22px;border:1px solid #dbe4f0;margin-bottom:20px;">
+        <div style="font-size:18px;font-weight:700;margin-bottom:12px;">高频算力服务器</div>
+        {% if busy_hosts %}
+        <table style="width:100%;border-collapse:collapse;">
+          <tr>
+            <th style="text-align:left;padding:10px 8px;background:#f8fafc;font-size:12px;color:#475569;">主机</th>
+            <th style="text-align:left;padding:10px 8px;background:#f8fafc;font-size:12px;color:#475569;">CPU 日均/峰值</th>
+            <th style="text-align:left;padding:10px 8px;background:#f8fafc;font-size:12px;color:#475569;">内存 日均/峰值</th>
+            <th style="text-align:left;padding:10px 8px;background:#f8fafc;font-size:12px;color:#475569;">GPU 日均/峰值</th>
+            <th style="text-align:left;padding:10px 8px;background:#f8fafc;font-size:12px;color:#475569;">样本数</th>
+          </tr>
+          {% for host in busy_hosts %}
+          <tr>
+            <td style="padding:12px 8px;border-top:1px solid #e5e7eb;font-size:13px;">
+              <div style="font-weight:700;">{{ host.host_name }}</div>
+              <div style="color:#64748b;">{{ host.host }}</div>
+            </td>
+            <td style="padding:12px 8px;border-top:1px solid #e5e7eb;font-size:13px;">{{ "%.1f%%"|format(host.cpu_avg) if host.cpu_avg is not none else "N/A" }} / {{ "%.1f%%"|format(host.cpu_max) if host.cpu_max is not none else "N/A" }}</td>
+            <td style="padding:12px 8px;border-top:1px solid #e5e7eb;font-size:13px;">{{ "%.1f%%"|format(host.memory_avg_percent) if host.memory_avg_percent is not none else "N/A" }} / {{ "%.1f%%"|format(host.memory_max_percent) if host.memory_max_percent is not none else "N/A" }}</td>
+            <td style="padding:12px 8px;border-top:1px solid #e5e7eb;font-size:13px;">{{ "%.1f%%"|format(host.gpu_util_avg) if host.gpu_util_avg is not none else "N/A" }} / {{ "%.1f%%"|format(host.gpu_util_max) if host.gpu_util_max is not none else "N/A" }}</td>
+            <td style="padding:12px 8px;border-top:1px solid #e5e7eb;font-size:13px;">{{ host.sample_count }}</td>
+          </tr>
+          {% endfor %}
+        </table>
+        {% else %}
+        <div style="color:#64748b;font-size:13px;">本周无高频算力服务器</div>
+        {% endif %}
+      </div>
+
+      <div style="background:#ffffff;border-radius:18px;padding:22px;border:1px solid #dbe4f0;margin-bottom:20px;">
+        <div style="font-size:18px;font-weight:700;margin-bottom:12px;">经常空闲服务器</div>
+        {% if idle_hosts %}
+        <table style="width:100%;border-collapse:collapse;">
+          <tr>
+            <th style="text-align:left;padding:10px 8px;background:#f8fafc;font-size:12px;color:#475569;">主机</th>
+            <th style="text-align:left;padding:10px 8px;background:#f8fafc;font-size:12px;color:#475569;">CPU 日均/峰值</th>
+            <th style="text-align:left;padding:10px 8px;background:#f8fafc;font-size:12px;color:#475569;">内存 日均/峰值</th>
+            <th style="text-align:left;padding:10px 8px;background:#f8fafc;font-size:12px;color:#475569;">GPU 日均/峰值</th>
+            <th style="text-align:left;padding:10px 8px;background:#f8fafc;font-size:12px;color:#475569;">样本数</th>
+          </tr>
+          {% for host in idle_hosts %}
+          <tr>
+            <td style="padding:12px 8px;border-top:1px solid #e5e7eb;font-size:13px;">
+              <div style="font-weight:700;">{{ host.host_name }}</div>
+              <div style="color:#64748b;">{{ host.host }}</div>
+            </td>
+            <td style="padding:12px 8px;border-top:1px solid #e5e7eb;font-size:13px;">{{ "%.1f%%"|format(host.cpu_avg) if host.cpu_avg is not none else "N/A" }} / {{ "%.1f%%"|format(host.cpu_max) if host.cpu_max is not none else "N/A" }}</td>
+            <td style="padding:12px 8px;border-top:1px solid #e5e7eb;font-size:13px;">{{ "%.1f%%"|format(host.memory_avg_percent) if host.memory_avg_percent is not none else "N/A" }} / {{ "%.1f%%"|format(host.memory_max_percent) if host.memory_max_percent is not none else "N/A" }}</td>
+            <td style="padding:12px 8px;border-top:1px solid #e5e7eb;font-size:13px;">{{ "%.1f%%"|format(host.gpu_util_avg) if host.gpu_util_avg is not none else "N/A" }} / {{ "%.1f%%"|format(host.gpu_util_max) if host.gpu_util_max is not none else "N/A" }}</td>
+            <td style="padding:12px 8px;border-top:1px solid #e5e7eb;font-size:13px;">{{ host.sample_count }}</td>
+          </tr>
+          {% endfor %}
+        </table>
+        {% else %}
+        <div style="color:#64748b;font-size:13px;">本周无经常空闲服务器</div>
+        {% endif %}
+      </div>
+
+      <div style="background:#ffffff;border-radius:18px;padding:22px;border:1px solid #dbe4f0;margin-bottom:20px;">
+        <div style="font-size:18px;font-weight:700;margin-bottom:12px;">逐主机详情与趋势</div>
+        {% for host in hosts %}
+        <div style="border-top:1px solid #e5e7eb;padding:18px 0;">
+          <div style="font-size:16px;font-weight:700;margin-bottom:4px;">{{ host.host_name }} <span style="font-weight:400;color:#64748b;">({{ host.host }})</span></div>
+          <div style="font-size:12px;color:#64748b;margin-bottom:12px;">
+            CPU 日均/峰值/谷值：{{ "%.1f%%"|format(host.cpu_avg) if host.cpu_avg is not none else "N/A" }} / {{ "%.1f%%"|format(host.cpu_max) if host.cpu_max is not none else "N/A" }} / {{ "%.1f%%"|format(host.cpu_min) if host.cpu_min is not none else "N/A" }} |
+            内存 日均/峰值：{{ "%.1f%%"|format(host.memory_avg_percent) if host.memory_avg_percent is not none else "N/A" }} / {{ "%.1f%%"|format(host.memory_max_percent) if host.memory_max_percent is not none else "N/A" }} |
+            磁盘 日均/峰值：{{ "%.1f%%"|format(host.disk_avg_percent) if host.disk_avg_percent is not none else "N/A" }} / {{ "%.1f%%"|format(host.disk_max_percent) if host.disk_max_percent is not none else "N/A" }} |
+            样本数：{{ host.sample_count }}
+          </div>
+          <div style="display:flex;gap:16px;flex-wrap:wrap;">
+            <div style="background:#f8fafc;border-radius:10px;padding:8px;">{{ host.cpu_chart|safe }}</div>
+            <div style="background:#f8fafc;border-radius:10px;padding:8px;">{{ host.memory_chart|safe }}</div>
+            {% if host.daily_points and host.daily_points|selectattr("gpu_util", "defined")|list|length > 0 %}
+            <div style="background:#f8fafc;border-radius:10px;padding:8px;">{{ host.gpu_chart|safe }}</div>
+            {% endif %}
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </body>
+</html>

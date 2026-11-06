@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <body style="margin:0;padding:24px;background:#f3f6fb;color:#1f2937;font-family:Arial,'PingFang SC','Microsoft YaHei',sans-serif;">
+    <div style="max-width:960px;margin:0 auto;">
+      <div style="background:#ffffff;border:1px solid #dbe4f0;border-radius:16px;padding:24px;margin-bottom:20px;">
+        <div style="font-size:24px;font-weight:700;margin-bottom:8px;">{{ subject }}</div>
+        <div style="font-size:13px;color:#6b7280;margin-bottom:18px;">生成时间：{{ generated_at }}</div>
+        <table style="width:100%;border-collapse:separate;border-spacing:12px 0;">
+          <tr>
+            <td style="background:#eef5ff;border-radius:12px;padding:16px;">
+              <div style="font-size:12px;color:#6b7280;">服务器总数</div>
+              <div style="font-size:24px;font-weight:700;">{{ summary.total_hosts }}</div>
+            </td>
+            <td style="background:#ecfdf3;border-radius:12px;padding:16px;">
+              <div style="font-size:12px;color:#6b7280;">成功</div>
+              <div style="font-size:24px;font-weight:700;color:#047857;">{{ summary.success_count }}</div>
+            </td>
+            <td style="background:#fff4ec;border-radius:12px;padding:16px;">
+              <div style="font-size:12px;color:#6b7280;">失败</div>
+              <div style="font-size:24px;font-weight:700;color:#c2410c;">{{ summary.failed_count }}</div>
+            </td>
+          </tr>
+        </table>
+      </div>
+
+      {% if failed_hosts %}
+      <div style="background:#ffffff;border:1px solid #fed7aa;border-radius:16px;padding:24px;margin-bottom:20px;">
+        <div style="font-size:18px;font-weight:700;color:#c2410c;margin-bottom:12px;">Failed Hosts</div>
+        <ul style="margin:0;padding-left:20px;color:#7c2d12;">
+          {% for host in failed_hosts %}
+          <li style="margin-bottom:8px;">{{ host.host_name }} ({{ host.host }}): {{ host.reason }}</li>
+          {% endfor %}
+        </ul>
+      </div>
+      {% endif %}
+
+      {% for host in hosts %}
+      <div style="background:#ffffff;border:1px solid #dbe4f0;border-radius:16px;padding:24px;margin-bottom:20px;">
+        <table style="width:100%;border-collapse:collapse;margin-bottom:16px;">
+          <tr>
+            <td style="vertical-align:top;padding-right:12px;">
+              <div style="font-size:20px;font-weight:700;">{{ host.host_name }} ({{ host.host }})</div>
+              <div style="font-size:13px;color:#6b7280;margin-top:4px;">
+                {{ host.metrics.os_pretty_name or 'Unknown OS' }} | {{ host.metrics.kernel_version or 'Unknown Kernel' }} | Uptime {{ host.metrics.uptime or 'N/A' }}
+              </div>
+            </td>
+            <td style="width:160px;vertical-align:top;text-align:right;">
+              <span style="display:inline-block;padding:8px 12px;border-radius:999px;background:{% if host.success %}#ecfdf3{% else %}#fff4ec{% endif %};color:{% if host.success %}#047857{% else %}#c2410c{% endif %};font-size:12px;font-weight:700;">
+                {% if host.success %}SUCCESS{% else %}PARTIAL / FAILED{% endif %}
+              </span>
+            </td>
+          </tr>
+        </table>
+
+        <div style="background:#f8fbff;border-radius:12px;padding:14px 16px;margin-bottom:16px;font-size:14px;font-weight:600;">{{ host.overview }}</div>
+
+        {% if host.has_partial_errors %}
+        <div style="background:#fff7ed;border:1px solid #fdba74;border-radius:12px;padding:12px 14px;margin-bottom:16px;">
+          <div style="font-size:14px;font-weight:700;color:#9a3412;margin-bottom:8px;">采集异常</div>
+          <ul style="margin:0;padding-left:20px;color:#9a3412;">
+            {% for error in host.errors %}
+            <li style="margin-bottom:6px;">{{ error.stage }}: {{ error.message }}</li>
+            {% endfor %}
+          </ul>
+        </div>
+        {% endif %}
+
+        <table style="width:100%;border-collapse:collapse;margin-bottom:16px;">
+          <tr>
+            <td style="padding:8px 0;font-size:13px;color:#6b7280;width:120px;">Load Avg</td>
+            <td style="padding:8px 0;font-size:14px;">
+              {% if host.metrics.load_average %}
+              {{ host.metrics.load_average.load_1 }} / {{ host.metrics.load_average.load_5 }} / {{ host.metrics.load_average.load_15 }}
+              {% else %}
+              N/A
+              {% endif %}
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:8px 0;font-size:13px;color:#6b7280;">Users Online</td>
+            <td style="padding:8px 0;font-size:14px;">{{ host.users_online }}</td>
+          </tr>
+          <tr>
+            <td style="padding:8px 0;font-size:13px;color:#6b7280;">Proc By User</td>
+            <td style="padding:8px 0;font-size:14px;">{{ host.process_counts_text }}</td>
+          </tr>
+          <tr>
+            <td style="padding:8px 0;font-size:13px;color:#6b7280;">Memory</td>
+            <td style="padding:8px 0;font-size:14px;">{{ host.memory_used_gib }}/{{ host.memory_total_gib }}</td>
+          </tr>
+        </table>
+
+        <div style="font-size:16px;font-weight:700;margin-bottom:10px;">Disk Usage</div>
+        <table style="width:100%;border-collapse:collapse;margin-bottom:16px;">
+          <tr>
+            <th style="text-align:left;padding:10px 8px;background:#f8fafc;font-size:12px;color:#475569;">Mount</th>
+            <th style="text-align:left;padding:10px 8px;background:#f8fafc;font-size:12px;color:#475569;">Used</th>
+            <th style="text-align:left;padding:10px 8px;background:#f8fafc;font-size:12px;color:#475569;">Size</th>
+            <th style="text-align:left;padding:10px 8px;background:#f8fafc;font-size:12px;color:#475569;">Usage</th>
+          </tr>
+          {% for row in host.metrics.disk_usage %}
+          <tr>
+            <td style="padding:10px 8px;border-top:1px solid #e5e7eb;font-size:13px;">{{ row.mountpoint }}</td>
+            <td style="padding:10px 8px;border-top:1px solid #e5e7eb;font-size:13px;">{{ row.used }}</td>
+            <td style="padding:10px 8px;border-top:1px solid #e5e7eb;font-size:13px;">{{ row.size }}</td>
+            <td style="padding:10px 8px;border-top:1px solid #e5e7eb;font-size:13px;">{{ row.percent }}</td>
+          </tr>
+          {% else %}
+          <tr><td colspan="4" style="padding:10px 8px;border-top:1px solid #e5e7eb;font-size:13px;">N/A</td></tr>
+          {% endfor %}
+        </table>
+
+        <div style="font-size:16px;font-weight:700;margin-bottom:10px;">Top CPU Processes</div>
+        <table style="width:100%;border-collapse:collapse;margin-bottom:16px;">
+          <tr>
+            <th style="text-align:left;padding:10px 8px;background:#f8fafc;font-size:12px;color:#475569;">USER</th>
+            <th style="text-align:left;padding:10px 8px;background:#f8fafc;font-size:12px;color:#475569;">PID</th>
+            <th style="text-align:left;padding:10px 8px;background:#f8fafc;font-size:12px;color:#475569;">CPU%</th>
+            <th style="text-align:left;padding:10px 8px;background:#f8fafc;font-size:12px;color:#475569;">MEM%</th>
+            <th style="text-align:left;padding:10px 8px;background:#f8fafc;font-size:12px;color:#475569;">CMD</th>
+          </tr>
+          {% for row in host.metrics.top_cpu_processes %}
+          <tr>
+            <td style="padding:10px 8px;border-top:1px solid #e5e7eb;font-size:13px;">{{ row.display_user }}</td>
+            <td style="padding:10px 8px;border-top:1px solid #e5e7eb;font-size:13px;">{{ row.pid }}</td>
+            <td style="padding:10px 8px;border-top:1px solid #e5e7eb;font-size:13px;">{{ row.cpu_percent }}</td>
+            <td style="padding:10px 8px;border-top:1px solid #e5e7eb;font-size:13px;">{{ row.mem_percent }}</td>
+            <td style="padding:10px 8px;border-top:1px solid #e5e7eb;font-size:13px;">{{ row.command }}</td>
+          </tr>
+          {% else %}
+          <tr><td colspan="5" style="padding:10px 8px;border-top:1px solid #e5e7eb;font-size:13px;">N/A</td></tr>
+          {% endfor %}
+        </table>
+
+        <div style="font-size:16px;font-weight:700;margin-bottom:10px;">Top Memory Processes</div>
+        <table style="width:100%;border-collapse:collapse;margin-bottom:16px;">
+          <tr>
+            <th style="text-align:left;padding:10px 8px;background:#f8fafc;font-size:12px;color:#475569;">USER</th>
+            <th style="text-align:left;padding:10px 8px;background:#f8fafc;font-size:12px;color:#475569;">PID</th>
+            <th style="text-align:left;padding:10px 8px;background:#f8fafc;font-size:12px;color:#475569;">CPU%</th>
+            <th style="text-align:left;padding:10px 8px;background:#f8fafc;font-size:12px;color:#475569;">MEM%</th>
+            <th style="text-align:left;padding:10px 8px;background:#f8fafc;font-size:12px;color:#475569;">CMD</th>
+          </tr>
+          {% for row in host.metrics.top_memory_processes %}
+          <tr>
+            <td style="padding:10px 8px;border-top:1px solid #e5e7eb;font-size:13px;">{{ row.display_user }}</td>
+            <td style="padding:10px 8px;border-top:1px solid #e5e7eb;font-size:13px;">{{ row.pid }}</td>
+            <td style="padding:10px 8px;border-top:1px solid #e5e7eb;font-size:13px;">{{ row.cpu_percent }}</td>
+            <td style="padding:10px 8px;border-top:1px solid #e5e7eb;font-size:13px;">{{ row.mem_percent }}</td>
+            <td style="padding:10px 8px;border-top:1px solid #e5e7eb;font-size:13px;">{{ row.command }}</td>
+          </tr>
+          {% else %}
+          <tr><td colspan="5" style="padding:10px 8px;border-top:1px solid #e5e7eb;font-size:13px;">N/A</td></tr>
+          {% endfor %}
+        </table>
+
+        <div style="font-size:16px;font-weight:700;margin-bottom:10px;">GPU Summary</div>
+        <table style="width:100%;border-collapse:collapse;margin-bottom:16px;">
+          <tr>
+            <th style="text-align:left;padding:10px 8px;background:#f8fafc;font-size:12px;color:#475569;">GPU</th>
+            <th style="text-align:left;padding:10px 8px;background:#f8fafc;font-size:12px;color:#475569;">NAME</th>
+            <th style="text-align:left;padding:10px 8px;background:#f8fafc;font-size:12px;color:#475569;">UTIL%</th>
+            <th style="text-align:left;padding:10px 8px;background:#f8fafc;font-size:12px;color:#475569;">TEMP</th>
+            <th style="text-align:left;padding:10px 8px;background:#f8fafc;font-size:12px;color:#475569;">MEM</th>
+          </tr>
+          {% for row in host.metrics.gpu_summary %}
+          <tr>
+            <td style="padding:10px 8px;border-top:1px solid #e5e7eb;font-size:13px;">{{ row.index }}</td>
+            <td style="padding:10px 8px;border-top:1px solid #e5e7eb;font-size:13px;">{{ row.name }}</td>
+            <td style="padding:10px 8px;border-top:1px solid #e5e7eb;font-size:13px;">{{ row.utilization_percent }}</td>
+            <td style="padding:10px 8px;border-top:1px solid #e5e7eb;font-size:13px;">{{ row.temperature_c if row.temperature_c is not none else 'N/A' }}</td>
+            <td style="padding:10px 8px;border-top:1px solid #e5e7eb;font-size:13px;">{{ row.memory_used_mb }} / {{ row.memory_total_mb }} MiB</td>
+          </tr>
+          {% else %}
+          <tr><td colspan="5" style="padding:10px 8px;border-top:1px solid #e5e7eb;font-size:13px;">N/A</td></tr>
+          {% endfor %}
+        </table>
+
+        <div style="font-size:16px;font-weight:700;margin-bottom:10px;">GPU Processes</div>
+        <table style="width:100%;border-collapse:collapse;margin-bottom:8px;">
+          <tr>
+            <th style="text-align:left;padding:10px 8px;background:#f8fafc;font-size:12px;color:#475569;">GPU</th>
+            <th style="text-align:left;padding:10px 8px;background:#f8fafc;font-size:12px;color:#475569;">PID</th>
+            <th style="text-align:left;padding:10px 8px;background:#f8fafc;font-size:12px;color:#475569;">USER</th>
+            <th style="text-align:left;padding:10px 8px;background:#f8fafc;font-size:12px;color:#475569;">GPU MEM</th>
+            <th style="text-align:left;padding:10px 8px;background:#f8fafc;font-size:12px;color:#475569;">CMD</th>
+          </tr>
+          {% for row in host.metrics.gpu_processes %}
+          <tr>
+            <td style="padding:10px 8px;border-top:1px solid #e5e7eb;font-size:13px;">{{ row.index }}</td>
+            <td style="padding:10px 8px;border-top:1px solid #e5e7eb;font-size:13px;">{{ row.pid }}</td>
+            <td style="padding:10px 8px;border-top:1px solid #e5e7eb;font-size:13px;">{{ row.username or 'unknown' }}</td>
+            <td style="padding:10px 8px;border-top:1px solid #e5e7eb;font-size:13px;">{{ row.memory_used_mb }} MiB</td>
+            <td style="padding:10px 8px;border-top:1px solid #e5e7eb;font-size:13px;">{{ row.command }}</td>
+          </tr>
+          {% else %}
+          <tr><td colspan="5" style="padding:10px 8px;border-top:1px solid #e5e7eb;font-size:13px;">N/A</td></tr>
+          {% endfor %}
+        </table>
+      </div>
+      {% endfor %}
+    </div>
+  </body>
+</html>
