@@ -17,6 +17,9 @@ from __future__ import annotations
 
 import hmac
 import logging
+import secrets
+import time
+from collections import deque
 from datetime import datetime, timezone
 from typing import Any
 
@@ -31,6 +34,7 @@ from flask import (
 )
 
 from servermanage import storage
+from servermanage.settings import SettingsError
 from servermanage.timeutil import resolve_timezone
 
 LOGGER = logging.getLogger(__name__)
@@ -62,6 +66,81 @@ def _config(app: Flask):
 
 def _db_path(app: Flask):
     return app.config["DB_PATH"]
+
+
+def _settings_service(app: Flask):
+    """The optional :class:`SettingsService` injected by ``create_app``."""
+    return app.config.get("SETTINGS_SERVICE")
+
+
+# ---------------------------------------------------------------------------
+# Task 7: first-run setup, CSRF and config refresh helpers
+# ---------------------------------------------------------------------------
+
+# Only a request originating from the same machine may complete first-run setup:
+# until an admin credential exists there is nothing else guarding ``/setup``.
+_LOOPBACK_ADDRESSES = {"127.0.0.1", "::1", "localhost", "::ffff:127.0.0.1"}
+
+# Login throttling: the 6th failed attempt from one remote address inside the
+# rolling window is rejected with 429 (5 failures are tolerated).
+_LOGIN_FAILURE_LIMIT = 5
+_LOGIN_FAILURE_WINDOW_SECONDS = 60
+
+
+def _is_loopback(remote_addr: str | None) -> bool:
+    return (remote_addr or "") in _LOOPBACK_ADDRESSES
+
+
+def _csrf_token() -> str:
+    """Return the per-session CSRF token, creating one on first use."""
+    token = session.get("csrf_token")
+    if not isinstance(token, str) or not token:
+        token = secrets.token_urlsafe(32)
+        session["csrf_token"] = token
+    return token
+
+
+def _require_csrf():
+    """Validate the CSRF token for a state-changing request.
+
+    Returns ``None`` when the token is valid, otherwise a ``(body, 400)`` tuple
+    ready to be returned from ``before_request``.  Accepts either the hidden
+    ``csrf_token`` form field or the ``X-CSRF-Token`` header so plain HTML forms
+    and fetch()/XHR clients both work.
+    """
+    expected = session.get("csrf_token")
+    supplied = request.form.get("csrf_token") or request.headers.get("X-CSRF-Token")
+    if (
+        not isinstance(expected, str)
+        or not expected
+        or not isinstance(supplied, str)
+        or not supplied
+    ):
+        return ("CSRF 校验失败", 400)
+    if not hmac.compare_digest(expected, supplied):
+        return ("CSRF 校验失败", 400)
+    return None
+
+
+def _refresh_config(app: Flask) -> None:
+    """Reload settings from the service and publish the new config to the app.
+
+    Also rotates ``app.secret_key`` when the freshly loaded dashboard config
+    carries a session secret, and notifies ``on_config_changed`` so the polling
+    process can hot-apply the new settings.
+    """
+    service = _settings_service(app)
+    if service is None:
+        return
+    new_config = service.load()
+    app.config["CONFIG"] = new_config
+    app.config["config"] = new_config
+    new_secret = new_config.dashboard.session_secret
+    if new_secret:
+        app.secret_key = new_secret
+    callback = app.config.get("ON_CONFIG_CHANGED")
+    if callback is not None:
+        callback(new_config)
 
 
 def _parse_iso(value: Any) -> datetime | None:
@@ -314,18 +393,116 @@ def _build_host_detail(name: str, config, db_path) -> dict[str, Any] | None:
 def register_routes(app: Flask) -> None:
     """Register auth guards, API routes and the login/logout endpoints."""
 
+    # Expose the CSRF token helper to every template.
+    app.jinja_env.globals["csrf_token"] = _csrf_token
+
+    def _login_failures() -> dict[str, deque]:
+        return app.extensions.setdefault("login_failures", {})
+
+    def _too_many_failures(remote_addr: str) -> bool:
+        now = time.monotonic()
+        failures = _login_failures().get(remote_addr)
+        if failures is None:
+            return False
+        while failures and now - failures[0] > _LOGIN_FAILURE_WINDOW_SECONDS:
+            failures.popleft()
+        return len(failures) >= _LOGIN_FAILURE_LIMIT
+
+    def _record_failure(remote_addr: str) -> None:
+        now = time.monotonic()
+        failures = _login_failures().setdefault(remote_addr, deque())
+        while failures and now - failures[0] > _LOGIN_FAILURE_WINDOW_SECONDS:
+            failures.popleft()
+        failures.append(now)
+
     @app.before_request
     def _require_login():
-        if request.path == "/login" or request.path.startswith("/static/"):
+        path = request.path
+        if path.startswith("/static/"):
             return None
+
+        service = _settings_service(app)
+
+        # 1) First-run setup gate.  ``/setup`` itself must stay reachable, and
+        #    ``/login`` stays reachable so credentials can be checked/limited
+        #    (it simply fails until setup has created the admin credential).
+        if (
+            path not in ("/setup", "/login")
+            and service is not None
+            and service.setup_required()
+        ):
+            if path.startswith("/api/"):
+                return jsonify({"error": "setup_required"}), 428
+            return redirect(url_for("setup"))
+
+        # 2) CSRF protection for state-changing requests.  Enforced only when a
+        #    settings service is wired in, so the legacy app built by
+        #    ``tests/test_web_api.py`` (no service) keeps working unchanged.
+        #    ``/login`` is exempt because the credential itself is the proof and
+        #    ``/setup`` validates CSRF itself *after* its loopback check (a
+        #    non-loopback POST must be 403, not 400).
+        if (
+            service is not None
+            and path not in ("/login", "/setup")
+            and request.method in ("POST", "PUT", "DELETE")
+        ):
+            rejection = _require_csrf()
+            if rejection is not None:
+                return rejection
+
+        # 3) ``/setup`` and ``/login`` bypass the normal logged-in gate.
+        if path in ("/setup", "/login"):
+            return None
+
         config = _config(app)
         if not config.dashboard.auth.enabled:
             return None
         if session.get("logged_in"):
             return None
-        if request.path.startswith("/api/"):
+        if path.startswith("/api/"):
             return jsonify({"error": "unauthorized"}), 401
         return redirect(url_for("login"))
+
+    # -- first-run setup ---------------------------------------------------
+
+    @app.route("/setup", methods=["GET", "POST"])
+    def setup():
+        if not _is_loopback(request.remote_addr):
+            return render_template("setup.html", error="首次设置只允许本机访问"), 403
+
+        if request.method == "POST":
+            rejection = _require_csrf()
+            if rejection is not None:
+                return rejection
+
+        service = _settings_service(app)
+        if service is None:
+            return render_template("setup.html", error="设置服务不可用"), 500
+
+        if request.method == "GET":
+            if not service.setup_required():
+                return redirect(url_for("login"))
+            return render_template("setup.html")
+
+        username = (request.form.get("username") or "").strip() or "admin"
+        password = request.form.get("password", "")
+        confirm = request.form.get("confirm", "")
+
+        error = None
+        if len(password) < 8:
+            error = "密码长度至少 8 位"
+        elif password != confirm:
+            error = "两次输入的密码不一致"
+        else:
+            try:
+                service.set_admin_password(None, password, username=username)
+            except SettingsError as exc:
+                error = str(exc)
+            else:
+                _refresh_config(app)
+                return redirect(url_for("login"))
+
+        return render_template("setup.html", error=error, username=username), 400
 
     # -- authentication ----------------------------------------------------
 
@@ -337,26 +514,42 @@ def register_routes(app: Flask) -> None:
 
     @app.post("/login")
     def login_submit():
+        remote_addr = request.remote_addr or ""
+        if _too_many_failures(remote_addr):
+            LOGGER.warning("Dashboard login rate-limited for remote_addr=%r", remote_addr)
+            return (
+                render_template("login.html", error="尝试过于频繁，请稍后再试"),
+                429,
+            )
+
         auth = _config(app).dashboard.auth
         username = request.form.get("username", "")
         password = request.form.get("password", "")
-        expected_username = auth.username or ""
-        expected_password = auth.password or ""
 
-        username_ok = hmac.compare_digest(username, expected_username)
-        # An unset configured password must never authenticate (compare_digest
-        # against "" would otherwise accept an empty password).
-        password_ok = bool(expected_password) and hmac.compare_digest(
-            password, expected_password
-        )
+        service = _settings_service(app)
+        if service is not None:
+            credentials_ok = bool(auth.enabled) and service.verify_admin(username, password)
+        else:
+            expected_username = auth.username or ""
+            expected_password = auth.password or ""
 
-        if auth.enabled and username_ok and password_ok:
+            username_ok = hmac.compare_digest(username, expected_username)
+            # An unset configured password must never authenticate (compare_digest
+            # against "" would otherwise accept an empty password).
+            password_ok = bool(expected_password) and hmac.compare_digest(
+                password, expected_password
+            )
+            credentials_ok = bool(auth.enabled) and username_ok and password_ok
+
+        if credentials_ok:
+            _login_failures().pop(remote_addr, None)
             session.clear()
             session.permanent = True
             session["logged_in"] = True
             session["username"] = username
             return redirect("/")
 
+        _record_failure(remote_addr)
         LOGGER.warning("Dashboard login failed for username=%r", username)
         return render_template("login.html", error="用户名或密码错误"), 401
 

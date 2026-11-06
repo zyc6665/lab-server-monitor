@@ -12,6 +12,7 @@ import logging
 import secrets
 from datetime import timedelta
 from pathlib import Path
+from typing import Callable
 
 from flask import Flask
 
@@ -23,7 +24,13 @@ __all__ = ["create_app"]
 LOGGER = logging.getLogger(__name__)
 
 
-def create_app(*, config: AppConfig, db_path: Path) -> Flask:
+def create_app(
+    *,
+    config: AppConfig,
+    db_path: Path,
+    settings_service=None,
+    on_config_changed: Callable[[AppConfig], None] | None = None,
+) -> Flask:
     """Build the dashboard Flask app.
 
     ``config`` and the resolved ``db_path`` are stored on ``app.config`` under
@@ -31,6 +38,12 @@ def create_app(*, config: AppConfig, db_path: Path) -> Flask:
     Task 11) share one source of truth.  The session secret always comes from
     configuration; when it is absent a per-process random secret is generated
     instead of ever hard-coding one (sessions simply do not survive a restart).
+
+    ``settings_service`` (Task 7) is optional: when supplied the app enforces
+    first-run ``/setup``, hashes the admin credential through it and enables CSRF
+    protection.  ``on_config_changed`` is invoked with the freshly composed
+    :class:`AppConfig` whenever a route persists settings, so the running poller
+    can pick them up without a restart.
     """
     app = Flask(__name__, template_folder="templates", static_folder="static")
 
@@ -52,6 +65,12 @@ def create_app(*, config: AppConfig, db_path: Path) -> Flask:
     # lookups (e.g. Task 11 page routes); both point at the same objects.
     app.config["config"] = config
     app.config["db_path"] = Path(db_path)
+
+    # Task 7 integrations.  ``SETTINGS_SERVICE`` being ``None`` keeps the legacy
+    # behaviour used by ``tests/test_web_api.py`` (plaintext config login, no
+    # setup gate and no CSRF) fully working.
+    app.config["SETTINGS_SERVICE"] = settings_service
+    app.config["ON_CONFIG_CHANGED"] = on_config_changed
 
     register_routes(app)
     return app

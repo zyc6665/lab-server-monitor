@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}首次设置 - 服务器监控{% endblock %}
+
+{% block content %}
+<section class="login-card">
+  <h1 class="login-title">首次设置</h1>
+  <p class="muted">首次使用需创建管理员账户。密码长度至少 8 位。</p>
+  {% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
+  <form method="post" action="{{ url_for('setup') }}" class="login-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <label class="field">
+      <span>用户名</span>
+      <input name="username" type="text" value="{{ username or 'admin' }}" autocomplete="username" required autofocus>
+    </label>
+    <label class="field">
+      <span>密码</span>
+      <input name="password" type="password" autocomplete="new-password" minlength="8" required>
+    </label>
+    <label class="field">
+      <span>确认密码</span>
+      <input name="confirm" type="password" autocomplete="new-password" minlength="8" required>
+    </label>
+    <button type="submit" class="primary-button">完成设置</button>
+  </form>
+</section>
+{% endblock %}
