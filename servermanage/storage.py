@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import sqlite3
-from datetime import date, datetime, timedelta, timezone, tzinfo
+from datetime import date, datetime, time, timedelta, timezone, tzinfo
 from pathlib import Path
 
 from servermanage.disk_health import AlertEvent, DiskHealthReport
@@ -295,6 +295,23 @@ def _gpu_memory_percent(row: sqlite3.Row) -> float | None:
     return None
 
 
+def _local_week_utc_bounds(
+    week_start: date, week_end: date, tz: tzinfo
+) -> tuple[datetime, datetime]:
+    """Return the ``[start, end)`` UTC instants covering the local week.
+
+    ``week_start`` / ``week_end`` are inclusive *local* dates.  The query
+    window is local Monday 00:00 (inclusive) through the day after local Sunday
+    00:00 (exclusive), converted to UTC instants so UTC-stamped samples are
+    compared against the correct wall-clock week regardless of server time.
+    """
+    start = datetime.combine(week_start, time.min, tzinfo=tz).astimezone(timezone.utc)
+    end = datetime.combine(
+        week_end + timedelta(days=1), time.min, tzinfo=tz
+    ).astimezone(timezone.utc)
+    return start, end
+
+
 def fetch_daily_points_for_week(
     db_path: Path,
     week_start: date,
@@ -303,16 +320,19 @@ def fetch_daily_points_for_week(
 ) -> list[dict[str, object]]:
     """Per-day averages per host for the week, bucketed by *local* day.
 
-    Raw rows in the (unchanged) UTC week range are fetched and grouped in
-    Python by ``dt.astimezone(tz).date()``.  Passing ``tz=UTC`` (the default)
-    reproduces the legacy ``DATE(collected_at)`` bucketing exactly.
+    Raw rows are fetched over the local week converted to a ``[start, end)``
+    UTC instant window and grouped in Python by ``dt.astimezone(tz).date()``;
+    any bucket outside ``[week_start, week_end]`` is dropped defensively.
+    Passing ``tz=UTC`` (the default) reproduces the legacy
+    ``DATE(collected_at)`` bucketing exactly.
     """
     db_path = Path(db_path)
     if not db_path.exists():
         return []
 
-    start_iso = datetime.combine(week_start, datetime.min.time(), tzinfo=timezone.utc).isoformat()
-    end_iso = datetime.combine(week_end, datetime.max.time(), tzinfo=timezone.utc).isoformat()
+    start_dt, end_dt = _local_week_utc_bounds(week_start, week_end, tz)
+    start_iso = start_dt.isoformat()
+    end_iso = end_dt.isoformat()
 
     sql = """
     SELECT
@@ -324,7 +344,7 @@ def fetch_daily_points_for_week(
         memory_total_mb,
         gpu_utilization_percent
     FROM host_metrics_history
-    WHERE collected_at >= ? AND collected_at <= ? AND success = 1
+    WHERE collected_at >= ? AND collected_at < ? AND success = 1
     """
 
     with sqlite3.connect(db_path) as conn:
@@ -333,7 +353,12 @@ def fetch_daily_points_for_week(
 
     buckets: dict[tuple[str, str, str], dict[str, list[float | None]]] = {}
     for row in raw_rows:
-        day = _parse_collected_at(row["collected_at"]).astimezone(tz).date().isoformat()
+        local_day = _parse_collected_at(row["collected_at"]).astimezone(tz).date()
+        if local_day < week_start or local_day > week_end:
+            # Defensive clamp: never surface a bucket outside the local week,
+            # even if a stored instant slipped past the UTC query window.
+            continue
+        day = local_day.isoformat()
         bucket = buckets.setdefault(
             (row["host_name"], row["host"], day),
             {"cpu": [], "memory": [], "gpu": []},
@@ -365,8 +390,10 @@ def fetch_weekly_metrics(
 ) -> list[dict[str, object]]:
     """Weekly per-host metrics, aggregating as the mean of daily means.
 
-    Raw rows in the (unchanged) UTC week range are bucketed by
-    ``dt.astimezone(tz).date()``.  For every host we first compute a mean per
+    Raw rows are fetched over the local week converted to a ``[start, end)``
+    UTC instant window and bucketed by ``dt.astimezone(tz).date()`` (buckets
+    outside ``[week_start, week_end]`` are dropped defensively).  For every host
+    we first compute a mean per
     local day and then average those daily means over the week, so each day
     carries equal weight regardless of how many samples it holds.  ``*_max`` /
     ``*_min`` stay raw extremes over every sample and ``sample_count`` stays
@@ -377,8 +404,9 @@ def fetch_weekly_metrics(
     if not db_path.exists():
         return []
 
-    start_iso = datetime.combine(week_start, datetime.min.time(), tzinfo=timezone.utc).isoformat()
-    end_iso = datetime.combine(week_end, datetime.max.time(), tzinfo=timezone.utc).isoformat()
+    start_dt, end_dt = _local_week_utc_bounds(week_start, week_end, tz)
+    start_iso = start_dt.isoformat()
+    end_iso = end_dt.isoformat()
 
     sql = """
     SELECT
@@ -397,7 +425,7 @@ def fetch_weekly_metrics(
         logged_in_user_count,
         total_processes
     FROM host_metrics_history
-    WHERE collected_at >= ? AND collected_at <= ? AND success = 1
+    WHERE collected_at >= ? AND collected_at < ? AND success = 1
     """
 
     with sqlite3.connect(db_path) as conn:
@@ -412,8 +440,11 @@ def fetch_weekly_metrics(
     for (host_name, host), host_rows in groups.items():
         day_buckets: dict[str, list[sqlite3.Row]] = {}
         for row in host_rows:
-            day = _parse_collected_at(row["collected_at"]).astimezone(tz).date().isoformat()
-            day_buckets.setdefault(day, []).append(row)
+            local_day = _parse_collected_at(row["collected_at"]).astimezone(tz).date()
+            if local_day < week_start or local_day > week_end:
+                # Defensive clamp, mirroring fetch_daily_points_for_week.
+                continue
+            day_buckets.setdefault(local_day.isoformat(), []).append(row)
 
         daily_means: dict[str, list[float | None]] = {
             "cpu": [],

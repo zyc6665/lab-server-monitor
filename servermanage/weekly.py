@@ -13,8 +13,26 @@ LOGGER = logging.getLogger(__name__)
 _MIN_SAMPLES_FOR_CLASSIFICATION = 3
 
 
-def _previous_week_range(reference_date: date | None = None) -> tuple[date, date]:
-    today = reference_date or datetime.now(timezone.utc).date()
+def _previous_week_range(
+    reference_date: date | None = None,
+    *,
+    tz: tzinfo = timezone.utc,
+    now: datetime | None = None,
+) -> tuple[date, date]:
+    """Return the inclusive local Mon..Sun range of the previous week.
+
+    When ``reference_date`` is omitted the "today" date is derived from the
+    current instant *in ``tz``* (not UTC), so a weekly run shortly after local
+    midnight picks the correct local week.  ``now`` is injectable for tests to
+    avoid relying on the wall clock.
+    """
+    if reference_date is not None:
+        today = reference_date
+    else:
+        current = now if now is not None else datetime.now(tz)
+        if current.tzinfo is None:
+            current = current.replace(tzinfo=tz)
+        today = current.astimezone(tz).date()
     # weekday(): Monday=0, Sunday=6
     days_since_monday = today.weekday()
     week_end = today - timedelta(days=days_since_monday + 1)
@@ -67,9 +85,10 @@ def generate_weekly_report(
     reference_date: date | None = None,
     config: WeeklyReportConfig | None = None,
     tz: tzinfo = timezone.utc,
+    now: datetime | None = None,
 ) -> WeeklyReport:
     config = config or WeeklyReportConfig()
-    week_start, week_end = _previous_week_range(reference_date)
+    week_start, week_end = _previous_week_range(reference_date, tz=tz, now=now)
 
     rows = fetch_weekly_metrics(db_path, week_start, week_end, tz=tz)
     daily_rows = fetch_daily_points_for_week(db_path, week_start, week_end, tz=tz)

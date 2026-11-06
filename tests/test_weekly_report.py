@@ -1,5 +1,6 @@
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 from servermanage.models import (
     DailyReport,
@@ -91,6 +92,50 @@ def test_previous_week_range_returns_monday_to_sunday():
     week_start, week_end = _previous_week_range(date(2026, 7, 12))
     assert week_start == date(2026, 6, 29)
     assert week_end == date(2026, 7, 5)
+
+
+def test_previous_week_range_uses_local_timezone():
+    """A weekly run just after local midnight must pick the local week.
+
+    Simulate ``now = 2026-07-13T00:30+08:00``.  Asia/Shanghai is already Monday
+    07-13, so the previous week is 07-06..07-12.  The same instant is still
+    Sunday 07-12 in UTC, where the old naive-UTC logic would (wrongly) pick
+    06-29..07-05 -- asserted below to prove the timezone actually matters.
+    """
+    shanghai = ZoneInfo("Asia/Shanghai")
+    now = datetime(2026, 7, 13, 0, 30, tzinfo=shanghai)
+
+    # Sanity: the UTC calendar date lags a day behind the local date.
+    assert now.astimezone(timezone.utc).date() == date(2026, 7, 12)
+
+    local_start, local_end = _previous_week_range(tz=shanghai, now=now)
+    assert (local_start, local_end) == (date(2026, 7, 6), date(2026, 7, 12))
+
+    # Explicit UTC tz from the same instant reproduces the old wrong week.
+    utc_start, utc_end = _previous_week_range(tz=timezone.utc, now=now)
+    assert (utc_start, utc_end) == (date(2026, 6, 29), date(2026, 7, 5))
+
+
+def test_generate_weekly_report_selects_week_in_local_tz(tmp_path: Path):
+    """``generate_weekly_report`` threads tz into the previous-week selection."""
+    shanghai = ZoneInfo("Asia/Shanghai")
+    db_path = tmp_path / "servermanage.db"
+
+    base_local = datetime(2026, 7, 6, 9, 0, tzinfo=shanghai)
+    for day in range(7):
+        when = (base_local + timedelta(days=day)).astimezone(timezone.utc)
+        persist_host_reports(_make_report_at(when), db_path)
+
+    report = generate_weekly_report(
+        db_path,
+        tz=shanghai,
+        now=datetime(2026, 7, 13, 0, 30, tzinfo=shanghai),
+    )
+
+    assert report.week_start == date(2026, 7, 6)
+    assert report.week_end == date(2026, 7, 12)
+    assert len(report.summaries) == 1
+    assert report.summaries[0].sample_count == 7
 
 
 def test_compute_intensity_score_with_gpu():

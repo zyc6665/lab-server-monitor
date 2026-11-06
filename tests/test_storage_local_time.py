@@ -13,7 +13,7 @@ the default so every pre-existing caller/test observes the old behaviour.
 from __future__ import annotations
 
 import sqlite3
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -172,11 +172,11 @@ def test_same_utc_day_splits_into_two_local_days(tmp_path: Path):
     persist_host_reports(_report_at(datetime(2026, 7, 6, 15, 30, tzinfo=timezone.utc)), db_path)
     persist_host_reports(_report_at(datetime(2026, 7, 6, 16, 30, tzinfo=timezone.utc)), db_path)
 
-    utc_rows = fetch_daily_points_for_week(db_path, date(2026, 7, 6), date(2026, 7, 6))
+    utc_rows = fetch_daily_points_for_week(db_path, date(2026, 7, 6), date(2026, 7, 7))
     assert [row["day"] for row in utc_rows] == ["2026-07-06"]
 
     local_rows = fetch_daily_points_for_week(
-        db_path, date(2026, 7, 6), date(2026, 7, 6), tz=SHANGHAI
+        db_path, date(2026, 7, 6), date(2026, 7, 7), tz=SHANGHAI
     )
     assert [row["day"] for row in local_rows] == ["2026-07-06", "2026-07-07"]
 
@@ -199,10 +199,83 @@ def test_naive_timestamp_treated_as_utc(tmp_path: Path):
         )
         conn.commit()
 
-    utc_rows = fetch_daily_points_for_week(db_path, date(2026, 7, 6), date(2026, 7, 6))
+    utc_rows = fetch_daily_points_for_week(db_path, date(2026, 7, 6), date(2026, 7, 7))
     assert [row["day"] for row in utc_rows] == ["2026-07-06"]
 
     local_rows = fetch_daily_points_for_week(
-        db_path, date(2026, 7, 6), date(2026, 7, 6), tz=SHANGHAI
+        db_path, date(2026, 7, 6), date(2026, 7, 7), tz=SHANGHAI
     )
     assert [row["day"] for row in local_rows] == ["2026-07-07"]
+
+
+def test_local_week_window_drops_out_of_week_and_keeps_local_monday(tmp_path: Path):
+    """Regression: the SQL window must follow the *local* week, not UTC days.
+
+    Week 2026-07-06..07-12, tz Asia/Shanghai.  All rows are UTC-stamped so the
+    stored ``+00:00`` instants compare cleanly against the UTC query bounds.
+
+    * 2026-07-05T19:00Z == local 07-06 03:00 -> IN week, bucket day 07-06
+    * 2026-07-12T19:00Z == local 07-13 03:00 -> OUT of week (must be excluded)
+
+    A correct window yields exactly seven daily buckets 07-06..07-12 and a
+    weekly ``sample_count`` that ignores the out-of-week row.
+    """
+    db_path = tmp_path / "servermanage.db"
+    # One sample at local noon for each of the seven local days.
+    for day in range(6, 13):
+        local_noon = datetime(2026, 7, day, 12, 0, tzinfo=SHANGHAI)
+        persist_host_reports(
+            _report_at(local_noon.astimezone(timezone.utc), cpu=float(day)), db_path
+        )
+    # Local Monday 03:00 (2026-07-06T03:00+08:00 == 2026-07-05T19:00Z): in week.
+    persist_host_reports(_report_at(datetime(2026, 7, 5, 19, 0, tzinfo=timezone.utc)), db_path)
+    # Local Monday 2026-07-13 03:00 (== 2026-07-12T19:00Z): out of week.
+    persist_host_reports(_report_at(datetime(2026, 7, 12, 19, 0, tzinfo=timezone.utc)), db_path)
+
+    daily = fetch_daily_points_for_week(
+        db_path, date(2026, 7, 6), date(2026, 7, 12), tz=SHANGHAI
+    )
+    assert [row["day"] for row in daily] == [
+        "2026-07-06",
+        "2026-07-07",
+        "2026-07-08",
+        "2026-07-09",
+        "2026-07-10",
+        "2026-07-11",
+        "2026-07-12",
+    ]
+
+    weekly = fetch_weekly_metrics(
+        db_path, date(2026, 7, 6), date(2026, 7, 12), tz=SHANGHAI
+    )
+    assert len(weekly) == 1
+    # 7 noon samples + 1 local-Monday-03:00 sample; the out-of-week row is gone.
+    assert weekly[0]["sample_count"] == 8
+
+
+def test_local_week_window_boundaries(tmp_path: Path):
+    """Exact local-week edges are inclusive; one minute before is excluded."""
+    db_path = tmp_path / "servermanage.db"
+    # Exactly local Monday 00:00 (== 2026-07-05T16:00Z): included, day 07-06.
+    monday_midnight = datetime(2026, 7, 6, 0, 0, tzinfo=SHANGHAI)
+    persist_host_reports(
+        _report_at(monday_midnight.astimezone(timezone.utc)), db_path
+    )
+    # Local Sunday 23:59 (== 2026-07-12T15:59Z): included, day 07-12.
+    sunday_last_minute = datetime(2026, 7, 12, 23, 59, tzinfo=SHANGHAI)
+    persist_host_reports(
+        _report_at(sunday_last_minute.astimezone(timezone.utc)), db_path
+    )
+    # One minute before local Monday 00:00 (== 2026-07-05T15:59Z): excluded.
+    just_before = monday_midnight - timedelta(minutes=1)
+    persist_host_reports(_report_at(just_before.astimezone(timezone.utc)), db_path)
+
+    daily = fetch_daily_points_for_week(
+        db_path, date(2026, 7, 6), date(2026, 7, 12), tz=SHANGHAI
+    )
+    assert [row["day"] for row in daily] == ["2026-07-06", "2026-07-12"]
+
+    weekly = fetch_weekly_metrics(
+        db_path, date(2026, 7, 6), date(2026, 7, 12), tz=SHANGHAI
+    )
+    assert weekly[0]["sample_count"] == 2
