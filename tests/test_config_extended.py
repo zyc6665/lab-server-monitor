@@ -73,3 +73,20 @@ servers:
     assert cfg.servers[0].tags == ["gpu", "prod"]
     assert cfg.servers[0].disk_health.storcli_path == "/usr/local/bin/storcli"
     assert cfg.servers[0].disk_health.use_sudo is True
+
+
+def test_dashboard_secrets_read_without_dashboard_section(tmp_path, monkeypatch):
+    monkeypatch.setenv("GPU01_PASSWORD", "x")
+    monkeypatch.setenv("DASHBOARD_PASSWORD", "pw")
+    monkeypatch.setenv("DASHBOARD_SECRET", "secret")
+    cfg = load_config(_write(tmp_path, ""))
+    assert cfg.dashboard.auth.password == "pw"
+    assert cfg.dashboard.session_secret == "secret"
+
+
+def test_webhook_url_read_without_webhook_section(tmp_path, monkeypatch):
+    monkeypatch.setenv("GPU01_PASSWORD", "x")
+    monkeypatch.setenv("ALERT_WEBHOOK_URL", "https://example.com/hook")
+    cfg = load_config(_write(tmp_path, ""))
+    assert cfg.alerts.webhook.url == "https://example.com/hook"
+

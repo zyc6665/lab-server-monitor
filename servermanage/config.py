@@ -104,7 +104,9 @@ def _load_dashboard_auth(data: Any) -> DashboardAuthConfig:
 
 def _load_dashboard(data: Any) -> DashboardConfig:
     if data is None:
-        return DashboardConfig()
+        # No dashboard section: still build defaults so env-backed secrets
+        # (DASHBOARD_PASSWORD / DASHBOARD_SECRET) are picked up.
+        data = {}
     mapping = _require_mapping(data, "dashboard")
     session_secret_env = str(mapping.get("session_secret_env", "DASHBOARD_SECRET"))
     return DashboardConfig(
@@ -132,7 +134,8 @@ def _load_thresholds(data: Any) -> AlertThresholds:
 
 def _load_webhook(data: Any) -> WebhookConfig:
     if data is None:
-        return WebhookConfig()
+        # No webhook section: still build defaults so ALERT_WEBHOOK_URL is read.
+        data = {}
     mapping = _require_mapping(data, "alerts.webhook")
     url_env = mapping.get("url_env", "ALERT_WEBHOOK_URL")
     return WebhookConfig(
@@ -145,7 +148,8 @@ def _load_webhook(data: Any) -> WebhookConfig:
 
 def _load_alerts(data: Any) -> AlertsConfig:
     if data is None:
-        return AlertsConfig()
+        # No alerts section: still build defaults so webhook env is read.
+        data = {}
     mapping = _require_mapping(data, "alerts")
     return AlertsConfig(
         enabled=bool(mapping.get("enabled", True)),
