@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import io
 from pathlib import Path
 from typing import Callable
 
@@ -37,9 +38,17 @@ class SSHClientWrapper:
         if self.host.auth.type == "password":
             kwargs["password"] = self.host.auth.password
         elif self.host.auth.type == "key":
-            kwargs["key_filename"] = str(Path(self.host.auth.key_path).expanduser())
-            if self.host.auth.passphrase:
-                kwargs["passphrase"] = self.host.auth.passphrase
+            if self.host.auth.key_data:
+                kwargs["pkey"] = paramiko.PKey.from_private_key(
+                    io.StringIO(self.host.auth.key_data),
+                    password=self.host.auth.passphrase or None,
+                )
+            elif self.host.auth.key_path:
+                kwargs["key_filename"] = str(Path(self.host.auth.key_path).expanduser())
+                if self.host.auth.passphrase:
+                    kwargs["passphrase"] = self.host.auth.passphrase
+            else:
+                raise ValueError("SSH key is not configured")
         else:  # pragma: no cover - guarded by config validation
             raise ValueError(f"Unsupported auth type: {self.host.auth.type}")
         return kwargs

@@ -1,5 +1,8 @@
 from pathlib import Path
 
+import pytest
+
+import servermanage.ssh_client as ssh_client
 from servermanage.models import AuthConfig, HostConfig
 from servermanage.ssh_client import SSHClientWrapper
 
@@ -134,3 +137,88 @@ def test_ssh_client_uses_key_passphrase_when_configured():
 
     assert client.kwargs["key_filename"] == str(Path("/tmp/id_rsa"))
     assert client.kwargs["passphrase"] == "key-passphrase"
+
+
+def test_ssh_client_uses_inline_key(monkeypatch):
+    sentinel = object()
+    monkeypatch.setattr(
+        ssh_client.paramiko.PKey,
+        "from_private_key",
+        classmethod(lambda cls, stream, password=None: sentinel),
+    )
+    host = HostConfig(
+        name="h",
+        host="10.0.0.1",
+        port=22,
+        username="u",
+        auth=AuthConfig(type="key", key_data="-----BEGIN KEY-----"),
+    )
+    wrapper = SSHClientWrapper(host=host, connect_timeout=5)
+    kwargs = wrapper._build_connect_kwargs()
+    assert kwargs["pkey"] is sentinel
+    assert "key_filename" not in kwargs
+
+
+def test_ssh_client_inline_key_passes_passphrase(monkeypatch):
+    sentinel = object()
+    captured = {}
+
+    def fake_from_private_key(cls, stream, password=None):
+        captured["password"] = password
+        return sentinel
+
+    monkeypatch.setattr(
+        ssh_client.paramiko.PKey,
+        "from_private_key",
+        classmethod(fake_from_private_key),
+    )
+    host = HostConfig(
+        name="h",
+        host="10.0.0.1",
+        port=22,
+        username="u",
+        auth=AuthConfig(
+            type="key",
+            key_data="-----BEGIN KEY-----",
+            passphrase="secret-pass",
+        ),
+    )
+    wrapper = SSHClientWrapper(host=host, connect_timeout=5)
+    assert wrapper._build_connect_kwargs()["pkey"] is sentinel
+    assert captured["password"] == "secret-pass"
+
+
+def test_ssh_client_inline_key_without_passphrase_passes_none(monkeypatch):
+    captured = {}
+
+    def fake_from_private_key(cls, stream, password=None):
+        captured["password"] = password
+        return object()
+
+    monkeypatch.setattr(
+        ssh_client.paramiko.PKey,
+        "from_private_key",
+        classmethod(fake_from_private_key),
+    )
+    host = HostConfig(
+        name="h",
+        host="10.0.0.1",
+        port=22,
+        username="u",
+        auth=AuthConfig(type="key", key_data="-----BEGIN KEY-----"),
+    )
+    SSHClientWrapper(host=host, connect_timeout=5)._build_connect_kwargs()
+    assert captured["password"] is None
+
+
+def test_ssh_client_key_auth_without_key_raises():
+    host = HostConfig(
+        name="h",
+        host="10.0.0.1",
+        port=22,
+        username="u",
+        auth=AuthConfig(type="key"),
+    )
+    wrapper = SSHClientWrapper(host=host, connect_timeout=5)
+    with pytest.raises(ValueError, match="SSH key is not configured"):
+        wrapper._build_connect_kwargs()
