@@ -165,6 +165,29 @@ CREATE TABLE IF NOT EXISTS app_secrets (
 );
 """
 
+# Table added by the v1.2 alert-silence feature (Task 3): maintenance windows
+# that suppress alert notifications for a host, a group, or everything.
+# ``scope`` is NULL for the global (``all``) scope.  Time columns are ISO-8601
+# UTC strings.
+_CREATE_SILENCE_TABLES_SQL = """
+CREATE TABLE IF NOT EXISTS alert_silences (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    scope_type TEXT NOT NULL,
+    scope TEXT,
+    reason TEXT NOT NULL,
+    starts_at TEXT NOT NULL,
+    ends_at TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    created_by TEXT
+);
+"""
+
+_CREATE_SILENCE_INDEX_SQL = """
+CREATE INDEX IF NOT EXISTS idx_alert_silences_ends_at
+    ON alert_silences(ends_at);
+"""
+
+
 def _disk_percent_value(percent: str) -> int:
     digits = "".join(ch for ch in percent if ch.isdigit())
     if not digits:
@@ -207,6 +230,8 @@ def init_storage(db_path: Path) -> None:
         conn.executescript(_CREATE_EXTENDED_TABLES_SQL)
         conn.executescript(_CREATE_EXTENDED_INDEX_SQL)
         conn.executescript(_CREATE_SETTINGS_TABLES_SQL)
+        conn.executescript(_CREATE_SILENCE_TABLES_SQL)
+        conn.executescript(_CREATE_SILENCE_INDEX_SQL)
 
 
 def persist_host_reports(
@@ -976,6 +1001,144 @@ def list_alerts(
 
 
 # ---------------------------------------------------------------------------
+# Alert silences (maintenance windows that suppress notifications)
+# ---------------------------------------------------------------------------
+
+
+def _to_iso_utc(value: datetime | str) -> str:
+    """Normalise a ``datetime`` or ISO string to an ISO-8601 UTC string.
+
+    Aware datetimes are converted to UTC; naive ones are assumed to already be
+    UTC.  Strings are returned unchanged (the caller contract is ISO-8601 UTC).
+    """
+    if isinstance(value, datetime):
+        if value.tzinfo is None:
+            value = value.replace(tzinfo=timezone.utc)
+        return value.astimezone(timezone.utc).isoformat()
+    return str(value)
+
+
+def _parse_iso_datetime(value: object) -> datetime | None:
+    """Parse a stored ISO-8601 string into an aware datetime, or ``None``."""
+    if not isinstance(value, str):
+        return None
+    try:
+        parsed = datetime.fromisoformat(value)
+    except (TypeError, ValueError):
+        return None
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=timezone.utc)
+    return parsed
+
+
+def insert_silence(
+    scope_type: str,
+    scope: str | None,
+    reason: str,
+    starts_at: datetime | str,
+    ends_at: datetime | str,
+    created_by: str | None,
+    db_path: Path,
+) -> int:
+    """Insert an alert-silence window and return its row id.
+
+    ``scope_type`` is ``host`` / ``group`` / ``all``; ``scope`` is the host or
+    group name and must be ``None`` for the global ``all`` scope.  ``starts_at``
+    and ``ends_at`` accept a ``datetime`` or an ISO-8601 string and are stored
+    as ISO-8601 UTC text.
+    """
+    db_path = Path(db_path)
+    init_storage(db_path)
+
+    created_at = datetime.now(timezone.utc).isoformat()
+    with sqlite3.connect(db_path) as conn:
+        cursor = conn.execute(
+            "INSERT INTO alert_silences"
+            " (scope_type, scope, reason, starts_at, ends_at, created_at, created_by)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (
+                scope_type,
+                scope,
+                reason,
+                _to_iso_utc(starts_at),
+                _to_iso_utc(ends_at),
+                created_at,
+                created_by,
+            ),
+        )
+        conn.commit()
+        return int(cursor.lastrowid)
+
+
+def list_silences(
+    db_path: Path,
+    *,
+    active_only: bool = False,
+    now: datetime | str | None = None,
+) -> list[dict]:
+    """Return silence rows, newest-id last, ordered by ``id``.
+
+    With ``active_only=True`` only rows whose window contains ``now`` survive,
+    using the half-open interval ``starts_at <= now < ends_at``.  ``now``
+    defaults to the current UTC instant and may be a ``datetime`` or ISO-8601
+    string.  Rows whose ``starts_at`` / ``ends_at`` cannot be parsed as ISO-8601
+    are skipped rather than raising, so a single corrupt row never breaks the
+    list.
+    """
+    db_path = Path(db_path)
+    if not db_path.exists():
+        return []
+
+    try:
+        with sqlite3.connect(db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            raw_rows = conn.execute(
+                "SELECT * FROM alert_silences ORDER BY id"
+            ).fetchall()
+    except sqlite3.OperationalError:
+        return []
+
+    reference: datetime | None = None
+    if active_only:
+        if now is None:
+            reference = datetime.now(timezone.utc)
+        elif isinstance(now, datetime):
+            reference = (
+                now if now.tzinfo is not None else now.replace(tzinfo=timezone.utc)
+            )
+        else:
+            reference = _parse_iso_datetime(now) or datetime.now(timezone.utc)
+
+    results: list[dict] = []
+    for raw in raw_rows:
+        starts = _parse_iso_datetime(raw["starts_at"])
+        ends = _parse_iso_datetime(raw["ends_at"])
+        if starts is None or ends is None:
+            continue
+        if active_only and reference is not None and not (starts <= reference < ends):
+            continue
+        results.append(dict(raw))
+    return results
+
+
+def delete_silence(silence_id: int, db_path: Path) -> bool:
+    """Delete the silence row; return ``True`` when a row was removed."""
+    db_path = Path(db_path)
+    if not db_path.exists():
+        return False
+
+    try:
+        with sqlite3.connect(db_path) as conn:
+            cursor = conn.execute(
+                "DELETE FROM alert_silences WHERE id = ?", (int(silence_id),)
+            )
+            conn.commit()
+            return cursor.rowcount > 0
+    except sqlite3.OperationalError:
+        return False
+
+
+# ---------------------------------------------------------------------------
 # Task state (scheduler catch-up)
 # ---------------------------------------------------------------------------
 
@@ -1042,13 +1205,15 @@ def purge_old_data(
     """Delete data older than *retention_days* and return per-table counts.
 
     Covers ``host_metrics_history``, the ``disk_health_snapshot`` header table,
-    the three disk snapshot tables, and alerts that are both older than the
-    cutoff and ``status = 'resolved'``.
-    Active alerts are never purged.  Pass ``now`` in tests to pin the cutoff.
+    the three disk snapshot tables, alerts that are both older than the cutoff
+    and ``status = 'resolved'``, and silence rows whose ``ends_at`` is before
+    the cutoff.  Active alerts are never purged.  Pass ``now`` in tests to pin
+    the cutoff.
     """
     db_path = Path(db_path)
     counts = {table: 0 for table in _PURGE_TABLES}
     counts["alerts"] = 0
+    counts["alert_silences"] = 0
     if not db_path.exists():
         return counts
 
@@ -1066,6 +1231,12 @@ def purge_old_data(
             (cutoff,),
         )
         counts["alerts"] = cursor.rowcount if cursor.rowcount is not None else 0
+        cursor = conn.execute(
+            "DELETE FROM alert_silences WHERE ends_at < ?", (cutoff,)
+        )
+        counts["alert_silences"] = (
+            cursor.rowcount if cursor.rowcount is not None else 0
+        )
         conn.commit()
 
     return counts

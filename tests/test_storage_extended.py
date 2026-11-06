@@ -16,6 +16,7 @@ from servermanage import storage
 from servermanage.models import HostMetrics, HostReport, MemorySummary
 from servermanage.serialization import dump_json, to_jsonable
 from servermanage.storage import (
+    delete_silence,
     find_latest_alert,
     get_all_disk_health,
     get_all_host_snapshots,
@@ -24,7 +25,9 @@ from servermanage.storage import (
     get_task_state,
     init_storage,
     insert_alert,
+    insert_silence,
     list_alerts,
+    list_silences,
     purge_old_data,
     save_disk_health,
     save_host_snapshot,
@@ -652,3 +655,154 @@ def test_settings_tables_created_by_init_storage(tmp_path):
     names = {row[0] for row in sqlite3.connect(db).execute(
         "SELECT name FROM sqlite_master WHERE type='table'")}
     assert {"app_settings", "app_secrets"} <= names
+
+
+# ---------------------------------------------------------------------------
+# alert silences
+# ---------------------------------------------------------------------------
+
+
+def test_alert_silences_table_and_index_created_by_init_storage(tmp_path: Path):
+    db_path = tmp_path / "servermanage.db"
+    init_storage(db_path)
+    with sqlite3.connect(db_path) as conn:
+        tables = {
+            row[0]
+            for row in conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table'"
+            )
+        }
+        indexes = {
+            row[0]
+            for row in conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='index'"
+            )
+        }
+    assert "alert_silences" in tables
+    assert "idx_alert_silences_ends_at" in indexes
+
+
+def test_silence_insert_list_delete_roundtrip(tmp_path: Path):
+    db_path = tmp_path / "servermanage.db"
+    silence_id = insert_silence(
+        "host",
+        "gpu-01",
+        "maintenance",
+        BASE,
+        BASE + timedelta(hours=2),
+        "alice",
+        db_path,
+    )
+    assert isinstance(silence_id, int)
+    assert silence_id > 0
+
+    rows = list_silences(db_path)
+    assert len(rows) == 1
+    row = rows[0]
+    assert row["id"] == silence_id
+    assert row["scope_type"] == "host"
+    assert row["scope"] == "gpu-01"
+    assert row["reason"] == "maintenance"
+    assert row["starts_at"] == BASE.isoformat()
+    assert row["ends_at"] == (BASE + timedelta(hours=2)).isoformat()
+    assert row["created_by"] == "alice"
+    assert row["created_at"]
+
+    assert delete_silence(silence_id, db_path) is True
+    assert list_silences(db_path) == []
+    assert delete_silence(silence_id, db_path) is False
+
+
+def test_list_silences_active_only_uses_start_end_window(tmp_path: Path):
+    db_path = tmp_path / "servermanage.db"
+    now = BASE
+    ended = insert_silence(
+        "host", "gpu-01", "ended",
+        BASE - timedelta(hours=2), BASE - timedelta(hours=1), "a", db_path,
+    )
+    active = insert_silence(
+        "host", "gpu-02", "active",
+        BASE - timedelta(hours=1), BASE + timedelta(hours=1), "a", db_path,
+    )
+    future = insert_silence(
+        "host", "gpu-03", "future",
+        BASE + timedelta(hours=1), BASE + timedelta(hours=2), "a", db_path,
+    )
+    # Boundary semantics: starts_at <= now < ends_at.
+    starts_now = insert_silence(
+        "host", "gpu-04", "starts-now",
+        BASE, BASE + timedelta(hours=1), "a", db_path,
+    )
+    ends_now = insert_silence(
+        "host", "gpu-05", "ends-now",
+        BASE - timedelta(hours=1), BASE, "a", db_path,
+    )
+
+    active_ids = {
+        row["id"] for row in list_silences(db_path, active_only=True, now=now)
+    }
+    assert active_ids == {active, starts_now}
+
+    all_ids = {row["id"] for row in list_silences(db_path)}
+    assert all_ids == {ended, active, future, starts_now, ends_now}
+
+
+def test_silence_scopes_nullable_and_kinds(tmp_path: Path):
+    db_path = tmp_path / "servermanage.db"
+    end = BASE + timedelta(hours=1)
+    all_id = insert_silence("all", None, "global", BASE, end, "admin", db_path)
+    group_id = insert_silence("group", "lab", "group-scope", BASE, end, "admin", db_path)
+    host_id = insert_silence("host", "gpu-01", "host-scope", BASE, end, "admin", db_path)
+
+    rows = {row["id"]: row for row in list_silences(db_path)}
+    assert rows[all_id]["scope_type"] == "all"
+    assert rows[all_id]["scope"] is None
+    assert rows[group_id]["scope"] == "lab"
+    assert rows[host_id]["scope"] == "gpu-01"
+
+
+def test_list_silences_skips_malformed_time_rows(tmp_path: Path):
+    db_path = tmp_path / "servermanage.db"
+    good = insert_silence(
+        "host", "gpu-01", "good", BASE, BASE + timedelta(hours=1), "a", db_path
+    )
+    with sqlite3.connect(db_path) as conn:
+        conn.execute(
+            "INSERT INTO alert_silences"
+            " (scope_type, scope, reason, starts_at, ends_at, created_at, created_by)"
+            " VALUES ('host', 'gpu-02', 'bad', 'not-a-date', 'also-bad', ?, 'a')",
+            (BASE.isoformat(),),
+        )
+        conn.commit()
+
+    rows = list_silences(db_path)  # must not raise on malformed rows
+    assert [row["id"] for row in rows] == [good]
+    assert [row["id"] for row in list_silences(db_path, active_only=True, now=BASE)] == [
+        good
+    ]
+
+
+def test_purge_old_data_deletes_expired_silences(tmp_path: Path):
+    db_path = tmp_path / "servermanage.db"
+    now = datetime(2026, 11, 6, 12, 0, 0, tzinfo=timezone.utc)
+    old_end = now - timedelta(days=100)
+    insert_silence(
+        "host", "gpu-01", "old",
+        old_end - timedelta(hours=1), old_end, "a", db_path,
+    )
+    live_id = insert_silence(
+        "host", "gpu-02", "live",
+        now - timedelta(hours=1), now + timedelta(days=30), "a", db_path,
+    )
+
+    counts = purge_old_data(db_path, retention_days=90, now=now)
+
+    assert counts["alert_silences"] == 1
+    remaining = {row["id"] for row in list_silences(db_path)}
+    assert remaining == {live_id}
+
+
+def test_purge_old_data_reports_zero_silences_on_missing_db(tmp_path: Path):
+    db_path = tmp_path / "missing.db"
+    counts = purge_old_data(db_path, retention_days=90, now=BASE)
+    assert counts["alert_silences"] == 0
