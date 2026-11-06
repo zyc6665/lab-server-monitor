@@ -144,6 +144,18 @@ def test_settings_page_has_v12_checkbox_fields(client):
         assert f'data-field="{field}"' in html
 
 
+def test_settings_js_decodes_legacy_gbk_upload(client):
+    source = client.get("/static/settings.js").get_data(as_text=True)
+
+    # Read raw bytes and decode strictly as UTF-8 first, then GB18030.
+    assert "readAsArrayBuffer(file)" in source
+    assert 'TextDecoder("utf-8", { fatal: true })' in source
+    assert 'TextDecoder("gb18030")' in source
+    # The previous implementation decoded with the browser's UTF-8 decoder
+    # before upload, destroying GBK bytes irreversibly.
+    assert 'readAsText(file, "utf-8")' not in source
+
+
 def test_settings_page_readonly_fallback_without_service(tmp_path):
     base = load_config_from_mapping(
         {"dashboard": {"auth": {"enabled": False}}}, allow_empty_servers=True

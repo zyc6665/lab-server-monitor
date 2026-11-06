@@ -379,8 +379,25 @@
       var file = event.target.files && event.target.files[0];
       if (!file) return;
       var reader = new FileReader();
-      reader.onload = function () { importText.value = String(reader.result || ""); };
-      reader.readAsText(file, "utf-8");
+      reader.onload = function () {
+        var bytes = new Uint8Array(reader.result || new ArrayBuffer(0));
+        var text = null;
+        try {
+          // fatal: strict UTF-8 wins when valid; the decoder strips a UTF-8 BOM.
+          text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+        } catch (utf8Error) {
+          try {
+            // Legacy Windows exports are commonly GBK/GB18030.
+            text = new TextDecoder("gb18030").decode(bytes);
+          } catch (gbkError) {
+            status(importStatus, "无法识别文件编码（支持 UTF-8 / GB18030）", true);
+            return;
+          }
+        }
+        importText.value = text;
+      };
+      reader.onerror = function () { status(importStatus, "读取文件失败", true); };
+      reader.readAsArrayBuffer(file);
     });
     qs("#import-preview-button").addEventListener("click", function () {
       if (!importText.value.trim()) { status(importStatus, "请先粘贴或选择文件内容", true); return; }

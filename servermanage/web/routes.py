@@ -662,7 +662,7 @@ def _build_overview(config, db_path) -> dict[str, Any]:
             silenced_count += 1
             ends = [s.get("ends_at") for s in matched if s.get("ends_at")]
             if ends:
-                silenced_until = _to_local_iso(min(ends), tz)
+                silenced_until = _to_local_iso(max(ends), tz)
         hosts.append(
             _host_row(
                 name=host_name,
