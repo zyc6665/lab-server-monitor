@@ -1,60 +1,58 @@
-服务器轮询监测工具（Windows 绿色包）使用说明  v1.1
+﻿服务器轮询监测工具 v1.2（Windows 绿色包）使用说明
 ====================================================
 
 一、启动与首次设置
-1. 解压整个文件夹到任意目录（中文路径可用）。
-2. 双击「启动.bat」。首次会在 data\ 下自动创建 servermonitor.db。
-3. 浏览器打开 http://127.0.0.1:8080
-   局域网其它电脑打开 http://本机IP:8080
-4. 首次访问本机会自动进入 /setup，设置管理员密码（至少 8 位）。
-   设置完成后用该密码登录。
-5. 停止：双击「停止.bat」。
-6. 开机自启：右键「注册开机自启.ps1」→ 使用 PowerShell 运行（可重复执行）。
+1. 解压整个文件夹到任意目录（路径可含中文，不建议有特殊符号）。
+2. 双击“启动.bat”。程序会自动打开浏览器；若未自动打开，请看 data\runtime.json 里的 url
+   （默认 http://127.0.0.1:8080；若端口被占用会自动顺延到 8081、8082……）。
+3. 首次使用会进入“初始化管理员”页面：请设置管理员用户名和密码（至少 8 位）。
+   以后登录使用该账号；密码保存在本机，不会随压缩包传播。
+4. 局域网其它电脑访问：http://本机IP:端口（在“看板与安全”里可查看/修改端口，修改后重启生效）。
+5. 停止：双击“停止.bat”（或右键任务栏托盘图标选择“退出”）。
+6. 开机自启：右键“注册开机自启.ps1”→“使用 PowerShell 运行”（可重复执行）。
 
-二、网页在线配置（1.1 新增，推荐）
-登录后进入「设置」页，可直接修改并保存：
-- 主机与 SSH：增删服务器、IP、端口、用户名、密码或私钥；
-- 通知：桌面通知、邮件 SMTP、企业微信/钉钉/通用 Webhook；
-- 报告：日报/周报启停与发送时间；
-- 磁盘健康：storcli 健康规则与温度阈值；
-- 磁盘容量：每台主机只监控配置的挂载点（默认 / 和 /data，可增删）；
-- 看板与安全：监听地址/端口、管理员密码。
+二、网页在线设置（v1.2 起）
+启动后进入“设置”页面即可修改，无需手工编辑 config 文件：
+- 主机与 SSH：增删主机、分组/负责人/机房/备注、私钥/密码认证、每台磁盘容量监控目录；
+  支持从 SSH config、CSV、YAML 批量导入并预览，支持批量连通性测试和复制主机。
+- 监控与存储：采集间隔、磁盘采集间隔、并发数、历史保留天数、时区。
+- 通知：桌面通知、邮件 SMTP、企业微信/钉钉/通用 Webhook；同主机同类告警可聚合为一条；
+  可设置恢复通知；支持对单机/分组/全部设置告警静默（维护窗口）。
+- 报告：日报/周报启用状态、发送时间、周报星期。
+- 磁盘健康：storcli 路径、温度阈值、各类错误告警开关。
+- 看板与安全：管理员用户名/密码、监听地址和端口。
 
-敏感信息（SSH 密码/私钥、邮箱密码、Webhook 地址）使用当前 Windows 账户的
-DPAPI 加密保存在 data\servermonitor.db，网页和接口都不会回显原文。
+三、安全说明（重要）
+- SSH 私钥、SSH 密码、SMTP 密码、Webhook 地址等敏感信息使用 Windows 本机账户加密
+  （DPAPI）保存，只在本机可解密。
+- 把整个文件夹拷到另一台电脑时，敏感信息会失效，系统会要求新电脑上的管理员重新初始化
+  并重新填写主机凭据（主机名称、分组等非敏感配置会保留）。
+- 每台电脑各自运行一套独立实例；请不要把整个文件夹连同 data 目录发给别人。
 
-三、已预置的 4 台服务器
+四、已预置的 4 台服务器（可在网页“主机与 SSH”里改）
 a100  202.119.189.245  zhouyc  密钥 C:/Users/Administrator/.ssh/id_ed25519
 v100  202.119.186.254  zhouyc  同上
 4090  10.202.2.228      zhouyc  同上
 h100  10.202.2.208      zhouyc  同上
-默认每 10 分钟采集一次状态，每天采集一次磁盘健康。
+默认每 10 分钟采集一次状态，每天采集一次磁盘健康；容量默认只看 / 和 /data。
 
-四、让「磁盘健康」真正读到每块盘（重要）
-storcli 必须以 root 运行。请在 4 台机器上各执行一次（需要你的 sudo 密码）：
+五、磁盘健康（storcli）
+storcli 必须以 root 运行。请确认这 4 台机器已配置受限免密 sudo（每台执行一次）：
+  sudo tee /etc/sudoers.d/servermonitor >/dev/null <<'EOF'
+  zhouyc ALL=(root) NOPASSWD: /opt/MegaRAID/storcli/storcli64, /usr/local/bin/storcli, /usr/sbin/smartctl
+  EOF
+  sudo chmod 440 /etc/sudoers.d/servermonitor
+  sudo visudo -cf /etc/sudoers.d/servermonitor
+验证：sudo -n /usr/local/bin/storcli -v 应直接输出版本、不再提示密码。
+若未配置，看板会显示“permission_denied”（权限不足），不会误报坏盘。
 
-sudo tee /etc/sudoers.d/servermonitor >/dev/null <<'EOF'
-zhouyc ALL=(root) NOPASSWD: /opt/MegaRAID/storcli/storcli64, /usr/local/bin/storcli, /usr/sbin/smartctl
-EOF
-sudo chmod 440 /etc/sudoers.d/servermonitor
-sudo visudo -cf /etc/sudoers.d/servermonitor
+六、日志与排错
+- 运行日志：logs\servermonitor.log（自动轮转，5MB × 5 份）。
+- 网页“设置 → 日志”可查看最近日志。
+- 看板打不开：确认端口未被占用；“停止.bat”后重新启动。
+- 主机离线：检查网络、SSH 用户名和私钥路径。
+- 忘记管理员密码：本机管理员可用“停止.bat”后删除 data\servermonitor.db 重新初始化
+  （会丢失历史数据；主机配置也会丢失，请先在“设置→主机与 SSH”记录）。
 
-验证（应不再提示输入密码）：
-sudo -n /usr/local/bin/storcli -v
-
-之后看板「磁盘」页会显示控制器、虚拟盘、每块物理盘的状态/介质错误/其它错误/
-Predictive/SMART/Shield/温度/健康度。发现坏道或预警盘会按配置发桌面通知（邮件/
-Webhook 需在设置页开启）。
-
-五、安全与交接
-- 整个文件夹拷到另一台电脑后，DPAPI 密钥失效：程序会要求在新电脑重新 /setup，
-  并重新填写各类凭据；主机清单、阈值等非敏感配置保留。
-- config\config.yaml 与 config\.env 仅作为首次启动的种子配置；1.1 起日常修改
-  都可以在网页完成。删除 .env 也能启动。
-- Linux/Docker 部署仍使用 config.yaml + .env，设置页为只读。
-
-六、常见问题
-1. 看板打不开：确认 8080 端口未被占用；用「停止.bat」后重新启动。
-2. 状态显示离线：确认本机到服务器网络、SSH 密钥路径/密码正确。
-3. 磁盘 permission_denied：按第四节配置 sudoers。
-4. 邮件/机器人不发送：在设置页确认已启用并保存，点「测试」验证。
+七、版本
+当前版本：1.2.0
