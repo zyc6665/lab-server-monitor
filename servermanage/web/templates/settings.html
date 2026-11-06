@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block title %}设置 - 服务器监控{% endblock %}
+
+{% block content %}
+<h1 class="page-title">设置</h1>
+
+<section class="card">
+  <div class="section-head">
+    <h2>运行参数</h2>
+    <span class="muted">只读</span>
+  </div>
+  <dl class="kv-grid">
+    <div class="kv">
+      <dt>时区</dt>
+      <dd class="mono">{{ config.app.timezone }}</dd>
+    </div>
+    <div class="kv">
+      <dt>轮询间隔（秒）</dt>
+      <dd class="mono">{{ config.app.poll_interval_seconds }}</dd>
+    </div>
+    <div class="kv">
+      <dt>磁盘轮询间隔（秒）</dt>
+      <dd class="mono">{{ config.app.disk_poll_interval_seconds }}</dd>
+    </div>
+  </dl>
+</section>
+
+<section class="card">
+  <div class="section-head">
+    <h2>报告归属</h2>
+    <span class="muted">只读</span>
+  </div>
+  <dl class="kv-grid">
+    <div class="kv">
+      <dt>日报</dt>
+      <dd>
+        {% if config.report.daily_enabled %}
+        <span class="badge badge-online">PC</span>
+        {% else %}
+        <span class="badge badge-offline">关闭</span>
+        {% endif %}
+      </dd>
+    </div>
+    <div class="kv">
+      <dt>周报</dt>
+      <dd>
+        {% if config.report.weekly.enabled %}
+        <span class="badge badge-online">PC</span>
+        {% else %}
+        <span class="badge badge-offline">关闭</span>
+        {% endif %}
+      </dd>
+    </div>
+  </dl>
+</section>
+{% endblock %}

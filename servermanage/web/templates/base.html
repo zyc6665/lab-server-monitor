@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}服务器监控{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  {% if session.get('logged_in') %}
+  <header class="topbar">
+    <div class="brand">服务器监控</div>
+    <nav class="nav" aria-label="主导航">
+      <a href="{{ url_for('overview_page') }}" class="nav-link{% if active_page == 'overview' %} active{% endif %}">概览</a>
+      <a href="{{ url_for('alerts_page') }}" class="nav-link{% if active_page == 'alerts' %} active{% endif %}">告警</a>
+      <a href="{{ url_for('settings_page') }}" class="nav-link{% if active_page == 'settings' %} active{% endif %}">设置</a>
+    </nav>
+    <form method="post" action="{{ url_for('logout') }}" class="logout-form">
+      {% if session.get('username') %}<span class="current-user">{{ session.get('username') }}</span>{% endif %}
+      <button type="submit" class="link-button">退出</button>
+    </form>
+  </header>
+  {% endif %}
+
+  <main class="container">
+    {% block content %}{% endblock %}
+  </main>
+
+  <footer class="page-footer">
+    <span>服务器轮询监测 · 数据每 30 秒自动刷新</span>
+  </footer>
+
+  <script src="{{ url_for('static', filename='app.js') }}"></script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

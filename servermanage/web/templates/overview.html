@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block title %}概览 - 服务器监控{% endblock %}
+
+{% macro pct(value) -%}
+{%- if value is none -%}—{%- elif value is string -%}{{ value }}{%- else -%}{{ '%.1f'|format(value) }}%{%- endif -%}
+{%- endmacro %}
+
+{% block content %}
+<h1 class="page-title">概览</h1>
+
+<section class="summary-grid" aria-label="汇总">
+  <article class="card summary-card">
+    <div class="summary-label">在线</div>
+    <div class="summary-value" id="summary-online">{{ summary.online }}</div>
+  </article>
+  <article class="card summary-card">
+    <div class="summary-label">离线</div>
+    <div class="summary-value" id="summary-offline">{{ summary.offline }}</div>
+  </article>
+  <article class="card summary-card">
+    <div class="summary-label">活动告警</div>
+    <div class="summary-value summary-alert" id="summary-alerts">{{ summary.active_alerts }}</div>
+  </article>
+</section>
+
+<section class="card">
+  <div class="section-head">
+    <h2>主机</h2>
+    <span class="muted" id="host-count">共 {{ hosts|length }} 台</span>
+  </div>
+  <p class="empty" id="empty-state"{% if hosts %} hidden{% endif %}>暂无数据</p>
+  <div class="table-wrap">
+    <table class="data-table" id="host-table"{% if not hosts %} hidden{% endif %}>
+      <thead>
+        <tr>
+          <th>名称</th>
+          <th>地址</th>
+          <th>状态</th>
+          <th>CPU</th>
+          <th>内存</th>
+          <th>磁盘</th>
+          <th>GPU 显存</th>
+          <th>磁盘健康</th>
+          <th>采集时间</th>
+        </tr>
+      </thead>
+      <tbody id="host-table-body">
+        {% for host in hosts %}
+        <tr data-host="{{ host.name }}">
+          <td><a href="{{ url_for('host_page', name=host.name) }}">{{ host.name }}</a></td>
+          <td class="mono">{{ host.host or '—' }}</td>
+          <td>
+            <span class="badge {{ 'badge-online' if host.online else 'badge-offline' }}">
+              {{ '在线' if host.online else '离线' }}
+            </span>
+          </td>
+          <td>{{ pct(host.cpu_percent) }}</td>
+          <td>{{ pct(host.memory_percent) }}</td>
+          <td>{{ pct(host.disk_percent) }}</td>
+          <td>{{ pct(host.gpu_memory_percent) }}</td>
+          <td>
+            <span class="health health-{{ host.disk_health.status }}">{{ host.disk_health.status }}</span>
+            <span class="health-counts">健康 {{ host.disk_health.healthy }} · 告警 {{ host.disk_health.warning }} · 严重 {{ host.disk_health.critical }}</span>
+          </td>
+          <td class="mono">{{ host.collected_at or '—' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

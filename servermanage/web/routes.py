@@ -20,7 +20,15 @@ import logging
 from datetime import datetime, timezone
 from typing import Any
 
-from flask import Flask, jsonify, redirect, render_template_string, request, session, url_for
+from flask import (
+    Flask,
+    jsonify,
+    redirect,
+    render_template,
+    request,
+    session,
+    url_for,
+)
 
 from servermanage import storage
 
@@ -41,28 +49,6 @@ _VIRTUAL_FILESYSTEMS = {
     "mqueue",
     "shm",
 }
-
-_LOGIN_PAGE = """<!doctype html>
-<html lang="zh-CN">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>登录 - 服务器监控</title>
-</head>
-<body>
-  <main>
-    <h1>服务器监控</h1>
-    {% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
-    <form method="post" action="/login">
-      <label>用户名 <input name="username" autocomplete="username" required></label>
-      <label>密码 <input type="password" name="password" autocomplete="current-password" required></label>
-      <button type="submit">登录</button>
-    </form>
-  </main>
-</body>
-</html>
-"""
-
 
 # ---------------------------------------------------------------------------
 # Small value helpers
@@ -227,6 +213,73 @@ def _host_row(
     }
 
 
+def _build_overview(config, db_path) -> dict[str, Any]:
+    """Build the ``/api/overview`` payload shared by the JSON API and pages.
+
+    Kept as one function so the server-rendered overview page and the 30 s
+    polling refresh always agree on the summary counts and per-host rows.
+    """
+    now = datetime.now(timezone.utc)
+
+    snapshots = {
+        item["host_name"]: item for item in storage.get_all_host_snapshots(db_path)
+    }
+    disk_reports = {
+        item["host_name"]: item for item in storage.get_all_disk_health(db_path)
+    }
+    addresses = {server.name: server.host for server in config.servers}
+
+    names: list[str] = []
+    for server in config.servers:
+        if server.name not in names:
+            names.append(server.name)
+    for host_name in snapshots:
+        if host_name not in names:
+            names.append(host_name)
+
+    hosts = [
+        _host_row(
+            name=host_name,
+            host=addresses.get(host_name),
+            snapshot=snapshots.get(host_name),
+            disk_health=disk_reports.get(host_name),
+            poll_interval_seconds=config.app.poll_interval_seconds,
+            now=now,
+        )
+        for host_name in sorted(names)
+    ]
+
+    online = sum(1 for host in hosts if host["online"])
+    active_alerts = len(
+        storage.list_alerts(db_path, status="active", limit=100_000)
+    )
+    return {
+        "summary": {
+            "online": online,
+            "offline": len(hosts) - online,
+            "active_alerts": active_alerts,
+        },
+        "hosts": hosts,
+    }
+
+
+def _build_host_detail(name: str, config, db_path) -> dict[str, Any] | None:
+    """Build the ``/api/host/<name>`` payload, or ``None`` when unknown."""
+    snapshot = storage.get_host_snapshot(name, db_path)
+    if snapshot is None:
+        return None
+
+    addresses = {server.name: server.host for server in config.servers}
+    return {
+        "name": name,
+        "host": addresses.get(name),
+        "collected_at": snapshot.get("collected_at"),
+        "success": snapshot.get("success"),
+        "metrics": snapshot.get("metrics") or {},
+        "disk": storage.get_disk_health(name, db_path),
+    }
+
+
 def register_routes(app: Flask) -> None:
     """Register auth guards, API routes and the login/logout endpoints."""
 
@@ -249,7 +302,7 @@ def register_routes(app: Flask) -> None:
     def login():
         if session.get("logged_in"):
             return redirect("/")
-        return render_template_string(_LOGIN_PAGE)
+        return render_template("login.html")
 
     @app.post("/login")
     def login_submit():
@@ -274,7 +327,7 @@ def register_routes(app: Flask) -> None:
             return redirect("/")
 
         LOGGER.warning("Dashboard login failed for username=%r", username)
-        return render_template_string(_LOGIN_PAGE, error="用户名或密码错误"), 401
+        return render_template("login.html", error="用户名或密码错误"), 401
 
     @app.post("/logout")
     def logout():
@@ -285,71 +338,14 @@ def register_routes(app: Flask) -> None:
 
     @app.get("/api/overview")
     def api_overview():
-        config = _config(app)
-        db_path = _db_path(app)
-        now = datetime.now(timezone.utc)
-
-        snapshots = {
-            item["host_name"]: item for item in storage.get_all_host_snapshots(db_path)
-        }
-        disk_reports = {
-            item["host_name"]: item for item in storage.get_all_disk_health(db_path)
-        }
-        addresses = {server.name: server.host for server in config.servers}
-
-        names: list[str] = []
-        for server in config.servers:
-            if server.name not in names:
-                names.append(server.name)
-        for host_name in snapshots:
-            if host_name not in names:
-                names.append(host_name)
-
-        hosts = [
-            _host_row(
-                name=host_name,
-                host=addresses.get(host_name),
-                snapshot=snapshots.get(host_name),
-                disk_health=disk_reports.get(host_name),
-                poll_interval_seconds=config.app.poll_interval_seconds,
-                now=now,
-            )
-            for host_name in sorted(names)
-        ]
-
-        online = sum(1 for host in hosts if host["online"])
-        active_alerts = len(
-            storage.list_alerts(db_path, status="active", limit=100_000)
-        )
-        return jsonify(
-            {
-                "summary": {
-                    "online": online,
-                    "offline": len(hosts) - online,
-                    "active_alerts": active_alerts,
-                },
-                "hosts": hosts,
-            }
-        )
+        return jsonify(_build_overview(_config(app), _db_path(app)))
 
     @app.get("/api/host/<name>")
     def api_host(name: str):
-        db_path = _db_path(app)
-        snapshot = storage.get_host_snapshot(name, db_path)
-        if snapshot is None:
+        detail = _build_host_detail(name, _config(app), _db_path(app))
+        if detail is None:
             return jsonify({"error": "not found"}), 404
-
-        addresses = {server.name: server.host for server in _config(app).servers}
-        return jsonify(
-            {
-                "name": name,
-                "host": addresses.get(name),
-                "collected_at": snapshot.get("collected_at"),
-                "success": snapshot.get("success"),
-                "metrics": snapshot.get("metrics") or {},
-                "disk": storage.get_disk_health(name, db_path),
-            }
-        )
+        return jsonify(detail)
 
     @app.get("/api/alerts")
     def api_alerts():
@@ -367,3 +363,48 @@ def register_routes(app: Flask) -> None:
             ack_at=datetime.now(timezone.utc).isoformat(),
         )
         return jsonify({"ok": True})
+
+    # -- HTML pages --------------------------------------------------------
+    #
+    # Page routes are login-protected by the ``before_request`` gate above: an
+    # unauthenticated non-``/api`` request is redirected to ``/login`` (never a
+    # 401 JSON body).  Each page renders its initial state server-side so the
+    # dashboard is usable without JavaScript; ``app.js`` then refreshes the
+    # dynamic parts every 30 s from the JSON API.
+
+    @app.get("/")
+    def overview_page():
+        data = _build_overview(_config(app), _db_path(app))
+        return render_template(
+            "overview.html",
+            active_page="overview",
+            summary=data["summary"],
+            hosts=data["hosts"],
+        )
+
+    @app.get("/host/<name>")
+    def host_page(name: str):
+        detail = _build_host_detail(name, _config(app), _db_path(app))
+        if detail is None:
+            return (
+                render_template(
+                    "host.html", active_page="overview", name=name, detail=None
+                ),
+                404,
+            )
+        return render_template(
+            "host.html", active_page="overview", name=name, detail=detail
+        )
+
+    @app.get("/alerts")
+    def alerts_page():
+        alerts = storage.list_alerts(_db_path(app), status="active")
+        return render_template(
+            "alerts.html", active_page="alerts", alerts=alerts
+        )
+
+    @app.get("/settings")
+    def settings_page():
+        return render_template(
+            "settings.html", active_page="settings", config=_config(app)
+        )

@@ -1,0 +1,200 @@
+{% extends "base.html" %}
+{% block title %}{{ name }} - 服务器监控{% endblock %}
+
+{% macro pct(value) -%}
+{%- if value is none -%}—{%- elif value is string -%}{{ value }}{%- else -%}{{ '%.1f'|format(value) }}%{%- endif -%}
+{%- endmacro %}
+
+{% block content %}
+<nav class="breadcrumb"><a href="{{ url_for('overview_page') }}">概览</a> / <span>{{ name }}</span></nav>
+
+{% if detail is none %}
+<section class="card">
+  <h1 class="page-title">未找到主机</h1>
+  <p class="empty">未找到主机 “{{ name }}” 的采集数据。</p>
+  <p><a href="{{ url_for('overview_page') }}">返回概览</a></p>
+</section>
+{% else %}
+{% set metrics = detail.metrics %}
+<h1 class="page-title">{{ name }}</h1>
+
+<section class="card">
+  <div class="section-head">
+    <h2>指标详情</h2>
+    <span class="badge {{ 'badge-online' if detail.success else 'badge-offline' }}">
+      {{ '采集成功' if detail.success else '采集失败' }}
+    </span>
+  </div>
+  <dl class="kv-grid">
+    <div class="kv"><dt>主机地址</dt><dd class="mono">{{ detail.host or '—' }}</dd></div>
+    <div class="kv"><dt>采集时间</dt><dd class="mono">{{ detail.collected_at or '—' }}</dd></div>
+    <div class="kv"><dt>操作系统</dt><dd>{{ metrics.os_pretty_name or '—' }}</dd></div>
+    <div class="kv"><dt>内核版本</dt><dd>{{ metrics.kernel_version or '—' }}</dd></div>
+    <div class="kv"><dt>运行时长</dt><dd>{{ metrics.uptime or '—' }}</dd></div>
+    <div class="kv"><dt>CPU 核心</dt><dd>{{ metrics.cpu_core_count if metrics.cpu_core_count is not none else '—' }}</dd></div>
+    <div class="kv"><dt>CPU 使用率</dt><dd>{{ pct(metrics.cpu_usage_percent) }}</dd></div>
+    <div class="kv"><dt>内存</dt><dd>
+      {% if metrics.memory %}{{ metrics.memory.used_mb }} / {{ metrics.memory.total_mb }} MB{% else %}—{% endif %}
+    </dd></div>
+    <div class="kv"><dt>负载 (1/5/15)</dt><dd>
+      {% if metrics.load_average %}
+        {{ metrics.load_average.load_1 }} / {{ metrics.load_average.load_5 }} / {{ metrics.load_average.load_15 }}
+      {% else %}—{% endif %}
+    </dd></div>
+  </dl>
+</section>
+
+<section class="card">
+  <h2>磁盘</h2>
+  {% if metrics.disk_usage %}
+  <div class="table-wrap">
+    <table class="data-table">
+      <thead>
+        <tr><th>文件系统</th><th>挂载点</th><th>容量</th><th>已用</th><th>可用</th><th>使用率</th></tr>
+      </thead>
+      <tbody>
+        {% for row in metrics.disk_usage %}
+        <tr>
+          <td>{{ row.filesystem }}</td>
+          <td class="mono">{{ row.mountpoint }}</td>
+          <td>{{ row.size }}</td>
+          <td>{{ row.used }}</td>
+          <td>{{ row.available }}</td>
+          <td>{{ pct(row.percent) }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="empty">暂无数据</p>
+  {% endif %}
+</section>
+
+<section class="card">
+  <h2>GPU</h2>
+  {% if metrics.gpu_summary %}
+  <div class="table-wrap">
+    <table class="data-table">
+      <thead>
+        <tr><th>序号</th><th>型号</th><th>使用率</th><th>显存</th><th>温度</th></tr>
+      </thead>
+      <tbody>
+        {% for gpu in metrics.gpu_summary %}
+        <tr>
+          <td>{{ gpu.index }}</td>
+          <td>{{ gpu.name }}</td>
+          <td>{{ pct(gpu.utilization_percent) }}</td>
+          <td>{{ gpu.memory_used_mb }} / {{ gpu.memory_total_mb }} MB</td>
+          <td>{% if gpu.temperature_c is not none %}{{ gpu.temperature_c }} °C{% else %}—{% endif %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="empty">暂无数据</p>
+  {% endif %}
+</section>
+
+<section class="card" id="disk-array">
+  <div class="section-head">
+    <h2>磁盘阵列</h2>
+    {% if detail.disk %}
+    <span class="health health-{{ detail.disk.status }}">{{ detail.disk.status }}</span>
+    {% endif %}
+  </div>
+
+  {% if detail.disk %}
+  <p class="muted">
+    整体状态：<strong>{{ detail.disk.status }}</strong>
+    {% if detail.disk.message %} · {{ detail.disk.message }}{% endif %}
+    {% if detail.disk.collected_at %} · 采集时间 {{ detail.disk.collected_at }}{% endif %}
+  </p>
+
+  <h3>控制器</h3>
+  {% if detail.disk.controllers %}
+  <div class="table-wrap">
+    <table class="data-table">
+      <thead>
+        <tr><th>控制器</th><th>型号</th><th>固件</th><th>BBU 状态</th><th>健康</th></tr>
+      </thead>
+      <tbody>
+        {% for c in detail.disk.controllers %}
+        <tr>
+          <td>{{ c.controller }}</td>
+          <td>{{ c.model or '—' }}</td>
+          <td>{{ c.firmware or '—' }}</td>
+          <td>{{ c.bbu_state or '—' }}</td>
+          <td><span class="health health-{{ c.health }}">{{ c.health }}</span></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="empty">暂无数据</p>
+  {% endif %}
+
+  <h3>Virtual Drives</h3>
+  {% if detail.disk.virtual_drives %}
+  <div class="table-wrap">
+    <table class="data-table">
+      <thead>
+        <tr><th>控制器</th><th>VD</th><th>RAID 级别</th><th>状态</th><th>容量</th><th>健康</th></tr>
+      </thead>
+      <tbody>
+        {% for vd in detail.disk.virtual_drives %}
+        <tr>
+          <td>{{ vd.controller }}</td>
+          <td>{{ vd.vd_id }}</td>
+          <td>{{ vd.raid_level or '—' }}</td>
+          <td>{{ vd.state or '—' }}</td>
+          <td>{{ vd.size or '—' }}</td>
+          <td><span class="health health-{{ vd.health }}">{{ vd.health }}</span></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="empty">暂无数据</p>
+  {% endif %}
+
+  <h3>Physical Drives</h3>
+  {% if detail.disk.physical_drives %}
+  <div class="table-wrap">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>控制器</th><th>Enclosure</th><th>Slot</th><th>型号</th><th>序列号</th>
+          <th>状态</th><th>介质错误</th><th>其他错误</th><th>温度</th><th>健康</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for d in detail.disk.physical_drives %}
+        <tr>
+          <td>{{ d.controller }}</td>
+          <td>{{ d.enclosure }}</td>
+          <td>{{ d.slot }}</td>
+          <td>{{ d.model or '—' }}</td>
+          <td class="mono">{{ d.serial or '—' }}</td>
+          <td>{{ d.state or '—' }}</td>
+          <td>{{ d.media_errors if d.media_errors is not none else '—' }}</td>
+          <td>{{ d.other_errors if d.other_errors is not none else '—' }}</td>
+          <td>{% if d.temperature_c is not none %}{{ d.temperature_c }} °C{% else %}—{% endif %}</td>
+          <td><span class="health health-{{ d.health }}">{{ d.health }}</span></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="empty">暂无数据</p>
+  {% endif %}
+  {% else %}
+  <p class="empty">暂无磁盘阵列数据</p>
+  {% endif %}
+</section>
+{% endif %}
+{% endblock %}

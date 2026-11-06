@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}告警 - 服务器监控{% endblock %}
+
+{% block content %}
+<h1 class="page-title">告警</h1>
+
+<section class="card">
+  <div class="section-head">
+    <h2>活动告警</h2>
+    <span class="muted" id="alert-count">共 {{ alerts|length }} 条</span>
+  </div>
+  <p class="empty" id="alerts-empty"{% if alerts %} hidden{% endif %}>暂无数据</p>
+  <div class="table-wrap">
+    <table class="data-table" id="alerts-table"{% if not alerts %} hidden{% endif %}>
+      <thead>
+        <tr>
+          <th>级别</th>
+          <th>类别</th>
+          <th>主机</th>
+          <th>标题</th>
+          <th>内容</th>
+          <th>时间</th>
+          <th>状态</th>
+          <th>操作</th>
+        </tr>
+      </thead>
+      <tbody id="alerts-body">
+        {% for alert in alerts %}
+        <tr data-alert-row="{{ alert.id }}">
+          <td><span class="severity severity-{{ alert.severity }}">{{ alert.severity }}</span></td>
+          <td>{{ alert.category }}</td>
+          <td>{{ alert.host_name }}</td>
+          <td class="alert-title">{{ alert.title }}</td>
+          <td class="alert-message">{{ alert.message }}</td>
+          <td class="mono">{{ alert.created_at }}</td>
+          <td><span class="status status-{{ alert.status }}">{{ alert.status }}</span></td>
+          <td>
+            {% if alert.status == 'active' %}
+            <button type="button" class="ack-btn" data-alert-id="{{ alert.id }}">确认</button>
+            {% else %}
+            <span class="muted">—</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}
