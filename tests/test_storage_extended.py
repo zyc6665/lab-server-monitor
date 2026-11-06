@@ -12,6 +12,7 @@ from servermanage.disk_health import (
     PhysicalDriveInfo,
     VirtualDriveInfo,
 )
+from servermanage import storage
 from servermanage.models import HostMetrics, HostReport, MemorySummary
 from servermanage.serialization import dump_json, to_jsonable
 from servermanage.storage import (
@@ -622,3 +623,32 @@ def test_purge_old_data_covers_disk_health_snapshot(tmp_path: Path):
             ).fetchall()
         }
     assert hosts == {"new-host"}
+
+
+# ---------------------------------------------------------------------------
+# web settings and encrypted secrets
+# ---------------------------------------------------------------------------
+
+
+def test_app_settings_roundtrip_and_upsert(tmp_path):
+    db = tmp_path / "s.db"
+    storage.save_app_settings("report", {"daily_enabled": False}, db)
+    storage.save_app_settings("report", {"daily_enabled": True}, db)
+    assert storage.load_app_settings(db)["report"]["daily_enabled"] is True
+
+
+def test_secret_roundtrip_and_delete(tmp_path):
+    db = tmp_path / "s.db"
+    storage.set_secret("smtp:password", b"ciphertext", db)
+    assert storage.get_secret("smtp:password", db) == b"ciphertext"
+    assert storage.list_secret_names(db) == ["smtp:password"]
+    storage.delete_secret("smtp:password", db)
+    assert storage.get_secret("smtp:password", db) is None
+
+
+def test_settings_tables_created_by_init_storage(tmp_path):
+    db = tmp_path / "s.db"
+    storage.init_storage(db)
+    names = {row[0] for row in sqlite3.connect(db).execute(
+        "SELECT name FROM sqlite_master WHERE type='table'")}
+    assert {"app_settings", "app_secrets"} <= names

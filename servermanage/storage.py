@@ -147,6 +147,22 @@ CREATE INDEX IF NOT EXISTS idx_alerts_created_at
     ON alerts(created_at);
 """
 
+# Tables added by the web-settings monitor (Task 3): persisted application
+# settings (JSON payloads keyed by section) and encrypted secrets (opaque
+# bytes keyed by name).  ``updated_at`` is an ISO-8601 UTC timestamp.
+_CREATE_SETTINGS_TABLES_SQL = """
+CREATE TABLE IF NOT EXISTS app_settings (
+    section TEXT PRIMARY KEY,
+    payload TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS app_secrets (
+    name TEXT PRIMARY KEY,
+    ciphertext BLOB NOT NULL,
+    updated_at TEXT NOT NULL
+);
+"""
+
 def _disk_percent_value(percent: str) -> int:
     digits = "".join(ch for ch in percent if ch.isdigit())
     if not digits:
@@ -183,6 +199,7 @@ def init_storage(db_path: Path) -> None:
         conn.executescript(_CREATE_INDEX_SQL)
         conn.executescript(_CREATE_EXTENDED_TABLES_SQL)
         conn.executescript(_CREATE_EXTENDED_INDEX_SQL)
+        conn.executescript(_CREATE_SETTINGS_TABLES_SQL)
 
 
 def persist_host_reports(report: DailyReport, db_path: Path) -> None:
@@ -1039,3 +1056,125 @@ def purge_old_data(
         conn.commit()
 
     return counts
+
+
+# ---------------------------------------------------------------------------
+# Web settings and encrypted secrets
+# ---------------------------------------------------------------------------
+
+
+def _settings_now() -> str:
+    """Current UTC instant as an ISO-8601 string for ``updated_at`` columns."""
+    return datetime.now(timezone.utc).isoformat()
+
+
+def save_app_settings(section: str, payload: dict, db_path: Path) -> None:
+    """Insert or replace the JSON *payload* stored for *section*."""
+    db_path = Path(db_path)
+    init_storage(db_path)
+
+    with sqlite3.connect(db_path) as conn:
+        conn.execute(
+            "INSERT INTO app_settings (section, payload, updated_at)"
+            " VALUES (?, ?, ?)"
+            " ON CONFLICT(section) DO UPDATE SET"
+            " payload = excluded.payload, updated_at = excluded.updated_at",
+            (section, dump_json(payload), _settings_now()),
+        )
+        conn.commit()
+
+
+def load_app_settings(db_path: Path) -> dict[str, dict]:
+    """Return ``{section: payload}`` for every stored settings section."""
+    db_path = Path(db_path)
+    if not db_path.exists():
+        return {}
+
+    try:
+        with sqlite3.connect(db_path) as conn:
+            rows = conn.execute(
+                "SELECT section, payload FROM app_settings"
+            ).fetchall()
+    except sqlite3.OperationalError:
+        return {}
+
+    return {section: json.loads(payload) for section, payload in rows}
+
+
+def delete_app_settings(section: str, db_path: Path) -> None:
+    """Remove the settings row for *section* if present."""
+    db_path = Path(db_path)
+    if not db_path.exists():
+        return
+
+    try:
+        with sqlite3.connect(db_path) as conn:
+            conn.execute("DELETE FROM app_settings WHERE section = ?", (section,))
+            conn.commit()
+    except sqlite3.OperationalError:
+        return
+
+
+def set_secret(name: str, ciphertext: bytes, db_path: Path) -> None:
+    """Insert or replace the encrypted *ciphertext* stored under *name*."""
+    db_path = Path(db_path)
+    init_storage(db_path)
+
+    with sqlite3.connect(db_path) as conn:
+        conn.execute(
+            "INSERT INTO app_secrets (name, ciphertext, updated_at)"
+            " VALUES (?, ?, ?)"
+            " ON CONFLICT(name) DO UPDATE SET"
+            " ciphertext = excluded.ciphertext, updated_at = excluded.updated_at",
+            (name, sqlite3.Binary(ciphertext), _settings_now()),
+        )
+        conn.commit()
+
+
+def get_secret(name: str, db_path: Path) -> bytes | None:
+    """Return the stored ciphertext for *name*, or ``None`` when absent."""
+    db_path = Path(db_path)
+    if not db_path.exists():
+        return None
+
+    try:
+        with sqlite3.connect(db_path) as conn:
+            row = conn.execute(
+                "SELECT ciphertext FROM app_secrets WHERE name = ?", (name,)
+            ).fetchone()
+    except sqlite3.OperationalError:
+        return None
+
+    if row is None:
+        return None
+    value = row[0]
+    return bytes(value) if value is not None else None
+
+
+def delete_secret(name: str, db_path: Path) -> None:
+    """Remove the secret stored under *name* if present."""
+    db_path = Path(db_path)
+    if not db_path.exists():
+        return
+
+    try:
+        with sqlite3.connect(db_path) as conn:
+            conn.execute("DELETE FROM app_secrets WHERE name = ?", (name,))
+            conn.commit()
+    except sqlite3.OperationalError:
+        return
+
+
+def list_secret_names(db_path: Path) -> list[str]:
+    """Return every stored secret name, ordered alphabetically."""
+    db_path = Path(db_path)
+    if not db_path.exists():
+        return []
+
+    try:
+        with sqlite3.connect(db_path) as conn:
+            rows = conn.execute("SELECT name FROM app_secrets ORDER BY name").fetchall()
+    except sqlite3.OperationalError:
+        return []
+
+    return [name for (name,) in rows]
