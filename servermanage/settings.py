@@ -14,9 +14,11 @@ returned decrypted inside the in-memory :class:`AppConfig`.
 from __future__ import annotations
 
 import json
+import hmac
 import types
 from copy import deepcopy
 from dataclasses import fields, replace
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Union, get_args, get_origin, get_type_hints
 
@@ -25,9 +27,12 @@ from servermanage.config import load_config
 from servermanage.models import (
     AlertsConfig,
     AppConfig,
+    AuthConfig,
     DashboardAuthConfig,
     DashboardConfig,
     DiskHealthConfig,
+    HostConfig,
+    HostDiskHealthOverride,
     ReportConfig,
 )
 
@@ -73,6 +78,29 @@ SECRET_SMTP_PASSWORD = "smtp:password"
 SECRET_WEBHOOK_URL = "webhook:url"
 SECRET_ADMIN = "dashboard:admin_password"
 SECRET_SESSION = "dashboard:session_secret"
+
+# Per-host secrets: plaintext credentials never live in the ``hosts`` section.
+_HOST_SECRET_PASSWORD = "host:{name}:ssh_password"
+_HOST_SECRET_KEY = "host:{name}:ssh_key"
+_HOST_SECRET_PASSPHRASE = "host:{name}:ssh_passphrase"
+
+# The ``hosts`` section is internal: it is written by the host CRUD helpers,
+# never through :meth:`SettingsService.save_section` (which only accepts the
+# public section names below).
+_SECTION_HOSTS = "hosts"
+
+_HOST_PAYLOAD_FIELDS = (
+    "host",
+    "port",
+    "username",
+    "tags",
+    "disk_mounts",
+    "auth_type",
+    "key_path",
+    "disk_health",
+)
+_HOST_AUTH_TYPES = frozenset({"password", "key"})
+_DEFAULT_DISK_MOUNTS = ["/", "/data"]
 
 # --- Accepted field names per nested section --------------------------------
 
@@ -209,7 +237,12 @@ class SettingsService:
                 allow_missing_secrets=True,
             )
         self.base_config = base_config
+        # Machine binding must run before any secret is seeded: a copied config
+        # directory on another PC has to wipe the old machine's DPAPI secrets
+        # and force first-run setup instead of failing to decrypt them later.
+        self._ensure_machine_binding()
         self._ensure_secret_session()
+        self._migrate_legacy_secrets()
 
     # -- public API ---------------------------------------------------------
 
@@ -231,6 +264,16 @@ class SettingsService:
             if section not in _ALLOWED_SECTIONS or not isinstance(payload, dict):
                 continue
             config = self._apply_section(config, section, payload)
+        host_entries = self._read_host_entries(sections)
+        if host_entries is not None:
+            config = replace(config, servers=self._build_servers(host_entries))
+        elif self.base_config.servers and self.is_writable():
+            # First load with a YAML/legacy seed but no ``hosts`` section yet:
+            # persist the non-sensitive host inventory so later web edits have a
+            # single source of truth (secrets are migrated separately).
+            self._save_host_entries(
+                [_host_entry_from_config(host) for host in self.base_config.servers]
+            )
         return self._apply_secrets(config)
 
     def is_writable(self) -> bool:
@@ -338,9 +381,398 @@ class SettingsService:
                     ),
                 },
             },
-            # Host listing is filled in by Task 6; empty for now.
-            "hosts": [],
+            "hosts": self._public_hosts(),
         }
+
+    # -- hosts ---------------------------------------------------------------
+
+    def list_hosts(self) -> list[dict]:
+        """Return the masked host inventory consumed by the settings page."""
+        return self.public_settings()["hosts"]
+
+    def get_host(self, name: str) -> dict | None:
+        """Return one masked host entry, or ``None`` when it does not exist."""
+        for host in self.list_hosts():
+            if host.get("name") == name:
+                return host
+        return None
+
+    def upsert_host(self, name: str, payload: dict[str, Any]) -> AppConfig:
+        """Create or update host *name* and return the recomposed config.
+
+        ``password`` / ``private_key`` / ``passphrase`` are write-only: they are moved into
+        ``app_secrets`` and never persisted in the ``hosts`` section nor echoed
+        by :meth:`public_settings`.
+        """
+        if not self.is_writable():
+            raise SettingsError("settings are not writable on this platform")
+        if not isinstance(payload, dict):
+            raise SettingsError("host payload must be an object")
+        name = _require_text(name, "name")
+        host = _require_text(payload.get("host"), "host")
+        username = _require_text(payload.get("username"), "username")
+        auth_type = _require_text(payload.get("auth_type"), "auth_type")
+        if auth_type not in _HOST_AUTH_TYPES:
+            raise SettingsError(f"unsupported auth_type: {auth_type}")
+        port = _coerce_port(payload.get("port", 22))
+        tags = _string_list(payload.get("tags"))
+        disk_mounts = _string_list(payload.get("disk_mounts"), default=list(_DEFAULT_DISK_MOUNTS))
+        if not disk_mounts:
+            disk_mounts = list(_DEFAULT_DISK_MOUNTS)
+        clear_secrets = _string_list(payload.get("clear_secrets"))
+        key_path_raw = payload.get("key_path")
+        key_path = str(key_path_raw).strip() if key_path_raw not in (None, "") else None
+
+        # Credentials first: a failed secret write must not mutate the inventory.
+        self._apply_host_secrets(
+            name,
+            auth_type,
+            password=_optional_text(payload.get("password")),
+            private_key=_optional_text(payload.get("private_key")),
+            passphrase=_optional_text(payload.get("passphrase")),
+            key_path=key_path,
+            clear_secrets=clear_secrets,
+        )
+
+        entry = {
+            "name": name,
+            "host": host,
+            "port": port,
+            "username": username,
+            "tags": tags,
+            "disk_mounts": disk_mounts,
+            "auth_type": auth_type,
+            "key_path": key_path,
+            "disk_health": _sanitize_host_disk_health(payload.get("disk_health")),
+        }
+        entries = self._host_entries_for_update()
+        for index, existing in enumerate(entries):
+            if existing.get("name") == name:
+                entries[index] = entry
+                break
+        else:
+            entries.append(entry)
+        self._save_host_entries(entries)
+        return self.load()
+
+    def delete_host(self, name: str) -> AppConfig:
+        """Remove host *name* and its three credentials, returning the new config."""
+        if not self.is_writable():
+            raise SettingsError("settings are not writable on this platform")
+        name = _require_text(name, "name")
+        for template in (
+            _HOST_SECRET_PASSWORD,
+            _HOST_SECRET_KEY,
+            _HOST_SECRET_PASSPHRASE,
+        ):
+            storage.delete_secret(template.format(name=name), self.db_path)
+        entries = [
+            entry for entry in self._host_entries_for_update() if entry.get("name") != name
+        ]
+        self._save_host_entries(entries)
+        return self.load()
+
+    def _apply_host_secrets(
+        self,
+        name: str,
+        auth_type: str,
+        *,
+        password: str | None,
+        private_key: str | None,
+        passphrase: str | None,
+        key_path: str | None,
+        clear_secrets: list[str],
+    ) -> None:
+        clear = set(clear_secrets)
+        password_secret = _HOST_SECRET_PASSWORD.format(name=name)
+        key_secret = _HOST_SECRET_KEY.format(name=name)
+        passphrase_secret = _HOST_SECRET_PASSPHRASE.format(name=name)
+        if auth_type == "password":
+            if "password" in clear:
+                storage.delete_secret(password_secret, self.db_path)
+            if password:
+                self._store_secret(password_secret, password)
+            elif storage.get_secret(password_secret, self.db_path) is None:
+                raise SettingsError("SSH 密码未设置")
+            return
+        # key auth
+        if "key" in clear:
+            storage.delete_secret(key_secret, self.db_path)
+        if private_key:
+            self._store_secret(key_secret, private_key)
+        has_key = storage.get_secret(key_secret, self.db_path) is not None or key_path is not None
+        if not has_key:
+            raise SettingsError("SSH 私钥未设置")
+        if "passphrase" in clear:
+            storage.delete_secret(passphrase_secret, self.db_path)
+        if passphrase:
+            self._store_secret(passphrase_secret, passphrase)
+
+    def _host_entries_for_update(self) -> list[dict]:
+        entries = self._read_host_entries()
+        if entries is not None:
+            return [dict(entry) for entry in entries]
+        return [_host_entry_from_config(host) for host in self.base_config.servers]
+
+    def _read_host_entries(
+        self, sections: dict[str, Any] | None = None
+    ) -> list[dict] | None:
+        if sections is None:
+            sections = storage.load_app_settings(self.db_path)
+        if not isinstance(sections, dict):
+            return None
+        payload = sections.get(_SECTION_HOSTS)
+        if not isinstance(payload, dict):
+            return None
+        entries = payload.get("hosts")
+        if not isinstance(entries, list):
+            return None
+        return [entry for entry in entries if isinstance(entry, dict)]
+
+    def _save_host_entries(self, entries: list[dict]) -> None:
+        storage.save_app_settings(_SECTION_HOSTS, {"hosts": entries}, self.db_path)
+
+    def _public_hosts(self) -> list[dict]:
+        entries = self._read_host_entries()
+        if entries is None:
+            entries = [_host_entry_from_config(host) for host in self.base_config.servers]
+        return [self._public_host_entry(entry) for entry in entries]
+
+    def _public_host_entry(self, entry: dict[str, Any]) -> dict[str, Any]:
+        name = str(entry.get("name") or "")
+        key_path = entry.get("key_path")
+        return {
+            "name": name,
+            "host": str(entry.get("host") or ""),
+            "port": entry.get("port", 22),
+            "username": str(entry.get("username") or ""),
+            "tags": [str(tag) for tag in entry.get("tags") or []],
+            "disk_mounts": [str(mount) for mount in entry.get("disk_mounts") or []],
+            "auth_type": str(entry.get("auth_type") or ""),
+            "key_path": key_path,
+            "disk_health": entry.get("disk_health"),
+            "password_configured": (
+                storage.get_secret(_HOST_SECRET_PASSWORD.format(name=name), self.db_path)
+                is not None
+            ),            "key_configured": (
+                storage.get_secret(_HOST_SECRET_KEY.format(name=name), self.db_path)
+                is not None
+                or bool(key_path)
+            ),
+            "passphrase_configured": (
+                storage.get_secret(_HOST_SECRET_PASSPHRASE.format(name=name), self.db_path)
+                is not None
+            ),
+        }
+
+    def _build_servers(self, entries: list[dict[str, Any]]) -> list[HostConfig]:
+        servers: list[HostConfig] = []
+        for entry in entries:
+            name = str(entry.get("name") or "").strip()
+            host = str(entry.get("host") or "").strip()
+            username = str(entry.get("username") or "").strip()
+            auth_type = str(entry.get("auth_type") or "").strip()
+            if not name or not host or not username or auth_type not in _HOST_AUTH_TYPES:
+                continue
+            try:
+                port = int(entry.get("port", 22))
+            except (TypeError, ValueError):
+                port = 22
+            disk_mounts = [str(mount) for mount in entry.get("disk_mounts") or []]
+            servers.append(
+                HostConfig(
+                    name=name,
+                    host=host,
+                    port=port,
+                    username=username,
+                    auth=self._build_auth(name, auth_type, entry),
+                    tags=[str(tag) for tag in entry.get("tags") or []],
+                    disk_health=_build_host_disk_health(entry.get("disk_health")),
+                    disk_mounts=disk_mounts or list(_DEFAULT_DISK_MOUNTS),
+                )
+            )
+        return servers
+
+    def _build_auth(self, name: str, auth_type: str, entry: dict[str, Any]) -> AuthConfig:
+        if auth_type == "password":
+            return AuthConfig(
+                type=auth_type,
+                password=self._read_secret_text(
+                    _HOST_SECRET_PASSWORD.format(name=name)
+                ),
+            )
+        key_path_raw = entry.get("key_path")
+        key_path = Path(str(key_path_raw)).expanduser() if key_path_raw else None
+        return AuthConfig(
+            type=auth_type,
+            key_path=key_path,
+            key_data=self._read_secret_text(_HOST_SECRET_KEY.format(name=name)),
+            passphrase=self._read_secret_text(_HOST_SECRET_PASSPHRASE.format(name=name)),
+        )
+
+    # -- admin credential ----------------------------------------------------
+
+    def verify_admin(self, username: str, password: str) -> bool:
+        """Check *username* / *password* against the stored admin credential.
+
+        Falls back to the plaintext dashboard password from YAML/.env only while
+        the DPAPI-backed credential has not been created yet (migration period).
+        """
+        admin = self._read_secret_json(SECRET_ADMIN)
+        if isinstance(admin, dict):
+            hash_value = admin.get("hash")
+            salt = admin.get("salt")
+            if not isinstance(hash_value, str) or not hash_value:
+                return False
+            if not isinstance(salt, str) or not salt:
+                return False
+            iterations = admin.get("iterations")
+            if not isinstance(iterations, int) or isinstance(iterations, bool) or iterations <= 0:
+                iterations = DashboardAuthConfig().password_iterations
+            stored_user = admin.get("username") or self.base_config.dashboard.auth.username
+            if str(stored_user) != str(username):
+                return False
+            return security.verify_password(
+                password, hash_value, salt, iterations
+            )
+        auth = self.base_config.dashboard.auth
+        if not auth.password:
+            return False
+        if str(username) != str(auth.username or "admin"):
+            return False
+        return hmac.compare_digest(str(password), str(auth.password))
+
+    def set_admin_password(
+        self,
+        current_password: str | None,
+        new_password: str,
+        *,
+        username: str | None = None,
+    ) -> None:
+        """Create or rotate the admin credential (DPAPI-encrypted JSON in SECRET_ADMIN)."""
+        if not self.is_writable():
+            raise SettingsError("settings are not writable on this platform")
+        if not isinstance(new_password, str) or not new_password:
+            raise SettingsError("新密码不能为空")
+        admin = self._read_secret_json(SECRET_ADMIN)
+        existing_user: str | None = None
+        if isinstance(admin, dict) and isinstance(admin.get("hash"), str) and admin.get("hash"):
+            existing_user = str(
+                admin.get("username")
+                or self.base_config.dashboard.auth.username
+                or "admin"
+            )
+            if not current_password or not self.verify_admin(
+                existing_user, current_password
+            ):
+                raise SettingsError("当前密码不正确")
+            # Rotating an existing credential must meet the length policy; the
+            # first-run setup route enforces the same bound before calling us.
+            if len(new_password) < 8:
+                raise SettingsError("新密码长度至少 8 位")
+        target_user = (
+            username
+            or existing_user
+            or self.base_config.dashboard.auth.username
+            or "admin"
+        )
+        self._store_admin_password(new_password, target_user)
+        sections = storage.load_app_settings(self.db_path)
+        security_section = sections.get("security")
+        payload = dict(security_section) if isinstance(security_section, dict) else {}
+        payload.pop("force_setup", None)
+        payload["machine_id"] = security.current_machine_id()
+        storage.save_app_settings("security", payload, self.db_path)
+        try:
+            ciphertext = security.protect_secret(_new_session_secret().encode("utf-8"))
+        except security.SecurityError as exc:
+            raise SettingsError(str(exc)) from exc
+        storage.set_secret(SECRET_SESSION, ciphertext, self.db_path)
+
+    # -- machine binding & legacy migration ----------------------------------
+
+    def _ensure_machine_binding(self) -> None:
+        """Wipe DPAPI secrets when this config directory runs on another machine."""
+        sections = storage.load_app_settings(self.db_path)
+        section = sections.get("security")
+        payload = dict(section) if isinstance(section, dict) else {}
+        machine_id = payload.get("machine_id")
+        current = security.current_machine_id()
+        if machine_id and machine_id != current:
+            for name in storage.list_secret_names(self.db_path):
+                storage.delete_secret(name, self.db_path)
+            storage.save_app_settings(
+                "security",
+                {"machine_id": current, "force_setup": True},
+                self.db_path,
+            )
+            return
+        if not machine_id:
+            payload["machine_id"] = current
+            storage.save_app_settings("security", payload, self.db_path)
+
+    def _migrate_legacy_secrets(self) -> None:
+        """One-time import of YAML/.env plaintext secrets into ``app_secrets``."""
+        if not self.is_writable():
+            return
+        sections = storage.load_app_settings(self.db_path)
+        section = sections.get("security")
+        payload = dict(section) if isinstance(section, dict) else {}
+        if payload.get("migrated_at"):
+            return
+        if payload.get("force_setup"):
+            # A machine change just wiped the secrets; re-importing plaintext
+            # from the config would defeat the reset.
+            return
+        try:
+            self._migrate_legacy_sources()
+        except Exception as exc:  # noqa: BLE001 - migration must never block startup
+            payload["migration_error"] = f"{type(exc).__name__}: {exc}"
+            storage.save_app_settings("security", payload, self.db_path)
+            return
+        payload["migrated_at"] = datetime.now(timezone.utc).isoformat()
+        payload.pop("migration_error", None)
+        storage.save_app_settings("security", payload, self.db_path)
+
+    def _migrate_legacy_sources(self) -> None:
+        base = self.base_config
+        if (
+            base.smtp is not None
+            and base.smtp.password
+            and storage.get_secret(SECRET_SMTP_PASSWORD, self.db_path) is None
+        ):
+            self._store_secret(SECRET_SMTP_PASSWORD, base.smtp.password)
+        webhook_url = base.alerts.webhook.url
+        if webhook_url and storage.get_secret(SECRET_WEBHOOK_URL, self.db_path) is None:
+            self._store_secret(SECRET_WEBHOOK_URL, str(webhook_url))
+        admin_password = base.dashboard.auth.password
+        if admin_password and storage.get_secret(SECRET_ADMIN, self.db_path) is None:
+            self._store_admin_password(
+                admin_password, base.dashboard.auth.username
+            )
+        for host in base.servers:
+            self._migrate_legacy_host_secrets(host)
+
+    def _migrate_legacy_host_secrets(self, host: HostConfig) -> None:
+        auth = host.auth
+        password_secret = _HOST_SECRET_PASSWORD.format(name=host.name)
+        if auth.type == "password":
+            if auth.password and storage.get_secret(password_secret, self.db_path) is None:
+                self._store_secret(password_secret, auth.password)
+            return
+        if auth.type != "key":
+            return
+        key_secret = _HOST_SECRET_KEY.format(name=host.name)
+        if storage.get_secret(key_secret, self.db_path) is None:
+            if auth.key_data:
+                self._store_secret(key_secret, auth.key_data)
+            elif auth.key_path is not None and Path(auth.key_path).is_file():
+                self._store_secret(
+                    key_secret, Path(auth.key_path).read_text(encoding="utf-8")
+                )
+        passphrase_secret = _HOST_SECRET_PASSPHRASE.format(name=host.name)
+        if auth.passphrase and storage.get_secret(passphrase_secret, self.db_path) is None:
+            self._store_secret(passphrase_secret, auth.passphrase)
 
     # -- section composition ------------------------------------------------
 
@@ -611,6 +1043,91 @@ class SettingsService:
         except (ValueError, TypeError):
             return None
         return value if isinstance(value, dict) else None
+
+
+def _require_text(value: Any, field: str) -> str:
+    if not isinstance(value, str) or not value.strip():
+        raise SettingsError(f"{field} 不能为空")
+    return value.strip()
+
+
+def _optional_text(value: Any) -> str | None:
+    if value is None:
+        return None
+    text = str(value)
+    return text if text else None
+
+
+def _string_list(value: Any, *, default: list[str] | None = None) -> list[str]:
+    if value is None:
+        return list(default or [])
+    if isinstance(value, str):
+        return [value]
+    if isinstance(value, (list, tuple)):
+        return [str(item) for item in value]
+    return list(default or [])
+
+
+def _coerce_port(value: Any) -> int:
+    try:
+        port = int(value)
+    except (TypeError, ValueError) as exc:
+        raise SettingsError("port 必须是整数") from exc
+    if not 1 <= port <= 65535:
+        raise SettingsError("port 超出范围")
+    return port
+
+
+def _sanitize_host_disk_health(value: Any) -> dict[str, Any] | None:
+    if not isinstance(value, dict):
+        return None
+    result: dict[str, Any] = {}
+    if value.get("enabled") is not None:
+        result["enabled"] = bool(value.get("enabled"))
+    if value.get("use_sudo") is not None:
+        result["use_sudo"] = bool(value.get("use_sudo"))
+    storcli_path = value.get("storcli_path")
+    if storcli_path:
+        result["storcli_path"] = str(storcli_path)
+    return result or None
+
+
+def _build_host_disk_health(value: Any) -> HostDiskHealthOverride | None:
+    if not isinstance(value, dict):
+        return None
+
+    def _optional_bool(key: str) -> bool | None:
+        raw = value.get(key)
+        return None if raw is None else bool(raw)
+
+    storcli_path = value.get("storcli_path")
+    return HostDiskHealthOverride(
+        enabled=_optional_bool("enabled"),
+        storcli_path=str(storcli_path) if storcli_path else None,
+        use_sudo=_optional_bool("use_sudo"),
+    )
+
+
+def _host_entry_from_config(host: HostConfig) -> dict[str, Any]:
+    auth = host.auth
+    disk_health: dict[str, Any] | None = None
+    if host.disk_health is not None:
+        disk_health = {
+            "enabled": host.disk_health.enabled,
+            "storcli_path": host.disk_health.storcli_path,
+            "use_sudo": host.disk_health.use_sudo,
+        }
+    return {
+        "name": host.name,
+        "host": host.host,
+        "port": host.port,
+        "username": host.username,
+        "tags": list(host.tags),
+        "disk_mounts": list(host.disk_mounts),
+        "auth_type": auth.type,
+        "key_path": str(auth.key_path) if auth.key_path is not None else None,
+        "disk_health": disk_health,
+    }
 
 
 def _new_session_secret() -> str:

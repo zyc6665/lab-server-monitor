@@ -226,3 +226,66 @@ def test_malformed_admin_secret_is_tolerated(tmp_path):
     assert auth.password_hash == "deadbeef"
     assert auth.password_salt is None
     assert auth.password_iterations == 200000
+
+
+# ---------------------------------------------------------------------------
+# Task 6: host CRUD, secret migration, machine reset and admin password
+# ---------------------------------------------------------------------------
+
+
+def test_upsert_host_stores_and_masks_secret(tmp_path):
+    svc = _service(tmp_path)
+    svc.set_admin_password(None, "AdminPass!23", username="admin")
+    cfg = svc.upsert_host("a100", {
+        "host": "202.119.189.245", "port": 22, "username": "zhouyc",
+        "auth_type": "password", "password": "ssh-secret",
+        "disk_mounts": ["/", "/data"],
+    })
+    assert [h.name for h in cfg.servers] == ["a100"]
+    assert cfg.servers[0].auth.password == "ssh-secret"
+    assert "ssh-secret" not in repr(svc.public_settings())
+
+
+def test_updating_host_without_password_keeps_existing_secret(tmp_path):
+    svc = _service(tmp_path)
+    svc.upsert_host("h", {"host": "1.2.3.4", "username": "u",
+                          "auth_type": "password", "password": "keepme"})
+    svc.upsert_host("h", {"host": "1.2.3.5", "username": "u", "auth_type": "password"})
+    assert svc.load().servers[0].auth.password == "keepme"
+
+
+def test_delete_host_removes_secrets(tmp_path):
+    svc = _service(tmp_path)
+    svc.upsert_host("h", {"host": "1.2.3.4", "username": "u",
+                          "auth_type": "password", "password": "x"})
+    svc.delete_host("h")
+    assert svc.load().servers == []
+    assert storage.get_secret("host:h:ssh_password", svc.db_path) is None
+
+
+def test_verify_admin_and_change_password(tmp_path):
+    svc = _service(tmp_path)
+    svc.set_admin_password(None, "OldPass!23", username="admin")
+    assert svc.verify_admin("admin", "OldPass!23") is True
+    assert svc.verify_admin("admin", "wrong") is False
+    svc.set_admin_password("OldPass!23", "AdminPass!23")
+    assert svc.verify_admin("admin", "AdminPass!23") is True
+
+
+def test_machine_mismatch_forces_setup_and_clears_secrets(tmp_path):
+    svc = _service(tmp_path)
+    svc.set_admin_password(None, "Pass!23", username="admin")
+    storage.save_app_settings("security", {"machine_id": "other-machine"}, svc.db_path)
+    svc2 = SettingsService(config_path=svc.config_path, db_path=svc.db_path)
+    assert svc2.setup_required() is True
+    assert storage.get_secret("dashboard:admin_password", svc.db_path) is None
+
+
+def test_legacy_env_password_migrates_to_dpapi(tmp_path, monkeypatch):
+    monkeypatch.setenv("DASHBOARD_PASSWORD", "LegacyPass!23")
+    cfg = tmp_path / "config.yaml"
+    cfg.write_text("servers: []\n", encoding="utf-8")
+    svc = SettingsService(config_path=cfg, db_path=tmp_path / "m.db")
+    svc.load()
+    if security.dpapi_available():
+        assert storage.get_secret("dashboard:admin_password", svc.db_path) is not None
