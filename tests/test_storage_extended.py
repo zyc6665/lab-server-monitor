@@ -511,3 +511,114 @@ def test_purge_old_data_deletes_old_keeps_today(tmp_path: Path):
             for row in conn.execute("SELECT fingerprint FROM alerts").fetchall()
         }
         assert alert_fps == {"fp-old-active", "fp-new-resolved"}
+
+
+# ---------------------------------------------------------------------------
+# disk health header (status / message snapshot)
+# ---------------------------------------------------------------------------
+
+
+def test_zero_drive_report_roundtrips_status_and_message(tmp_path: Path):
+    """(a) A zero-drive report keeps its own status/message, not a derived one."""
+    db_path = tmp_path / "servermanage.db"
+    report = DiskHealthReport(
+        host_name="gpu-09",
+        collected_at=BASE,
+        status="permission_denied",
+        message="sudo: a password is required",
+    )
+
+    save_disk_health(report, db_path)
+
+    result = get_disk_health("gpu-09", db_path)
+    assert result is not None
+    assert result["status"] == "permission_denied"
+    assert result["message"] == "sudo: a password is required"
+    assert result["collected_at"] == BASE.isoformat()
+    assert result["controllers"] == []
+    assert result["virtual_drives"] == []
+    assert result["physical_drives"] == []
+
+
+def test_zero_drive_report_not_masked_by_older_batch(tmp_path: Path):
+    """(a) A newer zero-drive header must not be masked by an older batch."""
+    db_path = tmp_path / "servermanage.db"
+    save_disk_health(_six_drive_disk_report("gpu-01"), db_path)
+
+    newer = DiskHealthReport(
+        host_name="gpu-01",
+        collected_at=BASE + timedelta(hours=1),
+        status="permission_denied",
+        message="sudo: a password is required",
+    )
+    save_disk_health(newer, db_path)
+
+    result = get_disk_health("gpu-01", db_path)
+    assert result is not None
+    assert result["collected_at"] == (BASE + timedelta(hours=1)).isoformat()
+    assert result["status"] == "permission_denied"
+    assert result["message"] == "sudo: a password is required"
+    assert result["controllers"] == []
+    assert result["virtual_drives"] == []
+    assert result["physical_drives"] == []
+
+
+def test_report_status_preserved_when_all_drives_ok(tmp_path: Path):
+    """(b) An explicit critical status survives even with all-ok components."""
+    db_path = tmp_path / "servermanage.db"
+    report = DiskHealthReport(
+        host_name="gpu-03",
+        collected_at=BASE,
+        status="critical",
+        message="controller offline",
+        physical_drives=[
+            PhysicalDriveInfo(
+                controller=0, enclosure=252, slot=0, health="ok"
+            )
+        ],
+    )
+
+    save_disk_health(report, db_path)
+
+    result = get_disk_health("gpu-03", db_path)
+    assert result is not None
+    assert result["status"] == "critical"
+    assert result["message"] == "controller offline"
+    assert len(result["physical_drives"]) == 1
+    assert result["physical_drives"][0]["health"] == "ok"
+
+
+def test_purge_old_data_covers_disk_health_snapshot(tmp_path: Path):
+    """(c) Retention purge deletes old disk_health_snapshot header rows."""
+    db_path = tmp_path / "servermanage.db"
+    init_storage(db_path)
+    now = datetime(2026, 11, 6, 12, 0, 0, tzinfo=timezone.utc)
+    old = (now - timedelta(days=100)).isoformat()
+    today = now.isoformat()
+
+    with sqlite3.connect(db_path) as conn:
+        conn.execute(
+            "INSERT INTO disk_health_snapshot"
+            " (host_name, collected_at, status, message)"
+            " VALUES ('old-host', ?, 'ok', NULL)",
+            (old,),
+        )
+        conn.execute(
+            "INSERT INTO disk_health_snapshot"
+            " (host_name, collected_at, status, message)"
+            " VALUES ('new-host', ?, 'ok', NULL)",
+            (today,),
+        )
+        conn.commit()
+
+    counts = purge_old_data(db_path, retention_days=90, now=now)
+
+    assert counts["disk_health_snapshot"] == 1
+    with sqlite3.connect(db_path) as conn:
+        hosts = {
+            row[0]
+            for row in conn.execute(
+                "SELECT host_name FROM disk_health_snapshot"
+            ).fetchall()
+        }
+    assert hosts == {"new-host"}

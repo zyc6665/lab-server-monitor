@@ -107,6 +107,13 @@ CREATE TABLE IF NOT EXISTS disk_pd_snapshot (
     health TEXT,
     reasons TEXT
 );
+CREATE TABLE IF NOT EXISTS disk_health_snapshot (
+    host_name TEXT NOT NULL,
+    collected_at TEXT NOT NULL,
+    status TEXT NOT NULL,
+    message TEXT,
+    PRIMARY KEY (host_name, collected_at)
+);
 CREATE TABLE IF NOT EXISTS alerts (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     created_at TEXT NOT NULL,
@@ -139,11 +146,6 @@ CREATE INDEX IF NOT EXISTS idx_alerts_fingerprint
 CREATE INDEX IF NOT EXISTS idx_alerts_created_at
     ON alerts(created_at);
 """
-
-# Health ranking used to derive an overall status for a disk-health batch.
-# ``ok`` and ``healthy`` are treated as the same "good" tier.
-_DISK_HEALTH_RANK = {"critical": 3, "warning": 2, "healthy": 1, "ok": 1}
-
 
 def _disk_percent_value(percent: str) -> int:
     digits = "".join(ch for ch in percent if ch.isdigit())
@@ -487,6 +489,20 @@ def save_disk_health(report: DiskHealthReport, db_path: Path) -> None:
     ]
 
     with sqlite3.connect(db_path) as conn:
+        # Always write the batch header, even for zero-drive reports, so the
+        # report's own ``status`` / ``message`` are not lost.
+        conn.execute(
+            """
+            INSERT INTO disk_health_snapshot
+                (host_name, collected_at, status, message)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(host_name, collected_at) DO UPDATE SET
+                status = excluded.status,
+                message = excluded.message
+            """,
+            (host_name, collected_at, report.status, report.message),
+        )
+
         for table in (
             "disk_controller_snapshot",
             "disk_vd_snapshot",
@@ -525,26 +541,14 @@ def save_disk_health(report: DiskHealthReport, db_path: Path) -> None:
         conn.commit()
 
 
-def _derive_disk_status(health_values: list[object]) -> str:
-    """Derive an overall status from the component health tiers."""
-    worst = 0
-    for value in health_values:
-        worst = max(worst, _DISK_HEALTH_RANK.get(str(value).lower(), 0))
-    if worst >= 3:
-        return "critical"
-    if worst == 2:
-        return "warning"
-    if worst == 1:
-        return "ok"
-    return "unknown"
-
-
 def get_disk_health(host_name: str, db_path: Path) -> dict | None:
     """Return the most recent disk-health batch for *host_name*, or ``None``.
 
-    Note: the six-table schema has no dedicated overall ``status``/``message``
-    column, so the overall status is derived from the worst component health
-    (``critical`` > ``warning`` > good) and ``message`` is ``None``.
+    The overall ``status`` / ``message`` are read from the newest
+    ``disk_health_snapshot`` header row for the host and returned unchanged
+    (never derived from component health).  Component lists come from the
+    latest batch at that same ``collected_at``.  If no header row exists for
+    the host, ``None`` is returned.
     """
     db_path = Path(db_path)
     if not db_path.exists():
@@ -552,22 +556,16 @@ def get_disk_health(host_name: str, db_path: Path) -> dict | None:
 
     with sqlite3.connect(db_path) as conn:
         conn.row_factory = sqlite3.Row
-        latest = conn.execute(
-            """
-            SELECT MAX(collected_at) AS latest FROM (
-                SELECT collected_at FROM disk_controller_snapshot WHERE host_name = ?
-                UNION ALL
-                SELECT collected_at FROM disk_vd_snapshot WHERE host_name = ?
-                UNION ALL
-                SELECT collected_at FROM disk_pd_snapshot WHERE host_name = ?
-            )
-            """,
-            (host_name, host_name, host_name),
+        header = conn.execute(
+            "SELECT collected_at, status, message FROM disk_health_snapshot"
+            " WHERE host_name = ?"
+            " ORDER BY collected_at DESC LIMIT 1",
+            (host_name,),
         ).fetchone()
-        if latest is None or latest["latest"] is None:
+        if header is None:
             return None
 
-        collected_at = latest["latest"]
+        collected_at = header["collected_at"]
         controllers = [
             dict(row)
             for row in conn.execute(
@@ -601,24 +599,20 @@ def get_disk_health(host_name: str, db_path: Path) -> dict | None:
             ).fetchall()
         ]
 
-    health_values: list[object] = []
     for controller in controllers:
         controller["reasons"] = _load_reasons(controller.get("reasons"))
-        health_values.append(controller.get("health"))
     for vd in virtual_drives:
         vd["reasons"] = _load_reasons(vd.get("reasons"))
-        health_values.append(vd.get("health"))
     for drive in physical_drives:
         drive["reasons"] = _load_reasons(drive.get("reasons"))
         if drive.get("smart_alert") is not None:
             drive["smart_alert"] = bool(drive["smart_alert"])
-        health_values.append(drive.get("health"))
 
     return {
         "host_name": host_name,
         "collected_at": collected_at,
-        "status": _derive_disk_status(health_values),
-        "message": None,
+        "status": header["status"],
+        "message": header["message"],
         "controllers": controllers,
         "virtual_drives": virtual_drives,
         "physical_drives": physical_drives,
@@ -635,6 +629,8 @@ def get_all_disk_health(db_path: Path) -> list[dict]:
         rows = conn.execute(
             """
             SELECT host_name FROM (
+                SELECT host_name FROM disk_health_snapshot
+                UNION
                 SELECT host_name FROM disk_controller_snapshot
                 UNION
                 SELECT host_name FROM disk_vd_snapshot
@@ -811,6 +807,7 @@ def set_task_state(
 
 _PURGE_TABLES = (
     "host_metrics_history",
+    "disk_health_snapshot",
     "disk_controller_snapshot",
     "disk_vd_snapshot",
     "disk_pd_snapshot",
@@ -825,8 +822,9 @@ def purge_old_data(
 ) -> dict[str, int]:
     """Delete data older than *retention_days* and return per-table counts.
 
-    Covers ``host_metrics_history``, the three disk snapshot tables, and
-    alerts that are both older than the cutoff and ``status = 'resolved'``.
+    Covers ``host_metrics_history``, the ``disk_health_snapshot`` header table,
+    the three disk snapshot tables, and alerts that are both older than the
+    cutoff and ``status = 'resolved'``.
     Active alerts are never purged.  Pass ``now`` in tests to pin the cutoff.
     """
     db_path = Path(db_path)
