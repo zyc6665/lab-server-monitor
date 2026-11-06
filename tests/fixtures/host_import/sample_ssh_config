@@ -1,0 +1,20 @@
+# Sample ~/.ssh/config used by host import tests.
+Include ~/.ssh/config.d/*
+
+Host *
+    ServerAliveInterval 30
+
+Host web1 web2
+    HostName 10.0.0.11
+    User deploy
+    Port 2222
+    IdentityFile ~/.ssh/id_ed25519
+
+Host db-primary
+    HostName 10.0.0.21
+    User root
+    IdentityFile keys/db_rsa
+
+Host bastion-only
+    HostName 10.0.0.31
+    ProxyJump bastion.example.com

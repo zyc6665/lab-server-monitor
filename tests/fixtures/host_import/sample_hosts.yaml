@@ -1,0 +1,17 @@
+hosts:
+  - name: web1
+    host: 10.0.0.11
+    port: 2222
+    username: deploy
+    auth_type: key
+    key_path: ~/.ssh/id_ed25519
+    tags: [prod, web]
+    disk_mounts: ["/", "/data"]
+    group: 生产环境
+    owner: 张三
+    location: A机房
+    notes: 主站
+  - name: gpu1
+    host: 10.0.0.41
+    tags: gpu
+    disk_mounts: ["/", "/data", "/scratch"]
