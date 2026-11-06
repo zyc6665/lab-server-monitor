@@ -1,0 +1,153 @@
+# ============================================================================
+# 服务器轮询监测工具 —— Windows PC 绿色包示例配置
+# Server Polling Monitor —— Windows PC (PyInstaller onedir) example config
+#
+# 用法：复制本文件为 config/config.yaml，复制 config/.env.example 为
+#       config/.env，填写真实值后双击 启动.bat。
+#       （旧版 Docker 部署请继续使用仓库根目录的 config.yaml.example）
+#
+# 说明：所有形如 *_env 的字段都写“环境变量名”，真实密码放在 config/.env 中，
+#       不要把明文密码写进本文件。
+# ============================================================================
+
+# ---------------------------------------------------------------------------
+# app：服务运行参数（轮询节奏）
+# ---------------------------------------------------------------------------
+app:
+  poll_interval_seconds: 600          # 系统指标轮询间隔（秒）= 10 分钟
+  disk_poll_interval_seconds: 86400   # 磁盘健康轮询间隔（秒）= 24 小时
+  concurrency: 8                      # 并发 SSH 采集线程数
+  retention_days: 90                  # 采样数据保留天数
+  timezone: "Asia/Shanghai"
+
+# ---------------------------------------------------------------------------
+# dashboard：本地 Web 看板
+# ---------------------------------------------------------------------------
+dashboard:
+  host: "0.0.0.0"
+  port: 8080
+  session_lifetime_hours: 12
+  session_secret_env: "DASHBOARD_SECRET"
+  auth:
+    enabled: true
+    username: "admin"
+    password_env: "DASHBOARD_PASSWORD"
+
+# ---------------------------------------------------------------------------
+# alerts：告警策略与阈值
+# ---------------------------------------------------------------------------
+alerts:
+  enabled: true
+  desktop_notification: true          # Windows 桌面通知（winotify）
+  email: true
+  cooldown_minutes: 60
+  repeat_while_active: false
+  offline_failures: 2                 # 连续失败 N 次判定离线
+  webhook:
+    enabled: false                    # 需要企业微信/钉钉等推送时改为 true
+    type: "wecom"
+    url_env: "ALERT_WEBHOOK_URL"
+  thresholds:
+    cpu_percent: 90
+    memory_percent: 90
+    disk_percent: 90
+    gpu_memory_percent: 90
+    disk_temperature_c: 55            # 硬盘温度告警阈值（摄氏度）
+
+# ---------------------------------------------------------------------------
+# disk_health：磁盘/SMART 健康检查（需要目标机安装 storcli 时按需开启）
+# ---------------------------------------------------------------------------
+disk_health:
+  enabled: true
+  use_sudo: true
+  storcli_candidates:
+    - "storcli"
+    - "storcli64"
+    - "/opt/MegaRAID/storcli/storcli64"
+    - "/opt/lsi/storcli/storcli64"
+    - "/usr/local/bin/storcli"
+    - "/usr/sbin/storcli"
+  rules:
+    alert_on_media_errors: true
+    alert_on_other_errors: true
+    alert_on_predictive_failure: true
+    alert_on_smart_flag: true
+    alert_on_state_not_optimal: true
+    alert_on_error_increase: true
+
+# ---------------------------------------------------------------------------
+# smtp：日报邮件发送（不需要邮件时可整段删除）
+# ---------------------------------------------------------------------------
+smtp:
+  host: "smtp.example.com"
+  port: 465
+  username: "monitor@example.com"
+  password_env: "SMTP_PASSWORD"
+  use_ssl: true
+  from_addr: "monitor@example.com"
+  to_addrs:
+    - "ops@example.com"
+
+# ---------------------------------------------------------------------------
+# ssh：SSH 连接/命令超时（秒）
+# ---------------------------------------------------------------------------
+ssh:
+  connect_timeout: 10
+  command_timeout: 20
+
+# ---------------------------------------------------------------------------
+# report：日报 / 周报 / 领导摘要
+# ---------------------------------------------------------------------------
+report:
+  subject_prefix: "[Server Daily Report]"
+  include_failed_hosts: true
+  daily_enabled: true
+  daily_time: "09:00"
+  executive:
+    enabled: false
+    subject_prefix: "[Leader Summary]"
+    to_addrs:
+      - "leader@example.com"
+  weekly:
+    enabled: true
+    subject_prefix: "[Server Weekly Report]"
+    busy_threshold: 70.0
+    idle_threshold: 20.0
+    time: "16:00"
+
+# ---------------------------------------------------------------------------
+# storage：本地 SQLite 数据（绿色包建议放在 data/ 下）
+# ---------------------------------------------------------------------------
+storage:
+  enabled: true
+  db_path: "data/servermonitor.db"
+
+# ---------------------------------------------------------------------------
+# servers：被监测的 Linux 服务器（示例统一用密码认证，避免依赖私钥文件）
+# ---------------------------------------------------------------------------
+servers:
+  - name: "a100"
+    host: "10.0.0.21"
+    port: 22
+    username: "root"
+    tags:
+      - "gpu"
+      - "a100"
+    auth:
+      type: "password"
+      password_env: "A100_SSH_PASSWORD"
+    disk_health:
+      enabled: true
+
+  - name: "l40s-01"
+    host: "10.0.0.22"
+    port: 22
+    username: "ops"
+    tags:
+      - "gpu"
+      - "l40s"
+    auth:
+      type: "password"
+      password_env: "L40S_01_SSH_PASSWORD"
+    disk_health:
+      enabled: true

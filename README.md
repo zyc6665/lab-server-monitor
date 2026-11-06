@@ -463,3 +463,76 @@ docker compose down
 - `docker-compose.yml` 里的 `CRON_SCHEDULE`（如果要改定时）
 
 只要这几个地方改对，大多数情况下就能跑起来喵～
+
+---
+
+## Windows PC 绿色包（免 Docker）
+
+除上面的 Docker 部署外，本项目还提供 **Windows 11 绿色包**：用 PyInstaller 打成
+`onedir` 目录，解压即用，自带常驻 Web 看板（`http://127.0.0.1:8080`），不依赖
+Docker，也不需要安装 Python。
+
+### 和 Docker 版的区别
+
+| 项目 | Docker 版（旧） | Windows PC 绿色包（新） |
+| --- | --- | --- |
+| 运行方式 | `supercronic` 定时执行日报 | 常驻服务 + 内置调度器 + 本地 Web 看板 |
+| 配置文件 | 根目录 `config.yaml` / `.env` | `config/config.yaml` / `config/.env` |
+| 示例模板 | 根目录 `config.yaml.example` / `.env.example`（保留不动） | `config/config.yaml.example` / `config/.env.example` |
+| 数据库 | 容器内 `data/servermanage.db` | `data/servermonitor.db` |
+| 登录方式 | 私钥或密码 | 示例统一用**密码**，无需私钥文件 |
+| 启停 | `docker compose up/down` | `启动.bat` / `停止.bat` |
+
+> 根目录旧的 `config.yaml.example`、`.env.example` 仍服务于 Docker 文档，请勿删除；
+> PC 版请改用 `config/` 下的新模板。
+
+### 一、构建（开发者，可选）
+
+在装有 Python 3.11+ 的 Windows 上，于项目根目录执行：
+
+```powershell
+pwsh packaging/build.ps1
+```
+
+脚本会 `pip install -e ".[build]"` 安装 PyInstaller，然后执行
+`python -m PyInstaller packaging/servermonitor.spec --noconfirm --clean`，
+产物为 `dist/servermonitor/servermonitor.exe`（onedir 形式）。
+
+### 二、组装绿色包目录
+
+把下面这些内容一起拷进 `dist/servermonitor/`：
+
+```text
+dist/servermonitor/
+├── servermonitor.exe        # 构建产物
+├── config/
+│   ├── config.yaml          # 由 config.yaml.example 复制并填写
+│   └── .env                 # 由 .env.example 复制并填写
+├── data/                    # 存放 servermonitor.db（可空目录）
+├── logs/                    # 运行日志（可空目录）
+├── 启动.bat
+├── 停止.bat
+└── 注册开机自启.ps1
+```
+
+首次使用：
+
+```text
+copy config\config.yaml.example config\config.yaml
+copy config\.env.example config\.env
+```
+
+然后编辑 `config\config.yaml`（服务器 IP、SMTP 等）与 `config\.env`（密码）。
+
+### 三、启动 / 停止 / 开机自启
+
+- **启动**：双击 `启动.bat`（会自检 `servermonitor.exe`、`config\config.yaml`、
+  `config\.env`，缺文件给出中文提示并暂停），后台最小化启动，浏览器访问
+  `http://127.0.0.1:8080`。
+- **停止**：双击 `停止.bat`，会先检测 `servermonitor.exe` 是否存在，存在才结束进程，
+  否则给出提示。
+- **开机自启**：右键 `注册开机自启.ps1` →「使用 PowerShell 运行」。脚本会创建计划任务
+  `ServerMonitorDashboard`（登录时触发），可重复运行（先删除同名任务）；权限不足时自动
+  回退到「启动」文件夹快捷方式。
+
+> 看板登录密码、SMTP 授权码等都放在 `config\.env` 里，`启动.bat` 不写任何密码。
