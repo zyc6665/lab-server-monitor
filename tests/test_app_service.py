@@ -23,6 +23,7 @@ from servermanage.models import (
     AppConfig,
     AppRuntimeConfig,
     AuthConfig,
+    DiskUsageRow,
     HostConfig,
     HostMetrics,
     HostReport,
@@ -34,7 +35,7 @@ from servermanage.models import (
     WeeklyReport,
     WeeklyReportConfig,
 )
-from servermanage.storage import get_disk_health, get_host_snapshot
+from servermanage.storage import get_disk_health, get_host_snapshot, list_alerts
 
 
 # ---------------------------------------------------------------------------
@@ -173,15 +174,43 @@ def test_run_once_collects_status_and_disk(tmp_path: Path):
     assert _count_rows(db_path, "host_metrics_history") == 1
 
 
-def test_run_status_once_generates_offline_alert_and_resolves(tmp_path: Path):
+def _failure_report(name: str = "gpu-01") -> HostReport:
+    return HostReport(host_name=name, host="10.0.0.1", success=False)
+
+
+def _disk_report(
+    percent: str,
+    *,
+    filesystem: str = "/dev/sda1",
+    name: str = "gpu-01",
+) -> HostReport:
+    return HostReport(
+        host_name=name,
+        host="10.0.0.1",
+        success=True,
+        metrics=HostMetrics(
+            collected_at=datetime.now(timezone.utc),
+            disk_usage=[
+                DiskUsageRow(
+                    filesystem=filesystem,
+                    size="100G",
+                    used="50G",
+                    available="50G",
+                    percent=percent,
+                    mountpoint="/",
+                )
+            ],
+        ),
+    )
+
+
+def test_run_status_once_debounces_offline_alert_until_threshold(tmp_path: Path):
     db_path = tmp_path / "monitor.db"
     notifier = FakeNotifier()
     service = MonitorService(
-        _make_config(),
+        _make_config(),  # AlertsConfig.offline_failures defaults to 2
         db_path=db_path,
-        collect_status=lambda config: [
-            HostReport(host_name="gpu-01", host="10.0.0.1", success=False)
-        ],
+        collect_status=lambda config: [_failure_report()],
         notifier=notifier,
     )
 
@@ -192,12 +221,114 @@ def test_run_status_once_generates_offline_alert_and_resolves(tmp_path: Path):
         )
     )
 
+    first = service.run_status_once()
+    assert first == {"hosts": 1, "alerts": 0}
+    assert notifier.events == []
+    assert list_alerts(db_path) == []
+    assert resolve_calls == [("gpu-01", set(), "system")]
+
+    second = service.run_status_once()
+    assert second == {"hosts": 1, "alerts": 1}
+    assert len(notifier.events) == 1
+    assert notifier.events[0].category == "offline"
+    assert resolve_calls[-1] == ("gpu-01", {"offline:gpu-01"}, "system")
+    assert [row["fingerprint"] for row in list_alerts(db_path)] == ["offline:gpu-01"]
+
+
+def test_offline_counter_resets_after_success(tmp_path: Path):
+    db_path = tmp_path / "monitor.db"
+    notifier = FakeNotifier()
+    reports = iter(
+        [_failure_report(), _success_report(), _failure_report(), _failure_report()]
+    )
+    service = MonitorService(
+        _make_config(),
+        db_path=db_path,
+        collect_status=lambda config: [next(reports)],
+        notifier=notifier,
+    )
+
+    results = [service.run_status_once() for _ in range(4)]
+
+    assert [result["alerts"] for result in results] == [0, 0, 0, 1]
+    assert len(notifier.events) == 1
+    assert notifier.events[0].category == "offline"
+    # A success after a single failure must not emit a recovery notification.
+    assert all(
+        event.fingerprint != "recovery:gpu-01:offline" for event in notifier.events
+    )
+
+
+def test_recovery_notification_after_offline_recovers(tmp_path: Path):
+    db_path = tmp_path / "monitor.db"
+    notifier = FakeNotifier()
+    reports = iter(
+        [_failure_report(), _failure_report(), _success_report()]
+    )
+    service = MonitorService(
+        _make_config(),
+        db_path=db_path,
+        collect_status=lambda config: [next(reports)],
+        notifier=notifier,
+    )
+
+    results = [service.run_status_once() for _ in range(3)]
+
+    assert [result["alerts"] for result in results] == [0, 1, 1]
+    assert [event.category for event in notifier.events] == ["offline", "offline"]
+    recovery = notifier.events[1]
+    assert recovery.fingerprint == "recovery:gpu-01:offline"
+    assert recovery.severity == "info"
+
+
+def test_run_status_once_raises_disk_usage_alert(tmp_path: Path):
+    db_path = tmp_path / "monitor.db"
+    notifier = FakeNotifier()
+    service = MonitorService(
+        _make_config(),
+        db_path=db_path,
+        collect_status=lambda config: [_disk_report("95%")],
+        notifier=notifier,
+    )
+
     result = service.run_status_once()
 
     assert result == {"hosts": 1, "alerts": 1}
     assert len(notifier.events) == 1
-    assert notifier.events[0].category == "offline"
-    assert resolve_calls == [("gpu-01", {"offline:gpu-01"}, "system")]
+    assert notifier.events[0].category == "system"
+    assert notifier.events[0].fingerprint == "system:gpu-01:disk"
+
+
+def test_run_status_once_ignores_disk_usage_below_threshold(tmp_path: Path):
+    db_path = tmp_path / "monitor.db"
+    notifier = FakeNotifier()
+    service = MonitorService(
+        _make_config(),
+        db_path=db_path,
+        collect_status=lambda config: [_disk_report("50%")],
+        notifier=notifier,
+    )
+
+    result = service.run_status_once()
+
+    assert result == {"hosts": 1, "alerts": 0}
+    assert notifier.events == []
+
+
+def test_run_status_once_ignores_virtual_filesystems_for_disk_alert(tmp_path: Path):
+    db_path = tmp_path / "monitor.db"
+    notifier = FakeNotifier()
+    service = MonitorService(
+        _make_config(),
+        db_path=db_path,
+        collect_status=lambda config: [_disk_report("95%", filesystem="tmpfs")],
+        notifier=notifier,
+    )
+
+    result = service.run_status_once()
+
+    assert result == {"hosts": 1, "alerts": 0}
+    assert notifier.events == []
 
 
 def test_run_status_once_resolves_for_successful_host(tmp_path: Path):

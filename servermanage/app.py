@@ -25,6 +25,7 @@ from servermanage.alerts import (
     evaluate_disk_alerts,
     evaluate_system_alerts,
     offline_alert,
+    recovery_event,
 )
 from servermanage.collectors import collect_all_hosts
 from servermanage.config import load_config
@@ -40,6 +41,7 @@ from servermanage.scheduler import (
 )
 from servermanage.ssh_client import SSHClientWrapper
 from servermanage.storage import (
+    _extract_disk_used_percent,
     init_storage,
     persist_host_reports,
     purge_old_data,
@@ -164,6 +166,7 @@ class MonitorService:
         """Poll every host's system metrics and reconcile system/offline alerts."""
         reports = list(self.collect_status(self.config))
         storage_enabled = bool(getattr(self.config.storage, "enabled", True))
+        offline_threshold = max(1, int(self.config.alerts.offline_failures))
         events: list = []
         # Every configured host must be reconciled each cycle, even if this
         # round produced no report for it.
@@ -176,23 +179,33 @@ class MonitorService:
             host_name = report.host_name
             active.setdefault(host_name, set())
             if report.success:
+                previous_failures = self._failure_counts.get(host_name, 0)
                 self._failure_counts[host_name] = 0
                 if storage_enabled:
                     save_host_snapshot(report, self.db_path)
                 success_reports.append(report)
                 # A recovered host should clear any stale offline alert.
                 self.engine.resolve(host_name, "offline")
+                if previous_failures >= offline_threshold:
+                    events.append(recovery_event(host_name, "offline"))
+                disk_percent = _extract_disk_used_percent(report)
                 for event in evaluate_system_alerts(
-                    host_name, report.metrics, self.config.alerts.thresholds
+                    host_name,
+                    report.metrics,
+                    self.config.alerts.thresholds,
+                    disk_percent=disk_percent,
                 ):
                     events.append(event)
                     active[host_name].add(event.fingerprint)
             else:
                 failures = self._failure_counts.get(host_name, 0) + 1
                 self._failure_counts[host_name] = failures
-                event = offline_alert(host_name, failures)
-                events.append(event)
-                active[host_name].add(event.fingerprint)
+                # Debounce: only declare the host offline after the configured
+                # number of consecutive failed collections.
+                if failures >= offline_threshold:
+                    event = offline_alert(host_name, failures)
+                    events.append(event)
+                    active[host_name].add(event.fingerprint)
 
         if storage_enabled and success_reports:
             persist_host_reports(
