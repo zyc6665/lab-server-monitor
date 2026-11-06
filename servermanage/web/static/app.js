@@ -87,6 +87,16 @@
   function buildHostRow(host) {
     var tr = document.createElement('tr');
     if (host.name) { tr.setAttribute('data-host', host.name); }
+    tr.setAttribute('data-group', host.group || '未分组');
+    tr.setAttribute('data-owner', host.owner || '');
+    tr.setAttribute('data-online', host.online ? '1' : '0');
+    tr.setAttribute('data-silenced', host.silenced ? '1' : '0');
+    tr.setAttribute('data-alert-count', host.active_alert_count || 0);
+    tr.setAttribute(
+      'data-search',
+      [host.name, host.host, host.group || '未分组', host.owner, host.location]
+        .join(' ').toLowerCase()
+    );
 
     var nameCell = document.createElement('td');
     var link = document.createElement('a');
@@ -96,9 +106,19 @@
     tr.appendChild(nameCell);
 
     tr.appendChild(textCell(host.host, 'mono'));
+    tr.appendChild(textCell(host.group || '未分组'));
+    tr.appendChild(textCell(host.owner));
 
     var statusCell = document.createElement('td');
     statusCell.appendChild(booleanBadge(!!host.online));
+    if (host.silenced) {
+      var silenceBadge = document.createElement('span');
+      silenceBadge.className = 'badge badge-silenced';
+      silenceBadge.title = '静默至 ' + (host.silenced_until || '—');
+      silenceBadge.textContent = '静默';
+      statusCell.appendChild(document.createTextNode(' '));
+      statusCell.appendChild(silenceBadge);
+    }
     tr.appendChild(statusCell);
 
     tr.appendChild(textCell(formatPercent(host.cpu_percent)));
@@ -125,6 +145,53 @@
     return tr;
   }
 
+  function hostRowMatches(tr, group, status, keyword) {
+    if (group && tr.getAttribute('data-group') !== group) { return false; }
+    if (status === 'online' && tr.getAttribute('data-online') !== '1') { return false; }
+    if (status === 'offline' && tr.getAttribute('data-online') !== '0') { return false; }
+    if (status === 'alert' && Number(tr.getAttribute('data-alert-count') || 0) <= 0) { return false; }
+    if (status === 'silenced' && tr.getAttribute('data-silenced') !== '1') { return false; }
+    if (keyword) {
+      var haystack = (tr.getAttribute('data-search') || tr.textContent || '').toLowerCase();
+      if (haystack.indexOf(keyword) === -1) { return false; }
+    }
+    return true;
+  }
+
+  // 纯客户端筛选：只显隐已渲染的 host 行，不触发任何网络请求。
+  function applyHostFilters() {
+    var tbody = document.getElementById('host-table-body');
+    if (!tbody) { return; }
+    var groupEl = document.getElementById('filter-group');
+    var statusEl = document.getElementById('filter-status');
+    var keywordEl = document.getElementById('filter-keyword');
+    var group = groupEl ? groupEl.value : '';
+    var status = statusEl ? statusEl.value : '';
+    var keyword = keywordEl ? keywordEl.value.trim().toLowerCase() : '';
+    var rows = tbody.querySelectorAll('tr');
+    var visible = 0;
+    for (var i = 0; i < rows.length; i += 1) {
+      var show = hostRowMatches(rows[i], group, status, keyword);
+      rows[i].hidden = !show;
+      if (show) { visible += 1; }
+    }
+    var count = document.getElementById('filter-count');
+    if (count) {
+      count.textContent = (group || status || keyword)
+        ? ('筛选出 ' + visible + ' / ' + rows.length + ' 台')
+        : '';
+    }
+    if (rows.length > 0) {
+      var table = document.getElementById('host-table');
+      var empty = document.getElementById('empty-state');
+      if (table) { table.hidden = visible === 0; }
+      if (empty) {
+        empty.hidden = visible !== 0;
+        empty.textContent = visible === 0 ? '没有符合筛选条件的主机' : '暂无数据';
+      }
+    }
+  }
+
   function updateHosts(hosts) {
     if (!Array.isArray(hosts)) { return; }
     var tbody = document.getElementById('host-table-body');
@@ -141,6 +208,7 @@
     table.hidden = !hasData;
     if (empty) { empty.hidden = hasData; }
     setText('host-count', '共 ' + hosts.length + ' 台');
+    applyHostFilters();
   }
 
   function buildAlertRow(alert) {
@@ -257,6 +325,15 @@
         ackAlert(target);
       }
     });
+
+    // 概览页筛选条：纯客户端过滤，事件绑定一次即可。
+    var groupFilter = document.getElementById('filter-group');
+    var statusFilter = document.getElementById('filter-status');
+    var keywordFilter = document.getElementById('filter-keyword');
+    if (groupFilter) { groupFilter.addEventListener('change', applyHostFilters); }
+    if (statusFilter) { statusFilter.addEventListener('change', applyHostFilters); }
+    if (keywordFilter) { keywordFilter.addEventListener('input', applyHostFilters); }
+    applyHostFilters();
 
     refreshAll();
     window.setInterval(refreshAll, REFRESH_MS);

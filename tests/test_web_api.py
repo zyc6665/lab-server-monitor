@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -28,6 +28,7 @@ from servermanage.models import (
 )
 from servermanage.storage import (
     insert_alert,
+    insert_silence,
     list_alerts,
     save_disk_health,
     save_host_snapshot,
@@ -38,7 +39,15 @@ HOST_NAME = "gpu-01"
 HOST_ADDRESS = "10.0.0.1"
 
 
-def _make_config(*, password: str = "pw", secret: str = "s") -> AppConfig:
+def _make_config(
+    *,
+    password: str = "pw",
+    secret: str = "s",
+    group: str = "未分组",
+    owner: str = "",
+    location: str = "",
+    tags: list[str] | None = None,
+) -> AppConfig:
     """Build a real AppConfig whose secrets are already resolved."""
     return AppConfig(
         smtp=None,
@@ -51,6 +60,10 @@ def _make_config(*, password: str = "pw", secret: str = "s") -> AppConfig:
                 port=22,
                 username="monitor",
                 auth=AuthConfig(type="password", password="ssh-pw"),
+                tags=list(tags or []),
+                group=group,
+                owner=owner,
+                location=location,
             )
         ],
         app=AppRuntimeConfig(poll_interval_seconds=600),
@@ -258,6 +271,93 @@ def test_ack_alert(env):
     assert len(stored) == 1
     assert stored[0]["status"] == "acknowledged"
     assert stored[0]["ack_at"] is not None
+
+
+def _new_client(config, db_path: Path):
+    app = create_app(config=config, db_path=db_path)
+    app.config.update(TESTING=True)
+    client = app.test_client()
+    _login(client)
+    return client
+
+
+def test_overview_includes_host_metadata_and_groups(tmp_path):
+    db_path = tmp_path / "meta.db"
+    _seed_database(db_path)
+    client = _new_client(
+        _make_config(group="GPU", owner="alice", location="A-101", tags=["gpu", "prod"]),
+        db_path,
+    )
+
+    payload = client.get("/api/overview").get_json()
+    host = next(item for item in payload["hosts"] if item["name"] == HOST_NAME)
+    assert host["group"] == "GPU"
+    assert host["owner"] == "alice"
+    assert host["location"] == "A-101"
+    assert host["tags"] == ["gpu", "prod"]
+    assert host["silenced"] is False
+    assert host["silenced_until"] is None
+    assert host["active_alert_count"] == 1
+    assert payload["meta"]["groups"] == ["GPU"]
+    assert payload["meta"]["silenced_count"] == 0
+
+
+def test_overview_marks_silenced_hosts(tmp_path):
+    db_path = tmp_path / "silence.db"
+    _seed_database(db_path)
+    now = datetime.now(timezone.utc)
+    insert_silence(
+        "host",
+        HOST_NAME,
+        "maintenance",
+        now - timedelta(hours=1),
+        now + timedelta(hours=1),
+        "admin",
+        db_path,
+    )
+    client = _new_client(_make_config(group="GPU"), db_path)
+
+    payload = client.get("/api/overview").get_json()
+    host = next(item for item in payload["hosts"] if item["name"] == HOST_NAME)
+    assert host["silenced"] is True
+    assert host["silenced_until"]
+    assert payload["meta"]["silenced_count"] == 1
+
+
+def test_overview_group_scope_silence_marks_host(tmp_path):
+    db_path = tmp_path / "group-silence.db"
+    _seed_database(db_path)
+    now = datetime.now(timezone.utc)
+    insert_silence(
+        "group",
+        "GPU",
+        "group maintenance",
+        now - timedelta(hours=1),
+        now + timedelta(hours=1),
+        "admin",
+        db_path,
+    )
+    client = _new_client(_make_config(group="GPU"), db_path)
+
+    host = next(
+        item for item in client.get("/api/overview").get_json()["hosts"]
+        if item["name"] == HOST_NAME
+    )
+    assert host["silenced"] is True
+
+
+def test_overview_page_has_filter_controls(tmp_path):
+    db_path = tmp_path / "page.db"
+    _seed_database(db_path)
+    client = _new_client(_make_config(group="GPU"), db_path)
+
+    html = client.get("/").get_data(as_text=True)
+    assert 'id="host-filter"' in html
+    assert 'id="filter-group"' in html
+    assert 'id="filter-status"' in html
+    assert 'id="filter-keyword"' in html
+    assert "<th>分组</th>" in html
+    assert "<th>负责人</th>" in html
 
 
 def test_logout_clears_session(env):

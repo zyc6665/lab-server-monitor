@@ -404,3 +404,33 @@ a:hover { text-decoration: underline; }
   word-break: break-all;
   margin: 12px 0 0;
 }
+
+/* -- overview page: host metadata + client-side filters ------------------- */
+.badge-silenced { background: var(--warn-soft, #fef3c7); color: var(--warn, #b45309); }
+.filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px 20px;
+  align-items: flex-end;
+  margin-bottom: 16px;
+}
+.filter-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+.filter-field select,
+.filter-field input {
+  min-width: 150px;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 14px;
+  color: var(--text);
+  background: #fff;
+}
+.filter-keyword input { min-width: 220px; }
+#filter-count { margin-left: auto; }
+

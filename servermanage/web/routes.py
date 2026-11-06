@@ -546,7 +546,23 @@ def _host_row(
     now: datetime,
     tz,
     disk_mounts: list[str] | None = None,
+    group: str = "未分组",
+    owner: str = "",
+    location: str = "",
+    tags: list[str] | None = None,
+    silenced: bool = False,
+    silenced_until: str | None = None,
+    active_alert_count: int = 0,
 ) -> dict[str, Any]:
+    meta = {
+        "group": group or "未分组",
+        "owner": owner or "",
+        "location": location or "",
+        "tags": list(tags or []),
+        "silenced": bool(silenced),
+        "silenced_until": silenced_until,
+        "active_alert_count": int(active_alert_count),
+    }
     if snapshot is None:
         return {
             "name": name,
@@ -560,6 +576,7 @@ def _host_row(
             "logged_in_user_count": 0,
             "logged_in_sessions": 0,
             "disk_health": _disk_health_summary(disk_health),
+            **meta,
         }
     metrics = snapshot.get("metrics") or {}
     user_count, session_count = _logged_in_counts(metrics)
@@ -572,7 +589,21 @@ def _host_row(
         "logged_in_user_count": user_count,
         "logged_in_sessions": session_count,
         "disk_health": _disk_health_summary(disk_health),
+        **meta,
     }
+
+
+def _silence_applies(silence: dict[str, Any], host_name: str, group: str) -> bool:
+    """Return True when *silence* covers *host_name* in *group*."""
+    scope_type = silence.get("scope_type")
+    scope = silence.get("scope")
+    if scope_type == "all":
+        return True
+    if scope_type == "host":
+        return scope == host_name
+    if scope_type == "group":
+        return scope == (group or "未分组")
+    return False
 
 
 def _build_overview(config, db_path) -> dict[str, Any]:
@@ -590,8 +621,23 @@ def _build_overview(config, db_path) -> dict[str, Any]:
     disk_reports = {
         item["host_name"]: item for item in storage.get_all_disk_health(db_path)
     }
+    servers_by_name = {server.name: server for server in config.servers}
     addresses = {server.name: server.host for server in config.servers}
     mounts_by_host = {server.name: server.disk_mounts for server in config.servers}
+
+    active_silences = storage.list_silences(db_path, active_only=True)
+    active_alerts = storage.list_alerts(db_path, status="active", limit=100_000)
+    alert_counts: dict[str, int] = {}
+    for alert in active_alerts:
+        host_name = alert.get("host_name")
+        if host_name:
+            alert_counts[host_name] = alert_counts.get(host_name, 0) + 1
+
+    groups: list[str] = []
+    for server in config.servers:
+        group_name = server.group or "未分组"
+        if group_name not in groups:
+            groups.append(group_name)
 
     names: list[str] = []
     for server in config.servers:
@@ -601,29 +647,52 @@ def _build_overview(config, db_path) -> dict[str, Any]:
         if host_name not in names:
             names.append(host_name)
 
-    hosts = [
-        _host_row(
-            name=host_name,
-            host=addresses.get(host_name),
-            snapshot=snapshots.get(host_name),
-            disk_health=disk_reports.get(host_name),
-            poll_interval_seconds=config.app.poll_interval_seconds,
-            now=now,
-            tz=tz,
-            disk_mounts=mounts_by_host.get(host_name),
+    hosts: list[dict[str, Any]] = []
+    silenced_count = 0
+    for host_name in sorted(names):
+        server = servers_by_name.get(host_name)
+        group = (server.group if server is not None else None) or "未分组"
+        matched = [
+            silence
+            for silence in active_silences
+            if _silence_applies(silence, host_name, group)
+        ]
+        silenced_until = None
+        if matched:
+            silenced_count += 1
+            ends = [s.get("ends_at") for s in matched if s.get("ends_at")]
+            if ends:
+                silenced_until = _to_local_iso(min(ends), tz)
+        hosts.append(
+            _host_row(
+                name=host_name,
+                host=addresses.get(host_name),
+                snapshot=snapshots.get(host_name),
+                disk_health=disk_reports.get(host_name),
+                poll_interval_seconds=config.app.poll_interval_seconds,
+                now=now,
+                tz=tz,
+                disk_mounts=mounts_by_host.get(host_name),
+                group=group,
+                owner=server.owner if server is not None else "",
+                location=server.location if server is not None else "",
+                tags=server.tags if server is not None else [],
+                silenced=bool(matched),
+                silenced_until=silenced_until,
+                active_alert_count=alert_counts.get(host_name, 0),
+            )
         )
-        for host_name in sorted(names)
-    ]
 
     online = sum(1 for host in hosts if host["online"])
-    active_alerts = len(
-        storage.list_alerts(db_path, status="active", limit=100_000)
-    )
     return {
         "summary": {
             "online": online,
             "offline": len(hosts) - online,
-            "active_alerts": active_alerts,
+            "active_alerts": len(active_alerts),
+        },
+        "meta": {
+            "groups": groups,
+            "silenced_count": silenced_count,
         },
         "hosts": hosts,
     }
@@ -636,16 +705,22 @@ def _build_host_detail(name: str, config, db_path) -> dict[str, Any] | None:
         return None
 
     addresses = {server.name: server.host for server in config.servers}
+    servers_by_name = {server.name: server for server in config.servers}
     tz = resolve_timezone(config.app.timezone)
     disk = storage.get_disk_health(name, db_path)
     if disk is not None:
         disk = dict(disk)
         disk["collected_at"] = _to_local_iso(disk.get("collected_at"), tz)
+    server = servers_by_name.get(name)
     return {
         "name": name,
         "host": addresses.get(name),
         "collected_at": _to_local_iso(snapshot.get("collected_at"), tz),
         "success": snapshot.get("success"),
+        "group": (server.group if server is not None else None) or "未分组",
+        "owner": server.owner if server is not None else "",
+        "location": server.location if server is not None else "",
+        "tags": list(server.tags) if server is not None else [],
         "metrics": snapshot.get("metrics") or {},
         "disk": disk,
     }
@@ -1271,6 +1346,7 @@ def register_routes(app: Flask) -> None:
             "overview.html",
             active_page="overview",
             summary=data["summary"],
+            meta=data["meta"],
             hosts=data["hosts"],
         )
 
