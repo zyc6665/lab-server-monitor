@@ -1,6 +1,6 @@
 [project]
 name = "servermanage"
-version = "1.1.0"
+version = "1.2.0"
 description = "Centralized Linux server daily monitor with HTML email reports."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -13,6 +13,8 @@ dependencies = [
   "waitress>=3.0.0,<4",
   "winotify>=1.1.0,<2",
   "tzdata>=2024.1",
+  "pystray>=0.19.5,<1",
+  "Pillow>=10.0",
 ]
 
 [project.optional-dependencies]

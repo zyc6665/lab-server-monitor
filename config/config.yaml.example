@@ -1,17 +1,26 @@
 # ============================================================================
-# 服务器轮询监测工具 —— Windows PC 绿色包示例配置
+# 服务器轮询监测工具 —— Windows PC 绿色包示例配置（v1.2）
 # Server Polling Monitor —— Windows PC (PyInstaller onedir) example config
 #
 # 用法：复制本文件为 config/config.yaml，复制 config/.env.example 为
-#       config/.env，填写真实值后双击 启动.bat。
+#       config/.env（可选），填写真实值后双击 启动.bat。
 #       （旧版 Docker 部署请继续使用仓库根目录的 config.yaml.example）
 #
 # 说明：所有形如 *_env 的字段都写“环境变量名”，真实密码放在 config/.env 中，
-#       不要把明文密码写进本文件。
+#       不要把明文密码写进本文件。config/.env 是**可选**的：不建也能启动，
+#       首次打开网页会跳到 /setup 设置管理员密码，之后在「设置」页维护密码。
 #
 #       本文件只是“首次启动的种子配置”。1.1 起，主机、SSH 凭据、通知、
 #       报告启停、磁盘容量目录等都可在浏览器「设置」页修改并保存到 SQLite；
 #       敏感值使用当前 Windows 账户的 DPAPI 加密，换电脑后需重新设置。
+#
+#       v1.2 新增（详见 README「v1.2 更新」）：
+#       - 主机批量导入（设置页粘贴 YAML/CSV，先预览再导入）
+#       - 告警静默（全局/按主机/按时段，静默期内不重复打扰）
+#       - 主机分组 / 负责人 / 位置，概览页可按分组、状态、关键字筛选
+#       - 系统托盘（打开看板 / 打开日志目录 / 退出）
+#       - 端口被占用时自动顺延（auto_port_fallback）
+#       - 日志入口：logs/servermonitor.log，托盘菜单可直接打开日志目录
 # ============================================================================
 
 # ---------------------------------------------------------------------------
@@ -23,6 +32,9 @@ app:
   concurrency: 8                      # 并发 SSH 采集线程数
   retention_days: 90                  # 采样数据保留天数
   timezone: "Asia/Shanghai"
+  auto_port_fallback: true            # 端口被占用时在 8080..8099 内自动顺延
+  tray_enabled: true                  # 显示系统托盘图标（Windows）
+  open_browser_on_start: true         # 启动后自动打开看板
 
 # ---------------------------------------------------------------------------
 # dashboard：本地 Web 看板
@@ -127,33 +139,48 @@ storage:
   db_path: "data/servermonitor.db"
 
 # ---------------------------------------------------------------------------
-# servers：被监测的 Linux 服务器（示例统一用密码认证，避免依赖私钥文件）
+# servers：被监测的 Linux 服务器
+#
+# v1.2 起首次安装可以留空（servers: []）：启动后浏览器自动跳到 /setup，
+# 设置管理员密码 → 登录 → 「设置」页添加主机，或使用「导入」粘贴 YAML/CSV
+# 批量导入（先预览再确认）。主机可带 group / owner / location 元数据。
+#
+# 如需在配置文件里预置，可取消下面示例的注释并填写（示例统一用密码认证，
+# 避免依赖私钥文件）。disk_mounts 为容量监控目录，默认 ["/", "/data"]。
 # ---------------------------------------------------------------------------
-servers:
-  - name: "a100"
-    host: "10.0.0.21"
-    port: 22
-    username: "root"
-    tags:
-      - "gpu"
-      - "a100"
-    auth:
-      type: "password"
-      password_env: "A100_SSH_PASSWORD"
-    disk_mounts: ["/", "/data"]      # 容量监控目录（可在网页设置里逐台修改）
-    disk_health:
-      enabled: true
+servers: []
 
-  - name: "l40s-01"
-    host: "10.0.0.22"
-    port: 22
-    username: "ops"
-    tags:
-      - "gpu"
-      - "l40s"
-    auth:
-      type: "password"
-      password_env: "L40S_01_SSH_PASSWORD"
-    disk_mounts: ["/", "/data"]      # 容量监控目录（可在网页设置里逐台修改）
-    disk_health:
-      enabled: true
+# servers:
+#   - name: "a100"
+#     host: "10.0.0.21"
+#     port: 22
+#     username: "root"
+#     group: "GPU 集群"
+#     owner: "张三"
+#     location: "机房 A"
+#     tags:
+#       - "gpu"
+#       - "a100"
+#     auth:
+#       type: "password"
+#       password_env: "A100_SSH_PASSWORD"
+#     disk_mounts: ["/", "/data"]      # 容量监控目录（可在网页设置里逐台修改）
+#     disk_health:
+#       enabled: true
+#
+#   - name: "l40s-01"
+#     host: "10.0.0.22"
+#     port: 22
+#     username: "ops"
+#     group: "GPU 集群"
+#     owner: "李四"
+#     location: "机房 B"
+#     tags:
+#       - "gpu"
+#       - "l40s"
+#     auth:
+#       type: "password"
+#       password_env: "L40S_01_SSH_PASSWORD"
+#     disk_mounts: ["/", "/data"]      # 容量监控目录（可在网页设置里逐台修改）
+#     disk_health:
+#       enabled: true
