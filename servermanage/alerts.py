@@ -19,6 +19,7 @@ from __future__ import annotations
 import logging
 import sqlite3
 from datetime import datetime, timedelta, timezone
+from html import escape as _html_escape
 from pathlib import Path
 from typing import Callable, Protocol
 
@@ -29,7 +30,17 @@ from servermanage.disk_health import (
     PhysicalDriveInfo,
     VirtualDriveInfo,
 )
-from servermanage.models import AlertsConfig, AlertThresholds, HostMetrics
+from servermanage.mailer import send_report
+from servermanage.models import (
+    AlertsConfig,
+    AlertThresholds,
+    HostMetrics,
+    RenderedReport,
+    SMTPConfig,
+    WebhookConfig,
+)
+from servermanage.notify_desktop import send_desktop_notification
+from servermanage.notify_webhook import send_webhook
 
 LOGGER = logging.getLogger(__name__)
 
@@ -40,6 +51,7 @@ __all__ = [
     "offline_alert",
     "recovery_event",
     "NotifierProtocol",
+    "Notifier",
     "AlertEngine",
 ]
 
@@ -333,6 +345,138 @@ class NotifierProtocol(Protocol):
 
     def dispatch(self, event: AlertEvent, config: AlertsConfig) -> list[str]:
         ...
+
+
+def _alert_timestamp() -> str:
+    """Local, human-readable ISO-8601 timestamp for notification bodies."""
+    return datetime.now(timezone.utc).astimezone().isoformat(timespec="seconds")
+
+
+def _alert_subject(event: AlertEvent) -> str:
+    """Short one-line subject/title, prefixed with the severity."""
+    return f"[{event.severity}] {event.title}"
+
+
+def _alert_text_body(event: AlertEvent) -> str:
+    """Plain-text alert body: host, category, severity, title, time, message."""
+    return "\n".join(
+        [
+            f"主机: {event.host_name}",
+            f"类别: {event.category}",
+            f"级别: {event.severity}",
+            f"标题: {event.title}",
+            f"时间: {_alert_timestamp()}",
+            "",
+            event.message,
+        ]
+    )
+
+
+def _alert_html_body(event: AlertEvent) -> str:
+    """Minimal HTML rendering of :func:`_alert_text_body`, safely escaped."""
+    rows = (
+        ("主机", event.host_name),
+        ("类别", event.category),
+        ("级别", event.severity),
+        ("标题", event.title),
+        ("时间", _alert_timestamp()),
+        ("详情", event.message),
+    )
+    cells = "".join(
+        f"<tr><th>{_html_escape(str(label))}</th>"
+        f"<td>{_html_escape(str(value))}</td></tr>"
+        for label, value in rows
+    )
+    return (
+        "<html><body>"
+        f"<h3>{_html_escape(event.title)}</h3>"
+        f"<table>{cells}</table>"
+        "</body></html>"
+    )
+
+
+class Notifier:
+    """Fan one :class:`AlertEvent` out to every enabled notification channel.
+
+    Channels are tried independently, in the order ``desktop`` → ``email`` →
+    ``webhook``.  Each channel honours its ``enabled`` flag (a disabled channel
+    performs no I/O at all), and a failure in one channel is logged and does not
+    prevent the others from running.  :meth:`dispatch` returns only the channel
+    names that actually accepted the event; an empty list therefore means the
+    alert engine should retry on the next polling cycle (Task 6 semantics).
+
+    Email requires an :class:`~servermanage.models.SMTPConfig`.  When the
+    ``email`` flag is on but no SMTP config was supplied (``smtp is None``), the
+    email channel is skipped cleanly rather than treated as a failure.
+
+    ``dispatch`` never raises: an unexpected error is logged and the channels
+    accepted so far are still returned.
+    """
+
+    def __init__(self, *, smtp: SMTPConfig | None = None) -> None:
+        self._smtp = smtp
+
+    # -- public API --------------------------------------------------------
+
+    def dispatch(self, event: AlertEvent, config: AlertsConfig) -> list[str]:
+        accepted: list[str] = []
+        try:
+            if config.desktop_notification and self._dispatch_desktop(event):
+                accepted.append("desktop")
+            if config.email and self._dispatch_email(event):
+                accepted.append("email")
+            if (
+                config.webhook is not None
+                and config.webhook.enabled
+                and self._dispatch_webhook(event, config.webhook)
+            ):
+                accepted.append("webhook")
+        except Exception:  # noqa: BLE001 - dispatch must never raise
+            LOGGER.exception(
+                "Unexpected notifier failure for alert %s", event.fingerprint
+            )
+        return accepted
+
+    # -- per-channel helpers ----------------------------------------------
+
+    def _dispatch_desktop(self, event: AlertEvent) -> bool:
+        try:
+            return bool(
+                send_desktop_notification(
+                    _alert_subject(event), _alert_text_body(event)
+                )
+            )
+        except Exception:  # noqa: BLE001 - one channel must not break others
+            LOGGER.exception("Desktop notification failed for %s", event.fingerprint)
+            return False
+
+    def _dispatch_email(self, event: AlertEvent) -> bool:
+        if self._smtp is None:
+            LOGGER.debug(
+                "Email channel enabled but no SMTP config; skipping for %s",
+                event.fingerprint,
+            )
+            return False
+        try:
+            report = RenderedReport(
+                subject=_alert_subject(event),
+                text_body=_alert_text_body(event),
+                html_body=_alert_html_body(event),
+            )
+            send_report(self._smtp, report)
+            return True
+        except Exception:  # noqa: BLE001 - one channel must not break others
+            LOGGER.exception("Email notification failed for %s", event.fingerprint)
+            return False
+
+    def _dispatch_webhook(
+        self, event: AlertEvent, webhook: WebhookConfig
+    ) -> bool:
+        try:
+            return bool(send_webhook(webhook, event))
+        except Exception:  # noqa: BLE001 - one channel must not break others
+            LOGGER.exception("Webhook notification failed for %s", event.fingerprint)
+            return False
 
 
 def _as_utc(value: datetime) -> datetime:
