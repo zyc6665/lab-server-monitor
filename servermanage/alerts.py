@@ -330,6 +330,12 @@ def recovery_event(host_name: str, category: str) -> AlertEvent:
 # just grew; such growth must break cooldown and notify again immediately.
 _ERROR_INCREASE_MARKER = "error_increase"
 
+# Alert statuses that represent an unresolved condition.  ``acknowledged`` is
+# "condition still present, user confirmed", so it is open just like ``active``:
+# it suppresses repeats while the condition fires and must be resolved when the
+# condition disappears.  ``resolved`` is the only closed status.
+_OPEN_ALERT_STATUSES = ("active", "acknowledged")
+
 # Upper bound for the active-alert scan used by :meth:`AlertEngine.resolve`.
 # ``list_alerts`` requires a limit; active alerts are purged rarely, so this is
 # deliberately generous while still being a bounded query.
@@ -569,18 +575,21 @@ class AlertEngine:
         return notified
 
     def resolve(self, host_name: str, category: str) -> None:
-        """Mark every ``active`` alert for *host_name* + *category* as resolved."""
+        """Mark every unresolved alert for *host_name* + *category* as resolved.
+
+        Both ``active`` and ``acknowledged`` rows are open conditions: an
+        acknowledged alert whose condition disappears must still be closed,
+        otherwise it lingers in the database forever.
+        """
         try:
-            active = storage.list_alerts(
-                self._db_path, status="active", limit=_RESOLVE_SCAN_LIMIT
-            )
+            rows = self._open_alerts()
         except sqlite3.Error:
             LOGGER.exception(
-                "Failed to load active alerts while resolving %s/%s", host_name, category
+                "Failed to load open alerts while resolving %s/%s", host_name, category
             )
             return
 
-        for row in active:
+        for row in rows:
             if row.get("host_name") != host_name or row.get("category") != category:
                 continue
             try:
@@ -595,26 +604,25 @@ class AlertEngine:
         *,
         category: str | None = None,
     ) -> None:
-        """Resolve a host's active alerts whose condition no longer fires.
+        """Resolve a host's open alerts whose condition no longer fires.
 
         *active_fingerprints* is the set of fingerprints still produced by the
-        rules this cycle; any active alert for *host_name* whose fingerprint is
-        absent is stale and gets marked ``resolved``.  Pass *category* to scope
-        the cleanup to one alert type (e.g. only ``"system"``) when a caller did
-        not evaluate every rule for the host.
+        rules this cycle; any open alert (``active`` or ``acknowledged``) for
+        *host_name* whose fingerprint is absent is stale and gets marked
+        ``resolved``.  Pass *category* to scope the cleanup to one alert type
+        (e.g. only ``"system"``) when a caller did not evaluate every rule for
+        the host.
         """
         remaining = set(active_fingerprints)
         try:
-            active = storage.list_alerts(
-                self._db_path, status="active", limit=_RESOLVE_SCAN_LIMIT
-            )
+            rows = self._open_alerts()
         except sqlite3.Error:
             LOGGER.exception(
-                "Failed to load active alerts while resolving missing for %s", host_name
+                "Failed to load open alerts while resolving missing for %s", host_name
             )
             return
 
-        for row in active:
+        for row in rows:
             if row.get("host_name") != host_name:
                 continue
             if category is not None and row.get("category") != category:
@@ -628,8 +636,36 @@ class AlertEngine:
 
     # -- internals ---------------------------------------------------------
 
+    def _open_alerts(self) -> list[dict]:
+        """Return every open alert: both ``active`` and ``acknowledged`` rows.
+
+        ``storage.list_alerts`` keeps its single-status contract, so the two
+        scans are merged here.  ``sqlite3.Error`` propagates to the caller.
+        """
+        rows: list[dict] = []
+        for status in _OPEN_ALERT_STATUSES:
+            rows.extend(
+                storage.list_alerts(
+                    self._db_path, status=status, limit=_RESOLVE_SCAN_LIMIT
+                )
+            )
+        return rows
+
     def _should_skip(self, event: AlertEvent, now: datetime) -> bool:
-        """Return True when this event is a duplicate inside the cooldown window."""
+        """Return True when this event should be suppressed.
+
+        Suppression rules, in order:
+
+        * ``error_increase`` always notifies — deterioration is new information
+          an acknowledgement must not silence.
+        * An ``acknowledged`` latest row means "condition still present, user
+          already confirmed": suppress while the same fingerprint keeps firing,
+          regardless of the cooldown window.  An older ``active`` row for the
+          same fingerprint (possible legacy data) does not override this,
+          because the newest row is the authoritative ack.
+        * An ``active`` row follows the original cooldown / un-notified-retry
+          semantics.
+        """
         if _has_error_increase(event):
             return False
 
@@ -644,7 +680,14 @@ class AlertEngine:
             )
             return False
 
-        if latest is None or latest.get("status") != "active":
+        if latest is None:
+            return False
+
+        status = latest.get("status")
+        if status == "acknowledged":
+            # User confirmed a still-present condition: stay silent.
+            return True
+        if status != "active":
             return False
 
         # A previous attempt that no channel accepted must be retried: an

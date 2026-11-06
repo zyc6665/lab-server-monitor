@@ -10,7 +10,7 @@ from servermanage.disk_health import (
     PhysicalDriveInfo,
 )
 from servermanage.models import AlertsConfig
-from servermanage.storage import find_latest_alert, list_alerts
+from servermanage.storage import find_latest_alert, list_alerts, update_alert
 
 BASE = datetime(2026, 11, 6, 2, 0, 0, tzinfo=timezone.utc)
 
@@ -403,3 +403,122 @@ def test_successful_notify_still_suppressed_within_cooldown(tmp_path: Path):
     clock.advance(minutes=1)
     assert engine.process([event]) == []
     assert len(list_alerts(db_path)) == 1
+
+
+# ---------------------------------------------------------------------------
+# Task 10b: acknowledge (ack) semantics
+# ---------------------------------------------------------------------------
+
+
+def _ack_latest(fingerprint: str, db_path: Path) -> None:
+    """Simulate the web ack endpoint: flip the newest row to acknowledged."""
+    latest = find_latest_alert(fingerprint, db_path)
+    assert latest is not None
+    update_alert(
+        latest["id"], db_path, status="acknowledged", ack_at=BASE.isoformat()
+    )
+
+
+def test_ack_suppresses_repeat_while_condition_persists(tmp_path: Path):
+    db_path = tmp_path / "servermanage.db"
+    clock = FakeClock()
+    notifier = FakeNotifier()
+    engine = _engine(db_path, clock, notifier)
+    event = _event()
+
+    assert engine.process([event]) == [event]
+    _ack_latest(event.fingerprint, db_path)
+
+    # Advance well past the 60-minute cooldown: suppression must come from the
+    # ack, not from the cooldown window.
+    clock.advance(minutes=120)
+    assert engine.process([event]) == []
+
+    assert len(notifier.calls) == 1
+    rows = [r for r in list_alerts(db_path) if r["fingerprint"] == event.fingerprint]
+    assert len(rows) == 1
+    assert rows[0]["status"] == "acknowledged"
+
+
+def test_ack_then_error_increase_notifies_again(tmp_path: Path):
+    db_path = tmp_path / "servermanage.db"
+    clock = FakeClock()
+    notifier = FakeNotifier()
+    engine = _engine(db_path, clock, notifier)
+    event = _event()
+
+    assert engine.process([event]) == [event]
+    _ack_latest(event.fingerprint, db_path)
+
+    clock.advance(minutes=5)
+    escalation = AlertEvent(
+        host_name=event.host_name,
+        category=event.category,
+        severity=event.severity,
+        title=event.title,
+        message=event.message,
+        fingerprint=event.fingerprint,
+        reasons=("error_increase",),
+    )
+    # Deterioration must break the ack and notify once more.
+    assert engine.process([escalation]) == [escalation]
+
+    assert len(notifier.calls) == 2
+    rows = [r for r in list_alerts(db_path) if r["fingerprint"] == event.fingerprint]
+    assert [r["status"] for r in rows].count("active") == 1
+
+
+def test_resolve_missing_resolves_acknowledged(tmp_path: Path):
+    db_path = tmp_path / "servermanage.db"
+    clock = FakeClock()
+    notifier = FakeNotifier()
+    engine = _engine(db_path, clock, notifier)
+    event = _event()
+
+    assert engine.process([event]) == [event]
+    _ack_latest(event.fingerprint, db_path)
+
+    # The condition cleared this cycle -> the acknowledged row must resolve.
+    engine.resolve_missing("gpu-01", set(), category="system")
+
+    latest = find_latest_alert(event.fingerprint, db_path)
+    assert latest is not None
+    assert latest["status"] == "resolved"
+
+
+def test_resolve_resolves_acknowledged(tmp_path: Path):
+    db_path = tmp_path / "servermanage.db"
+    clock = FakeClock()
+    notifier = FakeNotifier()
+    engine = _engine(db_path, clock, notifier)
+    event = _event()
+
+    assert engine.process([event]) == [event]
+    _ack_latest(event.fingerprint, db_path)
+
+    engine.resolve("gpu-01", "system")
+
+    latest = find_latest_alert(event.fingerprint, db_path)
+    assert latest is not None
+    assert latest["status"] == "resolved"
+
+
+def test_ack_suppresses_when_latest_ack_but_older_row_active(tmp_path: Path):
+    """Legacy data: latest row acknowledged, an older row still active."""
+    db_path = tmp_path / "servermanage.db"
+    clock = FakeClock()
+    notifier = FakeNotifier()
+    engine = _engine(db_path, clock, notifier)
+    event = _event()
+
+    # Two active occurrences of the same fingerprint.
+    assert engine.process([event]) == [event]
+    clock.advance(minutes=61)
+    assert engine.process([event]) == [event]
+    # Acknowledge only the newest row; the older one stays active.
+    _ack_latest(event.fingerprint, db_path)
+
+    before = len(list_alerts(db_path))
+    clock.advance(minutes=120)
+    assert engine.process([event]) == []
+    assert len(list_alerts(db_path)) == before
