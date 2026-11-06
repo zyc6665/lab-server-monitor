@@ -14,9 +14,15 @@ Design notes
     ``now - last_run_at >= interval_seconds`` (or never ran).
   - **Report tasks** (daily / weekly e-mail): due when a *scheduled target
     time* has passed and no report was sent for that target.  They carry an
-    optional ``target_time`` callable that maps a *reference* local time (the
-    last run, or "now" when there is none) to the first target after it (see
-    :func:`compute_daily_fire` / :func:`compute_weekly_fire`).
+    optional ``target_time`` callable mapping a reference instant to the first
+    scheduled occurrence *strictly after* it (see
+    :func:`compute_daily_fire` / :func:`compute_weekly_fire`).  With a stored
+    ``last_run_at`` the evaluated target is the next occurrence after the last
+    run (the slot that may have been missed); on a fresh install
+    (``last_run_at is None``) it is the occurrence for the *current* period
+    (today's / this week's), so installing before today's target waits for it
+    instead of sending an immediate report and then a second one when the
+    target arrives.
 
 * All comparisons happen in the configured timezone.  A naive datetime from
   the injectable ``clock`` (default: :func:`datetime.now`) is interpreted as
@@ -179,6 +185,44 @@ def compute_weekly_fire(now_local: datetime, weekday: int, hhmm: str) -> datetim
     return target
 
 
+def _current_period_target(
+    target_time: Callable[[datetime], datetime],
+    now_local: datetime,
+    tz: tzinfo,
+) -> datetime:
+    """Return the scheduled occurrence *within* ``now_local``'s period.
+
+    Used by a report task that has never run.  ``target_time`` yields the first
+    occurrence strictly after a reference, so the cadence is inferred from two
+    consecutive occurrences: a one-day spacing means "daily" (evaluate today's
+    ``hh:mm``) and a one-week spacing means "weekly" (evaluate this week's
+    weekday/``hh:mm``).  Any other cadence falls back to the next occurrence,
+    the conservative choice since a future target is simply not due.
+
+    Evaluating the *current* period rather than the next occurrence is what
+    avoids the fresh-install double report: before today's target the computed
+    target is in the future (not due); after it, the target is in the past (one
+    catch-up fire, never one per missed day).
+    """
+    following = _normalize(target_time(now_local), tz)
+    after_following = _normalize(target_time(following), tz)
+    period = after_following - following
+    if period <= timedelta(days=2):
+        # Daily (or sub-daily): today's occurrence at the target clock time.
+        return now_local.replace(
+            hour=following.hour, minute=following.minute, second=0, microsecond=0
+        )
+    if period <= timedelta(days=14):
+        # Weekly: this week's occurrence on the target weekday/time.
+        week_start = (now_local - timedelta(days=now_local.weekday())).replace(
+            hour=0, minute=0, second=0, microsecond=0
+        )
+        return (week_start + timedelta(days=following.weekday())).replace(
+            hour=following.hour, minute=following.minute, second=0, microsecond=0
+        )
+    return following
+
+
 def is_report_due(
     *,
     last_run_at: datetime | None,
@@ -187,23 +231,26 @@ def is_report_due(
 ) -> bool:
     """Return True when a scheduled report for *target_local* must be sent.
 
-    A report is due when
+    A report is due exactly when the target has already arrived and it has not
+    been covered by a previous run::
 
-    * it has never been sent (``last_run_at is None``) — a fresh install /
-      brand-new task must produce a report rather than silently waiting for a
-      whole period, or
-    * the last run predates the target and the target has already passed
-      (``last_run_at < target_local <= now_local``) — a missed report fires
-      once.
+        target_local <= now_local and (last_run_at is None
+                                       or last_run_at < target_local)
 
-    A report already sent for that target (``last_run_at >= target_local``) or
-    a target still in the future is never due, so nothing is sent twice.
+    A target still in the future is never due — not even on a fresh install
+    (``last_run_at is None``).  That prevents installing at 08:00 for a 09:00
+    daily report from sending immediately and then again at 09:00.  A missed
+    report (target in the past, last run before it) fires exactly once, and a
+    report already sent for that target (``last_run_at >= target_local``) is
+    never sent twice.
     """
+    target_local, now_local = _align_pair(target_local, now_local)
+    if target_local > now_local:
+        return False
     if last_run_at is None:
         return True
-    target_local, now_local = _align_pair(target_local, now_local)
     last_run_at, target_local = _align_pair(last_run_at, target_local)
-    return last_run_at < target_local <= now_local
+    return last_run_at < target_local
 
 
 # ---------------------------------------------------------------------------
@@ -284,14 +331,19 @@ class Scheduler:
             now = _normalize(self._clock(), self._tz)
             for task in self._tasks:
                 last_run_at = self._last_run_at(task.name)
-                if not self._is_due(task, last_run_at, now):
-                    continue
-
-                invoked.append(task.name)
                 try:
+                    # The due check runs inside the per-task guard: a broken
+                    # schedule (e.g. target_time "25:99" raising in
+                    # compute_daily_fire) must only fail this task, never abort
+                    # the run before later healthy tasks get their turn.
+                    if not self._is_due(task, last_run_at, now):
+                        continue
+                    invoked.append(task.name)
                     task.func()
                 except Exception as exc:  # noqa: BLE001 - isolate task failures
                     LOGGER.exception("Scheduled task %r failed", task.name)
+                    if task.name not in invoked:
+                        invoked.append(task.name)
                     self._record(task.name, now, self._describe_error(exc))
                     continue
 
@@ -344,11 +396,17 @@ class Scheduler:
         now: datetime,
     ) -> bool:
         if task.target_time is not None:
-            # The target is the first occurrence after the last run: that is
-            # the slot which may have been missed.  With no state yet the
-            # task is due regardless, so any reference time is fine.
-            reference = last_run_at if last_run_at is not None else now
-            target_local = _normalize(task.target_time(reference), self._tz)
+            if last_run_at is not None:
+                # The first occurrence after the last run: the slot which may
+                # have been missed.
+                target_local = _normalize(task.target_time(last_run_at), self._tz)
+            else:
+                # Never ran: evaluate the occurrence for the *current* period
+                # (today's / this week's) so an install before today's target
+                # waits for it instead of firing twice on install day.
+                target_local = _current_period_target(
+                    task.target_time, now, self._tz
+                )
             return is_report_due(
                 last_run_at=last_run_at,
                 target_local=target_local,

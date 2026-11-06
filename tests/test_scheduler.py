@@ -119,9 +119,14 @@ def test_is_report_due_semantics():
         target_local=target,
         now_local=BASE - timedelta(minutes=1),
     )
-    # Never ran at all -> due even before the nominal time (fresh-install catch-up).
-    assert is_report_due(
+    # Never ran, but the target is still in the future -> NOT due: a fresh
+    # install before today's target must wait instead of reporting immediately.
+    assert not is_report_due(
         last_run_at=None, target_local=target, now_local=BASE - timedelta(minutes=1)
+    )
+    # Never ran and the target is exactly now -> due (catch-up boundary).
+    assert is_report_due(
+        last_run_at=None, target_local=target, now_local=target
     )
     # Already sent for exactly this target -> not due again.
     assert not is_report_due(
@@ -167,6 +172,143 @@ def test_report_task_fires_once_after_missed_day(tmp_path: Path):
     clock_now = clock_now + timedelta(days=1)
     assert scheduler.run_pending() == ["daily-report"]
     assert len(calls) == 2
+
+
+def test_fresh_install_before_target_does_not_report(tmp_path: Path):
+    """Install at 08:00 for a 09:00 daily report: no immediate (double) send."""
+    calls: list[int] = []
+
+    def send_report() -> None:
+        calls.append(1)
+
+    db_path = tmp_path / "state.db"
+    task = ScheduledTask(
+        "daily-report",
+        0,
+        send_report,
+        target_time=lambda now: compute_daily_fire(now, "09:00"),
+    )
+    clock_now = datetime(2026, 11, 6, 8, 0, tzinfo=TZ)
+    scheduler = Scheduler([task], db_path=db_path, tz=TZ, clock=lambda: clock_now)
+
+    # 08:00, before today's target: nothing is due, nothing recorded.
+    assert scheduler.run_pending() == []
+    assert calls == []
+    assert get_task_state("daily-report", db_path) is None
+
+    # 09:00:01, the target has just passed: fires exactly once.
+    clock_now = datetime(2026, 11, 6, 9, 0, 1, tzinfo=TZ)
+    assert scheduler.run_pending() == ["daily-report"]
+    assert calls == [1]
+
+    # Same day, later: the slot is covered, so no second report.
+    clock_now = datetime(2026, 11, 6, 12, 0, tzinfo=TZ)
+    assert scheduler.run_pending() == []
+    assert calls == [1]
+
+    # Next day the following occurrence fires once.
+    clock_now = datetime(2026, 11, 7, 9, 0, 1, tzinfo=TZ)
+    assert scheduler.run_pending() == ["daily-report"]
+    assert calls == [1, 1]
+
+
+def test_fresh_install_after_target_fires_catch_up_once(tmp_path: Path):
+    """Install at 10:00 for a 09:00 daily report: one catch-up report today."""
+    calls: list[int] = []
+
+    def send_report() -> None:
+        calls.append(1)
+
+    db_path = tmp_path / "state.db"
+    task = ScheduledTask(
+        "daily-report",
+        0,
+        send_report,
+        target_time=lambda now: compute_daily_fire(now, "09:00"),
+    )
+    scheduler = Scheduler(
+        [task],
+        db_path=db_path,
+        tz=TZ,
+        clock=lambda: datetime(2026, 11, 6, 10, 0, tzinfo=TZ),
+    )
+
+    assert scheduler.run_pending() == ["daily-report"]
+    assert calls == [1]
+
+    # A second call the same day must not report again.
+    assert scheduler.run_pending() == []
+    assert calls == [1]
+
+
+def test_weekly_fresh_install_semantics(tmp_path: Path):
+    """Weekly report: this week's slot governs a fresh install."""
+    calls: list[int] = []
+
+    def send_report() -> None:
+        calls.append(1)
+
+    db_path = tmp_path / "state.db"
+    task = ScheduledTask(
+        "weekly-report",
+        0,
+        send_report,
+        target_time=lambda now: compute_weekly_fire(now, 0, "09:00"),  # Monday 09:00
+    )
+    clock_now = datetime(2026, 11, 2, 8, 0, tzinfo=TZ)  # Monday, before 09:00
+    scheduler = Scheduler([task], db_path=db_path, tz=TZ, clock=lambda: clock_now)
+
+    # This week's Monday 09:00 is still ahead -> not due.
+    assert scheduler.run_pending() == []
+    assert calls == []
+
+    # Friday: this week's Monday slot has passed -> one catch-up, then quiet.
+    clock_now = datetime(2026, 11, 6, 10, 0, tzinfo=TZ)
+    assert scheduler.run_pending() == ["weekly-report"]
+    assert calls == [1]
+    assert scheduler.run_pending() == []
+    assert calls == [1]
+
+    # The following Monday's slot fires normally.
+    clock_now = datetime(2026, 11, 9, 9, 0, 1, tzinfo=TZ)
+    assert scheduler.run_pending() == ["weekly-report"]
+    assert calls == [1, 1]
+
+
+def test_multi_day_gap_reports_exactly_once(tmp_path: Path):
+    """Several missed daily slots still produce a single catch-up report."""
+    calls: list[int] = []
+
+    def send_report() -> None:
+        calls.append(1)
+
+    db_path = tmp_path / "state.db"
+    task = ScheduledTask(
+        "daily-report",
+        0,
+        send_report,
+        target_time=lambda now: compute_daily_fire(now, "09:00"),
+    )
+    scheduler = Scheduler(
+        [task],
+        db_path=db_path,
+        tz=TZ,
+        clock=lambda: datetime(2026, 11, 6, 10, 0, tzinfo=TZ),
+    )
+
+    # Last ran five days ago; four/five slots were missed while the PC was off.
+    set_task_state(
+        "daily-report",
+        db_path,
+        last_run_at=datetime(2026, 11, 1, 9, 0, tzinfo=TZ).isoformat(),
+    )
+
+    assert scheduler.run_pending() == ["daily-report"]
+    assert calls == [1]
+
+    # Not replayed once per missed day.
+    assert scheduler.run_pending() == []
+    assert calls == [1]
 
 
 # ---------------------------------------------------------------------------
@@ -225,6 +367,41 @@ def test_scheduler_failure_does_not_stop_others(tmp_path: Path):
     broken_state = get_task_state("broken", db_path)
     assert broken_state is not None
     assert "boom" in (broken_state["last_result"] or "")
+
+
+def test_due_check_error_does_not_block_healthy_task(tmp_path: Path):
+    """A bad report target_time must not abort the run for later tasks."""
+    done: list[str] = []
+
+    def bad_report() -> None:
+        done.append("report")
+
+    def healthy() -> None:
+        done.append("ok")
+
+    db_path = tmp_path / "state.db"
+    scheduler = Scheduler(
+        [
+            ScheduledTask(
+                "bad-report",
+                0,
+                bad_report,
+                target_time=lambda now: compute_daily_fire(now, "25:99"),
+            ),
+            ScheduledTask("healthy", 600, healthy),
+        ],
+        db_path=db_path,
+        tz=TZ,
+        clock=lambda: BASE,
+    )
+
+    result = scheduler.run_pending()  # must not raise
+
+    assert "healthy" in result
+    assert done == ["ok"]
+    bad_state = get_task_state("bad-report", db_path)
+    assert bad_state is not None
+    assert "ValueError" in (bad_state["last_result"] or "")
 
 
 def test_scheduler_normalizes_naive_clock_and_state(tmp_path: Path):
