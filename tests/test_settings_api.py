@@ -533,19 +533,26 @@ def test_logs_returns_tail_and_clamps(client, monkeypatch, tmp_path):
     body = client.get("/api/logs?lines=3").get_json()
     assert body["path"].replace("\\", "/").endswith("logs/servermonitor.log")
     assert body["text"].splitlines() == ["line-2098", "line-2099", "line-2100"]
+    assert body["lines"] == body["text"]
+    assert body["line_count"] == 3
 
     clamped = client.get("/api/logs?lines=999999").get_json()
     assert len(clamped["text"].splitlines()) == 2000
+    assert clamped["line_count"] == 2000
 
     floored = client.get("/api/logs?lines=0").get_json()
     assert floored["text"].splitlines() == ["line-2100"]
+    assert floored["line_count"] == 1
 
 
 def test_logs_missing_file_returns_empty_text(client, monkeypatch, tmp_path):
     monkeypatch.chdir(tmp_path)
     resp = client.get("/api/logs")
     assert resp.status_code == 200
-    assert resp.get_json()["text"] == ""
+    body = resp.get_json()
+    assert body["text"] == ""
+    assert body["lines"] == ""
+    assert body["line_count"] == 0
 
 
 def test_runtime_missing_returns_url_null(client, monkeypatch, tmp_path):
@@ -583,7 +590,8 @@ def test_new_write_apis_require_csrf(client):
 def test_test_batch_reports_each_host_without_leaking_secrets(client, monkeypatch):
     import servermanage.web.routes as routes
 
-    _seed_host(client, "batch-host", password="batch-secret")
+    batch_secret = "batch-secret"
+    _seed_host(client, "batch-host", password=batch_secret)
     monkeypatch.setattr(
         routes.SSHClientWrapper,
         "run",
@@ -601,7 +609,8 @@ def test_test_batch_reports_each_host_without_leaking_secrets(client, monkeypatc
     assert results["batch-host"]["ok"] is True
     assert results["batch-host"]["detail"] == "ok"
     assert results["ghost"]["ok"] is False
-    assert "batch-secret" not in repr(body)
+    # The stored credential must never appear anywhere in the response payload.
+    assert batch_secret not in repr(body)
 
 
 def test_test_batch_reports_connection_failure(client, monkeypatch):

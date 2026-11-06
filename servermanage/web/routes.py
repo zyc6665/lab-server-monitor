@@ -1215,17 +1215,33 @@ def register_routes(app: Flask) -> None:
 
     @app.get("/api/logs")
     def api_logs():
+        """Return the tail of the fixed dashboard log.
+
+        Response contract: ``lines`` is the tail *text* (design §3.9),
+        ``text`` is the same content under the brief's naming, and
+        ``line_count`` is the integer number of lines returned—so callers can
+        tell the payload apart from the request parameter unambiguously.
+        """
         lines = max(1, min(_as_int(request.args.get("lines"), 200), 2000))
         log_path = _LOG_FILE
         if not log_path.is_file():
-            return jsonify({"path": str(log_path), "lines": "", "text": ""})
+            return jsonify(
+                {"path": str(log_path), "lines": "", "text": "", "line_count": 0}
+            )
         try:
             with log_path.open("r", encoding="utf-8", errors="replace") as handle:
                 tail = deque(handle, maxlen=lines)
         except OSError as exc:
             return jsonify({"error": str(exc)}), 500
         text = "".join(tail)
-        return jsonify({"path": str(log_path), "lines": text, "text": text})
+        return jsonify(
+            {
+                "path": str(log_path),
+                "lines": text,
+                "text": text,
+                "line_count": len(tail),
+            }
+        )
 
     @app.get("/api/runtime")
     def api_runtime():
