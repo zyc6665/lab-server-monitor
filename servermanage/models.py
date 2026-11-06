@@ -17,12 +17,21 @@ class AuthConfig:
 
 
 @dataclass(frozen=True)
+class HostDiskHealthOverride:
+    enabled: bool | None = None
+    storcli_path: str | None = None
+    use_sudo: bool | None = None
+
+
+@dataclass(frozen=True)
 class HostConfig:
     name: str
     host: str
     port: int
     username: str
     auth: AuthConfig
+    tags: list[str] = field(default_factory=list)
+    disk_health: HostDiskHealthOverride | None = None
 
 
 @dataclass(frozen=True)
@@ -48,6 +57,7 @@ class WeeklyReportConfig:
     subject_prefix: str = "[Server Weekly Report]"
     busy_threshold: float = 70.0
     idle_threshold: float = 20.0
+    time: str = "16:00"
 
 
 @dataclass(frozen=True)
@@ -56,6 +66,8 @@ class ReportConfig:
     include_failed_hosts: bool = True
     executive: "ExecutiveReportConfig | None" = None
     weekly: WeeklyReportConfig = field(default_factory=WeeklyReportConfig)
+    daily_enabled: bool = True
+    daily_time: str = "09:00"
 
 
 @dataclass(frozen=True)
@@ -72,12 +84,97 @@ class StorageConfig:
 
 
 @dataclass(frozen=True)
+class AppRuntimeConfig:
+    poll_interval_seconds: int = 600
+    disk_poll_interval_seconds: int = 86400
+    concurrency: int = 8
+    retention_days: int = 90
+    timezone: str = "Asia/Shanghai"
+
+
+@dataclass(frozen=True)
+class DashboardAuthConfig:
+    enabled: bool = True
+    username: str = "admin"
+    password_env: str | None = "DASHBOARD_PASSWORD"
+    password: str | None = None
+
+
+@dataclass(frozen=True)
+class DashboardConfig:
+    host: str = "0.0.0.0"
+    port: int = 8080
+    auth: DashboardAuthConfig = field(default_factory=DashboardAuthConfig)
+    session_secret_env: str = "DASHBOARD_SECRET"
+    session_secret: str | None = None
+    session_lifetime_hours: int = 12
+
+
+@dataclass(frozen=True)
+class AlertThresholds:
+    cpu_percent: float = 90
+    memory_percent: float = 90
+    disk_percent: float = 90
+    gpu_memory_percent: float = 90
+    disk_temperature_c: float = 55
+
+
+@dataclass(frozen=True)
+class WebhookConfig:
+    enabled: bool = False
+    type: str = "wecom"
+    url_env: str | None = "ALERT_WEBHOOK_URL"
+    url: str | None = None
+
+
+@dataclass(frozen=True)
+class AlertsConfig:
+    enabled: bool = True
+    desktop_notification: bool = True
+    email: bool = True
+    webhook: WebhookConfig = field(default_factory=WebhookConfig)
+    thresholds: AlertThresholds = field(default_factory=AlertThresholds)
+    cooldown_minutes: int = 60
+    repeat_while_active: bool = False
+    offline_failures: int = 2
+
+
+@dataclass(frozen=True)
+class DiskHealthRuleConfig:
+    alert_on_media_errors: bool = True
+    alert_on_other_errors: bool = True
+    alert_on_predictive_failure: bool = True
+    alert_on_smart_flag: bool = True
+    alert_on_state_not_optimal: bool = True
+    alert_on_error_increase: bool = True
+
+
+@dataclass(frozen=True)
+class DiskHealthConfig:
+    enabled: bool = True
+    use_sudo: bool = True
+    storcli_candidates: tuple[str, ...] = (
+        "storcli",
+        "storcli64",
+        "/opt/MegaRAID/storcli/storcli64",
+        "/opt/lsi/storcli/storcli64",
+        "/usr/local/bin/storcli",
+        "/usr/sbin/storcli",
+    )
+    rules: DiskHealthRuleConfig = field(default_factory=DiskHealthRuleConfig)
+
+
+@dataclass(frozen=True)
 class AppConfig:
-    smtp: SMTPConfig
+    smtp: SMTPConfig | None
     ssh: SSHRuntimeConfig
     report: ReportConfig
     servers: list[HostConfig]
     storage: StorageConfig = field(default_factory=StorageConfig)
+    app: AppRuntimeConfig = field(default_factory=AppRuntimeConfig)
+    dashboard: DashboardConfig = field(default_factory=DashboardConfig)
+    alerts: AlertsConfig = field(default_factory=AlertsConfig)
+    disk_health: DiskHealthConfig = field(default_factory=DiskHealthConfig)
 
 
 @dataclass(frozen=True)
