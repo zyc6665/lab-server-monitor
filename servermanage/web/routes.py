@@ -18,9 +18,11 @@ from __future__ import annotations
 import hmac
 import logging
 import secrets
+import smtplib
 import time
 from collections import deque
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 
 from flask import (
@@ -34,7 +36,11 @@ from flask import (
 )
 
 from servermanage import storage
+from servermanage.disk_health import AlertEvent
+from servermanage.models import AuthConfig, HostConfig, WebhookConfig
+from servermanage.notify_webhook import send_webhook
 from servermanage.settings import SettingsError
+from servermanage.ssh_client import SSHClientWrapper
 from servermanage.timeutil import resolve_timezone
 
 LOGGER = logging.getLogger(__name__)
@@ -71,6 +77,74 @@ def _db_path(app: Flask):
 def _settings_service(app: Flask):
     """The optional :class:`SettingsService` injected by ``create_app``."""
     return app.config.get("SETTINGS_SERVICE")
+
+
+# Editable settings sections accepted by ``PUT /api/settings/<section>``.  The
+# ``hosts`` section is intentionally excluded: host rows are managed through the
+# dedicated CRUD endpoints so their credentials land in ``app_secrets``.
+_ALLOWED_SETTINGS_SECTIONS = frozenset(
+    {"monitoring", "dashboard", "alerts", "report", "disk_health", "ssh"}
+)
+
+
+def _settings_or_404(app: Flask):
+    """Return ``(service, None)`` or ``(None, (response, 404))``.
+
+    Every settings endpoint requires an injected :class:`SettingsService`; the
+    legacy dashboard app (no service) reports 404 instead of crashing, matching
+    the "route does not exist" semantics.
+    """
+    service = _settings_service(app)
+    if service is None:
+        return None, (jsonify({"error": "settings_unavailable"}), 404)
+    return service, None
+
+
+def _ensure_writable(service):
+    """Return a 409 response when the service cannot persist, else ``None``."""
+    if not service.is_writable():
+        return jsonify({"error": "settings_not_writable"}), 409
+    return None
+
+
+def _as_int(value: Any, default: int) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _optional_text(value: Any) -> str | None:
+    if value is None:
+        return None
+    text = str(value)
+    return text if text else None
+
+
+def _host_config_from_payload(payload: dict[str, Any], *, name: str | None = None) -> HostConfig:
+    """Build a transient :class:`HostConfig` for the SSH connectivity probe.
+
+    The object is never persisted; secrets come straight from the request body so
+    a "test connection" click does not have to save the host first.
+    """
+    auth_type = str(payload.get("auth_type") or "password")
+    key_path_raw = payload.get("key_path")
+    auth = AuthConfig(
+        type=auth_type,
+        password=_optional_text(payload.get("password")),
+        key_data=_optional_text(payload.get("private_key")),
+        key_path=(
+            Path(str(key_path_raw)).expanduser() if key_path_raw else None
+        ),
+        passphrase=_optional_text(payload.get("passphrase")),
+    )
+    return HostConfig(
+        name=name or str(payload.get("name") or payload.get("host") or "test"),
+        host=str(payload.get("host") or ""),
+        port=_as_int(payload.get("port"), 22),
+        username=str(payload.get("username") or ""),
+        auth=auth,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -591,6 +665,192 @@ def register_routes(app: Flask) -> None:
             ack_at=datetime.now(timezone.utc).isoformat(),
         )
         return jsonify({"ok": True})
+
+    # -- settings API (Task 8) --------------------------------------------
+    #
+    # All mutating routes require an injected SettingsService (404 otherwise) and
+    # a writable platform (409 otherwise).  ``_refresh_config`` re-composes the
+    # runtime config after every successful write so callers can see the change
+    # immediately and ``on_config_changed`` can hot-apply it.
+
+    @app.get("/api/settings")
+    def api_get_settings():
+        service, error = _settings_or_404(app)
+        if error is not None:
+            return error
+        # ``public_settings`` already carries ``writable``/``setup_required``;
+        # secrets are reduced to booleans and never echoed.
+        return jsonify(service.public_settings())
+
+    @app.put("/api/settings/<section>")
+    def api_put_settings_section(section: str):
+        service, error = _settings_or_404(app)
+        if error is not None:
+            return error
+        rejection = _ensure_writable(service)
+        if rejection is not None:
+            return rejection
+        if section not in _ALLOWED_SETTINGS_SECTIONS:
+            return jsonify({"error": "unknown_section"}), 404
+        payload = request.get_json(silent=True)
+        if not isinstance(payload, dict):
+            return jsonify({"error": "invalid_payload"}), 400
+        try:
+            service.save_section(section, payload)
+        except SettingsError as exc:
+            return jsonify({"error": str(exc)}), 400
+        _refresh_config(app)
+        return jsonify({"ok": True, "restart_required": section == "dashboard"})
+
+    @app.get("/api/settings/hosts")
+    def api_list_hosts():
+        service, error = _settings_or_404(app)
+        if error is not None:
+            return error
+        return jsonify({"hosts": service.list_hosts()})
+
+    @app.put("/api/settings/hosts/<name>")
+    def api_upsert_host(name: str):
+        service, error = _settings_or_404(app)
+        if error is not None:
+            return error
+        rejection = _ensure_writable(service)
+        if rejection is not None:
+            return rejection
+        payload = request.get_json(silent=True)
+        if not isinstance(payload, dict):
+            return jsonify({"error": "invalid_payload"}), 400
+        try:
+            service.upsert_host(name, payload)
+        except SettingsError as exc:
+            return jsonify({"error": str(exc)}), 400
+        _refresh_config(app)
+        return jsonify({"ok": True})
+
+    @app.delete("/api/settings/hosts/<name>")
+    def api_delete_host(name: str):
+        service, error = _settings_or_404(app)
+        if error is not None:
+            return error
+        rejection = _ensure_writable(service)
+        if rejection is not None:
+            return rejection
+        if service.get_host(name) is None:
+            return jsonify({"error": "not_found"}), 404
+        try:
+            service.delete_host(name)
+        except SettingsError as exc:
+            return jsonify({"error": str(exc)}), 400
+        _refresh_config(app)
+        return jsonify({"ok": True})
+
+    @app.post("/api/settings/password")
+    def api_change_password():
+        service, error = _settings_or_404(app)
+        if error is not None:
+            return error
+        rejection = _ensure_writable(service)
+        if rejection is not None:
+            return rejection
+        payload = request.get_json(silent=True)
+        if not isinstance(payload, dict):
+            return jsonify({"error": "invalid_payload"}), 400
+        try:
+            service.set_admin_password(
+                payload.get("current_password"),
+                payload.get("new_password"),
+                username=payload.get("new_username"),
+            )
+        except SettingsError as exc:
+            # SettingsError messages are user-facing and never contain a stack
+            # trace or secret material.
+            return jsonify({"error": str(exc)}), 400
+        _refresh_config(app)
+        return jsonify({"ok": True})
+
+    @app.post("/api/settings/test-ssh")
+    def api_test_ssh():
+        service, error = _settings_or_404(app)
+        if error is not None:
+            return error
+        payload = request.get_json(silent=True)
+        if not isinstance(payload, dict):
+            return jsonify({"error": "invalid_payload"}), 400
+        if not str(payload.get("host") or "").strip():
+            return jsonify({"ok": False, "detail": "host 不能为空"})
+        config = _config(app)
+        try:
+            host_config = _host_config_from_payload(payload)
+            with SSHClientWrapper(
+                host=host_config,
+                connect_timeout=config.ssh.connect_timeout,
+            ) as ssh:
+                result = ssh.run("echo ok", timeout=config.ssh.command_timeout)
+            return jsonify({"ok": True, "detail": result.stdout})
+        except Exception as exc:  # noqa: BLE001 - report, never leak a traceback
+            return jsonify({"ok": False, "detail": str(exc)})
+
+    @app.post("/api/settings/test-email")
+    def api_test_email():
+        service, error = _settings_or_404(app)
+        if error is not None:
+            return error
+        payload = request.get_json(silent=True)
+        if not isinstance(payload, dict):
+            return jsonify({"error": "invalid_payload"}), 400
+        host = str(payload.get("host") or "").strip()
+        if not host:
+            return jsonify({"ok": False, "detail": "host 不能为空"})
+        port = _as_int(payload.get("port"), 25)
+        username = str(payload.get("username") or "")
+        password = str(payload.get("password") or "")
+        use_ssl = bool(payload.get("use_ssl"))
+        try:
+            # Connectivity probe only: connect and authenticate, never send a mail.
+            if use_ssl:
+                server = smtplib.SMTP_SSL(host, port, timeout=10)
+            else:
+                server = smtplib.SMTP(host, port, timeout=10)
+            try:
+                if username:
+                    server.login(username, password)
+            finally:
+                try:
+                    server.quit()
+                except Exception:  # noqa: BLE001 - best-effort teardown
+                    pass
+        except Exception as exc:  # noqa: BLE001 - text-only error surface
+            return jsonify({"ok": False, "detail": str(exc)})
+        return jsonify({"ok": True, "detail": "SMTP 连接与登录成功"})
+
+    @app.post("/api/settings/test-webhook")
+    def api_test_webhook():
+        service, error = _settings_or_404(app)
+        if error is not None:
+            return error
+        payload = request.get_json(silent=True)
+        if not isinstance(payload, dict):
+            return jsonify({"error": "invalid_payload"}), 400
+        url = str(payload.get("url") or "").strip()
+        if not url:
+            return jsonify({"ok": False, "detail": "url 不能为空"})
+        kind = str(payload.get("type") or "generic")
+        try:
+            webhook = WebhookConfig(enabled=True, type=kind, url=url)
+            event = AlertEvent(
+                host_name="test",
+                category="test",
+                severity="info",
+                title="Webhook 测试",
+                message="这是一条来自设置页的测试通知",
+                fingerprint="settings:test-webhook",
+            )
+            sent = send_webhook(webhook, event)
+        except Exception as exc:  # noqa: BLE001 - text-only error surface
+            return jsonify({"ok": False, "detail": str(exc)})
+        return jsonify(
+            {"ok": bool(sent), "detail": "已发送" if sent else "发送失败"}
+        )
 
     # -- HTML pages --------------------------------------------------------
     #
