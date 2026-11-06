@@ -1,17 +1,26 @@
-"""Disk health data models and storcli output parsers.
+"""Disk health data models, storcli parsers, health rules and SSH collection.
 
-This module currently holds only the data models and the parsing helpers for
-storcli output (Task 3). Health evaluation and SSH collection are added by a
-later task and build on top of these public interfaces.
+Task 3 contributed the data models and the parsing helpers for storcli output.
+Task 4 builds on those public interfaces: single-drive / virtual-drive health
+evaluation plus :func:`collect_disk_health`, which probes storcli over SSH (as
+root via ``sudo -n``) and turns its JSON output into a :class:`DiskHealthReport`.
 """
 
 from __future__ import annotations
 
 import json
 import re
-from dataclasses import dataclass, field
-from datetime import datetime
+from dataclasses import dataclass, field, replace
+from datetime import datetime, timezone
 from typing import Any
+
+from servermanage.models import (
+    DiskHealthConfig,
+    DiskHealthRuleConfig,
+    HostConfig,
+    HostDiskHealthOverride,
+    SSHRunner,
+)
 
 __all__ = [
     "StorcliParseError",
@@ -25,6 +34,9 @@ __all__ = [
     "parse_virtual_drives",
     "parse_physical_drives",
     "parse_physical_drives_text",
+    "evaluate_drive_health",
+    "evaluate_virtual_drive_health",
+    "collect_disk_health",
 ]
 
 
@@ -467,3 +479,348 @@ def parse_physical_drives(text: str) -> list[PhysicalDriveInfo]:
         raise StorcliParseError(
             "unable to parse storcli physical drive output as JSON or text"
         ) from json_error
+
+
+# ---------------------------------------------------------------------------
+# Health evaluation (design section 7.2)
+# ---------------------------------------------------------------------------
+
+# A physical drive in one of these states is failed and needs replacing.
+_CRITICAL_STATES = {"failed", "offline", "offln", "missing"}
+# A physical drive in one of these states is rebuilding / degraded.
+_WARNING_STATES = {"rebuild", "rbld", "copyback", "degraded"}
+
+_VD_OPTIMAL_STATES = {"optimal", "optl", "online", "onln"}
+_VD_CRITICAL_STATES = {"failed", "offline", "offln", "missing"}
+_VD_WARNING_STATES = {
+    "degraded",
+    "partially degraded",
+    "partiallydegraded",
+    "rbld",
+    "rebuild",
+    "copyback",
+    "init",
+    "initializing",
+    "dgrd",
+}
+
+_BBU_FAILURE_WORDS = {
+    "failed",
+    "failure",
+    "fault",
+    "faulty",
+    "bad",
+    "degraded",
+    "critical",
+    "offline",
+    "missing",
+    "replace",
+}
+
+
+def _state_word(value: Any) -> str:
+    """Normalise a storcli state string for comparison ("" when absent)."""
+    if value is None:
+        return ""
+    return re.sub(r"\s+", " ", str(value).strip().lower())
+
+
+def _increased(current: int | None, previous: int | None) -> bool:
+    """True only when both counters are known and *current* grew.
+
+    Missing values are ``None`` (never 0), so an unknown previous counter cannot
+    be used as evidence of an increase.
+    """
+    return current is not None and previous is not None and current > previous
+
+
+def evaluate_drive_health(
+    drive: PhysicalDriveInfo,
+    *,
+    rules: DiskHealthRuleConfig,
+    temperature_threshold_c: float = 55.0,
+    previous: PhysicalDriveInfo | None = None,
+) -> PhysicalDriveInfo:
+    """Return a copy of *drive* with ``health`` and machine-code ``reasons`` set.
+
+    Reason codes: ``state_failed`` / ``state_degraded`` / ``predictive_failure``
+    / ``smart_flag`` / ``media_errors`` / ``other_errors`` / ``error_increase``
+    / ``temperature``.  The input object is never mutated.
+    """
+    reasons: list[str] = []
+    critical = False
+    warning = False
+
+    state = _state_word(drive.state)
+    if rules.alert_on_state_not_optimal:
+        if state in _CRITICAL_STATES:
+            reasons.append("state_failed")
+            critical = True
+        elif state in _WARNING_STATES:
+            reasons.append("state_degraded")
+            warning = True
+
+    if (
+        rules.alert_on_predictive_failure
+        and drive.predictive_failures is not None
+        and drive.predictive_failures > 0
+    ):
+        reasons.append("predictive_failure")
+        warning = True
+
+    if rules.alert_on_smart_flag and drive.smart_alert is True:
+        reasons.append("smart_flag")
+        warning = True
+
+    if (
+        rules.alert_on_media_errors
+        and drive.media_errors is not None
+        and drive.media_errors > 0
+    ):
+        reasons.append("media_errors")
+        warning = True
+
+    if (
+        rules.alert_on_other_errors
+        and drive.other_errors is not None
+        and drive.other_errors > 0
+    ):
+        reasons.append("other_errors")
+        warning = True
+
+    if rules.alert_on_error_increase and previous is not None:
+        if _increased(drive.media_errors, previous.media_errors) or _increased(
+            drive.other_errors, previous.other_errors
+        ):
+            reasons.append("error_increase")
+            warning = True
+
+    if (
+        drive.temperature_c is not None
+        and temperature_threshold_c is not None
+        and drive.temperature_c > temperature_threshold_c
+    ):
+        reasons.append("temperature")
+        warning = True
+
+    if critical:
+        health = "critical"
+    elif warning:
+        health = "warning"
+    else:
+        health = "healthy"
+
+    return replace(drive, health=health, reasons=reasons)
+
+
+def evaluate_virtual_drive_health(vd: VirtualDriveInfo) -> VirtualDriveInfo:
+    """Return a copy of *vd* with ``health``/``reasons`` based on its state.
+
+    Only *Optimal* is healthy; a degraded/rebuilding VD is a warning and an
+    offline/failed/missing VD is critical.  An unknown/missing state stays
+    ``unknown`` (never silently healthy).
+    """
+    state = _state_word(vd.state)
+    if not state:
+        return replace(vd, health="unknown", reasons=[])
+    if state in _VD_CRITICAL_STATES:
+        return replace(vd, health="critical", reasons=["state_failed"])
+    if state in _VD_OPTIMAL_STATES:
+        return replace(vd, health="healthy", reasons=[])
+    if state in _VD_WARNING_STATES:
+        return replace(vd, health="warning", reasons=["state_degraded"])
+    # "VD State 非 Optimal → warning" (design 7.2): any other known state warns.
+    return replace(vd, health="warning", reasons=["state_degraded"])
+
+
+def _evaluate_controller_health(
+    controller: DiskControllerInfo,
+) -> DiskControllerInfo:
+    """Fill controller health from its BBU/CacheVault state when it is known."""
+    bbu = _state_word(controller.bbu_state)
+    if not bbu:
+        return controller
+    if any(word in bbu for word in _BBU_FAILURE_WORDS):
+        return replace(controller, health="warning", reasons=["bbu_not_optimal"])
+    return replace(controller, health="healthy", reasons=[])
+
+
+# ---------------------------------------------------------------------------
+# SSH collection
+# ---------------------------------------------------------------------------
+
+_PERMISSION_MARKERS = ("password is required", "not in the sudoers")
+_NO_CONTROLLER_MARKER = "no controller found"
+
+
+def _looks_permission_error(text: str | None) -> bool:
+    lowered = (text or "").lower()
+    return any(marker in lowered for marker in _PERMISSION_MARKERS)
+
+
+def _brief(text: str | None, limit: int = 300) -> str:
+    value = (text or "").strip()
+    if len(value) > limit:
+        return value[:limit] + "..."
+    return value
+
+
+def collect_disk_health(
+    host: HostConfig,
+    runner: SSHRunner,
+    *,
+    config: DiskHealthConfig,
+    command_timeout: int,
+    previous: DiskHealthReport | None = None,
+    override: HostDiskHealthOverride | None = None,
+    now: datetime | None = None,
+) -> DiskHealthReport:
+    """Collect one host's disk health over SSH using storcli.
+
+    Never raises for an operational failure and never fabricates drives: any
+    problem yields a report whose ``status`` reflects the real condition
+    (``permission_denied`` / ``no_storcli`` / ``no_controller`` / ``error`` /
+    ``degraded``) with an explanatory ``message``.
+    """
+    collected_at = now if now is not None else datetime.now(timezone.utc)
+    effective = override if override is not None else host.disk_health
+
+    if effective is not None and effective.storcli_path:
+        candidates: list[str] = [effective.storcli_path]
+    else:
+        candidates = list(config.storcli_candidates)
+
+    if effective is not None and effective.use_sudo is not None:
+        use_sudo = effective.use_sudo
+    else:
+        use_sudo = config.use_sudo
+    prefix = "sudo -n " if use_sudo else ""
+
+    def _report(status: str, message: str | None, **kwargs: Any) -> DiskHealthReport:
+        return DiskHealthReport(
+            host_name=host.name,
+            collected_at=collected_at,
+            status=status,
+            message=message,
+            **kwargs,
+        )
+
+    if not candidates:
+        return _report("no_storcli", "未配置 storcli 候选路径")
+
+    # 1. Probe candidates in order; the first one that exits 0 is used.
+    storcli: str | None = None
+    probe_errors: list[str] = []
+    for candidate in candidates:
+        try:
+            result = runner.run(f"{prefix}{candidate} -v", command_timeout)
+        except Exception as exc:  # SSH transport errors must not crash polling.
+            probe_errors.append(f"{candidate}: {exc}")
+            continue
+        if result.exit_status == 0:
+            storcli = candidate
+            break
+        detail = _brief(result.stderr) or _brief(result.stdout) or (
+            f"exit {result.exit_status}"
+        )
+        probe_errors.append(f"{candidate}: {detail}")
+
+    if storcli is None:
+        if any(_looks_permission_error(item) for item in probe_errors):
+            return _report(
+                "permission_denied",
+                "sudo 权限不足，无法以 root 运行 storcli；请配置免密 sudo（NOPASSWD）后重试。",
+            )
+        return _report(
+            "no_storcli",
+            "未找到可用的 storcli 可执行文件：" + "; ".join(probe_errors),
+        )
+
+    # 2. Enumerate controllers.
+    controllers_result = runner.run(
+        f"{prefix}{storcli} /cALL show J", command_timeout
+    )
+    if controllers_result.exit_status != 0:
+        if _looks_permission_error(controllers_result.stderr):
+            return _report(
+                "permission_denied",
+                "sudo 权限不足，无法以 root 运行 storcli；请配置免密 sudo（NOPASSWD）后重试。",
+            )
+        return _report(
+            "error",
+            "storcli /cALL show J 执行失败（exit "
+            f"{controllers_result.exit_status}）：{_brief(controllers_result.stderr or controllers_result.stdout)}",
+        )
+    try:
+        controllers = parse_controllers(controllers_result.stdout)
+    except StorcliParseError as exc:
+        return _report("error", f"无法解析控制器输出：{exc}")
+
+    if not controllers:
+        combined = f"{controllers_result.stdout}\n{controllers_result.stderr}".lower()
+        if not use_sudo and _NO_CONTROLLER_MARKER in combined:
+            # Non-root storcli reports "No Controller found" as a permission
+            # artefact rather than a genuinely controller-less host.
+            return _report(
+                "permission_denied",
+                "storcli 未提权运行且报告 No Controller found；请以 root（sudo）运行。",
+            )
+        return _report("no_controller", "storcli 未发现任何控制器")
+
+    # 3. Virtual drives and physical drives per controller.
+    virtual_drives: list[VirtualDriveInfo] = []
+    physical_drives: list[PhysicalDriveInfo] = []
+    warnings: list[str] = []
+
+    for controller in controllers:
+        cid = controller.controller
+
+        vd_result = runner.run(f"{prefix}{storcli} /c{cid}/vall show J", command_timeout)
+        if vd_result.exit_status != 0:
+            warnings.append(
+                f"控制器 {cid} 虚拟盘查询失败：{_brief(vd_result.stderr or vd_result.stdout)}"
+            )
+        else:
+            try:
+                virtual_drives.extend(parse_virtual_drives(vd_result.stdout, cid))
+            except StorcliParseError as exc:
+                warnings.append(f"控制器 {cid} 虚拟盘解析失败：{exc}")
+
+        pd_result = runner.run(
+            f"{prefix}{storcli} /c{cid}/eall/sall show all J", command_timeout
+        )
+        if pd_result.exit_status != 0:
+            warnings.append(
+                f"控制器 {cid} 物理盘查询失败：{_brief(pd_result.stderr or pd_result.stdout)}"
+            )
+            continue
+        try:
+            physical_drives.extend(parse_physical_drives(pd_result.stdout))
+        except StorcliParseError as exc:
+            warnings.append(f"控制器 {cid} 物理盘解析失败：{exc}")
+
+    # 4. Evaluate health, matching the previous snapshot by slot identity.
+    previous_index: dict[tuple[int, int | None, int | None], PhysicalDriveInfo] = {}
+    if previous is not None:
+        for item in previous.physical_drives:
+            previous_index[(item.controller, item.enclosure, item.slot)] = item
+
+    evaluated: list[PhysicalDriveInfo] = []
+    for drive in physical_drives:
+        prior = previous_index.get((drive.controller, drive.enclosure, drive.slot))
+        evaluated.append(
+            evaluate_drive_health(drive, rules=config.rules, previous=prior)
+        )
+
+    evaluated_controllers = [_evaluate_controller_health(c) for c in controllers]
+    evaluated_virtual = [evaluate_virtual_drive_health(v) for v in virtual_drives]
+
+    status = "degraded" if warnings else "ok"
+    message = "; ".join(warnings) if warnings else None
+    return _report(
+        status,
+        message,
+        controllers=evaluated_controllers,
+        virtual_drives=evaluated_virtual,
+        physical_drives=evaluated,
+    )
