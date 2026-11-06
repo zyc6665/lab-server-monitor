@@ -66,6 +66,7 @@ def test_non_windows_is_read_only(tmp_path, monkeypatch):
     monkeypatch.setattr(sys, "platform", "linux")
     svc = _service(tmp_path)
     assert svc.is_writable() is False
+    assert svc.setup_required() is False
     with pytest.raises(SettingsError):
         svc.save_section("report", {"daily_enabled": False})
 
