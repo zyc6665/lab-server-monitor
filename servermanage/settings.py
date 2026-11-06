@@ -18,7 +18,7 @@ import hmac
 import types
 from copy import deepcopy
 from dataclasses import fields, replace
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Union, get_args, get_origin, get_type_hints
 
@@ -106,6 +106,8 @@ _ALERT_TOP_FIELDS = frozenset(
         "cooldown_minutes",
         "repeat_while_active",
         "offline_failures",
+        "aggregate_by_host",
+        "notify_on_recovery",
     }
 )
 _WEBHOOK_FIELDS = frozenset({"enabled", "type", "url_env"})
@@ -347,6 +349,9 @@ class SettingsService:
                 "disk_poll_interval_seconds": config.app.disk_poll_interval_seconds,
                 "concurrency": config.app.concurrency,
                 "retention_days": config.app.retention_days,
+                "auto_port_fallback": config.app.auto_port_fallback,
+                "tray_enabled": config.app.tray_enabled,
+                "open_browser_on_start": config.app.open_browser_on_start,
             },
             "dashboard": {
                 "host": config.dashboard.host,
@@ -388,6 +393,8 @@ class SettingsService:
                 "cooldown_minutes": config.alerts.cooldown_minutes,
                 "repeat_while_active": config.alerts.repeat_while_active,
                 "offline_failures": config.alerts.offline_failures,
+                "aggregate_by_host": config.alerts.aggregate_by_host,
+                "notify_on_recovery": config.alerts.notify_on_recovery,
             },
             "report": {
                 "daily_enabled": config.report.daily_enabled,
@@ -461,6 +468,10 @@ class SettingsService:
         disk_mounts = _string_list(payload.get("disk_mounts"), default=list(_DEFAULT_DISK_MOUNTS))
         if not disk_mounts:
             disk_mounts = list(_DEFAULT_DISK_MOUNTS)
+        group = (_optional_text(payload.get("group")) or "").strip() or "未分组"
+        owner = (_optional_text(payload.get("owner")) or "").strip()
+        location = (_optional_text(payload.get("location")) or "").strip()
+        notes = (_optional_text(payload.get("notes")) or "").strip()
         clear_secrets = _string_list(payload.get("clear_secrets"))
         key_path_raw = payload.get("key_path")
         key_path = str(key_path_raw).strip() if key_path_raw not in (None, "") else None
@@ -486,6 +497,10 @@ class SettingsService:
             "auth_type": auth_type,
             "key_path": key_path,
             "disk_health": _sanitize_host_disk_health(payload.get("disk_health")),
+            "group": group,
+            "owner": owner,
+            "location": location,
+            "notes": notes,
         }
         entries = self._host_entries_for_update()
         for index, existing in enumerate(entries):
@@ -513,6 +528,199 @@ class SettingsService:
         ]
         self._save_host_entries(entries)
         return self.load()
+
+    def host_groups(self) -> list[str]:
+        """Return the distinct, sorted groups currently used by hosts."""
+        groups = {"未分组"}
+        for entry in self._host_entries_for_update():
+            group = str(entry.get("group") or "").strip() or "未分组"
+            groups.add(group)
+        return sorted(groups)
+
+    def _validate_import_candidate(
+        self, raw: Any, existing_names: set[str]
+    ) -> dict[str, Any]:
+        if not isinstance(raw, dict):
+            raise SettingsError("主机条目必须是对象")
+        if raw.get("valid") is False:
+            raise SettingsError(str(raw.get("error") or "候选主机无效"))
+        payload = dict(raw)
+        name = _require_text(raw.get("name"), "name")
+        payload["name"] = name
+        payload["host"] = _require_text(raw.get("host"), "host")
+        payload["username"] = _require_text(raw.get("username"), "username")
+        auth_raw = raw.get("auth_type")
+        auth_type = str(auth_raw).strip() if auth_raw is not None else ""
+        auth_type = auth_type or "key"
+        if auth_type not in _HOST_AUTH_TYPES:
+            raise SettingsError(f"不支持的认证方式: {auth_type}")
+        payload["auth_type"] = auth_type
+        payload["port"] = _coerce_port(raw.get("port", 22))
+        if auth_type == "password":
+            if not _optional_text(raw.get("password")) and name not in existing_names:
+                raise SettingsError("SSH 密码未设置")
+        else:
+            key_path = raw.get("key_path")
+            existing_key = storage.get_secret(
+                _HOST_SECRET_KEY.format(name=name), self.db_path
+            )
+            if (
+                not _optional_text(raw.get("private_key"))
+                and not (key_path is not None and str(key_path).strip())
+                and existing_key is None
+            ):
+                raise SettingsError("SSH 私钥未设置")
+        return payload
+
+    def import_hosts(
+        self, candidates: list[dict], *, overwrite: bool = False
+    ) -> dict[str, list]:
+        """Validate every candidate before writing any of them, then upsert."""
+        if not self.is_writable():
+            raise SettingsError("settings are not writable on this platform")
+        if not isinstance(candidates, (list, tuple)):
+            raise SettingsError("candidates 必须是列表")
+        existing = {
+            str(entry.get("name") or "").strip()
+            for entry in self._host_entries_for_update()
+        }
+        validated: list[dict] = []
+        skipped: list[str] = []
+        failed: list[dict] = []
+        for raw in candidates:
+            try:
+                payload = self._validate_import_candidate(raw, existing)
+            except SettingsError as exc:
+                name = (
+                    str(raw.get("name") or "").strip()
+                    if isinstance(raw, dict)
+                    else ""
+                )
+                failed.append({"name": name, "error": str(exc)})
+                continue
+            name = payload["name"]
+            if name in existing and not overwrite:
+                skipped.append(name)
+                continue
+            validated.append(payload)
+
+        created: list[str] = []
+        updated: list[str] = []
+        for payload in validated:
+            name = payload["name"]
+            if name in existing:
+                updated.append(name)
+            else:
+                created.append(name)
+            self.upsert_host(name, payload)
+            existing.add(name)
+        return {
+            "created": created,
+            "updated": updated,
+            "skipped": skipped,
+            "failed": failed,
+        }
+
+    def copy_host(self, source: str, new_name: str) -> AppConfig:
+        """Copy host *source* to *new_name*, including all three credentials."""
+        if not self.is_writable():
+            raise SettingsError("settings are not writable on this platform")
+        source = _require_text(source, "source")
+        new_name = _require_text(new_name, "new_name")
+        entries = self._host_entries_for_update()
+        source_entry = next(
+            (dict(entry) for entry in entries if entry.get("name") == source), None
+        )
+        if source_entry is None:
+            raise SettingsError(f"源主机不存在: {source}")
+        if any(entry.get("name") == new_name for entry in entries):
+            raise SettingsError(f"目标主机已存在: {new_name}")
+        for template in (
+            _HOST_SECRET_PASSWORD,
+            _HOST_SECRET_KEY,
+            _HOST_SECRET_PASSPHRASE,
+        ):
+            blob = storage.get_secret(template.format(name=source), self.db_path)
+            if blob is not None:
+                storage.set_secret(template.format(name=new_name), blob, self.db_path)
+        entry = deepcopy(source_entry)
+        entry["name"] = new_name
+        entry["group"] = str(entry.get("group") or "").strip() or "未分组"
+        entries.append(entry)
+        self._save_host_entries(entries)
+        return self.load()
+
+    # -- alert silences ------------------------------------------------------
+
+    def list_silences(self, active_only: bool = True) -> list[dict]:
+        return storage.list_silences(self.db_path, active_only=active_only)
+
+    def add_silence(
+        self,
+        scope_type: str,
+        scope: str | None,
+        reason: str,
+        starts_at: Any,
+        ends_at: Any,
+        created_by: str | None = None,
+    ) -> int:
+        if not self.is_writable():
+            raise SettingsError("settings are not writable on this platform")
+        scope_type = str(scope_type or "").strip()
+        if scope_type not in {"host", "group", "all"}:
+            raise SettingsError("scope_type 必须是 host、group 或 all")
+        if scope_type == "all":
+            if scope is not None and str(scope).strip():
+                raise SettingsError("all 作用域的 scope 必须为空")
+            scope_value: str | None = None
+        else:
+            scope_value = str(scope).strip() if scope is not None else ""
+            if not scope_value:
+                raise SettingsError("scope 不能为空")
+        start = _coerce_datetime(starts_at, "starts_at")
+        end = _coerce_datetime(ends_at, "ends_at")
+        if start >= end:
+            raise SettingsError("starts_at 必须早于 ends_at")
+        if end - start > timedelta(days=30):
+            raise SettingsError("静默窗口不能超过 30 天")
+        silence_id = storage.insert_silence(
+            scope_type,
+            scope_value,
+            str(reason or ""),
+            start,
+            end,
+            created_by,
+            self.db_path,
+        )
+        self._resolve_open_alerts_for_scope(scope_type, scope_value)
+        return silence_id
+
+    def delete_silence(self, silence_id: int) -> bool:
+        return storage.delete_silence(silence_id, self.db_path)
+
+    def _resolve_open_alerts_for_scope(
+        self, scope_type: str, scope: str | None
+    ) -> None:
+        if scope_type == "all":
+            target: set[str] | None = None
+        elif scope_type == "host":
+            target = {scope or ""}
+        else:
+            target = {
+                str(entry.get("name") or "").strip()
+                for entry in self._host_entries_for_update()
+                if (str(entry.get("group") or "").strip() or "未分组") == scope
+            }
+            target.discard("")
+        for status in ("active", "acknowledged"):
+            for alert in storage.list_alerts(
+                self.db_path, status=status, limit=1_000_000
+            ):
+                if target is not None and str(alert.get("host_name") or "") not in target:
+                    continue
+                storage.update_alert(
+                    int(alert["id"]), self.db_path, status="resolved"
+                )
 
     def _apply_host_secrets(
         self,
@@ -608,6 +816,10 @@ class SettingsService:
             "auth_type": str(entry.get("auth_type") or ""),
             "key_path": key_path,
             "disk_health": entry.get("disk_health"),
+            "group": str(entry.get("group") or "").strip() or "未分组",
+            "owner": str(entry.get("owner") or "").strip(),
+            "location": str(entry.get("location") or "").strip(),
+            "notes": str(entry.get("notes") or "").strip(),
             "password_configured": (
                 storage.get_secret(_HOST_SECRET_PASSWORD.format(name=name), self.db_path)
                 is not None
@@ -650,6 +862,10 @@ class SettingsService:
                     tags=[str(tag) for tag in entry.get("tags") or []],
                     disk_health=_build_host_disk_health(entry.get("disk_health")),
                     disk_mounts=disk_mounts or list(_DEFAULT_DISK_MOUNTS),
+                    group=str(entry.get("group") or "").strip() or "未分组",
+                    owner=str(entry.get("owner") or "").strip(),
+                    location=str(entry.get("location") or "").strip(),
+                    notes=str(entry.get("notes") or "").strip(),
                 )
             )
         return servers
@@ -1228,6 +1444,22 @@ def _optional_text(value: Any) -> str | None:
     return text if text else None
 
 
+def _coerce_datetime(value: Any, field: str) -> datetime:
+    """Normalize *value* to an aware UTC datetime, raising SettingsError."""
+    if isinstance(value, datetime):
+        moment = value
+    elif isinstance(value, str) and value.strip():
+        try:
+            moment = datetime.fromisoformat(value.strip())
+        except ValueError as exc:
+            raise SettingsError(f"{field} 不是有效时间") from exc
+    else:
+        raise SettingsError(f"{field} 不是有效时间")
+    if moment.tzinfo is None:
+        moment = moment.replace(tzinfo=timezone.utc)
+    return moment.astimezone(timezone.utc)
+
+
 def _string_list(value: Any, *, default: list[str] | None = None) -> list[str]:
     if value is None:
         return list(default or [])
@@ -1297,6 +1529,10 @@ def _host_entry_from_config(host: HostConfig) -> dict[str, Any]:
         "auth_type": auth.type,
         "key_path": str(auth.key_path) if auth.key_path is not None else None,
         "disk_health": disk_health,
+        "group": host.group,
+        "owner": host.owner,
+        "location": host.location,
+        "notes": host.notes,
     }
 
 

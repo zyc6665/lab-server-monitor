@@ -531,3 +531,51 @@ def test_non_windows_never_requires_setup(tmp_path, monkeypatch):
     svc = _service(tmp_path)
     assert svc.is_writable() is False
     assert svc.setup_required() is False
+
+
+# ---------------------------------------------------------------------------
+# Task 4: v1.2 public monitoring/alerts fields
+# ---------------------------------------------------------------------------
+
+
+def test_public_settings_exposes_v12_toggles(tmp_path):
+    svc = _service(tmp_path)
+    payload = svc.public_settings()
+    monitoring = payload["monitoring"]
+    assert monitoring["auto_port_fallback"] is True
+    assert monitoring["tray_enabled"] is True
+    assert monitoring["open_browser_on_start"] is True
+    alerts = payload["alerts"]
+    assert alerts["aggregate_by_host"] is True
+    assert alerts["notify_on_recovery"] is True
+
+
+def test_save_monitoring_v12_toggles(tmp_path):
+    svc = _service(tmp_path)
+    cfg = svc.save_section(
+        "monitoring",
+        {
+            "auto_port_fallback": False,
+            "tray_enabled": False,
+            "open_browser_on_start": False,
+        },
+    )
+    assert cfg.app.auto_port_fallback is False
+    assert cfg.app.tray_enabled is False
+    assert cfg.app.open_browser_on_start is False
+    payload = svc.public_settings()["monitoring"]
+    assert payload["auto_port_fallback"] is False
+    assert payload["tray_enabled"] is False
+    assert payload["open_browser_on_start"] is False
+
+
+def test_save_alerts_v12_toggles(tmp_path):
+    svc = _service(tmp_path)
+    cfg = svc.save_section(
+        "alerts", {"aggregate_by_host": False, "notify_on_recovery": False}
+    )
+    assert cfg.alerts.aggregate_by_host is False
+    assert cfg.alerts.notify_on_recovery is False
+    alerts = svc.public_settings()["alerts"]
+    assert alerts["aggregate_by_host"] is False
+    assert alerts["notify_on_recovery"] is False
