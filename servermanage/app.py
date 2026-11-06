@@ -11,6 +11,8 @@ from __future__ import annotations
 
 import argparse
 import logging
+import os
+import threading
 from dataclasses import replace
 from datetime import datetime, timezone
 from logging.handlers import RotatingFileHandler
@@ -55,11 +57,25 @@ from servermanage.storage import (
     save_host_snapshot,
 )
 from servermanage.timeutil import resolve_timezone
+from servermanage.runtime import (
+    acquire_single_instance,
+    find_available_port,
+    open_browser,
+    read_runtime_state,
+    write_runtime_state,
+)
+from servermanage.tray import start_tray
 from servermanage.weekly import generate_weekly_report as _generate_weekly_report
 
 LOGGER = logging.getLogger(__name__)
 
 _LOGGING_CONFIGURED = False
+
+# Desktop startup: the single-instance mutex and the runtime-state file always
+# live in ``data/`` (design §3.7/§5.7).  They are resolved at call time so tests
+# and a relocated working directory behave predictably.
+_LOCK_PATH = Path("data") / "servermonitor.lock"
+_RUNTIME_STATE_PATH = Path("data") / "runtime.json"
 
 
 def _previous_disk_report(host_name: str, db_path: Path) -> DiskHealthReport | None:
@@ -562,6 +578,62 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def choose_port(
+    host: str, preferred: int, auto_port_fallback: bool = True, span: int = 20
+) -> int:
+    """Return the port to bind.
+
+    With ``auto_port_fallback`` the first free port in ``[preferred,
+    preferred+span)`` is probed; otherwise the configured port is used verbatim
+    and a conflict surfaces later when waitress binds the socket.
+    """
+    if auto_port_fallback:
+        return find_available_port(host, preferred, span)
+    return preferred
+
+
+def _dashboard_url(host: str, port: int) -> str:
+    """Build the browser URL, normalising wildcard bind addresses to loopback."""
+    display = host or ""
+    if display in {"", "0.0.0.0", "::", "::0"}:
+        display = "127.0.0.1"
+    elif ":" in display and not display.startswith("["):
+        # Bare IPv6 address needs brackets in a URL.
+        display = f"[{display}]"
+    return f"http://{display}:{port}"
+
+
+def _focus_running_instance() -> None:
+    """Open the dashboard of the already-running instance, if known."""
+    try:
+        state = read_runtime_state(_RUNTIME_STATE_PATH)
+        url = state.get("url") if isinstance(state, dict) else None
+        if url:
+            open_browser(url)
+        else:
+            LOGGER.info(
+                "Another servermonitor instance is running but no runtime state "
+                "was found; leaving it in the foreground."
+            )
+    except Exception:  # noqa: BLE001 - focusing the other instance is best-effort
+        LOGGER.exception("Failed to focus the running servermonitor instance")
+
+
+def _build_server(*, config, db_path, settings, service, host: str, port: int):
+    """Create the waitress server (imported lazily to keep module import cheap)."""
+    from waitress import create_server
+
+    from servermanage.web import create_app
+
+    app_obj = create_app(
+        config=config,
+        db_path=db_path,
+        settings_service=settings,
+        on_config_changed=service.apply_config,
+    )
+    return create_server(app_obj, host=host, port=port)
+
+
 def main(
     argv: Sequence[str] | None = None, *, log_dir: Path | None = None
 ) -> int:
@@ -571,39 +643,88 @@ def main(
     except SystemExit as exc:  # argparse raises for --help / usage errors
         return int(exc.code) if isinstance(exc.code, int) else 0
 
-    configure_logging(Path(log_dir) if log_dir is not None else Path("logs"))
+    configured_log_dir = Path(log_dir) if log_dir is not None else Path("logs")
+    configure_logging(configured_log_dir)
 
+    # 1) Single-instance guard first: the config (and thus the real data dir) is
+    #    not loaded yet, so the bootstrap lock path lives in ``data/`` (§3.7/R3).
+    lock = acquire_single_instance(_LOCK_PATH)
+    if not lock.acquired:
+        # Another copy owns the lock: surface its dashboard and exit 0.
+        _focus_running_instance()
+        lock.release()
+        return 0
+
+    service = None
+    server = None
+    tray_handle = None
     try:
-        config, db_path, settings = load_runtime_with_settings(
-            Path(args.config),
-            Path(args.dotenv) if args.dotenv else None,
+        try:
+            config, db_path, settings = load_runtime_with_settings(
+                Path(args.config),
+                Path(args.dotenv) if args.dotenv else None,
+            )
+        except Exception as exc:  # pragma: no cover - integration path
+            LOGGER.exception("Failed to load runtime configuration: %s", exc)
+            return 1
+
+        host = str(config.dashboard.host)
+        preferred_port = int(config.dashboard.port)
+        port = choose_port(
+            host,
+            preferred_port,
+            bool(getattr(config.app, "auto_port_fallback", True)),
         )
-    except Exception as exc:  # pragma: no cover - integration path
-        LOGGER.exception("Failed to load runtime configuration: %s", exc)
-        return 1
+        url = _dashboard_url(host, port)
 
-    service = MonitorService(config, db_path=db_path)
-    service.start()
-    try:
-        # Imported lazily so importing this module (e.g. in tests) stays cheap.
-        from waitress import serve
+        service = MonitorService(config, db_path=db_path)
+        service.start()
 
-        from servermanage.web import create_app
-
-        serve(
-            create_app(
-                config=config,
-                db_path=db_path,
-                settings_service=settings,
-                on_config_changed=service.apply_config,
-            ),
-            host=config.dashboard.host,
-            port=config.dashboard.port,
+        # ``create_server`` (rather than ``serve``) keeps a handle so the tray's
+        # "退出" item can stop the blocking ``server.run()`` loop.
+        server = _build_server(
+            config=config,
+            db_path=db_path,
+            settings=settings,
+            service=service,
+            host=host,
+            port=port,
         )
+        write_runtime_state(
+            _RUNTIME_STATE_PATH, url=url, port=port, pid=os.getpid()
+        )
+
+        if bool(getattr(config.app, "open_browser_on_start", True)):
+            threading.Timer(0.8, open_browser, [url]).start()
+
+        if bool(getattr(config.app, "tray_enabled", True)):
+            tray_handle = start_tray(
+                url=url,
+                log_dir=configured_log_dir,
+                on_exit=server.close,
+                enabled=True,
+            )
+
+        server.run()
     except KeyboardInterrupt:  # pragma: no cover - interactive path
         LOGGER.info("Interrupted; shutting down monitor service")
+    except Exception as exc:  # noqa: BLE001 - keep the console usable on failure
+        LOGGER.exception("Server startup failed: %s", exc)
+        return 1
     finally:
-        service.stop()
+        if tray_handle is not None:
+            try:
+                tray_handle.stop()
+            except Exception:  # noqa: BLE001
+                LOGGER.exception("Failed to stop system tray")
+        if server is not None:
+            try:
+                server.close()
+            except Exception:  # noqa: BLE001
+                LOGGER.exception("Failed to close the dashboard server")
+        if service is not None:
+            service.stop()
+        lock.release()
     return 0
 
 
