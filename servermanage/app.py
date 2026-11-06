@@ -22,10 +22,10 @@ from dotenv import load_dotenv
 from servermanage.alerts import (
     AlertEngine,
     Notifier,
+    SilenceRegistry,
     evaluate_disk_alerts,
     evaluate_system_alerts,
     offline_alert,
-    recovery_event,
 )
 from servermanage.collectors import collect_all_hosts
 from servermanage.config import load_config
@@ -195,7 +195,12 @@ class MonitorService:
         self._clock = clock or (lambda: datetime.now(timezone.utc))
         self._notifier = notifier if notifier is not None else Notifier(smtp=config.smtp)
         self.engine = AlertEngine(
-            self.db_path, config.alerts, self._notifier, clock=self._clock
+            self.db_path,
+            config.alerts,
+            self._notifier,
+            clock=self._clock,
+            silence_checker=SilenceRegistry(self.db_path, clock=self._clock),
+            host_groups={h.name: [h.group] for h in config.servers},
         )
         self._scheduler_factory = scheduler_factory or Scheduler
         self._scheduler = None
@@ -222,7 +227,12 @@ class MonitorService:
         self._tz = resolve_timezone(new_config.app.timezone)
         self._notifier = Notifier(smtp=new_config.smtp)
         self.engine = AlertEngine(
-            self.db_path, new_config.alerts, self._notifier, clock=self._clock
+            self.db_path,
+            new_config.alerts,
+            self._notifier,
+            clock=self._clock,
+            silence_checker=SilenceRegistry(self.db_path, clock=self._clock),
+            host_groups={h.name: [h.group] for h in new_config.servers},
         )
         if was_running:
             self.start()
@@ -245,6 +255,7 @@ class MonitorService:
         storage_enabled = bool(getattr(self.config.storage, "enabled", True))
         offline_threshold = max(1, int(self.config.alerts.offline_failures))
         events: list = []
+        recovery_count = 0
         # Every configured host must be reconciled each cycle, even if this
         # round produced no report for it.
         active: dict[str, set[str]] = {
@@ -257,15 +268,19 @@ class MonitorService:
             host_name = report.host_name
             active.setdefault(host_name, set())
             if report.success:
-                previous_failures = self._failure_counts.get(host_name, 0)
                 self._failure_counts[host_name] = 0
                 if storage_enabled:
                     save_host_snapshot(report, self.db_path)
                 success_reports.append(report)
-                # A recovered host should clear any stale offline alert.
-                self.engine.resolve(host_name, "offline")
-                if previous_failures >= offline_threshold:
-                    events.append(recovery_event(host_name, "offline"))
+                # A recovered host should clear any stale offline alert and, when
+                # configured, announce the recovery through the normal pipeline.
+                recovered = self.engine.resolve(host_name, "offline", notify=True)
+                if (
+                    recovered
+                    and self.config.alerts.enabled
+                    and bool(getattr(self.config.alerts, "notify_on_recovery", True))
+                ):
+                    recovery_count += len(recovered)
                 mounts = host_mounts.get(host_name)
                 disk_statuses = (
                     mount_statuses(report.metrics.disk_usage, mounts)
@@ -307,10 +322,10 @@ class MonitorService:
 
         for host_name, fingerprints in active.items():
             self.engine.resolve_missing(
-                host_name, fingerprints, category="system"
+                host_name, fingerprints, category="system", notify=True
             )
 
-        return {"hosts": len(reports), "alerts": len(notified)}
+        return {"hosts": len(reports), "alerts": len(notified) + recovery_count}
 
     def run_disk_once(self) -> dict:
         """Poll disk health on every enabled host and reconcile disk alerts."""
@@ -373,7 +388,9 @@ class MonitorService:
         notified = self.engine.process(events)
 
         for host_name, fingerprints in active.items():
-            self.engine.resolve_missing(host_name, fingerprints, category="disk")
+            self.engine.resolve_missing(
+                host_name, fingerprints, category="disk", notify=True
+            )
 
         return {"disk_reports": len(disk_reports), "alerts": len(notified)}
 

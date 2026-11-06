@@ -13,10 +13,12 @@ from __future__ import annotations
 
 import sqlite3
 from dataclasses import replace
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from servermanage import app as app_module
+from servermanage import storage
+from servermanage.alerts import SilenceRegistry
 from servermanage.app import MonitorService, load_runtime, load_runtime_with_settings
 from servermanage.disk_health import DiskHealthReport, PhysicalDriveInfo
 from servermanage.models import (
@@ -224,7 +226,7 @@ def test_run_status_once_debounces_offline_alert_until_threshold(tmp_path: Path)
 
     resolve_calls = []
     service.engine.resolve_missing = (
-        lambda host, fps, category=None: resolve_calls.append(
+        lambda host, fps, category=None, notify=None: resolve_calls.append(
             (host, set(fps), category)
         )
     )
@@ -352,7 +354,7 @@ def test_run_status_once_resolves_for_successful_host(tmp_path: Path):
 
     resolve_calls = []
     service.engine.resolve_missing = (
-        lambda host, fps, category=None: resolve_calls.append(
+        lambda host, fps, category=None, notify=None: resolve_calls.append(
             (host, set(fps), category)
         )
     )
@@ -377,7 +379,7 @@ def test_run_disk_once_generates_disk_alert_and_resolves(tmp_path: Path):
 
     resolve_calls = []
     service.engine.resolve_missing = (
-        lambda host, fps, category=None: resolve_calls.append(
+        lambda host, fps, category=None, notify=None: resolve_calls.append(
             (host, set(fps), category)
         )
     )
@@ -819,3 +821,126 @@ def test_weekly_task_uses_configured_weekday(tmp_path: Path):
 
     assert target.weekday() == 1
     assert (target.hour, target.minute) == (16, 0)
+
+
+# ---------------------------------------------------------------------------
+# Task 6: silence registry + recovery notification wiring
+# ---------------------------------------------------------------------------
+
+
+def _config_with_group(group: str = "lab") -> AppConfig:
+    base = _make_config()
+    return replace(base, servers=[replace(base.servers[0], group=group)])
+
+
+def test_service_engine_wires_silence_registry_and_host_groups(tmp_path: Path):
+    service = MonitorService(
+        _config_with_group("lab"),
+        db_path=tmp_path / "monitor.db",
+        notifier=FakeNotifier(),
+    )
+
+    assert isinstance(service.engine._silence_checker, SilenceRegistry)
+    assert service.engine._host_groups == {"gpu-01": ["lab"]}
+
+
+def test_apply_config_rebuilds_silence_registry_and_host_groups(tmp_path: Path):
+    service = MonitorService(
+        _config_with_group("lab"),
+        db_path=tmp_path / "monitor.db",
+        notifier=FakeNotifier(),
+    )
+    old_registry = service.engine._silence_checker
+
+    service.apply_config(_config_with_group("prod"))
+
+    assert isinstance(service.engine._silence_checker, SilenceRegistry)
+    assert service.engine._silence_checker is not old_registry
+    assert service.engine._host_groups == {"gpu-01": ["prod"]}
+
+
+def test_group_silence_suppresses_alert_through_service(tmp_path: Path):
+    db_path = tmp_path / "monitor.db"
+    notifier = FakeNotifier()
+    service = MonitorService(
+        _config_with_group("lab"),
+        db_path=db_path,
+        collect_status=lambda config: [_disk_report("95%")],
+        notifier=notifier,
+    )
+    now = datetime.now(timezone.utc)
+    storage.insert_silence(
+        "group",
+        "lab",
+        "maintenance",
+        now - timedelta(hours=1),
+        now + timedelta(hours=1),
+        "tester",
+        db_path,
+    )
+
+    result = service.run_status_once()
+
+    assert result == {"hosts": 1, "alerts": 0}
+    assert notifier.events == []
+    assert list_alerts(db_path) == []
+
+
+def test_condition_renotifies_after_silence_ends(tmp_path: Path):
+    db_path = tmp_path / "monitor.db"
+    notifier = FakeNotifier()
+    service = MonitorService(
+        _config_with_group("lab"),
+        db_path=db_path,
+        collect_status=lambda config: [_disk_report("95%")],
+        notifier=notifier,
+    )
+    now = datetime.now(timezone.utc)
+    silence_id = storage.insert_silence(
+        "group",
+        "lab",
+        "maintenance",
+        now - timedelta(hours=1),
+        now + timedelta(hours=1),
+        "tester",
+        db_path,
+    )
+
+    silenced = service.run_status_once()
+    assert silenced == {"hosts": 1, "alerts": 0}
+    assert notifier.events == []
+    # A suppressed condition must not be persisted, or the cooldown would keep
+    # hiding it once the maintenance window closes.
+    assert list_alerts(db_path) == []
+
+    assert storage.delete_silence(silence_id, db_path) is True
+    after = service.run_status_once()
+
+    assert after == {"hosts": 1, "alerts": 1}
+    assert [event.fingerprint for event in notifier.events] == [
+        "system:gpu-01:disk:/"
+    ]
+    assert [row["fingerprint"] for row in list_alerts(db_path)] == [
+        "system:gpu-01:disk:/"
+    ]
+
+
+def test_offline_recovery_resolves_alert_and_notifies(tmp_path: Path):
+    db_path = tmp_path / "monitor.db"
+    notifier = FakeNotifier()
+    reports = iter([_failure_report(), _failure_report(), _success_report()])
+    service = MonitorService(
+        _make_config(),
+        db_path=db_path,
+        collect_status=lambda config: [next(reports)],
+        notifier=notifier,
+    )
+
+    results = [service.run_status_once() for _ in range(3)]
+
+    assert [result["alerts"] for result in results] == [0, 1, 1]
+    statuses = {
+        row["fingerprint"]: row["status"] for row in list_alerts(db_path)
+    }
+    assert statuses["offline:gpu-01"] == "resolved"
+    assert statuses["recovery:gpu-01:offline"] == "active"
