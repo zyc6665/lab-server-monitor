@@ -229,6 +229,14 @@
       .catch(function (error) { status(qs("#notify-status"), error.message, true); });
   });
 
+  qs("#test-email-button").addEventListener("click", function () {
+    var payload = collectSection("smtp");
+    status(qs("#smtp-status"), "正在发送测试邮件…");
+    api("POST", "/api/settings/test-email", payload)
+      .then(function (result) { status(qs("#smtp-status"), result.detail, !result.ok); })
+      .catch(function (error) { status(qs("#smtp-status"), error.message, true); });
+  });
+
   // -- password ----------------------------------------------------------
   var passwordForm = qs("#password-form");
   passwordForm.addEventListener("submit", function (event) {
@@ -249,6 +257,7 @@
   // Fill any values that were not rendered server-side (e.g. list edits).
   fillSection("monitoring", initial.monitoring);
   fillSection("ssh", initial.ssh);
+  fillSection("smtp", initial.smtp);
   fillSection("alerts", initial.alerts);
   fillSection("report", initial.report);
   fillSection("disk_health", initial.disk_health);

@@ -277,3 +277,25 @@ def test_test_webhook_calls_send_once(client, monkeypatch):
     assert resp.get_json()["ok"] is True
     assert len(calls) == 1
     assert calls[0][0].url == "https://example.com/hook"
+
+
+def test_put_smtp_section_round_trips(client):
+    resp = client.put(
+        "/api/settings/smtp",
+        json={
+            "host": "smtp.example.com",
+            "port": 465,
+            "username": "monitor",
+            "password": "smtp-secret",
+            "use_ssl": True,
+            "from_addr": "monitor@example.com",
+            "to_addrs": "ops@example.com; lead@example.com",
+        },
+    )
+    assert resp.status_code == 200
+    payload = client.get("/api/settings").get_json()["smtp"]
+    assert payload["host"] == "smtp.example.com"
+    assert payload["port"] == 465
+    assert payload["to_addrs"] == ["ops@example.com", "lead@example.com"]
+    assert payload["password_configured"] is True
+    assert "smtp-secret" not in repr(payload)

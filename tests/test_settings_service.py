@@ -478,3 +478,46 @@ def test_machine_reset_does_not_readopt_env_admin(tmp_path, monkeypatch):
     assert storage.get_secret(SECRET_ADMIN, db) is None
     assert fresh.setup_required() is True
     assert fresh.verify_admin("admin", "LegacyPass!23") is False
+
+
+def test_smtp_section_stores_password_in_secret_store(tmp_path):
+    svc = _service(tmp_path)
+    cfg = svc.save_section(
+        "smtp",
+        {
+            "host": "smtp.example.com",
+            "port": 465,
+            "username": "monitor",
+            "password": "smtp-secret",
+            "use_ssl": True,
+            "from_addr": "monitor@example.com",
+            "to_addrs": "ops@example.com; lead@example.com",
+        },
+    )
+    assert cfg.smtp is not None
+    assert cfg.smtp.host == "smtp.example.com"
+    assert cfg.smtp.password == "smtp-secret"
+    assert cfg.smtp.to_addrs == ["ops@example.com", "lead@example.com"]
+    payload = svc.public_settings()
+    assert payload["smtp"]["password_configured"] is True
+    assert "smtp-secret" not in repr(payload)
+
+
+def test_enabling_report_without_smtp_is_rejected(tmp_path):
+    svc = _service(tmp_path)
+    svc.save_section("report", {"daily_enabled": False, "weekly": {"enabled": False}})
+    with pytest.raises(SettingsError):
+        svc.save_section("report", {"daily_enabled": True})
+    svc.save_section(
+        "smtp",
+        {
+            "host": "smtp.example.com",
+            "port": 587,
+            "username": "monitor",
+            "password": "smtp-secret",
+            "from_addr": "monitor@example.com",
+            "to_addrs": ["ops@example.com"],
+        },
+    )
+    cfg = svc.save_section("report", {"daily_enabled": True, "daily_time": "08:00"})
+    assert cfg.report.daily_enabled is True

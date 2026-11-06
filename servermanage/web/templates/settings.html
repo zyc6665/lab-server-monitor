@@ -149,6 +149,28 @@
     <p class="form-status" id="notify-status"></p>
   </section>
 
+  <!-- 邮件服务器 SMTP -->
+  <section class="card settings-card" data-section="smtp">
+    <div class="section-head">
+      <h2>邮件服务器（SMTP）</h2>
+      {% if not settings.writable %}<span class="readonly-badge">只读</span>{% endif %}
+    </div>
+    <div class="settings-grid">
+      <label class="field"><span>SMTP 主机</span><input data-field="host" value="{{ settings.smtp.host }}" placeholder="smtp.example.com"></label>
+      <label class="field"><span>端口</span><input type="number" min="1" max="65535" data-field="port" value="{{ settings.smtp.port }}"></label>
+      <label class="field"><span>用户名</span><input data-field="username" value="{{ settings.smtp.username }}"></label>
+      <label class="field"><span>密码{% if settings.smtp.password_configured %}（已配置，留空不改）{% else %}（未配置）{% endif %}</span><input type="password" data-field="password" autocomplete="new-password"></label>
+      <label class="check-row"><input type="checkbox" data-field="use_ssl" {% if settings.smtp.use_ssl %}checked{% endif %}> 使用 SSL（465 端口）</label>
+      <label class="field"><span>发件人</span><input data-field="from_addr" value="{{ settings.smtp.from_addr }}" placeholder="monitor@example.com"></label>
+      <label class="field span-2"><span>收件人（逗号或分号分隔）</span><input data-field="to_addrs" value="{{ settings.smtp.to_addrs|join(', ') }}"></label>
+    </div>
+    <div class="form-actions">
+      <button class="primary-button" data-save="smtp" {% if not settings.writable %}disabled{% endif %}>保存 SMTP</button>
+      <button class="secondary-button" id="test-email-button" {% if not settings.writable %}disabled{% endif %}>测试邮件</button>
+    </div>
+    <p class="form-status" id="smtp-status"></p>
+  </section>
+
   <!-- 报告 -->
   <section class="card settings-card" data-section="report">
     <div class="section-head">
@@ -163,13 +185,13 @@
       <label class="check-row"><input type="checkbox" data-field="daily_enabled" {% if settings.report.daily_enabled %}checked{% endif %}> 启用日报</label>
       <label class="field"><span>日报发送时间</span><input type="time" data-field="daily_time" value="{{ settings.report.daily_time }}"></label>
       <label class="check-row"><input type="checkbox" data-field="weekly.enabled" {% if settings.report.weekly.enabled %}checked{% endif %}> 启用周报</label>
-      <label class="field"><span>周报星期（1=周一…7=周日）</span><input type="number" min="1" max="7" data-field="weekly.weekday" value="{{ settings.report.weekly.weekday }}"></label>
+      <label class="field"><span>周报星期（0=周一…6=周日）</span><input type="number" min="0" max="6" data-field="weekly.weekday" value="{{ settings.report.weekly.weekday }}"></label>
       <label class="field"><span>周报发送时间</span><input type="time" data-field="weekly.time" value="{{ settings.report.weekly.time }}"></label>
       <label class="field"><span>周报主题前缀</span><input data-field="weekly.subject_prefix" value="{{ settings.report.weekly.subject_prefix }}"></label>
       <label class="field"><span>繁忙阈值 %</span><input type="number" step="0.1" data-field="weekly.busy_threshold" value="{{ settings.report.weekly.busy_threshold }}"></label>
       <label class="field"><span>空闲阈值 %</span><input type="number" step="0.1" data-field="weekly.idle_threshold" value="{{ settings.report.weekly.idle_threshold }}"></label>
     </div>
-    <p class="hint">邮件服务器与收件人请在主机所在电脑的配置文件里设置；开启邮件告警/日报前需先配置 SMTP。</p>
+    <p class="hint">邮件服务器与收件人请在上方“邮件服务器（SMTP）”中配置；未配置 SMTP 时无法启用日报/周报，邮件告警也不会发送。</p>
     <button class="primary-button" data-save="report" {% if not settings.writable %}disabled{% endif %}>保存报告</button>
   </section>
 

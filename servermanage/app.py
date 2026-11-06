@@ -467,7 +467,9 @@ class MonitorService:
                     0,
                     self.run_weekly_report,
                     target_time=lambda now: compute_weekly_fire(
-                        now, 4, self.config.report.weekly.time
+                        now,
+                        self.config.report.weekly.weekday,
+                        self.config.report.weekly.time,
                     ),
                 )
             )

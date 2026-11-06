@@ -83,7 +83,7 @@ def _settings_service(app: Flask):
 # ``hosts`` section is intentionally excluded: host rows are managed through the
 # dedicated CRUD endpoints so their credentials land in ``app_secrets``.
 _ALLOWED_SETTINGS_SECTIONS = frozenset(
-    {"monitoring", "dashboard", "alerts", "report", "disk_health", "ssh"}
+    {"monitoring", "dashboard", "alerts", "smtp", "report", "disk_health", "ssh"}
 )
 
 
@@ -134,6 +134,17 @@ def _settings_snapshot(config: AppConfig) -> dict[str, Any]:
         "ssh": {
             "connect_timeout": config.ssh.connect_timeout,
             "command_timeout": config.ssh.command_timeout,
+        },
+        "smtp": {
+            "host": config.smtp.host if config.smtp else "",
+            "port": config.smtp.port if config.smtp else 587,
+            "username": config.smtp.username if config.smtp else "",
+            "use_ssl": config.smtp.use_ssl if config.smtp else False,
+            "from_addr": config.smtp.from_addr if config.smtp else "",
+            "to_addrs": list(config.smtp.to_addrs) if config.smtp else [],
+            "password_configured": bool(
+                config.smtp is not None and config.smtp.password
+            ),
         },
         "alerts": {
             "enabled": config.alerts.enabled,
@@ -938,6 +949,10 @@ def register_routes(app: Flask) -> None:
         port = _as_int(payload.get("port"), 25)
         username = str(payload.get("username") or "")
         password = str(payload.get("password") or "")
+        if not password:
+            configured = service.load().smtp
+            if configured is not None:
+                password = configured.password or ""
         use_ssl = bool(payload.get("use_ssl"))
         try:
             # Connectivity probe only: connect and authenticate, never send a mail.

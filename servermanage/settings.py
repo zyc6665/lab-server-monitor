@@ -34,6 +34,7 @@ from servermanage.models import (
     HostConfig,
     HostDiskHealthOverride,
     ReportConfig,
+    SMTPConfig,
 )
 
 __all__ = [
@@ -45,6 +46,7 @@ __all__ = [
     "SECTION_REPORT",
     "SECTION_DISK_HEALTH",
     "SECTION_SSH",
+    "SECTION_SMTP",
     "SECTION_NAMES",
     "SECRET_SMTP_PASSWORD",
     "SECRET_WEBHOOK_URL",
@@ -60,6 +62,7 @@ SECTION_ALERTS = "alerts"
 SECTION_REPORT = "report"
 SECTION_DISK_HEALTH = "disk_health"
 SECTION_SSH = "ssh"
+SECTION_SMTP = "smtp"
 
 SECTION_NAMES = (
     SECTION_MONITORING,
@@ -68,6 +71,7 @@ SECTION_NAMES = (
     SECTION_REPORT,
     SECTION_DISK_HEALTH,
     SECTION_SSH,
+    SECTION_SMTP,
 )
 
 _ALLOWED_SECTIONS = frozenset(SECTION_NAMES)
@@ -130,6 +134,9 @@ _RULE_FIELDS = frozenset(
         "alert_on_state_not_optimal",
         "alert_on_error_increase",
     }
+)
+_SMTP_FIELDS = frozenset(
+    {"host", "port", "username", "use_ssl", "from_addr", "to_addrs"}
 )
 _DASHBOARD_TOP_FIELDS = frozenset({"host", "port", "session_lifetime_hours"})
 # Only non-secret auth fields may be persisted from the dashboard section.
@@ -271,7 +278,13 @@ class SettingsService:
         return security.dpapi_available()
 
     def setup_required(self) -> bool:
-        """Whether first-run admin setup still has to happen."""
+        """Whether first-run admin setup still has to happen.
+
+        Read-only platforms (Linux/Docker) keep the legacy YAML/.env login and
+        never run the DPAPI-backed setup flow, which cannot persist a password.
+        """
+        if not self.is_writable():
+            return False
         sections = storage.load_app_settings(self.db_path)
         security_section = sections.get("security")
         if isinstance(security_section, dict) and security_section.get("force_setup"):
@@ -303,6 +316,19 @@ class SettingsService:
             sanitized = self._sanitize_dashboard(sanitized)
         elif section == SECTION_ALERTS:
             sanitized = self._sanitize_alerts(sanitized)
+        elif section == SECTION_SMTP:
+            sanitized = self._sanitize_smtp(sanitized)
+        if section == SECTION_REPORT:
+            current = self.load()
+            report = self._apply_report(current.report, sanitized)
+            newly_enabled = (report.daily_enabled and not current.report.daily_enabled) or (
+                report.weekly.enabled and not current.report.weekly.enabled
+            )
+            smtp = current.smtp
+            if newly_enabled and (
+                smtp is None or not smtp.host or not smtp.password
+            ):
+                raise SettingsError("启用日报/周报前需要先配置 SMTP 邮件服务器")
         storage.save_app_settings(section, sanitized, self.db_path)
         return self.load()
 
@@ -328,6 +354,17 @@ class SettingsService:
             "ssh": {
                 "connect_timeout": config.ssh.connect_timeout,
                 "command_timeout": config.ssh.command_timeout,
+            },
+            "smtp": {
+                "host": config.smtp.host if config.smtp else "",
+                "port": config.smtp.port if config.smtp else 587,
+                "username": config.smtp.username if config.smtp else "",
+                "use_ssl": config.smtp.use_ssl if config.smtp else False,
+                "from_addr": config.smtp.from_addr if config.smtp else "",
+                "to_addrs": list(config.smtp.to_addrs) if config.smtp else [],
+                "password_configured": bool(
+                    config.smtp is not None and config.smtp.password
+                ),
             },
             "alerts": {
                 "enabled": config.alerts.enabled,
@@ -847,6 +884,18 @@ class SettingsService:
             return replace(config, app=_flat(config.app, payload))
         if section == SECTION_SSH:
             return replace(config, ssh=_flat(config.ssh, payload))
+        if section == SECTION_SMTP:
+            current = config.smtp or SMTPConfig(
+                host="",
+                port=587,
+                username="",
+                password="",
+                use_ssl=False,
+                from_addr="",
+                to_addrs=[],
+            )
+            data = {key: value for key, value in payload.items() if key in _SMTP_FIELDS}
+            return replace(config, smtp=_flat(current, data, allowed=_SMTP_FIELDS))
         if section == SECTION_DASHBOARD:
             return replace(
                 config, dashboard=self._apply_dashboard(config.dashboard, payload)
@@ -989,10 +1038,51 @@ class SettingsService:
             webhook["url_configured"] = configured
         return payload
 
+    def _sanitize_smtp(self, payload: dict[str, Any]) -> dict[str, Any]:
+        """Keep non-secret SMTP fields and move the password into app_secrets."""
+        sanitized: dict[str, Any] = {}
+        for key in _SMTP_FIELDS:
+            if key in payload:
+                sanitized[key] = payload[key]
+        password = payload.get("password")
+        if isinstance(password, str) and password:
+            self._store_secret(SECRET_SMTP_PASSWORD, password)
+        recipients = sanitized.get("to_addrs")
+        if isinstance(recipients, str):
+            sanitized["to_addrs"] = [
+                item.strip()
+                for item in recipients.replace(";", ",").split(",")
+                if item.strip()
+            ]
+        elif isinstance(recipients, (list, tuple)):
+            sanitized["to_addrs"] = [str(item).strip() for item in recipients if str(item).strip()]
+        sanitized["password_configured"] = (
+            storage.get_secret(SECRET_SMTP_PASSWORD, self.db_path) is not None
+            or bool(self.base_config.smtp and self.base_config.smtp.password)
+        )
+        return sanitized
+
     def _apply_secrets(self, config: AppConfig) -> AppConfig:
         smtp_password = self._read_secret_text(SECRET_SMTP_PASSWORD)
-        if smtp_password is not None and config.smtp is not None:
-            config = replace(config, smtp=replace(config.smtp, password=smtp_password))
+        if smtp_password is not None:
+            if config.smtp is None:
+                config = replace(
+                    config,
+                    smtp=SMTPConfig(
+                        host="",
+                        port=587,
+                        username="",
+                        password=smtp_password,
+                        use_ssl=False,
+                        from_addr="",
+                        to_addrs=[],
+                    ),
+                )
+            else:
+                config = replace(
+                    config,
+                    smtp=replace(config.smtp, password=smtp_password),
+                )
 
         webhook_url = self._read_secret_text(SECRET_WEBHOOK_URL)
         if webhook_url is not None:

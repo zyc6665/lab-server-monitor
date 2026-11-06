@@ -799,3 +799,23 @@ def test_load_runtime_with_settings_returns_service(tmp_path: Path, monkeypatch)
     assert db_path.exists()
     assert settings is not None
     assert settings.public_settings()["writable"] is True
+
+
+def test_weekly_task_uses_configured_weekday(tmp_path: Path):
+    from datetime import datetime as _dt
+
+    config = _make_config()
+    config = replace(
+        config,
+        report=replace(
+            config.report,
+            weekly=replace(config.report.weekly, weekday=1, time="16:00"),
+        ),
+    )
+    service = MonitorService(config, db_path=tmp_path / "m.db")
+    weekly = [task for task in service._build_tasks() if task.name == "weekly_report"][0]
+
+    target = weekly.target_time(_dt(2026, 11, 2, 10, 0))  # Monday
+
+    assert target.weekday() == 1
+    assert (target.hour, target.minute) == (16, 0)
