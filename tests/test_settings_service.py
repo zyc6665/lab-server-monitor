@@ -274,7 +274,7 @@ def test_verify_admin_and_change_password(tmp_path):
 
 def test_machine_mismatch_forces_setup_and_clears_secrets(tmp_path):
     svc = _service(tmp_path)
-    svc.set_admin_password(None, "Pass!23", username="admin")
+    svc.set_admin_password(None, "Pass!234", username="admin")
     storage.save_app_settings("security", {"machine_id": "other-machine"}, svc.db_path)
     svc2 = SettingsService(config_path=svc.config_path, db_path=svc.db_path)
     assert svc2.setup_required() is True
@@ -289,3 +289,144 @@ def test_legacy_env_password_migrates_to_dpapi(tmp_path, monkeypatch):
     svc.load()
     if security.dpapi_available():
         assert storage.get_secret("dashboard:admin_password", svc.db_path) is not None
+
+
+# ---------------------------------------------------------------------------
+# Task 6 review fixes: validation, migration, DPAPI reset and auth switching
+# ---------------------------------------------------------------------------
+
+
+def test_set_admin_rejects_short_password(tmp_path):
+    svc = _service(tmp_path)
+    with pytest.raises(SettingsError):
+        svc.set_admin_password(None, "1234567")
+
+
+def test_wrong_current_password_is_rejected(tmp_path):
+    svc = _service(tmp_path)
+    svc.set_admin_password(None, "Password1", username="admin")
+    with pytest.raises(SettingsError):
+        svc.set_admin_password("wrong-password", "Password2")
+
+
+def test_upsert_host_rejects_unknown_auth_type(tmp_path):
+    svc = _service(tmp_path)
+    with pytest.raises(SettingsError):
+        svc.upsert_host("x", {"host": "1.2.3.4", "username": "u", "auth_type": "telnet"})
+
+
+def test_upsert_host_rejects_payload_name_mismatch(tmp_path):
+    svc = _service(tmp_path)
+    with pytest.raises(SettingsError):
+        svc.upsert_host("a", {"name": "b", "host": "1.2.3.4", "username": "u",
+                              "auth_type": "password", "password": "pw"})
+
+
+def test_key_auth_host_upsert_and_clear_secrets(tmp_path):
+    svc = _service(tmp_path)
+    svc.upsert_host("k", {"host": "1.2.3.4", "username": "u", "auth_type": "key",
+                          "private_key": "KEYDATA", "passphrase": "pp"})
+    assert storage.get_secret("host:k:ssh_key", svc.db_path) is not None
+    assert storage.get_secret("host:k:ssh_passphrase", svc.db_path) is not None
+    entry = svc.get_host("k")
+    assert entry["key_configured"] is True
+    assert entry["passphrase_configured"] is True
+    assert svc.load().servers[0].auth.key_data == "KEYDATA"
+
+    svc.upsert_host("k", {"host": "1.2.3.4", "username": "u", "auth_type": "key",
+                          "key_path": "~/id_rsa", "clear_secrets": ["key", "passphrase"]})
+    assert storage.get_secret("host:k:ssh_key", svc.db_path) is None
+    assert storage.get_secret("host:k:ssh_passphrase", svc.db_path) is None
+    entry = svc.get_host("k")
+    assert entry["key_configured"] is True  # falls back to key_path
+    assert entry["passphrase_configured"] is False
+    assert svc.load().servers[0].auth.key_data is None
+
+
+def test_switching_auth_type_clears_stale_secrets(tmp_path):
+    svc = _service(tmp_path)
+    svc.upsert_host("s", {"host": "1.2.3.4", "username": "u", "auth_type": "key",
+                          "private_key": "KEYDATA", "passphrase": "pp"})
+    svc.upsert_host("s", {"host": "1.2.3.4", "username": "u", "auth_type": "password",
+                          "password": "newpw"})
+    assert storage.get_secret("host:s:ssh_key", svc.db_path) is None
+    assert storage.get_secret("host:s:ssh_passphrase", svc.db_path) is None
+    entry = svc.get_host("s")
+    assert entry["password_configured"] is True
+    assert entry["key_configured"] is False
+    assert entry["passphrase_configured"] is False
+
+
+def test_unreadable_admin_secret_forces_setup_and_clears_all_secrets(tmp_path):
+    if not security.dpapi_available():
+        pytest.skip("DPAPI only available on Windows")
+    svc = _service(tmp_path)
+    svc.set_admin_password(None, "Password1", username="admin")
+    svc.upsert_host("h", {"host": "1.2.3.4", "username": "u",
+                          "auth_type": "password", "password": "pw"})
+    storage.set_secret(SECRET_ADMIN, b"not-a-dpapi-blob", svc.db_path)
+    fresh = SettingsService(config_path=svc.config_path, db_path=svc.db_path)
+    assert fresh.setup_required() is True
+    assert storage.list_secret_names(svc.db_path) == []
+    section = storage.load_app_settings(svc.db_path)["security"]
+    assert section["force_setup"] is True
+    assert section["machine_id"] == security.current_machine_id()
+
+
+def test_machine_reset_db_level_state(tmp_path):
+    if not security.dpapi_available():
+        pytest.skip("DPAPI only available on Windows")
+    svc = _service(tmp_path)
+    svc.set_admin_password(None, "Password1", username="admin")
+    svc.upsert_host("h", {"host": "1.2.3.4", "username": "u",
+                          "auth_type": "password", "password": "pw"})
+    storage.save_app_settings("security", {"machine_id": "other-machine"}, svc.db_path)
+    SettingsService(config_path=svc.config_path, db_path=svc.db_path)
+    assert storage.list_secret_names(svc.db_path) == []
+    section = storage.load_app_settings(svc.db_path)["security"]
+    assert section == {"machine_id": security.current_machine_id(), "force_setup": True}
+
+
+def test_admin_setup_marks_migration_so_legacy_secrets_stay_gone(tmp_path, monkeypatch):
+    if not security.dpapi_available():
+        pytest.skip("DPAPI only available on Windows")
+    monkeypatch.setenv("LEGACY_HOST_PW", "legacy-pw")
+    cfg = tmp_path / "config.yaml"
+    cfg.write_text(
+        "servers:\n"
+        "  - name: legacy\n"
+        "    host: 1.2.3.4\n"
+        "    port: 22\n"
+        "    username: u\n"
+        "    auth:\n"
+        "      type: password\n"
+        "      password_env: LEGACY_HOST_PW\n",
+        encoding="utf-8",
+    )
+    db = tmp_path / "m.db"
+    svc = SettingsService(config_path=cfg, db_path=db)
+    assert storage.get_secret("host:legacy:ssh_password", db) is not None
+
+    storage.save_app_settings("security", {"machine_id": "other-machine"}, db)
+    reset = SettingsService(config_path=cfg, db_path=db)
+    assert storage.list_secret_names(db) == []
+    reset.set_admin_password(None, "Password1", username="admin")
+
+    restarted = SettingsService(config_path=cfg, db_path=db)
+    assert storage.get_secret("host:legacy:ssh_password", db) is None
+    assert restarted.load().servers[0].auth.password is None
+
+
+def test_migration_failure_records_error_and_keeps_config_usable(tmp_path, monkeypatch):
+    if not security.dpapi_available():
+        pytest.skip("DPAPI only available on Windows")
+
+    def boom(self):
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(SettingsService, "_migrate_legacy_sources", boom)
+    svc = _service(tmp_path)
+    section = storage.load_app_settings(svc.db_path)["security"]
+    assert "RuntimeError: boom" in section["migration_error"]
+    assert "migrated_at" not in section
+    assert svc.load().app.poll_interval_seconds == 600

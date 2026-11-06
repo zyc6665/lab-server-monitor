@@ -89,16 +89,6 @@ _HOST_SECRET_PASSPHRASE = "host:{name}:ssh_passphrase"
 # public section names below).
 _SECTION_HOSTS = "hosts"
 
-_HOST_PAYLOAD_FIELDS = (
-    "host",
-    "port",
-    "username",
-    "tags",
-    "disk_mounts",
-    "auth_type",
-    "key_path",
-    "disk_health",
-)
 _HOST_AUTH_TYPES = frozenset({"password", "key"})
 _DEFAULT_DISK_MOUNTS = ["/", "/data"]
 
@@ -286,7 +276,16 @@ class SettingsService:
         security_section = sections.get("security")
         if isinstance(security_section, dict) and security_section.get("force_setup"):
             return True
-        if storage.get_secret(SECRET_ADMIN, self.db_path) is not None:
+        admin_blob = storage.get_secret(SECRET_ADMIN, self.db_path)
+        if admin_blob is not None:
+            if not self.is_writable():
+                return False
+            try:
+                security.unprotect_secret(admin_blob)
+            except security.SecurityError:
+                # The credential exists but this machine's DPAPI cannot read it:
+                # first-run setup is required again instead of locking the admin out.
+                return True
             return False
         self._adopt_env_admin_password()
         return storage.get_secret(SECRET_ADMIN, self.db_path) is None
@@ -409,6 +408,9 @@ class SettingsService:
         if not isinstance(payload, dict):
             raise SettingsError("host payload must be an object")
         name = _require_text(name, "name")
+        payload_name = payload.get("name")
+        if payload_name is not None and str(payload_name).strip() != name:
+            raise SettingsError("host name in payload does not match the URL name")
         host = _require_text(payload.get("host"), "host")
         username = _require_text(payload.get("username"), "username")
         auth_type = _require_text(payload.get("auth_type"), "auth_type")
@@ -488,6 +490,9 @@ class SettingsService:
         key_secret = _HOST_SECRET_KEY.format(name=name)
         passphrase_secret = _HOST_SECRET_PASSPHRASE.format(name=name)
         if auth_type == "password":
+            # Switching auth type must not leave the other method's secrets behind.
+            storage.delete_secret(key_secret, self.db_path)
+            storage.delete_secret(passphrase_secret, self.db_path)
             if "password" in clear:
                 storage.delete_secret(password_secret, self.db_path)
             if password:
@@ -496,6 +501,7 @@ class SettingsService:
                 raise SettingsError("SSH 密码未设置")
             return
         # key auth
+        storage.delete_secret(password_secret, self.db_path)
         if "key" in clear:
             storage.delete_secret(key_secret, self.db_path)
         if private_key:
@@ -554,7 +560,8 @@ class SettingsService:
             "password_configured": (
                 storage.get_secret(_HOST_SECRET_PASSWORD.format(name=name), self.db_path)
                 is not None
-            ),            "key_configured": (
+            ),
+            "key_configured": (
                 storage.get_secret(_HOST_SECRET_KEY.format(name=name), self.db_path)
                 is not None
                 or bool(key_path)
@@ -573,7 +580,10 @@ class SettingsService:
             username = str(entry.get("username") or "").strip()
             auth_type = str(entry.get("auth_type") or "").strip()
             if not name or not host or not username or auth_type not in _HOST_AUTH_TYPES:
-                continue
+                raise SettingsError(
+                    f"host entry is invalid: {name or '<unnamed>'} "
+                    f"(host/auth_type/username missing or unsupported)"
+                )
             try:
                 port = int(entry.get("port", 22))
             except (TypeError, ValueError):
@@ -652,8 +662,8 @@ class SettingsService:
         """Create or rotate the admin credential (DPAPI-encrypted JSON in SECRET_ADMIN)."""
         if not self.is_writable():
             raise SettingsError("settings are not writable on this platform")
-        if not isinstance(new_password, str) or not new_password:
-            raise SettingsError("新密码不能为空")
+        if not isinstance(new_password, str) or len(new_password) < 8:
+            raise SettingsError("新密码长度至少 8 位")
         admin = self._read_secret_json(SECRET_ADMIN)
         existing_user: str | None = None
         if isinstance(admin, dict) and isinstance(admin.get("hash"), str) and admin.get("hash"):
@@ -666,50 +676,88 @@ class SettingsService:
                 existing_user, current_password
             ):
                 raise SettingsError("当前密码不正确")
-            # Rotating an existing credential must meet the length policy; the
-            # first-run setup route enforces the same bound before calling us.
-            if len(new_password) < 8:
-                raise SettingsError("新密码长度至少 8 位")
         target_user = (
             username
             or existing_user
             or self.base_config.dashboard.auth.username
             or "admin"
         )
+        # Prepare every sensitive value before the first write so a crypto
+        # failure leaves the existing credential untouched.
+        try:
+            session_ciphertext = security.protect_secret(
+                _new_session_secret().encode("utf-8")
+            )
+        except security.SecurityError as exc:
+            raise SettingsError(f"无法轮换会话密钥: {exc}") from exc
         self._store_admin_password(new_password, target_user)
         sections = storage.load_app_settings(self.db_path)
         security_section = sections.get("security")
         payload = dict(security_section) if isinstance(security_section, dict) else {}
         payload.pop("force_setup", None)
+        payload.pop("migration_error", None)
         payload["machine_id"] = security.current_machine_id()
+        # A fresh admin credential means the one-time legacy import is settled;
+        # without this marker a restart after a machine-change reset would
+        # re-import the old plaintext secrets from the YAML seed.
+        payload["migrated_at"] = datetime.now(timezone.utc).isoformat()
         storage.save_app_settings("security", payload, self.db_path)
-        try:
-            ciphertext = security.protect_secret(_new_session_secret().encode("utf-8"))
-        except security.SecurityError as exc:
-            raise SettingsError(str(exc)) from exc
-        storage.set_secret(SECRET_SESSION, ciphertext, self.db_path)
+        storage.set_secret(SECRET_SESSION, session_ciphertext, self.db_path)
 
     # -- machine binding & legacy migration ----------------------------------
 
     def _ensure_machine_binding(self) -> None:
-        """Wipe DPAPI secrets when this config directory runs on another machine."""
+        """Wipe DPAPI secrets when they belong to another machine/user.
+
+        Two independent triggers force a reset: a recorded ``machine_id`` that no
+        longer matches, or any stored secret that this machine's DPAPI cannot
+        decrypt (copied profile, rotated keys, corrupt blob). Either way the
+        admin would be locked out, so the secrets are dropped and first-run
+        setup is forced while the non-sensitive config is kept.
+        """
         sections = storage.load_app_settings(self.db_path)
         section = sections.get("security")
         payload = dict(section) if isinstance(section, dict) else {}
         machine_id = payload.get("machine_id")
         current = security.current_machine_id()
         if machine_id and machine_id != current:
-            for name in storage.list_secret_names(self.db_path):
-                storage.delete_secret(name, self.db_path)
-            storage.save_app_settings(
-                "security",
-                {"machine_id": current, "force_setup": True},
-                self.db_path,
-            )
+            self._reset_secrets_for_machine(current)
+            return
+        if self._has_unreadable_secret():
+            self._reset_secrets_for_machine(current)
             return
         if not machine_id:
             payload["machine_id"] = current
             storage.save_app_settings("security", payload, self.db_path)
+
+    def _has_unreadable_secret(self) -> bool:
+        if not self.is_writable():
+            return False
+        for name in storage.list_secret_names(self.db_path):
+            blob = storage.get_secret(name, self.db_path)
+            if blob is None:
+                continue
+            try:
+                security.unprotect_secret(blob)
+            except (security.SecurityError, OSError, ValueError):
+                return True
+        return False
+
+    def _reset_secrets_for_machine(self, current: str) -> None:
+        # Keep the non-sensitive host inventory: without a ``hosts`` section the
+        # next load would fall back to the YAML seed (and its plaintext
+        # credentials) — exactly what this reset must not resurrect.
+        if self._read_host_entries() is None and self.base_config.servers:
+            self._save_host_entries(
+                [_host_entry_from_config(host) for host in self.base_config.servers]
+            )
+        for name in storage.list_secret_names(self.db_path):
+            storage.delete_secret(name, self.db_path)
+        storage.save_app_settings(
+            "security",
+            {"machine_id": current, "force_setup": True},
+            self.db_path,
+        )
 
     def _migrate_legacy_secrets(self) -> None:
         """One-time import of YAML/.env plaintext secrets into ``app_secrets``."""
@@ -999,6 +1047,12 @@ class SettingsService:
     def _ensure_secret_session(self) -> None:
         """Seed a per-install session signing secret (Windows only, once)."""
         if not self.is_writable():
+            return
+        sections = storage.load_app_settings(self.db_path)
+        section = sections.get("security")
+        if isinstance(section, dict) and section.get("force_setup"):
+            # A machine-change reset must leave *no* secrets behind; the new
+            # credential created during setup rotates this secret anyway.
             return
         if storage.get_secret(SECRET_SESSION, self.db_path) is not None:
             return
