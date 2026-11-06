@@ -3,6 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="csrf-token" content="{{ csrf_token() }}">
   <title>{% block title %}服务器监控{% endblock %}</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
@@ -16,6 +17,7 @@
       <a href="{{ url_for('settings_page') }}" class="nav-link{% if active_page == 'settings' %} active{% endif %}">设置</a>
     </nav>
     <form method="post" action="{{ url_for('logout') }}" class="logout-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       {% if session.get('username') %}<span class="current-user">{{ session.get('username') }}</span>{% endif %}
       <button type="submit" class="link-button">退出</button>
     </form>

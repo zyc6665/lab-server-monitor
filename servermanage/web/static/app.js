@@ -13,12 +13,25 @@
     }
   }
 
+  // 读取 base.html <meta name="csrf-token"> 中的会话 CSRF 令牌。
+  function csrfToken() {
+    var meta = document.querySelector('meta[name="csrf-token"]');
+    return meta ? (meta.getAttribute('content') || '') : '';
+  }
+
   // 统一的 JSON 请求：401 -> 跳登录并返回 null；非 2xx / 非 JSON -> null。
+  // 所有非 GET 请求自动携带 X-CSRF-Token（服务端 CSRF 校验依赖它）。
   function fetchJson(url, options) {
     var opts = options || {};
+    var method = (opts.method || 'GET').toUpperCase();
+    var headers = { 'Accept': 'application/json' };
+    if (method !== 'GET' && method !== 'HEAD') {
+      var token = csrfToken();
+      if (token) { headers['X-CSRF-Token'] = token; }
+    }
     var base = {
       credentials: 'same-origin',
-      headers: { 'Accept': 'application/json' }
+      headers: headers
     };
     if (opts.method) { base.method = opts.method; }
 

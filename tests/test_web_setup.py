@@ -55,3 +55,86 @@ def test_login_rate_limited(tmp_path):
     for _ in range(6):
         resp = client.post("/login", data={"username": "admin", "password": "bad"})
     assert resp.status_code == 429
+
+
+# ---------------------------------------------------------------------------
+# CSRF coverage for the service-enabled app (setup / logout / API ack)
+# ---------------------------------------------------------------------------
+
+SECRET = "AdminPass!23"
+
+
+def _csrf_from_form(page: str) -> str:
+    return re.search(r'name="csrf_token" value="([^"]+)"', page).group(1)
+
+
+def _csrf_from_meta(page: str) -> str:
+    return re.search(r'name="csrf-token" content="([^"]+)"', page).group(1)
+
+
+def _do_setup(client) -> None:
+    page = client.get("/setup").get_data(as_text=True)
+    resp = client.post(
+        "/setup",
+        data={
+            "username": "admin",
+            "password": SECRET,
+            "confirm": SECRET,
+            "csrf_token": _csrf_from_form(page),
+        },
+    )
+    assert resp.status_code == 302
+
+
+def _do_login(client) -> None:
+    resp = client.post(
+        "/login", data={"username": "admin", "password": SECRET}
+    )
+    assert resp.status_code == 302
+
+
+def test_setup_requires_csrf(tmp_path):
+    app = _app(tmp_path)
+    client = app.test_client()
+    resp = client.post(
+        "/setup",
+        data={"username": "admin", "password": SECRET, "confirm": SECRET},
+    )
+    assert resp.status_code == 400
+    service = app.config["SETTINGS_SERVICE"]
+    assert service.setup_required() is True
+    assert service.verify_admin("admin", SECRET) is False
+
+
+def test_api_returns_428_while_setup_required(tmp_path):
+    client = _app(tmp_path).test_client()
+    resp = client.get("/api/overview")
+    assert resp.status_code == 428
+    assert resp.get_json() == {"error": "setup_required"}
+
+
+def test_logout_requires_csrf_once_service_wired(tmp_path):
+    client = _app(tmp_path).test_client()
+    _do_setup(client)
+    _do_login(client)
+
+    token = _csrf_from_meta(client.get("/").get_data(as_text=True))
+    resp = client.post("/logout", data={"csrf_token": token})
+    assert resp.status_code == 302
+    assert resp.headers["Location"].endswith("/login")
+
+    _do_login(client)
+    assert client.post("/logout").status_code == 400
+
+
+def test_ack_accepts_csrf_header_once_service_wired(tmp_path):
+    client = _app(tmp_path).test_client()
+    _do_setup(client)
+    _do_login(client)
+
+    token = _csrf_from_meta(client.get("/").get_data(as_text=True))
+    ok = client.post("/api/alerts/1/ack", headers={"X-CSRF-Token": token})
+    assert ok.status_code == 200
+    assert ok.get_json() == {"ok": True}
+
+    assert client.post("/api/alerts/1/ack").status_code == 400

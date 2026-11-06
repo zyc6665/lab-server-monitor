@@ -46,6 +46,10 @@ def create_app(
     can pick them up without a restart.
     """
     app = Flask(__name__, template_folder="templates", static_folder="static")
+    # Static assets change with releases (``app.js`` now sends X-CSRF-Token).
+    # Force revalidation so a browser never keeps running a stale cached copy
+    # after an upgrade.
+    app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 0
 
     secret = config.dashboard.session_secret
     if not secret:
