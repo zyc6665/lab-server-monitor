@@ -51,3 +51,15 @@ def test_example_config_loads_with_expected_defaults(monkeypatch):
     assert any(server.name == "a100" for server in cfg.servers)
     assert cfg.disk_health.enabled is True
     assert str(cfg.storage.db_path).replace("\\", "/").endswith("data/servermonitor.db")
+
+
+def test_example_config_monitors_root_and_data_mounts():
+    text = EXAMPLE_CONFIG.read_text(encoding="utf-8")
+
+    assert "disk_mounts:" in text
+    assert '"/data"' in text
+
+
+def test_project_version_is_1_1_0():
+    pyproject = PROJECT_ROOT / "pyproject.toml"
+    assert 'version = "1.1.0"' in pyproject.read_text(encoding="utf-8")

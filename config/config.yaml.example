@@ -8,6 +8,10 @@
 #
 # 说明：所有形如 *_env 的字段都写“环境变量名”，真实密码放在 config/.env 中，
 #       不要把明文密码写进本文件。
+#
+#       本文件只是“首次启动的种子配置”。1.1 起，主机、SSH 凭据、通知、
+#       报告启停、磁盘容量目录等都可在浏览器「设置」页修改并保存到 SQLite；
+#       敏感值使用当前 Windows 账户的 DPAPI 加密，换电脑后需重新设置。
 # ============================================================================
 
 # ---------------------------------------------------------------------------
@@ -136,6 +140,7 @@ servers:
     auth:
       type: "password"
       password_env: "A100_SSH_PASSWORD"
+    disk_mounts: ["/", "/data"]      # 容量监控目录（可在网页设置里逐台修改）
     disk_health:
       enabled: true
 
@@ -149,5 +154,6 @@ servers:
     auth:
       type: "password"
       password_env: "L40S_01_SSH_PASSWORD"
+    disk_mounts: ["/", "/data"]      # 容量监控目录（可在网页设置里逐台修改）
     disk_health:
       enabled: true
