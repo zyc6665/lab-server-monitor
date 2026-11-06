@@ -235,13 +235,15 @@ def test_run_status_once_debounces_offline_alert_until_threshold(tmp_path: Path)
     assert first == {"hosts": 1, "alerts": 0}
     assert notifier.events == []
     assert list_alerts(db_path) == []
-    assert resolve_calls == [("gpu-01", set(), "system")]
+    # A failed host has no fresh metrics, so system alerts must not be
+    # reconciled for it (that would emit a bogus "system recovered" notice).
+    assert resolve_calls == []
 
     second = service.run_status_once()
     assert second == {"hosts": 1, "alerts": 1}
     assert len(notifier.events) == 1
     assert notifier.events[0].category == "offline"
-    assert resolve_calls[-1] == ("gpu-01", {"offline:gpu-01"}, "system")
+    assert resolve_calls == []
     assert [row["fingerprint"] for row in list_alerts(db_path)] == ["offline:gpu-01"]
 
 
@@ -944,3 +946,83 @@ def test_offline_recovery_resolves_alert_and_notifies(tmp_path: Path):
     }
     assert statuses["offline:gpu-01"] == "resolved"
     assert statuses["recovery:gpu-01:offline"] == "active"
+
+
+def _statuses(db_path: Path) -> dict[str, str]:
+    return {row["fingerprint"]: row["status"] for row in list_alerts(db_path)}
+
+
+def test_failed_host_does_not_resolve_system_alerts(tmp_path: Path):
+    """A host that went dark must not have its system alerts closed."""
+    db_path = tmp_path / "monitor.db"
+    notifier = FakeNotifier()
+    reports = iter([[_disk_report("95%")], [_failure_report()]])
+    service = MonitorService(
+        _make_config(),
+        db_path=db_path,
+        collect_status=lambda config: next(reports),
+        notifier=notifier,
+    )
+
+    first = service.run_status_once()
+    assert first == {"hosts": 1, "alerts": 1}
+    assert _statuses(db_path)["system:gpu-01:disk:/"] == "active"
+    events_before = list(notifier.events)
+
+    second = service.run_status_once()
+    assert second == {"hosts": 1, "alerts": 0}
+    # No spurious "system recovered" notice while the host is unreachable...
+    assert notifier.events == events_before
+    assert all(
+        event.fingerprint != "recovery:gpu-01:system" for event in notifier.events
+    )
+    # ...and the pre-existing alert stays open.
+    assert _statuses(db_path)["system:gpu-01:disk:/"] == "active"
+
+
+def test_missing_host_does_not_resolve_system_alerts(tmp_path: Path):
+    """A host absent from this round's reports must not have alerts closed."""
+    db_path = tmp_path / "monitor.db"
+    notifier = FakeNotifier()
+    reports = iter([[_disk_report("95%")], []])
+    service = MonitorService(
+        _make_config(),
+        db_path=db_path,
+        collect_status=lambda config: next(reports),
+        notifier=notifier,
+    )
+
+    first = service.run_status_once()
+    assert first == {"hosts": 1, "alerts": 1}
+
+    second = service.run_status_once()
+    assert second == {"hosts": 0, "alerts": 0}
+    assert all(
+        event.fingerprint != "recovery:gpu-01:system" for event in notifier.events
+    )
+    assert _statuses(db_path)["system:gpu-01:disk:/"] == "active"
+
+
+def test_successful_host_system_recovery_is_notified_and_counted(tmp_path: Path):
+    """System recoveries use the same count semantics as offline ones."""
+    db_path = tmp_path / "monitor.db"
+    notifier = FakeNotifier()
+    reports = iter([[_disk_report("95%")], [_disk_report("50%")]])
+    service = MonitorService(
+        _make_config(),
+        db_path=db_path,
+        collect_status=lambda config: next(reports),
+        notifier=notifier,
+    )
+
+    first = service.run_status_once()
+    assert first == {"hosts": 1, "alerts": 1}
+
+    second = service.run_status_once()
+    assert second == {"hosts": 1, "alerts": 1}
+    assert [event.fingerprint for event in notifier.events] == [
+        "system:gpu-01:disk:/",
+        "recovery:gpu-01:system",
+    ]
+    assert _statuses(db_path)["system:gpu-01:disk:/"] == "resolved"
+    assert _statuses(db_path)["recovery:gpu-01:system"] == "active"

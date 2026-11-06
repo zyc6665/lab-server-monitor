@@ -250,14 +250,28 @@ class MonitorService:
         }
 
     def run_status_once(self) -> dict:
-        """Poll every host's system metrics and reconcile system/offline alerts."""
+        """Poll every host's system metrics and reconcile system/offline alerts.
+
+        Returns ``{"hosts": <reports>, "alerts": <notification count>}``. ``alerts``
+        counts newly dispatched alert notifications plus recovery notices produced
+        by ``resolve`` / ``resolve_missing`` this cycle; recovery notices are
+        informational and travel through the same notifier pipeline.
+        """
         reports = list(self.collect_status(self.config))
         storage_enabled = bool(getattr(self.config.storage, "enabled", True))
         offline_threshold = max(1, int(self.config.alerts.offline_failures))
         events: list = []
         recovery_count = 0
-        # Every configured host must be reconciled each cycle, even if this
-        # round produced no report for it.
+        notifications_on = bool(self.config.alerts.enabled) and bool(
+            getattr(self.config.alerts, "notify_on_recovery", True)
+        )
+        # Only hosts that produced a successful report this cycle may have stale
+        # system alerts resolved from them (see the reconciliation loop below).
+        successful_hosts: set[str] = set()
+        # Track every configured host so a host that drops out of this round's
+        # reports is still known here. Reconciliation is limited to hosts that
+        # reported successfully (see successful_hosts), so a host going dark
+        # never closes its own system alerts.
         active: dict[str, set[str]] = {
             host.name: set() for host in self.config.servers
         }
@@ -272,14 +286,11 @@ class MonitorService:
                 if storage_enabled:
                     save_host_snapshot(report, self.db_path)
                 success_reports.append(report)
+                successful_hosts.add(host_name)
                 # A recovered host should clear any stale offline alert and, when
                 # configured, announce the recovery through the normal pipeline.
                 recovered = self.engine.resolve(host_name, "offline", notify=True)
-                if (
-                    recovered
-                    and self.config.alerts.enabled
-                    and bool(getattr(self.config.alerts, "notify_on_recovery", True))
-                ):
+                if recovered and notifications_on:
                     recovery_count += len(recovered)
                 mounts = host_mounts.get(host_name)
                 disk_statuses = (
@@ -321,14 +332,26 @@ class MonitorService:
         notified = self.engine.process(events)
 
         for host_name, fingerprints in active.items():
-            self.engine.resolve_missing(
+            # A failed or missing host has no fresh metrics this cycle, so its
+            # open CPU/memory/disk alerts must stay open; closing them would
+            # dispatch a bogus "system recovered" notice exactly when the host
+            # went dark (and possibly before the offline threshold fires).
+            if host_name not in successful_hosts:
+                continue
+            recovered_system = self.engine.resolve_missing(
                 host_name, fingerprints, category="system", notify=True
             )
+            if recovered_system and notifications_on:
+                recovery_count += len(recovered_system)
 
         return {"hosts": len(reports), "alerts": len(notified) + recovery_count}
 
     def run_disk_once(self) -> dict:
-        """Poll disk health on every enabled host and reconcile disk alerts."""
+        """Poll disk health on every enabled host and reconcile disk alerts.
+
+        ``alerts`` counts newly dispatched disk alert notifications plus disk
+        recovery notices generated while reconciling polled hosts.
+        """
         if not bool(getattr(self.config.disk_health, "enabled", True)):
             # Globally disabled: no SSH attempts at all.
             return {"disk_reports": 0, "alerts": 0}
@@ -337,6 +360,10 @@ class MonitorService:
         temperature_threshold_c = float(
             self.config.alerts.thresholds.disk_temperature_c
         )
+        notifications_on = bool(self.config.alerts.enabled) and bool(
+            getattr(self.config.alerts, "notify_on_recovery", True)
+        )
+        disk_recovery_count = 0
         events: list = []
         # Only hosts actually polled this cycle take part in alert resolution;
         # a skipped/failed host must not have its existing disk alerts closed.
@@ -388,11 +415,16 @@ class MonitorService:
         notified = self.engine.process(events)
 
         for host_name, fingerprints in active.items():
-            self.engine.resolve_missing(
+            recovered_disk = self.engine.resolve_missing(
                 host_name, fingerprints, category="disk", notify=True
             )
+            if recovered_disk and notifications_on:
+                disk_recovery_count += len(recovered_disk)
 
-        return {"disk_reports": len(disk_reports), "alerts": len(notified)}
+        return {
+            "disk_reports": len(disk_reports),
+            "alerts": len(notified) + disk_recovery_count,
+        }
 
     # -- report jobs -------------------------------------------------------
 
