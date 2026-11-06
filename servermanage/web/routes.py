@@ -21,6 +21,7 @@ import secrets
 import smtplib
 import time
 from collections import deque
+from dataclasses import asdict
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -35,10 +36,11 @@ from flask import (
     url_for,
 )
 
-from servermanage import disk_capacity, storage
+from servermanage import disk_capacity, host_import, storage
 from servermanage.disk_health import AlertEvent
 from servermanage.models import AuthConfig, HostConfig, WebhookConfig
 from servermanage.notify_webhook import send_webhook
+from servermanage.runtime import read_runtime_state
 from servermanage.settings import SettingsError
 from servermanage.ssh_client import SSHClientWrapper
 from servermanage.timeutil import resolve_timezone
@@ -233,6 +235,46 @@ def _optional_text(value: Any) -> str | None:
         return None
     text = str(value)
     return text if text else None
+
+
+# Format aliases accepted by the import preview / import endpoints.
+_IMPORT_PARSERS = {
+    "ssh": host_import.parse_ssh_config,
+    "ssh_config": host_import.parse_ssh_config,
+    "csv": host_import.parse_csv,
+    "yaml": host_import.parse_yaml,
+    "yml": host_import.parse_yaml,
+}
+
+# Fixed, non-configurable files: the log viewer and the single-instance state
+# file never accept a caller-supplied path (avoids arbitrary file reads).
+_LOG_FILE = Path("logs") / "servermonitor.log"
+_RUNTIME_FILE = Path("data") / "runtime.json"
+
+
+def _parse_import_payload(payload: dict[str, Any]):
+    """Parse an import request body into a :class:`host_import.ParseResult`.
+
+    Returns ``(result, None)`` on success or ``(None, (response, status))`` when
+    the format is unknown or the content is missing.
+    """
+    fmt = str(payload.get("format") or "").strip().lower()
+    parser = _IMPORT_PARSERS.get(fmt)
+    if parser is None:
+        return None, (jsonify({"error": "unsupported_format"}), 400)
+    content = payload.get("content")
+    if not isinstance(content, str):
+        return None, (jsonify({"error": "invalid_payload"}), 400)
+    return parser(content), None
+
+
+def _truthy_arg(value: Any, default: bool = False) -> bool:
+    """Coerce a query-string / JSON flag to a bool (``false``/``0``/``no``/``off``)."""
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    return str(value).strip().lower() not in {"0", "false", "no", "off", ""}
 
 
 def _host_config_from_payload(payload: dict[str, Any], *, name: str | None = None) -> HostConfig:
@@ -999,6 +1041,203 @@ def register_routes(app: Flask) -> None:
             return jsonify({"ok": False, "detail": str(exc)})
         return jsonify(
             {"ok": bool(sent), "detail": "已发送" if sent else "发送失败"}
+        )
+
+    # -- Task 9: host import / batch probe / copy ---------------------------
+
+    @app.post("/api/settings/hosts/import/preview")
+    def api_preview_host_import():
+        """Parse pasted/uploaded host definitions without touching the store."""
+        service, error = _settings_or_404(app)
+        if error is not None:
+            return error
+        payload = request.get_json(silent=True)
+        if not isinstance(payload, dict):
+            return jsonify({"error": "invalid_payload"}), 400
+        parsed, parse_error = _parse_import_payload(payload)
+        if parse_error is not None:
+            return parse_error
+        return jsonify(
+            {
+                "candidates": [asdict(candidate) for candidate in parsed.candidates],
+                "errors": parsed.errors,
+                "warnings": parsed.warnings,
+            }
+        )
+
+    @app.post("/api/settings/hosts/import")
+    def api_import_hosts():
+        service, error = _settings_or_404(app)
+        if error is not None:
+            return error
+        rejection = _ensure_writable(service)
+        if rejection is not None:
+            return rejection
+        payload = request.get_json(silent=True)
+        if not isinstance(payload, dict):
+            return jsonify({"error": "invalid_payload"}), 400
+        parsed, parse_error = _parse_import_payload(payload)
+        if parse_error is not None:
+            return parse_error
+        try:
+            result = service.import_hosts(
+                [asdict(candidate) for candidate in parsed.candidates],
+                overwrite=_truthy_arg(payload.get("overwrite")),
+            )
+        except SettingsError as exc:
+            return jsonify({"error": str(exc)}), 400
+        _refresh_config(app)
+        return jsonify({"ok": True, "parse_errors": parsed.errors, **result})
+
+    @app.post("/api/settings/hosts/test-batch")
+    def api_test_hosts_batch():
+        """Probe several saved hosts, one temporary connection at a time.
+
+        Nothing is persisted and the response only carries a status line; secret
+        material from the config is never copied into the payload.
+        """
+        service, error = _settings_or_404(app)
+        if error is not None:
+            return error
+        payload = request.get_json(silent=True)
+        if not isinstance(payload, dict):
+            return jsonify({"error": "invalid_payload"}), 400
+        names = payload.get("names")
+        if not isinstance(names, list) or not all(
+            isinstance(name, str) for name in names
+        ):
+            return jsonify({"error": "invalid_payload"}), 400
+        config = _config(app)
+        servers = {server.name: server for server in config.servers}
+        results = []
+        for name in names:
+            if service.get_host(name) is None:
+                results.append({"name": name, "ok": False, "detail": "主机不存在"})
+                continue
+            host_config = servers.get(name)
+            if host_config is None:
+                results.append(
+                    {"name": name, "ok": False, "detail": "主机配置不可用"}
+                )
+                continue
+            try:
+                with SSHClientWrapper(
+                    host=host_config,
+                    connect_timeout=config.ssh.connect_timeout,
+                ) as ssh:
+                    probe = ssh.run(
+                        "echo ok", timeout=config.ssh.command_timeout
+                    )
+                detail = (probe.stdout or probe.stderr or "").strip()
+                results.append(
+                    {
+                        "name": name,
+                        "ok": probe.exit_status == 0,
+                        "detail": detail,
+                    }
+                )
+            except Exception as exc:  # noqa: BLE001 - text-only error surface
+                results.append({"name": name, "ok": False, "detail": str(exc)})
+        return jsonify({"results": results})
+
+    @app.post("/api/settings/hosts/<name>/copy")
+    def api_copy_host(name: str):
+        service, error = _settings_or_404(app)
+        if error is not None:
+            return error
+        rejection = _ensure_writable(service)
+        if rejection is not None:
+            return rejection
+        payload = request.get_json(silent=True)
+        if not isinstance(payload, dict):
+            return jsonify({"error": "invalid_payload"}), 400
+        new_name = str(payload.get("new_name") or "").strip()
+        if not new_name:
+            return jsonify({"error": "new_name 不能为空"}), 400
+        if service.get_host(name) is None:
+            return jsonify({"error": "not_found"}), 404
+        try:
+            service.copy_host(name, new_name)
+        except SettingsError as exc:
+            return jsonify({"error": str(exc)}), 400
+        _refresh_config(app)
+        return jsonify({"ok": True, "name": new_name})
+
+    # -- Task 9: alert silences --------------------------------------------
+
+    @app.get("/api/settings/silences")
+    def api_list_silences():
+        service, error = _settings_or_404(app)
+        if error is not None:
+            return error
+        active_only = _truthy_arg(request.args.get("active_only"), default=True)
+        return jsonify(
+            {"silences": service.list_silences(active_only=active_only)}
+        )
+
+    @app.post("/api/settings/silences")
+    def api_add_silence():
+        service, error = _settings_or_404(app)
+        if error is not None:
+            return error
+        rejection = _ensure_writable(service)
+        if rejection is not None:
+            return rejection
+        payload = request.get_json(silent=True)
+        if not isinstance(payload, dict):
+            return jsonify({"error": "invalid_payload"}), 400
+        try:
+            silence_id = service.add_silence(
+                scope_type=payload.get("scope_type"),
+                scope=payload.get("scope"),
+                reason=str(payload.get("reason") or ""),
+                starts_at=payload.get("starts_at"),
+                ends_at=payload.get("ends_at"),
+                created_by=session.get("username"),
+            )
+        except SettingsError as exc:
+            return jsonify({"error": str(exc)}), 400
+        return jsonify({"ok": True, "id": silence_id})
+
+    @app.delete("/api/settings/silences/<int:silence_id>")
+    def api_delete_silence(silence_id: int):
+        service, error = _settings_or_404(app)
+        if error is not None:
+            return error
+        rejection = _ensure_writable(service)
+        if rejection is not None:
+            return rejection
+        if not service.delete_silence(silence_id):
+            return jsonify({"error": "not_found"}), 404
+        return jsonify({"ok": True})
+
+    # -- Task 9: log tail and single-instance runtime state ----------------
+
+    @app.get("/api/logs")
+    def api_logs():
+        lines = max(1, min(_as_int(request.args.get("lines"), 200), 2000))
+        log_path = _LOG_FILE
+        if not log_path.is_file():
+            return jsonify({"path": str(log_path), "lines": "", "text": ""})
+        try:
+            with log_path.open("r", encoding="utf-8", errors="replace") as handle:
+                tail = deque(handle, maxlen=lines)
+        except OSError as exc:
+            return jsonify({"error": str(exc)}), 500
+        text = "".join(tail)
+        return jsonify({"path": str(log_path), "lines": text, "text": text})
+
+    @app.get("/api/runtime")
+    def api_runtime():
+        state = read_runtime_state(_RUNTIME_FILE)
+        if not state:
+            return jsonify({"url": None})
+        return jsonify(
+            {
+                "url": state.get("url"),
+                "port": state.get("port"),
+                "pid": state.get("pid"),
+            }
         )
 
     # -- HTML pages --------------------------------------------------------

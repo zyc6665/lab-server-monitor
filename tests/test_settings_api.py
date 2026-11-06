@@ -8,7 +8,9 @@ helper from ``tests/test_web_setup.py`` so every mutating request carries the
 
 from __future__ import annotations
 
+import json
 import re
+from datetime import datetime, timedelta, timezone
 
 import pytest
 
@@ -299,3 +301,322 @@ def test_put_smtp_section_round_trips(client):
     assert payload["to_addrs"] == ["ops@example.com", "lead@example.com"]
     assert payload["password_configured"] is True
     assert "smtp-secret" not in repr(payload)
+
+
+# ---------------------------------------------------------------------------
+# Task 9: host import, batch test, copy, alert silences, logs and runtime
+# ---------------------------------------------------------------------------
+
+SSH_CONFIG_SAMPLE = """\
+Host import-a
+    HostName 10.0.0.31
+    User deploy
+    Port 22
+    IdentityFile ~/.ssh/id_rsa
+
+Host import-b
+    HostName 10.0.0.32
+    User deploy
+"""
+
+CSV_SAMPLE = (
+    "name,host,port,username,auth_type,key_path\n"
+    "csv-a,10.0.0.41,22,deploy,key,~/.ssh/id_rsa\n"
+    "csv-b,10.0.0.42,2222,deploy,key,~/.ssh/id_rsa\n"
+)
+
+
+def _seed_host(client, name: str = "copy-src", *, password: str = "copy-secret") -> None:
+    resp = client.put(
+        f"/api/settings/hosts/{name}",
+        json={
+            "host": "10.0.0.51",
+            "port": 22,
+            "username": "u",
+            "auth_type": "password",
+            "password": password,
+        },
+    )
+    assert resp.status_code == 200
+
+
+def _silence_window() -> tuple[str, str]:
+    now = datetime.now(timezone.utc)
+    return (
+        (now - timedelta(hours=1)).isoformat(),
+        (now + timedelta(hours=2)).isoformat(),
+    )
+
+
+def test_import_preview_parses_without_persisting(client):
+    resp = client.post(
+        "/api/settings/hosts/import/preview",
+        json={"format": "ssh", "content": SSH_CONFIG_SAMPLE},
+    )
+    assert resp.status_code == 200
+    body = resp.get_json()
+    assert set(body) == {"candidates", "errors", "warnings"}
+    assert [c["name"] for c in body["candidates"]] == ["import-a", "import-b"]
+    assert body["candidates"][0]["host"] == "10.0.0.31"
+    assert body["candidates"][1]["username"] == "deploy"
+    assert body["errors"] == []
+    # A preview must never touch the host inventory.
+    assert client.get("/api/settings/hosts").get_json()["hosts"] == []
+
+
+def test_import_preview_rejects_unknown_format(client):
+    resp = client.post(
+        "/api/settings/hosts/import/preview",
+        json={"format": "json", "content": "{}"},
+    )
+    assert resp.status_code == 400
+    assert "error" in resp.get_json()
+
+
+def test_import_creates_hosts(client):
+    resp = client.post(
+        "/api/settings/hosts/import",
+        json={"format": "csv", "content": CSV_SAMPLE},
+    )
+    assert resp.status_code == 200
+    body = resp.get_json()
+    assert body["created"] == ["csv-a", "csv-b"]
+    assert body["updated"] == []
+    assert body["skipped"] == []
+    assert body["failed"] == []
+    hosts = {
+        host["name"]: host
+        for host in client.get("/api/settings/hosts").get_json()["hosts"]
+    }
+    assert set(hosts) == {"csv-a", "csv-b"}
+    assert hosts["csv-b"]["port"] == 2222
+
+
+def test_import_skips_existing_without_overwrite(client):
+    payload = {"format": "csv", "content": CSV_SAMPLE}
+    assert client.post("/api/settings/hosts/import", json=payload).status_code == 200
+    again = client.post("/api/settings/hosts/import", json=payload).get_json()
+    assert again["created"] == []
+    assert again["skipped"] == ["csv-a", "csv-b"]
+
+
+def test_import_requires_writable(client, monkeypatch):
+    monkeypatch.setattr(
+        client.application.config["SETTINGS_SERVICE"],
+        "is_writable",
+        lambda: False,
+    )
+    resp = client.post(
+        "/api/settings/hosts/import",
+        json={"format": "csv", "content": CSV_SAMPLE},
+    )
+    assert resp.status_code == 409
+    assert resp.get_json() == {"error": "settings_not_writable"}
+
+
+def test_copy_host_duplicates_entry_and_secret(client):
+    _seed_host(client)
+    resp = client.post(
+        "/api/settings/hosts/copy-src/copy", json={"new_name": "copy-dst"}
+    )
+    assert resp.status_code == 200
+    assert resp.get_json() == {"ok": True, "name": "copy-dst"}
+    hosts = {
+        host["name"]: host
+        for host in client.get("/api/settings/hosts").get_json()["hosts"]
+    }
+    assert set(hosts) == {"copy-src", "copy-dst"}
+    assert hosts["copy-dst"]["password_configured"] is True
+    assert "copy-secret" not in repr(hosts)
+
+
+def test_copy_unknown_source_returns_404(client):
+    resp = client.post(
+        "/api/settings/hosts/missing/copy", json={"new_name": "target"}
+    )
+    assert resp.status_code == 404
+    assert resp.get_json() == {"error": "not_found"}
+
+
+def test_copy_duplicate_target_returns_400(client):
+    _seed_host(client)
+    _seed_host(client, "already-there", password="other")
+    resp = client.post(
+        "/api/settings/hosts/copy-src/copy", json={"new_name": "already-there"}
+    )
+    assert resp.status_code == 400
+    assert "error" in resp.get_json()
+
+
+def test_silence_crud(client):
+    starts_at, ends_at = _silence_window()
+    created = client.post(
+        "/api/settings/silences",
+        json={
+            "scope_type": "all",
+            "scope": None,
+            "reason": "维护窗口",
+            "starts_at": starts_at,
+            "ends_at": ends_at,
+        },
+    )
+    assert created.status_code == 200
+    body = created.get_json()
+    assert body["ok"] is True
+    assert isinstance(body["id"], int)
+
+    active = client.get("/api/settings/silences?active_only=true").get_json()[
+        "silences"
+    ]
+    assert [row["id"] for row in active] == [body["id"]]
+    assert active[0]["reason"] == "维护窗口"
+
+    every = client.get("/api/settings/silences?active_only=false").get_json()[
+        "silences"
+    ]
+    assert len(every) == 1
+
+    assert client.delete(f"/api/settings/silences/{body['id']}").status_code == 200
+    assert client.get("/api/settings/silences").get_json()["silences"] == []
+
+
+def test_silence_rejects_invalid_window(client):
+    now = datetime.now(timezone.utc).isoformat()
+    resp = client.post(
+        "/api/settings/silences",
+        json={
+            "scope_type": "host",
+            "scope": "web1",
+            "reason": "x",
+            "starts_at": now,
+            "ends_at": now,
+        },
+    )
+    assert resp.status_code == 400
+    assert "error" in resp.get_json()
+
+
+def test_silence_delete_unknown_returns_404(client):
+    assert client.delete("/api/settings/silences/9999").status_code == 404
+
+
+def test_silence_requires_writable(client, monkeypatch):
+    monkeypatch.setattr(
+        client.application.config["SETTINGS_SERVICE"],
+        "is_writable",
+        lambda: False,
+    )
+    starts_at, ends_at = _silence_window()
+    resp = client.post(
+        "/api/settings/silences",
+        json={
+            "scope_type": "all",
+            "scope": None,
+            "reason": "x",
+            "starts_at": starts_at,
+            "ends_at": ends_at,
+        },
+    )
+    assert resp.status_code == 409
+    assert resp.get_json() == {"error": "settings_not_writable"}
+
+
+def test_logs_returns_tail_and_clamps(client, monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    log_dir = tmp_path / "logs"
+    log_dir.mkdir()
+    (log_dir / "servermonitor.log").write_text(
+        "\n".join(f"line-{index}" for index in range(1, 2101)) + "\n",
+        encoding="utf-8",
+    )
+
+    body = client.get("/api/logs?lines=3").get_json()
+    assert body["path"].replace("\\", "/").endswith("logs/servermonitor.log")
+    assert body["text"].splitlines() == ["line-2098", "line-2099", "line-2100"]
+
+    clamped = client.get("/api/logs?lines=999999").get_json()
+    assert len(clamped["text"].splitlines()) == 2000
+
+    floored = client.get("/api/logs?lines=0").get_json()
+    assert floored["text"].splitlines() == ["line-2100"]
+
+
+def test_logs_missing_file_returns_empty_text(client, monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    resp = client.get("/api/logs")
+    assert resp.status_code == 200
+    assert resp.get_json()["text"] == ""
+
+
+def test_runtime_missing_returns_url_null(client, monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    assert client.get("/api/runtime").get_json() == {"url": None}
+
+
+def test_runtime_reads_state_file(client, monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    data_dir = tmp_path / "data"
+    data_dir.mkdir()
+    (data_dir / "runtime.json").write_text(
+        json.dumps({"url": "http://127.0.0.1:8123", "port": 8123, "pid": 4321}),
+        encoding="utf-8",
+    )
+    assert client.get("/api/runtime").get_json() == {
+        "url": "http://127.0.0.1:8123",
+        "port": 8123,
+        "pid": 4321,
+    }
+
+
+def test_new_write_apis_require_csrf(client):
+    token = client.environ_base.pop("HTTP_X_CSRF_TOKEN")
+    try:
+        resp = client.post(
+            "/api/settings/hosts/import",
+            json={"format": "csv", "content": CSV_SAMPLE},
+        )
+        assert resp.status_code == 400
+    finally:
+        client.environ_base["HTTP_X_CSRF_TOKEN"] = token
+
+
+def test_test_batch_reports_each_host_without_leaking_secrets(client, monkeypatch):
+    import servermanage.web.routes as routes
+
+    _seed_host(client, "batch-host", password="batch-secret")
+    monkeypatch.setattr(
+        routes.SSHClientWrapper,
+        "run",
+        lambda self, command, timeout: CommandResult(
+            stdout="ok\n", stderr="", exit_status=0
+        ),
+    )
+    resp = client.post(
+        "/api/settings/hosts/test-batch",
+        json={"names": ["batch-host", "ghost"]},
+    )
+    assert resp.status_code == 200
+    body = resp.get_json()
+    results = {item["name"]: item for item in body["results"]}
+    assert results["batch-host"]["ok"] is True
+    assert results["batch-host"]["detail"] == "ok"
+    assert results["ghost"]["ok"] is False
+    assert "batch-secret" not in repr(body)
+
+
+def test_test_batch_reports_connection_failure(client, monkeypatch):
+    import servermanage.web.routes as routes
+
+    _seed_host(client, "batch-fail", password="pw")
+
+    def _boom(self, command, timeout):
+        raise RuntimeError("connection refused")
+
+    monkeypatch.setattr(routes.SSHClientWrapper, "run", _boom)
+    resp = client.post(
+        "/api/settings/hosts/test-batch", json={"names": ["batch-fail"]}
+    )
+    assert resp.status_code == 200
+    item = resp.get_json()["results"][0]
+    assert item["ok"] is False
+    assert "connection refused" in item["detail"]
