@@ -14,26 +14,21 @@ returned decrypted inside the in-memory :class:`AppConfig`.
 from __future__ import annotations
 
 import json
+import types
 from copy import deepcopy
 from dataclasses import fields, replace
 from pathlib import Path
-from typing import Any
+from typing import Any, Union, get_args, get_origin, get_type_hints
 
 from servermanage import security, storage
 from servermanage.config import load_config
 from servermanage.models import (
-    AlertThresholds,
     AlertsConfig,
     AppConfig,
-    AppRuntimeConfig,
     DashboardAuthConfig,
     DashboardConfig,
     DiskHealthConfig,
-    DiskHealthRuleConfig,
     ReportConfig,
-    SSHRuntimeConfig,
-    WebhookConfig,
-    WeeklyReportConfig,
 )
 
 __all__ = [
@@ -119,25 +114,54 @@ _RULE_FIELDS = frozenset(
     }
 )
 _DASHBOARD_TOP_FIELDS = frozenset({"host", "port", "session_lifetime_hours"})
-_AUTH_FIELDS = frozenset(
-    {
-        "enabled",
-        "username",
-        "password_env",
-        "password",
-        "password_hash",
-        "password_salt",
-        "password_iterations",
-    }
-)
+# Only non-secret auth fields may be persisted from the dashboard section.
+# Admin credentials (plaintext, hash, salt, iterations) are exclusively managed
+# through SECRET_ADMIN so a settings write can never inject a credential.
+_DASHBOARD_AUTH_FIELDS = frozenset({"enabled", "username", "password_env"})
 
 
 class SettingsError(ValueError):
     """Raised when a settings operation is invalid (bad section/payload/secret)."""
 
 
-def _coerce_like(current: Any, value: Any) -> Any:
-    """Coerce *value* to the type of *current* (JSON payloads arrive untyped)."""
+def _resolve_annotation(annotation: Any) -> Any:
+    """Unwrap ``T | None`` / ``Optional[T]`` to ``T`` (NoneType otherwise ignored)."""
+    origin = get_origin(annotation)
+    if origin is Union or origin is types.UnionType:
+        for arg in get_args(annotation):
+            if arg is not type(None):
+                return _resolve_annotation(arg)
+    return annotation
+
+
+def _type_hints(obj: Any) -> dict[str, Any]:
+    try:
+        return get_type_hints(type(obj))
+    except Exception:  # pragma: no cover - defensive against exotic annotations
+        return {}
+
+
+def _coerce_like(current: Any, value: Any, annotation: Any = None) -> Any:
+    """Coerce *value* to the annotated field type (JSON payloads arrive untyped).
+
+    The declared annotation wins over the default's runtime type: e.g.
+    ``AlertThresholds.disk_percent`` is annotated ``float`` but defaults to the
+    int ``90``, so coercing by ``type(default)`` would silently truncate 80.5.
+    """
+    if value is None:
+        return None
+    target = _resolve_annotation(annotation)
+    if target is bool:
+        if isinstance(value, str):
+            return value.strip().lower() in {"1", "true", "yes", "on"}
+        return bool(value)
+    if target is int and not isinstance(value, bool):
+        return int(value)
+    if target is float:
+        return float(value)
+    if target is str:
+        return str(value)
+    # Fallback: infer from the current value when the annotation is unavailable.
     if isinstance(current, bool):
         if isinstance(value, str):
             return value.strip().lower() in {"1", "true", "yes", "on"}
@@ -152,14 +176,16 @@ def _coerce_like(current: Any, value: Any) -> Any:
 
 
 def _flat(base_obj: Any, payload: dict[str, Any], allowed: frozenset[str] | None = None) -> Any:
-    """Return *base_obj* with fields from *payload* overlaid (typed like the base)."""
+    """Return *base_obj* with fields from *payload* overlaid, typed by annotation."""
+    hints = _type_hints(base_obj)
     updates: dict[str, Any] = {}
     for field_info in fields(base_obj):
         if allowed is not None and field_info.name not in allowed:
             continue
         if field_info.name in payload:
+            annotation = hints.get(field_info.name, field_info.type)
             updates[field_info.name] = _coerce_like(
-                getattr(base_obj, field_info.name), payload[field_info.name]
+                getattr(base_obj, field_info.name), payload[field_info.name], annotation
             )
     return replace(base_obj, **updates) if updates else base_obj
 
@@ -188,7 +214,16 @@ class SettingsService:
     # -- public API ---------------------------------------------------------
 
     def load(self) -> AppConfig:
-        """Return the effective config: YAML base overlaid with DB sections/secrets."""
+        """Return the effective config: YAML base overlaid with DB sections/secrets.
+
+        The brief's contract is "base as the bottom layer, overridden section by
+        section" (以 base 为底，按 section 覆盖), not a re-run of the raw mapping.
+        Overlaying the already-validated base dataclass is equivalent for all
+        persisted fields, while the base itself was still produced by
+        ``load_config`` -> ``load_config_from_mapping`` so central validation
+        (types, cross-field rules) continues to run once for the seed config.
+        Secrets are then layered from ``app_secrets`` (never from ``app_settings``).
+        """
         self._adopt_env_admin_password()
         sections = storage.load_app_settings(self.db_path)
         config = self.base_config
@@ -219,8 +254,12 @@ class SettingsService:
             raise SettingsError(f"unknown settings section: {section}")
         if not isinstance(payload, dict):
             raise SettingsError("settings payload must be an object")
+        if not self.is_writable():
+            raise SettingsError("settings are not writable on this platform")
         sanitized = deepcopy(payload)
-        if section == SECTION_ALERTS:
+        if section == SECTION_DASHBOARD:
+            sanitized = self._sanitize_dashboard(sanitized)
+        elif section == SECTION_ALERTS:
             sanitized = self._sanitize_alerts(sanitized)
         storage.save_app_settings(section, sanitized, self.db_path)
         return self.load()
@@ -330,17 +369,24 @@ class SettingsService:
     def _apply_dashboard(
         self, dashboard: DashboardConfig, payload: dict[str, Any]
     ) -> DashboardConfig:
+        """Merge only non-secret dashboard/auth fields from persisted settings.
+
+        Admin credentials (password/hash/salt/iterations) are deliberately never
+        read from ``app_settings.dashboard``; :meth:`_apply_secrets` layers them
+        exclusively from ``dashboard:admin_password``.
+        """
         auth = dashboard.auth
+        auth_overrides: dict[str, Any] = {}
         auth_payload = payload.get("auth")
         if isinstance(auth_payload, dict):
-            auth = _flat(
-                auth,
-                {key: value for key, value in auth_payload.items() if key in _AUTH_FIELDS},
-                allowed=_AUTH_FIELDS,
+            auth_overrides.update(
+                {key: value for key, value in auth_payload.items() if key in _DASHBOARD_AUTH_FIELDS}
             )
-        username = payload.get("username")
-        if username is not None and "auth" not in payload:
-            auth = replace(auth, username=str(username))
+        for key in _DASHBOARD_AUTH_FIELDS:
+            if key in payload and key not in auth_overrides:
+                auth_overrides[key] = payload[key]
+        if auth_overrides:
+            auth = _flat(auth, auth_overrides, allowed=_DASHBOARD_AUTH_FIELDS)
         dashboard = replace(dashboard, auth=auth)
         top = {key: value for key, value in payload.items() if key in _DASHBOARD_TOP_FIELDS}
         if top:
@@ -406,6 +452,30 @@ class SettingsService:
 
     # -- secrets ------------------------------------------------------------
 
+    def _sanitize_dashboard(self, payload: dict[str, Any]) -> dict[str, Any]:
+        """Strip credentials from a dashboard payload before it is persisted.
+
+        Only non-secret auth fields (``enabled``/``username``/``password_env``)
+        and safe dashboard top-level fields survive. ``password``,
+        ``password_hash``, ``password_salt`` and ``password_iterations`` are
+        discarded even when nested under ``auth``, so a settings write can never
+        inject a plaintext password or an attacker-chosen hash/salt.
+        """
+        sanitized: dict[str, Any] = {}
+        for key in _DASHBOARD_TOP_FIELDS | _DASHBOARD_AUTH_FIELDS:
+            if key in payload:
+                sanitized[key] = payload[key]
+        auth_payload = payload.get("auth")
+        if isinstance(auth_payload, dict):
+            auth = {
+                key: value
+                for key, value in auth_payload.items()
+                if key in _DASHBOARD_AUTH_FIELDS
+            }
+            if auth:
+                sanitized["auth"] = auth
+        return sanitized
+
     def _sanitize_alerts(self, payload: dict[str, Any]) -> dict[str, Any]:
         """Move a client-provided webhook URL into ``app_secrets`` (+ flag)."""
         webhook = payload.get("webhook")
@@ -443,19 +513,32 @@ class SettingsService:
         if session_secret is not None:
             dashboard = replace(dashboard, session_secret=session_secret)
         admin = self._read_secret_json(SECRET_ADMIN)
-        if isinstance(admin, dict) and admin.get("hash"):
-            dashboard = replace(
-                dashboard,
-                auth=replace(
-                    dashboard.auth,
-                    username=str(admin.get("username", dashboard.auth.username)),
-                    password_hash=str(admin["hash"]),
-                    password_salt=str(admin.get("salt")),
-                    password_iterations=int(
-                        admin.get("iterations", dashboard.auth.password_iterations)
+        if isinstance(admin, dict):
+            hash_value = admin.get("hash")
+            if isinstance(hash_value, str) and hash_value:
+                username = admin.get("username")
+                if not isinstance(username, str) or not username:
+                    username = dashboard.auth.username
+                salt = admin.get("salt")
+                if not isinstance(salt, str) or not salt:
+                    salt = None
+                iterations = admin.get("iterations", dashboard.auth.password_iterations)
+                if (
+                    not isinstance(iterations, int)
+                    or isinstance(iterations, bool)
+                    or iterations <= 0
+                ):
+                    iterations = dashboard.auth.password_iterations
+                dashboard = replace(
+                    dashboard,
+                    auth=replace(
+                        dashboard.auth,
+                        username=username,
+                        password_hash=hash_value,
+                        password_salt=salt,
+                        password_iterations=iterations,
                     ),
-                ),
-            )
+                )
         if dashboard is not config.dashboard:
             config = replace(config, dashboard=dashboard)
         return config

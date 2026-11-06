@@ -6,6 +6,8 @@ public settings payload. Host CRUD/admin password behaviour is added in Task 6.
 
 from __future__ import annotations
 
+import json
+
 import pytest
 
 from servermanage import security, storage
@@ -64,6 +66,8 @@ def test_non_windows_is_read_only(tmp_path, monkeypatch):
     monkeypatch.setattr(sys, "platform", "linux")
     svc = _service(tmp_path)
     assert svc.is_writable() is False
+    with pytest.raises(SettingsError):
+        svc.save_section("report", {"daily_enabled": False})
 
 
 # ---------------------------------------------------------------------------
@@ -137,3 +141,88 @@ def test_legacy_env_admin_password_is_adopted(tmp_path, monkeypatch):
     assert svc.setup_required() is False
     assert storage.get_secret(SECRET_ADMIN, svc.db_path) is not None
     assert svc.load().dashboard.auth.password_hash
+
+
+# ---------------------------------------------------------------------------
+# Review fixes: dashboard credential injection + numeric coercion
+# ---------------------------------------------------------------------------
+
+
+def test_dashboard_save_strips_admin_credentials(tmp_path, monkeypatch):
+    if not security.dpapi_available():
+        pytest.skip("DPAPI only available on Windows")
+    monkeypatch.delenv("DASHBOARD_PASSWORD", raising=False)
+    svc = _service(tmp_path)
+    cfg = svc.save_section(
+        "dashboard",
+        {
+            "host": "127.0.0.1",
+            "auth": {
+                "username": "bob",
+                "password": "MARKER",
+                "password_hash": "attacker-hash",
+                "password_salt": "attacker-salt",
+                "password_iterations": 1,
+                "enabled": True,
+                "password_env": "DASHBOARD_PASSWORD",
+            },
+        },
+    )
+    stored = storage.load_app_settings(svc.db_path)["dashboard"]
+    stored_auth = stored.get("auth", {})
+    # Nothing credential-like is persisted, directly or nested under auth.
+    assert "password" not in stored_auth
+    assert "password_hash" not in stored_auth
+    assert "password_salt" not in stored_auth
+    assert "password_iterations" not in stored_auth
+    assert "MARKER" not in repr(stored)
+    assert "attacker-hash" not in repr(stored)
+    # Loaded config has no injected admin credential; only safe fields applied.
+    assert cfg.dashboard.auth.password is None
+    assert cfg.dashboard.auth.password_hash is None
+    assert cfg.dashboard.auth.password_salt is None
+    assert cfg.dashboard.auth.username == "bob"
+    assert cfg.dashboard.host == "127.0.0.1"
+
+
+def test_dashboard_admin_hash_comes_only_from_secret(tmp_path, monkeypatch):
+    if not security.dpapi_available():
+        pytest.skip("DPAPI only available on Windows")
+    monkeypatch.delenv("DASHBOARD_PASSWORD", raising=False)
+    svc = _service(tmp_path)
+    svc._store_admin_password("realpw", "admin")
+    secret_hash = svc.load().dashboard.auth.password_hash
+    assert secret_hash
+
+    svc.save_section(
+        "dashboard",
+        {"auth": {"password_hash": "attacker-hash", "password_salt": "x",
+                  "password_iterations": 1}},
+    )
+    loaded = svc.load().dashboard.auth
+    assert loaded.password_hash == secret_hash != "attacker-hash"
+    assert loaded.password_salt != "x"
+
+
+def test_float_threshold_is_not_truncated(tmp_path):
+    svc = _service(tmp_path)
+    cfg = svc.save_section("alerts", {"thresholds": {"disk_percent": 80.5}})
+    assert cfg.alerts.thresholds.disk_percent == 80.5
+    assert isinstance(cfg.alerts.thresholds.disk_percent, float)
+    assert svc.load().alerts.thresholds.disk_percent == 80.5
+
+
+def test_malformed_admin_secret_is_tolerated(tmp_path):
+    if not security.dpapi_available():
+        pytest.skip("DPAPI only available on Windows")
+    svc = _service(tmp_path)
+    document = {"hash": "deadbeef", "salt": 123, "iterations": "nope"}
+    storage.set_secret(
+        SECRET_ADMIN,
+        security.protect_secret(json.dumps(document).encode("utf-8")),
+        svc.db_path,
+    )
+    auth = svc.load().dashboard.auth
+    assert auth.password_hash == "deadbeef"
+    assert auth.password_salt is None
+    assert auth.password_iterations == 200000
