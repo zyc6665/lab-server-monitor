@@ -365,6 +365,21 @@ def _metrics_payload(
     }
 
 
+def _logged_in_counts(metrics: dict[str, Any]) -> tuple[int, int]:
+    """Return ``(distinct_usernames, sessions)`` from a snapshot metrics dict."""
+    users = metrics.get("logged_in_users") or []
+    sessions = 0
+    usernames: set[str] = set()
+    for user in users:
+        if not isinstance(user, dict):
+            continue
+        sessions += 1
+        username = user.get("username")
+        if username:
+            usernames.add(str(username))
+    return len(usernames), sessions
+
+
 def _host_row(
     *,
     name: str,
@@ -386,15 +401,20 @@ def _host_row(
             "memory_percent": None,
             "disk_percent": None,
             "gpu_memory_percent": None,
+            "logged_in_user_count": 0,
+            "logged_in_sessions": 0,
             "disk_health": _disk_health_summary(disk_health),
         }
     metrics = snapshot.get("metrics") or {}
+    user_count, session_count = _logged_in_counts(metrics)
     return {
         "name": name,
         "host": host,
         "online": _is_online(snapshot, poll_interval_seconds, now),
         "collected_at": _to_local_iso(snapshot.get("collected_at"), tz),
         **_metrics_payload(metrics, disk_mounts),
+        "logged_in_user_count": user_count,
+        "logged_in_sessions": session_count,
         "disk_health": _disk_health_summary(disk_health),
     }
 

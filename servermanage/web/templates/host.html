@@ -44,6 +44,34 @@
   </dl>
 </section>
 
+<section class="card" id="logged-in-users">
+  <div class="section-head">
+    <h2>当前登录用户</h2>
+    <span class="muted">{{ metrics.logged_in_users|length if metrics.logged_in_users else 0 }} 个会话</span>
+  </div>
+  {% if metrics.logged_in_users %}
+  <div class="table-wrap">
+    <table class="data-table">
+      <thead>
+        <tr><th>用户名</th><th>终端</th><th>登录时间</th><th>来源 IP</th></tr>
+      </thead>
+      <tbody>
+        {% for user in metrics.logged_in_users %}
+        <tr>
+          <td>{{ user.username or '—' }}</td>
+          <td class="mono">{{ user.terminal or '—' }}</td>
+          <td class="mono">{{ user.login_at or '—' }}</td>
+          <td class="mono">{{ user.remote_host or '—' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="empty">暂无登录用户</p>
+  {% endif %}
+</section>
+
 <section class="card">
   <h2>磁盘</h2>
   {% if metrics.disk_usage %}

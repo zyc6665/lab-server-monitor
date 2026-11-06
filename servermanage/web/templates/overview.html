@@ -40,6 +40,7 @@
           <th>内存</th>
           <th>磁盘</th>
           <th>GPU 显存</th>
+          <th>登录用户</th>
           <th>磁盘健康</th>
           <th>采集时间</th>
         </tr>
@@ -58,6 +59,7 @@
           <td>{{ pct(host.memory_percent) }}</td>
           <td>{{ pct(host.disk_percent) }}</td>
           <td>{{ pct(host.gpu_memory_percent) }}</td>
+          <td>{{ host.logged_in_user_count }}</td>
           <td>
             <span class="health health-{{ host.disk_health.status }}">{{ host.disk_health.status }}</span>
             <span class="health-counts">健康 {{ host.disk_health.healthy }} · 告警 {{ host.disk_health.warning }} · 严重 {{ host.disk_health.critical }}</span>

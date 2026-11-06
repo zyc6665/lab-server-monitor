@@ -105,6 +105,7 @@
     tr.appendChild(textCell(formatPercent(host.memory_percent)));
     tr.appendChild(textCell(formatPercent(host.disk_percent)));
     tr.appendChild(textCell(formatPercent(host.gpu_memory_percent)));
+    tr.appendChild(textCell(host.logged_in_user_count == null ? '—' : host.logged_in_user_count));
 
     var healthCell = document.createElement('td');
     var dh = host.disk_health || {};

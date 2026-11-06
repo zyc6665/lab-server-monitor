@@ -21,6 +21,7 @@ from servermanage.models import (
     HostConfig,
     HostMetrics,
     HostReport,
+    LoggedInUser,
     MemorySummary,
     ReportConfig,
     SSHRuntimeConfig,
@@ -89,6 +90,11 @@ def _seed_database(db_path: Path) -> tuple[int, datetime]:
             metrics=HostMetrics(
                 collected_at=now,
                 cpu_usage_percent=42.5,
+                logged_in_users=[
+                    LoggedInUser(username="alice", terminal="pts/0", login_at="2026-11-06 09:00", remote_host="10.0.0.9"),
+                    LoggedInUser(username="alice", terminal="pts/1", login_at="2026-11-06 09:05", remote_host="10.0.0.9"),
+                    LoggedInUser(username="bob", terminal="pts/2", login_at="2026-11-06 09:10", remote_host="10.0.0.10"),
+                ],
                 memory=_memory(),
                 disk_usage=[
                     DiskUsageRow(
@@ -207,6 +213,8 @@ def test_login_and_overview(env):
     assert host["memory_percent"] == pytest.approx(25.0)
     assert host["disk_percent"] == pytest.approx(45.0)
     assert host["gpu_memory_percent"] == pytest.approx(25.0)
+    assert host["logged_in_user_count"] == 2
+    assert host["logged_in_sessions"] == 3
     assert host["disk_health"] == {
         "status": "warning",
         "healthy": 2,
