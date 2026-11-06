@@ -48,7 +48,18 @@ a = Analysis(
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=[],
+    excludes=[
+        # The build host's Anaconda environment contains a large scientific /
+        # notebook stack that this app never imports.  Excluding it keeps the
+        # bundle small and stops PyInstaller from traversing the whole site.
+        "matplotlib", "numpy", "pandas", "scipy",
+        "IPython", "ipykernel", "jupyter", "jupyter_client", "jupyter_core",
+        "notebook", "nbformat", "nbconvert", "traitlets",
+        "pytest", "_pytest", "docutils", "sphinx",
+        "jedi", "parso", "PIL", "Pillow",
+        "tkinter", "PyQt5", "PyQt6", "PySide2", "PySide6",
+        "lightrag",
+    ],
     noarchive=False,
 )
 
