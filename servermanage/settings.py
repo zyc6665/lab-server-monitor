@@ -537,9 +537,7 @@ class SettingsService:
             groups.add(group)
         return sorted(groups)
 
-    def _validate_import_candidate(
-        self, raw: Any, existing_names: set[str]
-    ) -> dict[str, Any]:
+    def _validate_import_candidate(self, raw: Any) -> dict[str, Any]:
         if not isinstance(raw, dict):
             raise SettingsError("主机条目必须是对象")
         if raw.get("valid") is False:
@@ -551,24 +549,35 @@ class SettingsService:
         payload["username"] = _require_text(raw.get("username"), "username")
         auth_raw = raw.get("auth_type")
         auth_type = str(auth_raw).strip() if auth_raw is not None else ""
-        auth_type = auth_type or "key"
+        if not auth_type:
+            raise SettingsError("auth_type 不能为空")
         if auth_type not in _HOST_AUTH_TYPES:
             raise SettingsError(f"不支持的认证方式: {auth_type}")
         payload["auth_type"] = auth_type
         payload["port"] = _coerce_port(raw.get("port", 22))
+        # Mirror _apply_host_secrets(): fail before any write when the selected
+        # auth method has no usable credential source.
+        clear = set(_string_list(raw.get("clear_secrets")))
         if auth_type == "password":
-            if not _optional_text(raw.get("password")) and name not in existing_names:
+            existing = storage.get_secret(
+                _HOST_SECRET_PASSWORD.format(name=name), self.db_path
+            )
+            usable = bool(_optional_text(raw.get("password"))) or (
+                existing is not None and "password" not in clear
+            )
+            if not usable:
                 raise SettingsError("SSH 密码未设置")
         else:
             key_path = raw.get("key_path")
             existing_key = storage.get_secret(
                 _HOST_SECRET_KEY.format(name=name), self.db_path
             )
-            if (
-                not _optional_text(raw.get("private_key"))
-                and not (key_path is not None and str(key_path).strip())
-                and existing_key is None
-            ):
+            usable = (
+                bool(_optional_text(raw.get("private_key")))
+                or (key_path is not None and bool(str(key_path).strip()))
+                or (existing_key is not None and "key" not in clear)
+            )
+            if not usable:
                 raise SettingsError("SSH 私钥未设置")
         return payload
 
@@ -587,32 +596,56 @@ class SettingsService:
         validated: list[dict] = []
         skipped: list[str] = []
         failed: list[dict] = []
+        seen: set[str] = set()
         for raw in candidates:
-            try:
-                payload = self._validate_import_candidate(raw, existing)
-            except SettingsError as exc:
-                name = (
-                    str(raw.get("name") or "").strip()
-                    if isinstance(raw, dict)
-                    else ""
-                )
-                failed.append({"name": name, "error": str(exc)})
+            if not isinstance(raw, dict):
+                failed.append({"name": "", "error": "主机条目必须是对象"})
                 continue
-            name = payload["name"]
+            if raw.get("valid") is False:
+                failed.append(
+                    {
+                        "name": str(raw.get("name") or "").strip(),
+                        "error": str(raw.get("error") or "候选主机无效"),
+                    }
+                )
+                continue
+            try:
+                name = _require_text(raw.get("name"), "name")
+            except SettingsError as exc:
+                failed.append(
+                    {"name": str(raw.get("name") or "").strip(), "error": str(exc)}
+                )
+                continue
+            # Existing targets are skipped before credential validation: the
+            # stored host may use a key_path-only setup with no stored secret.
             if name in existing and not overwrite:
                 skipped.append(name)
+                seen.add(name)
                 continue
+            if name in seen:
+                skipped.append(name)
+                continue
+            try:
+                payload = self._validate_import_candidate(raw)
+            except SettingsError as exc:
+                failed.append({"name": name, "error": str(exc)})
+                continue
+            seen.add(name)
             validated.append(payload)
 
         created: list[str] = []
         updated: list[str] = []
         for payload in validated:
             name = payload["name"]
+            try:
+                self.upsert_host(name, payload)
+            except SettingsError as exc:
+                failed.append({"name": name, "error": str(exc)})
+                continue
             if name in existing:
                 updated.append(name)
             else:
                 created.append(name)
-            self.upsert_host(name, payload)
             existing.add(name)
         return {
             "created": created,

@@ -224,6 +224,88 @@ def test_import_hosts_zero_writes_when_all_invalid(tmp_path):
     assert svc.load().servers == []
 
 
+def test_import_hosts_skips_existing_key_path_only_host(tmp_path):
+    svc = _service(tmp_path)
+    svc.upsert_host(
+        "kp",
+        {
+            "host": "10.0.0.8",
+            "port": 22,
+            "username": "u",
+            "auth_type": "key",
+            "key_path": "~/.ssh/id_rsa",
+        },
+    )
+    result = svc.import_hosts(
+        [
+            {
+                "name": "kp",
+                "host": "10.0.0.9",
+                "port": 22,
+                "username": "u",
+                "auth_type": "key",
+            }
+        ]
+    )
+    assert result["skipped"] == ["kp"]
+    assert result["failed"] == []
+    assert svc.load().servers[0].host == "10.0.0.8"
+    assert str(svc.load().servers[0].auth.key_path).endswith("id_rsa")
+
+
+def test_import_hosts_captures_write_time_failure(tmp_path, monkeypatch):
+    svc = _service(tmp_path)
+    original = svc.upsert_host
+
+    def flaky(name, payload):
+        if name == "b":
+            raise SettingsError("write boom")
+        return original(name, payload)
+
+    monkeypatch.setattr(svc, "upsert_host", flaky)
+    result = svc.import_hosts(
+        [
+            {"name": "a", "host": "10.0.0.1", "port": 22, "username": "u",
+             "auth_type": "password", "password": "pw"},
+            {"name": "b", "host": "10.0.0.2", "port": 22, "username": "u",
+             "auth_type": "password", "password": "pw"},
+        ]
+    )
+    assert result["created"] == ["a"]
+    assert [item["name"] for item in result["failed"]] == ["b"]
+    assert result["failed"][0]["error"] == "write boom"
+    assert [host.name for host in svc.load().servers] == ["a"]
+
+
+def test_import_hosts_requires_auth_type(tmp_path):
+    svc = _service(tmp_path)
+    result = svc.import_hosts(
+        [{"name": "noauth", "host": "10.0.0.1", "port": 22, "username": "u",
+          "password": "pw"}]
+    )
+    assert result["created"] == []
+    assert [item["name"] for item in result["failed"]] == ["noauth"]
+    assert "auth_type" in result["failed"][0]["error"]
+    assert svc.load().servers == []
+
+
+def test_import_hosts_duplicate_batch_names_not_created_and_updated(tmp_path):
+    svc = _service(tmp_path)
+    candidate = {
+        "name": "dup",
+        "host": "10.0.0.1",
+        "port": 22,
+        "username": "u",
+        "auth_type": "password",
+        "password": "pw",
+    }
+    result = svc.import_hosts([candidate, dict(candidate, host="10.0.0.2")])
+    assert result["created"] == ["dup"]
+    assert result["updated"] == []
+    assert result["skipped"] == ["dup"]
+    assert [host.name for host in svc.load().servers] == ["dup"]
+
+
 # ---------------------------------------------------------------------------
 # Copy
 # ---------------------------------------------------------------------------
