@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import logging
 import sqlite3
+from collections.abc import Iterable, Mapping
 from datetime import datetime, timedelta, timezone
 from html import escape as _html_escape
 from pathlib import Path
@@ -50,6 +51,7 @@ __all__ = [
     "evaluate_disk_alerts",
     "offline_alert",
     "recovery_event",
+    "SilenceRegistry",
     "NotifierProtocol",
     "Notifier",
     "AlertEngine",
@@ -350,6 +352,67 @@ def recovery_event(host_name: str, category: str) -> AlertEvent:
 
 
 # ---------------------------------------------------------------------------
+# Alert silences (maintenance windows)
+# ---------------------------------------------------------------------------
+
+# Silence scopes from broadest to narrowest.  When more than one matches a host
+# the broadest scope wins, making an ``all`` window impossible to override by a
+# narrower host/group window.
+_SILENCE_PRECEDENCE = ("all", "group", "host")
+
+
+class SilenceRegistry:
+    """Look up the active maintenance silence covering a host.
+
+    The database is read on **every** call (no caching), so a silence created or
+    deleted by another process takes effect on the next polling cycle.  Scope
+    precedence is ``all`` → ``group`` → ``host``: the first matching row wins.
+    """
+
+    def __init__(
+        self,
+        db_path: Path,
+        *,
+        clock: Callable[[], datetime] | None = None,
+    ) -> None:
+        self._db_path = Path(db_path)
+        self._clock: Callable[[], datetime] = clock or (
+            lambda: datetime.now(timezone.utc)
+        )
+
+    def active_for(
+        self,
+        host_name: str,
+        groups: Iterable[str] = (),
+        now: datetime | None = None,
+    ) -> dict | None:
+        """Return the active silence dict for *host_name*, or ``None``.
+
+        *groups* are the host's group memberships; they are supplied by the
+        caller because groups are a monitor-service concept, not alert data.
+        """
+        moment = _as_utc(now or self._clock())
+        rows = storage.list_silences(
+            self._db_path, active_only=True, now=moment
+        )
+        wanted_groups = {str(group) for group in (groups or ())}
+        for scope_type in _SILENCE_PRECEDENCE:
+            for row in rows:
+                if row.get("scope_type") != scope_type:
+                    continue
+                if scope_type == "all":
+                    return row
+                if (
+                    scope_type == "group"
+                    and str(row.get("scope")) in wanted_groups
+                ):
+                    return row
+                if scope_type == "host" and row.get("scope") == host_name:
+                    return row
+        return None
+
+
+# ---------------------------------------------------------------------------
 # Alert engine: dedupe / cooldown / persistence
 # ---------------------------------------------------------------------------
 
@@ -377,6 +440,12 @@ class NotifierProtocol(Protocol):
     """
 
     def dispatch(self, event: AlertEvent, config: AlertsConfig) -> list[str]:
+        ...
+
+    def dispatch_batch(
+        self, events: list[AlertEvent], config: AlertsConfig
+    ) -> list[str]:
+        """Notify several events that share a host using one merged message."""
         ...
 
 
@@ -428,6 +497,30 @@ def _alert_html_body(event: AlertEvent) -> str:
     )
 
 
+def _batch_event(events: list[AlertEvent]) -> AlertEvent:
+    """Merge several same-host events into one notification event.
+
+    The merged event keeps the host, carries the highest severity, and lists
+    every underlying title/message in its body.  Its fingerprint is only used
+    for logging (the individual rows keep their own fingerprints).
+    """
+    host_name = events[0].host_name
+    highest = max(events, key=lambda event: _severity_rank(event.severity))
+    title = f"主机 {host_name} {len(events)} 项告警"
+    details = "\n".join(
+        f"- [{event.severity}] {event.title}：{event.message}"
+        for event in events
+    )
+    return AlertEvent(
+        host_name=host_name,
+        category="batch",
+        severity=highest.severity,
+        title=title,
+        message=details,
+        fingerprint=fingerprint_for("batch", host_name, str(len(events))),
+    )
+
+
 class Notifier:
     """Fan one :class:`AlertEvent` out to every enabled notification channel.
 
@@ -469,6 +562,24 @@ class Notifier:
                 "Unexpected notifier failure for alert %s", event.fingerprint
             )
         return accepted
+
+    def dispatch_batch(
+        self, events: list[AlertEvent], config: AlertsConfig
+    ) -> list[str]:
+        """Notify *events* (all for one host) with a single merged message.
+
+        A single event delegates to :meth:`dispatch` so its message keeps the
+        normal single-alert shape.  Several events are merged into one title
+        ``主机 <host> N 项告警`` and one body listing each item, then sent once
+        per enabled channel.  Channel failures stay independent because
+        :meth:`dispatch` already isolates them.
+        """
+        events = list(events)
+        if not events:
+            return []
+        if len(events) == 1:
+            return self.dispatch(events[0], config)
+        return self.dispatch(_batch_event(events), config)
 
     # -- per-channel helpers ----------------------------------------------
 
@@ -540,6 +651,13 @@ def _severity_rank(severity: str | None) -> int:
     return _SEVERITY_RANK.get(str(severity or "").strip().lower(), 0)
 
 
+# Sentinel for "caller did not specify notify".  Modern notifiers (those with
+# ``dispatch_batch``) default recovery notifications on; legacy notifiers that
+# only implement ``dispatch`` keep the historical no-recovery behaviour so old
+# integrations/test doubles are not broken by Task 5.
+_NOTIFY_DEFAULT: object = object()
+
+
 class AlertEngine:
     """Turn raw :class:`AlertEvent` objects into "notify now" decisions.
 
@@ -570,6 +688,10 @@ class AlertEngine:
         notifier: NotifierProtocol,
         *,
         clock: Callable[[], datetime] | None = None,
+        silence_checker: "SilenceRegistry | None" = None,
+        host_groups: (
+            Mapping[str, Iterable[str]] | Callable[[str], Iterable[str]] | None
+        ) = None,
     ) -> None:
         self._db_path = Path(db_path)
         self._config = config
@@ -577,11 +699,19 @@ class AlertEngine:
         self._clock: Callable[[], datetime] = clock or (
             lambda: datetime.now(timezone.utc)
         )
+        self._silence_checker = silence_checker
+        self._host_groups = host_groups
 
     # -- public API --------------------------------------------------------
 
     def process(self, events: list[AlertEvent]) -> list[AlertEvent]:
         """Persist *events* and return the subset actually sent to channels.
+
+        Silenced events are logged and dropped before persistence/dispatch.
+        When ``aggregate_by_host`` is on, the remaining events are grouped by
+        host: a host with one event uses :meth:`dispatch`, a host with several
+        uses one merged :meth:`dispatch_batch`.  Every event is still persisted
+        and gets the channels accepted for its group written back.
 
         Disabled alerts config is a no-op.  An event is returned only when the
         notifier accepted it on at least one channel; skipped duplicates and
@@ -592,30 +722,88 @@ class AlertEngine:
             return []
 
         now = _as_utc(self._clock())
-        notified: list[AlertEvent] = []
-
+        candidates: list[AlertEvent] = []
         for event in events:
+            if self._is_silenced(event, now):
+                continue
             if self._should_skip(event, now):
                 continue
+            candidates.append(event)
 
+        if not candidates:
+            return []
+
+        if bool(getattr(self._config, "aggregate_by_host", False)):
+            return self._process_aggregated(candidates, now)
+        return self._process_individually(candidates, now)
+
+    def _process_individually(
+        self, events: list[AlertEvent], now: datetime
+    ) -> list[AlertEvent]:
+        notified: list[AlertEvent] = []
+        for event in events:
             alert_id = self._persist(event, now)
             if alert_id is None:
                 continue
-
             channels = self._dispatch(event)
             self._record_channels(alert_id, channels)
-
             if channels:
                 notified.append(event)
-
         return notified
 
-    def resolve(self, host_name: str, category: str) -> None:
+    def _process_aggregated(
+        self, events: list[AlertEvent], now: datetime
+    ) -> list[AlertEvent]:
+        groups: dict[str, list[AlertEvent]] = {}
+        for event in events:
+            groups.setdefault(event.host_name, []).append(event)
+
+        notified: list[AlertEvent] = []
+        for group in groups.values():
+            if len(group) == 1:
+                event = group[0]
+                alert_id = self._persist(event, now)
+                if alert_id is None:
+                    continue
+                channels = self._dispatch(event)
+                self._record_channels(alert_id, channels)
+                if channels:
+                    notified.append(event)
+                continue
+
+            persisted: list[tuple[AlertEvent, int]] = []
+            for event in group:
+                alert_id = self._persist(event, now)
+                if alert_id is not None:
+                    persisted.append((event, alert_id))
+            if not persisted:
+                continue
+
+            batch_events = [event for event, _ in persisted]
+            channels = self._dispatch_batch(batch_events)
+            for _, alert_id in persisted:
+                self._record_channels(alert_id, channels)
+            if channels:
+                notified.extend(batch_events)
+        return notified
+
+    def resolve(
+        self,
+        host_name: str,
+        category: str,
+        *,
+        notify: bool | object = _NOTIFY_DEFAULT,
+    ) -> list[AlertEvent]:
         """Mark every unresolved alert for *host_name* + *category* as resolved.
 
         Both ``active`` and ``acknowledged`` rows are open conditions: an
         acknowledged alert whose condition disappears must still be closed,
         otherwise it lingers in the database forever.
+
+        With *notify* (and ``notify_on_recovery``), one recovery event is
+        generated for the closed ``(host, category)`` and processed through the
+        normal pipeline.  Returns the recovery events that were generated, even
+        when notifications are disabled; no open rows means an empty list.
         """
         try:
             rows = self._open_alerts()
@@ -623,15 +811,23 @@ class AlertEngine:
             LOGGER.exception(
                 "Failed to load open alerts while resolving %s/%s", host_name, category
             )
-            return
+            return []
 
+        closed_conditions = 0
         for row in rows:
             if row.get("host_name") != host_name or row.get("category") != category:
                 continue
+            is_recovery = str(row.get("fingerprint") or "").startswith("recovery:")
             try:
                 storage.update_alert(row["id"], self._db_path, status="resolved")
+                if not is_recovery:
+                    closed_conditions += 1
             except sqlite3.Error:
                 LOGGER.exception("Failed to resolve alert id=%s", row.get("id"))
+
+        if not closed_conditions:
+            return []
+        return self._emit_recovery([(host_name, category)], notify)
 
     def resolve_missing(
         self,
@@ -639,7 +835,8 @@ class AlertEngine:
         active_fingerprints: set[str] | list[str] | tuple[str, ...],
         *,
         category: str | None = None,
-    ) -> None:
+        notify: bool | object = _NOTIFY_DEFAULT,
+    ) -> list[AlertEvent]:
         """Resolve a host's open alerts whose condition no longer fires.
 
         *active_fingerprints* is the set of fingerprints still produced by the
@@ -648,6 +845,10 @@ class AlertEngine:
         ``resolved``.  Pass *category* to scope the cleanup to one alert type
         (e.g. only ``"system"``) when a caller did not evaluate every rule for
         the host.
+
+        One recovery event is produced per ``(host, category)`` that actually
+        had rows closed.  With *notify* (and ``notify_on_recovery``) they are
+        processed through the normal aggregation/dispatch pipeline.
         """
         remaining = set(active_fingerprints)
         try:
@@ -656,8 +857,9 @@ class AlertEngine:
             LOGGER.exception(
                 "Failed to load open alerts while resolving missing for %s", host_name
             )
-            return
+            return []
 
+        closed_categories: list[str] = []
         for row in rows:
             if row.get("host_name") != host_name:
                 continue
@@ -665,10 +867,47 @@ class AlertEngine:
                 continue
             if row.get("fingerprint") in remaining:
                 continue
+            is_recovery = str(row.get("fingerprint") or "").startswith("recovery:")
             try:
                 storage.update_alert(row["id"], self._db_path, status="resolved")
             except sqlite3.Error:
                 LOGGER.exception("Failed to resolve alert id=%s", row.get("id"))
+                continue
+            if is_recovery:
+                # A recovery notice is informational; closing it must not spawn
+                # another recovery notice for the same category.
+                continue
+            row_category = row.get("category")
+            if (
+                isinstance(row_category, str)
+                and row_category not in closed_categories
+            ):
+                closed_categories.append(row_category)
+
+        if not closed_categories:
+            return []
+        return self._emit_recovery(
+            [(host_name, row_category) for row_category in closed_categories],
+            notify,
+        )
+
+    def _emit_recovery(
+        self, keys: list[tuple[str, str]], notify: bool | object
+    ) -> list[AlertEvent]:
+        events = [recovery_event(host_name, category) for host_name, category in keys]
+        if self._should_notify_recovery(notify) and bool(
+            getattr(self._config, "notify_on_recovery", True)
+        ):
+            self.process(events)
+        return events
+
+    def _should_notify_recovery(self, notify: bool | object) -> bool:
+        if notify is _NOTIFY_DEFAULT:
+            # Capability-based default: real notifiers (and new test doubles)
+            # implementing ``dispatch_batch`` get recovery notifications; legacy
+            # ``dispatch``-only notifiers retain the old behaviour.
+            return callable(getattr(self._notifier, "dispatch_batch", None))
+        return bool(notify)
 
     # -- internals ---------------------------------------------------------
 
@@ -686,6 +925,46 @@ class AlertEngine:
                 )
             )
         return rows
+
+    def _groups_for_host(self, host_name: str) -> list[str]:
+        """Resolve a host's group memberships for silence matching."""
+        source = self._host_groups
+        if source is None:
+            return []
+        try:
+            if callable(source):
+                groups = source(host_name)
+            else:
+                groups = source.get(host_name, ())
+            return [str(group) for group in (groups or ())]
+        except Exception:  # noqa: BLE001 - group lookup must not break polling
+            LOGGER.exception("Failed to resolve groups for host %s", host_name)
+            return []
+
+    def _is_silenced(self, event: AlertEvent, now: datetime) -> bool:
+        """True when an active silence covers this event's host."""
+        if self._silence_checker is None:
+            return False
+        try:
+            hit = self._silence_checker.active_for(
+                event.host_name,
+                self._groups_for_host(event.host_name),
+                now,
+            )
+        except Exception:  # noqa: BLE001 - silence lookup must not break polling
+            LOGGER.exception(
+                "Silence check failed for host %s", event.host_name
+            )
+            return False
+        if not hit:
+            return False
+        LOGGER.info(
+            "alert suppressed by silence %s for %s/%s",
+            hit.get("id"),
+            event.host_name,
+            event.category,
+        )
+        return True
 
     def _should_skip(self, event: AlertEvent, now: datetime) -> bool:
         """Return True when this event should be suppressed.
@@ -767,6 +1046,36 @@ class AlertEngine:
             LOGGER.exception("Notifier failed for alert %s", event.fingerprint)
             return []
         return list(channels or [])
+
+    def _dispatch_batch(self, events: list[AlertEvent]) -> list[str]:
+        """Dispatch a same-host batch, tolerating notifiers without support.
+
+        Old test doubles / integrations only implement ``dispatch``; when
+        ``dispatch_batch`` is absent we fall back to dispatching each event and
+        unioning the accepted channels, preserving the previous behaviour.
+        """
+        if not events:
+            return []
+        if len(events) == 1:
+            return self._dispatch(events[0])
+
+        batch = getattr(self._notifier, "dispatch_batch", None)
+        if callable(batch):
+            try:
+                channels = batch(events, self._config)
+            except Exception:  # noqa: BLE001 - must not break polling
+                LOGGER.exception(
+                    "Notifier batch failed for %s", events[0].host_name
+                )
+                return []
+            return list(channels or [])
+
+        accepted: list[str] = []
+        for event in events:
+            for channel in self._dispatch(event):
+                if channel not in accepted:
+                    accepted.append(channel)
+        return accepted
 
     def _record_channels(self, alert_id: int, channels: list[str]) -> None:
         try:
