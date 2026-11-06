@@ -35,7 +35,7 @@ from flask import (
     url_for,
 )
 
-from servermanage import storage
+from servermanage import disk_capacity, storage
 from servermanage.disk_health import AlertEvent
 from servermanage.models import AuthConfig, HostConfig, WebhookConfig
 from servermanage.notify_webhook import send_webhook
@@ -280,8 +280,13 @@ def _memory_percent(metrics: dict[str, Any]) -> float | None:
     return round(used / total * 100.0, 2)
 
 
-def _disk_percent(metrics: dict[str, Any]) -> float | None:
+def _disk_percent(
+    metrics: dict[str, Any],
+    mounts: list[str] | None = None,
+) -> float | None:
     rows = metrics.get("disk_usage") or []
+    if mounts is not None:
+        return disk_capacity.max_percent(rows, mounts)
     percents: list[int] = []
     for row in rows:
         if not isinstance(row, dict):
@@ -348,11 +353,14 @@ def _is_online(snapshot: dict[str, Any], poll_interval_seconds: int, now: dateti
     return (now - collected).total_seconds() <= max_age
 
 
-def _metrics_payload(metrics: dict[str, Any]) -> dict[str, Any]:
+def _metrics_payload(
+    metrics: dict[str, Any],
+    disk_mounts: list[str] | None = None,
+) -> dict[str, Any]:
     return {
         "cpu_percent": _as_float(metrics.get("cpu_usage_percent")),
         "memory_percent": _memory_percent(metrics),
-        "disk_percent": _disk_percent(metrics),
+        "disk_percent": _disk_percent(metrics, disk_mounts),
         "gpu_memory_percent": _gpu_memory_percent(metrics),
     }
 
@@ -366,6 +374,7 @@ def _host_row(
     poll_interval_seconds: int,
     now: datetime,
     tz,
+    disk_mounts: list[str] | None = None,
 ) -> dict[str, Any]:
     if snapshot is None:
         return {
@@ -385,7 +394,7 @@ def _host_row(
         "host": host,
         "online": _is_online(snapshot, poll_interval_seconds, now),
         "collected_at": _to_local_iso(snapshot.get("collected_at"), tz),
-        **_metrics_payload(metrics),
+        **_metrics_payload(metrics, disk_mounts),
         "disk_health": _disk_health_summary(disk_health),
     }
 
@@ -406,6 +415,7 @@ def _build_overview(config, db_path) -> dict[str, Any]:
         item["host_name"]: item for item in storage.get_all_disk_health(db_path)
     }
     addresses = {server.name: server.host for server in config.servers}
+    mounts_by_host = {server.name: server.disk_mounts for server in config.servers}
 
     names: list[str] = []
     for server in config.servers:
@@ -424,6 +434,7 @@ def _build_overview(config, db_path) -> dict[str, Any]:
             poll_interval_seconds=config.app.poll_interval_seconds,
             now=now,
             tz=tz,
+            disk_mounts=mounts_by_host.get(host_name),
         )
         for host_name in sorted(names)
     ]

@@ -29,6 +29,7 @@ from servermanage.alerts import (
 )
 from servermanage.collectors import collect_all_hosts
 from servermanage.config import load_config
+from servermanage.disk_capacity import mount_statuses
 from servermanage.disk_health import (
     DiskHealthReport,
     collect_disk_health,
@@ -196,6 +197,7 @@ class MonitorService:
             host.name: set() for host in self.config.servers
         }
         success_reports = []
+        host_mounts = {host.name: host.disk_mounts for host in self.config.servers}
 
         for report in reports:
             host_name = report.host_name
@@ -210,12 +212,19 @@ class MonitorService:
                 self.engine.resolve(host_name, "offline")
                 if previous_failures >= offline_threshold:
                     events.append(recovery_event(host_name, "offline"))
-                disk_percent = _extract_disk_used_percent(report)
+                mounts = host_mounts.get(host_name)
+                disk_statuses = (
+                    mount_statuses(report.metrics.disk_usage, mounts)
+                    if mounts is not None
+                    else None
+                )
+                disk_percent = _extract_disk_used_percent(report, mounts)
                 for event in evaluate_system_alerts(
                     host_name,
                     report.metrics,
                     self.config.alerts.thresholds,
                     disk_percent=disk_percent,
+                    disk_mounts=disk_statuses,
                 ):
                     events.append(event)
                     active[host_name].add(event.fingerprint)
@@ -237,6 +246,7 @@ class MonitorService:
                     subject_prefix=self.config.report.subject_prefix,
                 ),
                 self.db_path,
+                disk_mounts=host_mounts,
             )
 
         notified = self.engine.process(events)

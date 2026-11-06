@@ -100,6 +100,7 @@ def evaluate_system_alerts(
     thresholds: AlertThresholds,
     *,
     disk_percent: float | None = None,
+    disk_mounts: list[dict[str, object]] | None = None,
 ) -> list[AlertEvent]:
     """Build ``warning`` events for CPU / memory / disk / GPU over-utilisation.
 
@@ -143,7 +144,33 @@ def evaluate_system_alerts(
             )
         )
 
-    if disk_percent is not None and disk_percent >= thresholds.disk_percent:
+    if disk_mounts is not None:
+        for status in disk_mounts:
+            if not status.get("present"):
+                continue
+            percent = status.get("percent")
+            if percent is None:
+                continue
+            percent = float(percent)
+            if percent < thresholds.disk_percent:
+                continue
+            mountpoint = str(status.get("mountpoint"))
+            events.append(
+                AlertEvent(
+                    host_name=host_name,
+                    category="system",
+                    severity="warning",
+                    title="磁盘使用率过高",
+                    message=(
+                        f"主机 {host_name} 挂载点 {mountpoint} 磁盘使用率 "
+                        f"{percent:.1f}% 达到阈值 {thresholds.disk_percent:g}%"
+                    ),
+                    fingerprint=fingerprint_for(
+                        "system", host_name, "disk", mountpoint
+                    ),
+                )
+            )
+    elif disk_percent is not None and disk_percent >= thresholds.disk_percent:
         events.append(
             AlertEvent(
                 host_name=host_name,

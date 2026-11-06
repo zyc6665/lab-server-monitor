@@ -3,9 +3,11 @@ from __future__ import annotations
 import json
 import logging
 import sqlite3
+from collections.abc import Mapping, Sequence
 from datetime import date, datetime, time, timedelta, timezone, tzinfo
 from pathlib import Path
 
+from servermanage import disk_capacity
 from servermanage.disk_health import AlertEvent, DiskHealthReport
 from servermanage.models import DailyReport, HostReport
 from servermanage.serialization import dump_json, to_jsonable
@@ -170,9 +172,14 @@ def _disk_percent_value(percent: str) -> int:
     return int(digits)
 
 
-def _extract_disk_used_percent(host_report: HostReport) -> float | None:
+def _extract_disk_used_percent(
+    host_report: HostReport,
+    mounts: Sequence[str] | None = None,
+) -> float | None:
     if not host_report.metrics.disk_usage:
         return None
+    if mounts:
+        return disk_capacity.max_percent(host_report.metrics.disk_usage, mounts)
     real_disks = [
         row
         for row in host_report.metrics.disk_usage
@@ -202,7 +209,12 @@ def init_storage(db_path: Path) -> None:
         conn.executescript(_CREATE_SETTINGS_TABLES_SQL)
 
 
-def persist_host_reports(report: DailyReport, db_path: Path) -> None:
+def persist_host_reports(
+    report: DailyReport,
+    db_path: Path,
+    *,
+    disk_mounts: Mapping[str, Sequence[str]] | None = None,
+) -> None:
     db_path = Path(db_path)
     init_storage(db_path)
 
@@ -221,6 +233,7 @@ def persist_host_reports(report: DailyReport, db_path: Path) -> None:
         )
         memory = metrics.memory
         load = metrics.load_average
+        host_mounts = disk_mounts.get(host_report.host_name) if disk_mounts is not None else None
 
         rows.append(
             (
@@ -231,7 +244,7 @@ def persist_host_reports(report: DailyReport, db_path: Path) -> None:
                 metrics.cpu_usage_percent,
                 memory.used_mb if memory else None,
                 memory.total_mb if memory else None,
-                _extract_disk_used_percent(host_report),
+                _extract_disk_used_percent(host_report, host_mounts),
                 _extract_gpu_utilization_percent(host_report),
                 sum(gpu.memory_used_mb for gpu in metrics.gpu_summary) if metrics.gpu_summary else None,
                 sum(gpu.memory_total_mb for gpu in metrics.gpu_summary) if metrics.gpu_summary else None,

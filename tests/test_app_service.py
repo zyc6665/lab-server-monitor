@@ -304,7 +304,9 @@ def test_run_status_once_raises_disk_usage_alert(tmp_path: Path):
     assert result == {"hosts": 1, "alerts": 1}
     assert len(notifier.events) == 1
     assert notifier.events[0].category == "system"
-    assert notifier.events[0].fingerprint == "system:gpu-01:disk"
+    # Disk capacity is monitored per configured mount, so the fingerprint now
+    # carries the mount point (the "/" row in _disk_report is at 95%).
+    assert notifier.events[0].fingerprint == "system:gpu-01:disk:/"
 
 
 def test_run_status_once_ignores_disk_usage_below_threshold(tmp_path: Path):
