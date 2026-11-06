@@ -430,3 +430,51 @@ def test_migration_failure_records_error_and_keeps_config_usable(tmp_path, monke
     assert "RuntimeError: boom" in section["migration_error"]
     assert "migrated_at" not in section
     assert svc.load().app.poll_interval_seconds == 600
+
+
+def test_failed_key_to_password_switch_preserves_credentials(tmp_path):
+    svc = _service(tmp_path)
+    svc.upsert_host("h", {"host": "1.2.3.4", "username": "u", "auth_type": "key",
+                          "private_key": "KEYDATA", "passphrase": "pp"})
+    with pytest.raises(SettingsError):
+        svc.upsert_host("h", {"host": "1.2.3.4", "username": "u",
+                              "auth_type": "password"})
+    assert storage.get_secret("host:h:ssh_key", svc.db_path) is not None
+    assert storage.get_secret("host:h:ssh_passphrase", svc.db_path) is not None
+    assert storage.get_secret("host:h:ssh_password", svc.db_path) is None
+    auth = svc.load().servers[0].auth
+    assert auth.type == "key"
+    assert auth.key_data == "KEYDATA"
+    assert auth.passphrase == "pp"
+
+
+def test_failed_password_to_key_switch_preserves_credentials(tmp_path):
+    svc = _service(tmp_path)
+    svc.upsert_host("h", {"host": "1.2.3.4", "username": "u",
+                          "auth_type": "password", "password": "oldpw"})
+    with pytest.raises(SettingsError):
+        svc.upsert_host("h", {"host": "1.2.3.4", "username": "u", "auth_type": "key"})
+    assert storage.get_secret("host:h:ssh_password", svc.db_path) is not None
+    assert storage.get_secret("host:h:ssh_key", svc.db_path) is None
+    auth = svc.load().servers[0].auth
+    assert auth.type == "password"
+    assert auth.password == "oldpw"
+
+
+def test_machine_reset_does_not_readopt_env_admin(tmp_path, monkeypatch):
+    if not security.dpapi_available():
+        pytest.skip("DPAPI only available on Windows")
+    monkeypatch.setenv("DASHBOARD_PASSWORD", "LegacyPass!23")
+    cfg = tmp_path / "config.yaml"
+    cfg.write_text("servers: []\n", encoding="utf-8")
+    db = tmp_path / "m.db"
+    svc = SettingsService(config_path=cfg, db_path=db)
+    assert storage.get_secret(SECRET_ADMIN, db) is not None  # migrated from env
+
+    storage.save_app_settings("security", {"machine_id": "other-machine"}, db)
+    fresh = SettingsService(config_path=cfg, db_path=db)
+    fresh.load()
+    fresh.public_settings()
+    assert storage.get_secret(SECRET_ADMIN, db) is None
+    assert fresh.setup_required() is True
+    assert fresh.verify_admin("admin", "LegacyPass!23") is False

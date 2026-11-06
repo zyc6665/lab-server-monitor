@@ -490,29 +490,40 @@ class SettingsService:
         key_secret = _HOST_SECRET_KEY.format(name=name)
         passphrase_secret = _HOST_SECRET_PASSPHRASE.format(name=name)
         if auth_type == "password":
-            # Switching auth type must not leave the other method's secrets behind.
-            storage.delete_secret(key_secret, self.db_path)
-            storage.delete_secret(passphrase_secret, self.db_path)
+            existing = storage.get_secret(password_secret, self.db_path)
+            usable = bool(password) or (
+                existing is not None and "password" not in clear
+            )
+            if not usable:
+                # Validate the *new* credential before touching any secret: a
+                # failed switch must leave the previous auth method intact.
+                raise SettingsError("SSH 密码未设置")
             if "password" in clear:
                 storage.delete_secret(password_secret, self.db_path)
             if password:
                 self._store_secret(password_secret, password)
-            elif storage.get_secret(password_secret, self.db_path) is None:
-                raise SettingsError("SSH 密码未设置")
+            # Only now that the new credential is persisted, drop the stale
+            # secrets of the other auth method.
+            storage.delete_secret(key_secret, self.db_path)
+            storage.delete_secret(passphrase_secret, self.db_path)
             return
-        # key auth
-        storage.delete_secret(password_secret, self.db_path)
+        # key auth: confirm a usable key source before deleting anything.
+        existing_key = storage.get_secret(key_secret, self.db_path)
+        usable = bool(private_key) or key_path is not None or (
+            existing_key is not None and "key" not in clear
+        )
+        if not usable:
+            raise SettingsError("SSH 私钥未设置")
         if "key" in clear:
             storage.delete_secret(key_secret, self.db_path)
         if private_key:
             self._store_secret(key_secret, private_key)
-        has_key = storage.get_secret(key_secret, self.db_path) is not None or key_path is not None
-        if not has_key:
-            raise SettingsError("SSH 私钥未设置")
         if "passphrase" in clear:
             storage.delete_secret(passphrase_secret, self.db_path)
         if passphrase:
             self._store_secret(passphrase_secret, passphrase)
+        # Only switch over once the key credential is in place.
+        storage.delete_secret(password_secret, self.db_path)
 
     def _host_entries_for_update(self) -> list[dict]:
         entries = self._read_host_entries()
@@ -646,6 +657,11 @@ class SettingsService:
                 password, hash_value, salt, iterations
             )
         auth = self.base_config.dashboard.auth
+        sections = storage.load_app_settings(self.db_path)
+        security_section = sections.get("security")
+        if isinstance(security_section, dict) and security_section.get("force_setup"):
+            # During a forced re-setup the legacy plaintext credential is void.
+            return False
         if not auth.password:
             return False
         if str(username) != str(auth.username or "admin"):
@@ -1031,6 +1047,13 @@ class SettingsService:
         var (and existing deployments are not forced through first-run setup).
         """
         if not self.is_writable():
+            return
+        sections = storage.load_app_settings(self.db_path)
+        section = sections.get("security")
+        if isinstance(section, dict) and section.get("force_setup"):
+            # A machine-change reset deliberately removed the credential; don't
+            # silently recreate it from the legacy env var, which would let the
+            # old password authenticate while setup is still required.
             return
         if storage.get_secret(SECRET_ADMIN, self.db_path) is not None:
             return
