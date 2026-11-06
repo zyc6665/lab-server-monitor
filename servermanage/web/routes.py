@@ -1304,9 +1304,15 @@ def register_routes(app: Flask) -> None:
         config = _config(app)
         service = _settings_service(app)
         settings = service.public_settings() if service is not None else _settings_snapshot(config)
+        runtime = read_runtime_state(_RUNTIME_FILE) or {}
+        silences = (
+            service.list_silences(active_only=True) if service is not None else []
+        )
         return render_template(
             "settings.html",
             active_page="settings",
             config=config,
             settings=settings,
+            runtime=runtime,
+            silences=silences,
         )

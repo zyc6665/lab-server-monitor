@@ -75,6 +75,89 @@ def test_settings_page_readonly_when_not_writable(client, monkeypatch):
     assert "disabled" in html
 
 
+def test_settings_page_has_v12_host_metadata_and_import(client):
+    html = client.get("/settings").get_data(as_text=True)
+
+    # Host form metadata fields.
+    for name in ("group", "owner", "location", "notes"):
+        assert f'data-host-field="{name}"' in html
+    # Host table shows the new metadata columns.
+    assert "分组" in html
+    assert "负责人" in html
+
+    # Batch import dialog and controls.
+    assert 'id="import-open-button"' in html
+    assert 'id="import-dialog"' in html
+    assert 'id="import-format"' in html
+    for fmt in ("ssh", "csv", "yaml"):
+        assert f'value="{fmt}"' in html
+    assert 'id="import-file"' in html
+    assert 'type="file"' in html
+    assert 'id="import-text"' in html
+    assert 'id="import-preview-button"' in html
+    assert 'id="import-preview-table"' in html
+    assert 'id="import-valid-body"' in html
+    assert 'id="import-invalid-body"' in html
+    assert 'id="import-duplicate-body"' in html
+    assert 'id="import-confirm-button"' in html
+    # Batch connection test trigger.
+    assert 'id="test-batch-button"' in html
+
+
+def test_settings_page_has_silence_and_logs_cards(client):
+    html = client.get("/settings").get_data(as_text=True)
+
+    # Silence sub-card (scope / scope value / reason / window / create / list).
+    assert 'data-section="silences"' in html
+    for element_id in (
+        "silence-scope-type",
+        "silence-scope",
+        "silence-reason",
+        "silence-starts-at",
+        "silence-ends-at",
+        "silence-create-button",
+        "silence-list",
+    ):
+        assert f'id="{element_id}"' in html
+
+    # Log card tailing /api/logs.
+    assert 'data-section="logs"' in html
+    assert 'id="logs-output"' in html
+    assert 'id="logs-refresh-button"' in html
+    assert "logs-output" in html
+
+    # First paint gets runtime + silences injected alongside settings.
+    assert "window.__SETTINGS_RUNTIME__" in html
+    assert "window.__SETTINGS_SILENCES__" in html
+
+
+def test_settings_page_has_v12_checkbox_fields(client):
+    html = client.get("/settings").get_data(as_text=True)
+
+    for field in (
+        "aggregate_by_host",
+        "notify_on_recovery",
+        "auto_port_fallback",
+        "tray_enabled",
+        "open_browser_on_start",
+    ):
+        assert f'data-field="{field}"' in html
+
+
+def test_settings_page_readonly_fallback_without_service(tmp_path):
+    base = load_config_from_mapping(
+        {"dashboard": {"auth": {"enabled": False}}}, allow_empty_servers=True
+    )
+    app = create_app(config=base, db_path=tmp_path / "legacy.db")
+
+    response = app.test_client().get("/settings")
+
+    assert response.status_code == 200
+    html = response.get_data(as_text=True)
+    assert 'id="settings-root"' in html
+    assert "只读" in html
+
+
 def test_settings_page_renders_host_rows(tmp_path):
     app = _app(tmp_path)
     service = app.config["SETTINGS_SERVICE"]
@@ -110,3 +193,4 @@ def test_settings_page_renders_host_rows(tmp_path):
     assert "edge" in html
     assert "10.0.0.5" in html
     assert "data-host-edit=\"edge\"" in html
+    assert "data-host-copy=\"edge\"" in html

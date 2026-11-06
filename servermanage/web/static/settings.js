@@ -158,6 +158,10 @@
     hostField("passphrase").value = "";
     hostField("password").value = "";
     hostField("tags").value = host ? (host.tags || []).join(", ") : "";
+    hostField("group").value = host ? (host.group || "") : "";
+    hostField("owner").value = host ? (host.owner || "") : "";
+    hostField("location").value = host ? (host.location || "") : "";
+    hostField("notes").value = host ? (host.notes || "") : "";
     status(hostStatus, "");
     updateAuthVisibility();
     hostForm.hidden = false;
@@ -186,6 +190,17 @@
     });
   });
 
+  qsa("[data-host-copy]").forEach(function (button) {
+    button.addEventListener("click", function () {
+      var name = button.getAttribute("data-host-copy");
+      var newName = window.prompt("复制为新的主机名称", name + "-copy");
+      if (!newName) return;
+      api("POST", "/api/settings/hosts/" + encodeURIComponent(name) + "/copy", { new_name: newName })
+        .then(function () { window.location.reload(); })
+        .catch(function (error) { window.alert(error.message); });
+    });
+  });
+
   function hostPayload() {
     var mounts = hostField("disk_mounts").value.split(",").map(function (item) { return item.trim(); });
     var tags = hostField("tags").value.split(",").map(function (item) { return item.trim(); });
@@ -196,6 +211,10 @@
       auth_type: hostField("auth_type").value,
       disk_mounts: mounts.filter(Boolean),
       tags: tags.filter(Boolean),
+      group: hostField("group").value.trim(),
+      owner: hostField("owner").value.trim(),
+      location: hostField("location").value.trim(),
+      notes: hostField("notes").value.trim(),
       key_path: hostField("key_path").value.trim() || null,
     };
     if (hostField("private_key").value.trim()) payload.private_key = hostField("private_key").value;
@@ -253,6 +272,252 @@
       })
       .catch(function (error) { status(qs("#password-status"), error.message, true); });
   });
+
+  // -- batch connection test ---------------------------------------------
+  var batchButton = qs("#test-batch-button");
+  if (batchButton) {
+    batchButton.addEventListener("click", function () {
+      var names = (initial.hosts || []).map(function (host) { return host.name; });
+      var batchStatus = qs("#host-batch-status");
+      if (!names.length) { status(batchStatus, "没有可测试的主机", true); return; }
+      status(batchStatus, "正在测试 " + names.length + " 台主机…");
+      batchButton.disabled = true;
+      api("POST", "/api/settings/hosts/test-batch", { names: names })
+        .then(function (result) {
+          var results = result.results || [];
+          var okCount = results.filter(function (item) { return item.ok; }).length;
+          var failed = results.filter(function (item) { return !item.ok; })
+            .map(function (item) { return item.name + "：" + (item.detail || "失败"); });
+          var text = "成功 " + okCount + "/" + results.length;
+          if (failed.length) text += "；失败 " + failed.join("；");
+          status(batchStatus, text, failed.length > 0);
+        })
+        .catch(function (error) { status(batchStatus, error.message, true); })
+        .finally(function () { batchButton.disabled = !writable; });
+    });
+  }
+
+  // -- batch import -------------------------------------------------------
+  var importDialog = qs("#import-dialog");
+  var importStatus = qs("#import-status");
+  var importSummary = qs("#import-preview-summary");
+  var importText = qs("#import-text");
+  var importFormat = qs("#import-format");
+  var importPreview = null;
+
+  function clearChildren(el) {
+    if (!el) return;
+    while (el.firstChild) el.removeChild(el.firstChild);
+  }
+  function cell(text) {
+    var td = document.createElement("td");
+    td.textContent = text === undefined || text === null ? "" : String(text);
+    return td;
+  }
+  function addPreviewRow(body, category, candidate, note) {
+    var tr = document.createElement("tr");
+    if (category === "无效") tr.className = "import-row-invalid";
+    if (category === "重复") tr.className = "import-row-duplicate";
+    tr.appendChild(cell(category));
+    tr.appendChild(cell(candidate.name || ""));
+    tr.appendChild(cell(candidate.host || ""));
+    tr.appendChild(cell(candidate.username || ""));
+    tr.appendChild(cell(candidate.group || ""));
+    tr.appendChild(cell(note || ""));
+    body.appendChild(tr);
+  }
+  function renderPreview(preview) {
+    var validBody = qs("#import-valid-body");
+    var invalidBody = qs("#import-invalid-body");
+    var duplicateBody = qs("#import-duplicate-body");
+    clearChildren(validBody);
+    clearChildren(invalidBody);
+    clearChildren(duplicateBody);
+    var candidates = (preview && preview.candidates) || [];
+    var existing = {};
+    (initial.hosts || []).forEach(function (host) { existing[host.name] = true; });
+    var seen = {};
+    var validCount = 0;
+    var invalidCount = 0;
+    var duplicateCount = 0;
+    candidates.forEach(function (candidate) {
+      var name = candidate.name || "";
+      if (candidate.valid === false) {
+        invalidCount += 1;
+        addPreviewRow(invalidBody, "无效", candidate, candidate.error || "校验失败");
+        return;
+      }
+      var duplicate = !!existing[name] || !!seen[name];
+      seen[name] = true;
+      if (duplicate) {
+        duplicateCount += 1;
+        addPreviewRow(duplicateBody, "重复", candidate, existing[name] ? "已存在同名主机" : "导入内容内重复");
+        return;
+      }
+      validCount += 1;
+      addPreviewRow(validBody, "有效", candidate, (candidate.warnings || []).join("；"));
+    });
+    var parseErrors = (preview && preview.errors && preview.errors.length) || 0;
+    importSummary.textContent = "有效 " + validCount + " 台，无效 " + invalidCount +
+      " 台，重复 " + duplicateCount + " 台" + (parseErrors ? "；解析错误 " + parseErrors + " 条" : "");
+    var confirmButton = qs("#import-confirm-button");
+    if (confirmButton) confirmButton.disabled = candidates.length === 0;
+  }
+  function importRequest() {
+    return { format: importFormat.value, content: importText.value };
+  }
+  if (importDialog) {
+    qs("#import-open-button").addEventListener("click", function () {
+      if (importDialog.showModal) importDialog.showModal();
+      else importDialog.setAttribute("open", "");
+    });
+    qs("#import-close-button").addEventListener("click", function () {
+      if (importDialog.close) importDialog.close();
+      else importDialog.removeAttribute("open");
+    });
+    qs("#import-file").addEventListener("change", function (event) {
+      var file = event.target.files && event.target.files[0];
+      if (!file) return;
+      var reader = new FileReader();
+      reader.onload = function () { importText.value = String(reader.result || ""); };
+      reader.readAsText(file, "utf-8");
+    });
+    qs("#import-preview-button").addEventListener("click", function () {
+      if (!importText.value.trim()) { status(importStatus, "请先粘贴或选择文件内容", true); return; }
+      status(importStatus, "正在解析…");
+      api("POST", "/api/settings/hosts/import/preview", importRequest())
+        .then(function (payload) {
+          importPreview = payload;
+          renderPreview(payload);
+          status(importStatus, "解析完成", false);
+        })
+        .catch(function (error) { status(importStatus, error.message, true); });
+    });
+    qs("#import-confirm-button").addEventListener("click", function () {
+      if (!importPreview) { status(importStatus, "请先预览", true); return; }
+      var body = importRequest();
+      body.overwrite = qs("#import-overwrite").checked;
+      status(importStatus, "正在导入…");
+      api("POST", "/api/settings/hosts/import", body)
+        .then(function (result) {
+          var text = "创建 " + (result.created || []).length + " 台，更新 " +
+            (result.updated || []).length + " 台，跳过 " + (result.skipped || []).length +
+            " 台，失败 " + (result.failed || []).length + " 台";
+          status(importStatus, text, (result.failed || []).length > 0);
+          window.setTimeout(function () { window.location.reload(); }, 800);
+        })
+        .catch(function (error) { status(importStatus, error.message, true); });
+    });
+  }
+
+  // -- alert silences -----------------------------------------------------
+  var silenceScopeType = qs("#silence-scope-type");
+  var silenceScope = qs("#silence-scope");
+  var silenceStatus = qs("#silence-status");
+
+  function localInputValue(date) {
+    function pad(value) { return (value < 10 ? "0" : "") + value; }
+    return date.getFullYear() + "-" + pad(date.getMonth() + 1) + "-" + pad(date.getDate()) +
+      "T" + pad(date.getHours()) + ":" + pad(date.getMinutes());
+  }
+  function toIso(value) { return value ? new Date(value).toISOString() : null; }
+  function scopeLabel(type) {
+    if (type === "all") return "全部";
+    return type === "group" ? "分组" : "主机";
+  }
+  function updateSilenceScope() {
+    var isAll = silenceScopeType.value === "all";
+    silenceScope.disabled = isAll;
+    if (isAll) silenceScope.value = "";
+  }
+  function renderSilences(silences) {
+    var body = qs("#silence-list");
+    clearChildren(body);
+    if (!silences || !silences.length) {
+      var emptyRow = document.createElement("tr");
+      var emptyCell = cell("当前没有生效的静默");
+      emptyCell.colSpan = 6;
+      emptyCell.className = "empty-cell";
+      emptyRow.appendChild(emptyCell);
+      body.appendChild(emptyRow);
+      return;
+    }
+    silences.forEach(function (silence) {
+      var tr = document.createElement("tr");
+      tr.appendChild(cell(scopeLabel(silence.scope_type)));
+      tr.appendChild(cell(silence.scope || "全部"));
+      tr.appendChild(cell(silence.reason || ""));
+      tr.appendChild(cell(silence.starts_at ? new Date(silence.starts_at).toLocaleString() : ""));
+      tr.appendChild(cell(silence.ends_at ? new Date(silence.ends_at).toLocaleString() : ""));
+      var actions = document.createElement("td");
+      var button = document.createElement("button");
+      button.className = "danger-button";
+      button.textContent = "解除";
+      button.disabled = !writable;
+      button.addEventListener("click", function () {
+        if (!window.confirm("确定解除这条静默吗？")) return;
+        api("DELETE", "/api/settings/silences/" + encodeURIComponent(silence.id))
+          .then(loadSilences)
+          .catch(function (error) { status(silenceStatus, error.message, true); });
+      });
+      actions.appendChild(button);
+      tr.appendChild(actions);
+      body.appendChild(tr);
+    });
+  }
+  function loadSilences() {
+    return api("GET", "/api/settings/silences?active_only=true")
+      .then(function (payload) { renderSilences(payload.silences || []); })
+      .catch(function (error) { status(silenceStatus, error.message, true); });
+  }
+  if (silenceScopeType) {
+    updateSilenceScope();
+    silenceScopeType.addEventListener("change", updateSilenceScope);
+    var now = new Date();
+    qs("#silence-starts-at").value = localInputValue(now);
+    qs("#silence-ends-at").value = localInputValue(new Date(now.getTime() + 60 * 60 * 1000));
+    qs("#silence-refresh-button").addEventListener("click", loadSilences);
+    qs("#silence-create-button").addEventListener("click", function () {
+      var payload = {
+        scope_type: silenceScopeType.value,
+        scope: silenceScopeType.value === "all" ? null : silenceScope.value.trim(),
+        reason: qs("#silence-reason").value.trim(),
+        starts_at: toIso(qs("#silence-starts-at").value),
+        ends_at: toIso(qs("#silence-ends-at").value),
+      };
+      status(silenceStatus, "正在创建…");
+      api("POST", "/api/settings/silences", payload)
+        .then(function () { status(silenceStatus, "已创建静默", false); return loadSilences(); })
+        .catch(function (error) { status(silenceStatus, error.message, true); });
+    });
+    renderSilences(window.__SETTINGS_SILENCES__ || []);
+    loadSilences();
+  }
+
+  // -- logs ---------------------------------------------------------------
+  var logsOutput = qs("#logs-output");
+  function refreshLogs() {
+    var logsStatus = qs("#logs-status");
+    status(logsStatus, "正在加载…");
+    api("GET", "/api/logs?lines=300")
+      .then(function (payload) {
+        var text = (payload && (payload.text || payload.lines)) || "";
+        logsOutput.textContent = text || "（暂无日志）";
+        status(logsStatus, "已加载 " + ((payload && payload.line_count) || 0) + " 行", false);
+      })
+      .catch(function (error) { status(logsStatus, error.message, true); });
+  }
+  if (logsOutput) {
+    qs("#logs-refresh-button").addEventListener("click", refreshLogs);
+    refreshLogs();
+  }
+  var runtimeInfo = qs("#runtime-info");
+  var runtime = window.__SETTINGS_RUNTIME__ || {};
+  if (runtimeInfo) {
+    runtimeInfo.textContent = runtime.url
+      ? "运行地址 " + runtime.url + (runtime.pid ? "（PID " + runtime.pid + "）" : "")
+      : "未检测到运行状态";
+  }
 
   // Fill any values that were not rendered server-side (e.g. list edits).
   fillSection("monitoring", initial.monitoring);

@@ -32,6 +32,9 @@
       <label class="field"><span>历史保留天数</span>
         <input type="number" min="1" data-field="retention_days" value="{{ settings.monitoring.retention_days }}">
       </label>
+      <label class="check-row"><input type="checkbox" data-field="auto_port_fallback" {% if settings.monitoring.auto_port_fallback %}checked{% endif %}> 端口占用时自动顺延</label>
+      <label class="check-row"><input type="checkbox" data-field="tray_enabled" {% if settings.monitoring.tray_enabled %}checked{% endif %}> 启用系统托盘</label>
+      <label class="check-row"><input type="checkbox" data-field="open_browser_on_start" {% if settings.monitoring.open_browser_on_start %}checked{% endif %}> 启动时自动打开浏览器</label>
     </div>
     <button class="primary-button" data-save="monitoring" {% if not settings.writable %}disabled{% endif %}>保存监控与存储</button>
   </section>
@@ -52,10 +55,16 @@
       <button class="secondary-button" data-save="ssh" {% if not settings.writable %}disabled{% endif %}>保存 SSH 超时</button>
     </div>
 
+    <div class="section-toolbar">
+      <button class="secondary-button" id="import-open-button" {% if not settings.writable %}disabled{% endif %}>批量导入</button>
+      <button class="secondary-button" id="test-batch-button" {% if not settings.writable %}disabled{% endif %}>批量测试连接</button>
+      <span class="form-status" id="host-batch-status"></span>
+    </div>
+
     <div class="table-wrap">
       <table class="data-table" id="host-settings-table">
         <thead>
-          <tr><th>名称</th><th>地址</th><th>端口</th><th>用户</th><th>认证</th><th>容量目录</th><th>操作</th></tr>
+          <tr><th>名称</th><th>地址</th><th>端口</th><th>用户</th><th>认证</th><th>分组</th><th>负责人</th><th>容量目录</th><th>操作</th></tr>
         </thead>
         <tbody>
           {% for host in settings.hosts %}
@@ -65,15 +74,18 @@
             <td>{{ host.port }}</td>
             <td>{{ host.username }}</td>
             <td>{{ '密码' if host.auth_type == 'password' else 'SSH 私钥' }}</td>
+            <td>{{ host.group or '未分组' }}</td>
+            <td>{{ host.owner }}</td>
             <td class="mono">{{ host.disk_mounts|join(', ') }}</td>
             <td class="row-actions">
               <button class="ack-btn" data-host-edit="{{ host.name }}" {% if not settings.writable %}disabled{% endif %}>编辑</button>
+              <button class="secondary-button" data-host-copy="{{ host.name }}" {% if not settings.writable %}disabled{% endif %}>复制</button>
               <button class="danger-button" data-host-delete="{{ host.name }}" {% if not settings.writable %}disabled{% endif %}>删除</button>
             </td>
           </tr>
           {% endfor %}
           {% if not settings.hosts %}
-          <tr><td colspan="7" class="empty-cell">还没有主机，请点击“新增主机”。</td></tr>
+          <tr><td colspan="9" class="empty-cell">还没有主机，请点击“新增主机”或“批量导入”。</td></tr>
           {% endif %}
         </tbody>
       </table>
@@ -100,6 +112,10 @@
         <label class="field key-only"><span>私钥口令（可选，留空表示不改）</span><input type="password" data-host-field="passphrase" autocomplete="new-password"></label>
         <label class="field password-only"><span>SSH 密码（留空表示不改）</span><input type="password" data-host-field="password" autocomplete="new-password"></label>
         <label class="field"><span>标签（逗号分隔，可选）</span><input data-host-field="tags"></label>
+        <label class="field"><span>分组（默认“未分组”）</span><input data-host-field="group" placeholder="未分组"></label>
+        <label class="field"><span>负责人（可选）</span><input data-host-field="owner"></label>
+        <label class="field"><span>位置（可选）</span><input data-host-field="location"></label>
+        <label class="field span-2"><span>备注（可选）</span><textarea data-host-field="notes" rows="2"></textarea></label>
       </div>
       <p class="hint key-only">已配置的密钥不会显示原文；留空表示沿用已保存的凭据。</p>
       <p class="hint password-only">已配置的密码不会显示原文；留空表示沿用已保存的凭据。</p>
@@ -110,6 +126,43 @@
       </div>
       <p class="form-status" id="host-form-status"></p>
     </form>
+
+    <dialog class="settings-dialog" id="import-dialog">
+      <h3>批量导入主机</h3>
+      <div class="settings-grid">
+        <label class="field"><span>格式</span>
+          <select id="import-format">
+            <option value="ssh">SSH 客户端配置（~/.ssh/config）</option>
+            <option value="csv">CSV</option>
+            <option value="yaml">YAML</option>
+          </select>
+        </label>
+        <label class="field"><span>从文件读取（可选）</span>
+          <input type="file" id="import-file" accept=".txt,.csv,.yaml,.yml,.conf,.cfg">
+        </label>
+        <label class="field span-2"><span>粘贴内容</span>
+          <textarea id="import-text" rows="8" placeholder="把 ssh 配置 / CSV / YAML 粘贴到这里"></textarea>
+        </label>
+      </div>
+      <div class="form-actions">
+        <button type="button" class="secondary-button" id="import-preview-button">预览</button>
+        <button type="button" class="primary-button" id="import-confirm-button" disabled>确认导入</button>
+        <label class="check-row"><input type="checkbox" id="import-overwrite"> 覆盖同名主机</label>
+        <button type="button" class="secondary-button" id="import-close-button">关闭</button>
+      </div>
+      <p class="form-status" id="import-status"></p>
+      <p class="hint" id="import-preview-summary"></p>
+      <div class="table-wrap">
+        <table class="data-table" id="import-preview-table">
+          <thead>
+            <tr><th>类别</th><th>名称</th><th>地址</th><th>用户</th><th>分组</th><th>说明</th></tr>
+          </thead>
+          <tbody id="import-valid-body"></tbody>
+          <tbody id="import-invalid-body"></tbody>
+          <tbody id="import-duplicate-body"></tbody>
+        </table>
+      </div>
+    </dialog>
   </section>
 
   <!-- 通知 -->
@@ -141,12 +194,57 @@
       <label class="field"><span>冷却时间（分钟）</span><input type="number" min="0" data-field="cooldown_minutes" value="{{ settings.alerts.cooldown_minutes }}"></label>
       <label class="field"><span>离线判定次数</span><input type="number" min="1" data-field="offline_failures" value="{{ settings.alerts.offline_failures }}"></label>
       <label class="check-row"><input type="checkbox" data-field="repeat_while_active" {% if settings.alerts.repeat_while_active %}checked{% endif %}> 持续告警按冷却时间重复通知</label>
+      <label class="check-row"><input type="checkbox" data-field="aggregate_by_host" {% if settings.alerts.aggregate_by_host %}checked{% endif %}> 同一主机多事件合并推送</label>
+      <label class="check-row"><input type="checkbox" data-field="notify_on_recovery" {% if settings.alerts.notify_on_recovery %}checked{% endif %}> 恢复时发送通知</label>
     </div>
     <div class="form-actions">
       <button class="primary-button" data-save="alerts" {% if not settings.writable %}disabled{% endif %}>保存通知</button>
       <button class="secondary-button" id="test-webhook-button" {% if not settings.writable %}disabled{% endif %}>测试 Webhook</button>
     </div>
     <p class="form-status" id="notify-status"></p>
+
+    <hr class="divider">
+    <div class="sub-card" data-section="silences">
+      <h3>静默</h3>
+      <p class="hint">静默期间命中的告警不会写库、不会推送；解除后下一轮评估重新判断。</p>
+      <div class="settings-grid">
+        <label class="field"><span>作用域</span>
+          <select id="silence-scope-type">
+            <option value="all">全部主机</option>
+            <option value="group">按分组</option>
+            <option value="host">按主机</option>
+          </select>
+        </label>
+        <label class="field"><span>对象（主机名 / 分组名；全部留空）</span><input id="silence-scope" placeholder="例如 a100 或 实验室"></label>
+        <label class="field"><span>原因</span><input id="silence-reason" placeholder="例如 计划维护"></label>
+        <label class="field"><span>开始时间</span><input type="datetime-local" id="silence-starts-at"></label>
+        <label class="field"><span>结束时间</span><input type="datetime-local" id="silence-ends-at"></label>
+      </div>
+      <div class="form-actions">
+        <button type="button" class="primary-button" id="silence-create-button" {% if not settings.writable %}disabled{% endif %}>创建静默</button>
+        <button type="button" class="secondary-button" id="silence-refresh-button">刷新列表</button>
+      </div>
+      <p class="form-status" id="silence-status"></p>
+      <div class="table-wrap">
+        <table class="data-table" id="silence-table">
+          <thead><tr><th>作用域</th><th>对象</th><th>原因</th><th>开始</th><th>结束</th><th>操作</th></tr></thead>
+          <tbody id="silence-list"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- 日志 -->
+  <section class="card settings-card" data-section="logs">
+    <div class="section-head">
+      <h2>运行日志</h2>
+      <span class="hint" id="runtime-info"></span>
+    </div>
+    <div class="form-actions">
+      <button type="button" class="secondary-button" id="logs-refresh-button">刷新日志</button>
+      <span class="form-status" id="logs-status"></span>
+    </div>
+    <pre class="logs-output" id="logs-output"></pre>
   </section>
 
   <!-- 邮件服务器 SMTP -->
@@ -246,7 +344,11 @@
   </section>
 </div>
 
-<script>window.__SETTINGS__ = {{ settings|tojson }};</script>
+<script>
+window.__SETTINGS__ = {{ settings|tojson }};
+window.__SETTINGS_RUNTIME__ = {{ runtime|tojson }};
+window.__SETTINGS_SILENCES__ = {{ silences|tojson }};
+</script>
 {% endblock %}
 
 {% block scripts %}
