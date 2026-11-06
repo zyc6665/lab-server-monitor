@@ -313,6 +313,22 @@ hosts:
     assert len(result.errors) == 2
 
 
+def test_yaml_native_int_port_out_of_range_rejected():
+    for bad_port in (70000, 0, -1):
+        text = f"hosts:\n  - name: web1\n    host: 10.0.0.1\n    port: {bad_port}\n"
+        result = parse_yaml(text)
+        assert result.candidates == [], bad_port
+        assert len(result.errors) == 1, bad_port
+        assert "无效端口" in result.errors[0]["error"]
+
+
+def test_yaml_native_int_port_in_range_accepted():
+    text = "hosts:\n  - name: web1\n    host: 10.0.0.1\n    port: 2222\n"
+    result = parse_yaml(text)
+    assert result.errors == []
+    assert result.candidates[0].port == 2222
+
+
 def test_yaml_fixture_file():
     result = parse_yaml(_read("sample_hosts.yaml"))
     assert len(result.candidates) == 2

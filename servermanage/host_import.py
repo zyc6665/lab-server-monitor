@@ -403,6 +403,9 @@ def parse_yaml(text: str | bytes) -> ParseResult:
         port = 22
         raw_port = item.get("port")
         if isinstance(raw_port, int) and not isinstance(raw_port, bool):
+            if not 0 < raw_port < 65536:
+                errors.append({"row": row_number, "error": f"无效端口: {raw_port}"})
+                continue
             port = raw_port
         elif _as_text(raw_port):
             parsed_port = _int_or_none(_as_text(raw_port))
