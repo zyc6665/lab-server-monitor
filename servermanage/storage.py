@@ -653,12 +653,25 @@ def get_all_disk_health(db_path: Path) -> list[dict]:
 # ---------------------------------------------------------------------------
 
 
-def insert_alert(event: AlertEvent, db_path: Path) -> int:
-    """Insert an alert event with status ``active`` and return its row id."""
+def insert_alert(
+    event: AlertEvent,
+    db_path: Path,
+    *,
+    created_at: datetime | None = None,
+) -> int:
+    """Insert an alert event with status ``active`` and return its row id.
+
+    ``created_at`` defaults to the current UTC time.  The alert engine passes an
+    explicit value so its injectable clock also drives the persisted timestamp
+    (otherwise cooldown math computed from a fake clock would not line up with
+    the stored row).  Existing callers are unaffected.
+    """
     db_path = Path(db_path)
     init_storage(db_path)
 
-    created_at = datetime.now(timezone.utc).isoformat()
+    created_at_text = (
+        created_at if created_at is not None else datetime.now(timezone.utc)
+    ).isoformat()
     with sqlite3.connect(db_path) as conn:
         cursor = conn.execute(
             "INSERT INTO alerts"
@@ -666,7 +679,7 @@ def insert_alert(event: AlertEvent, db_path: Path) -> int:
             " fingerprint, status)"
             " VALUES (?, ?, ?, ?, ?, ?, ?, 'active')",
             (
-                created_at,
+                created_at_text,
                 event.host_name,
                 event.category,
                 event.severity,
