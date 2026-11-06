@@ -521,3 +521,12 @@ def test_enabling_report_without_smtp_is_rejected(tmp_path):
     )
     cfg = svc.save_section("report", {"daily_enabled": True, "daily_time": "08:00"})
     assert cfg.report.daily_enabled is True
+
+
+def test_non_windows_never_requires_setup(tmp_path, monkeypatch):
+    import sys
+
+    monkeypatch.setattr(sys, "platform", "linux")
+    svc = _service(tmp_path)
+    assert svc.is_writable() is False
+    assert svc.setup_required() is False

@@ -144,3 +144,16 @@ def test_auth_key_data_roundtrip():
     cfg = _load({"servers": [_server(auth={"type": "key", "key_data": "PEM"})]})
     assert cfg.servers[0].auth.key_data == "PEM"
 
+from pathlib import Path
+
+
+def test_missing_key_path_allowed_for_packaged_seed(tmp_path):
+    missing = tmp_path / "not-there" / "id_rsa"
+
+    cfg = load_config_from_mapping(
+        {"servers": [_server(auth={"type": "key", "key_path": str(missing)})]},
+        allow_empty_servers=False,
+        allow_missing_secrets=True,
+    )
+
+    assert cfg.servers[0].auth.key_path == missing

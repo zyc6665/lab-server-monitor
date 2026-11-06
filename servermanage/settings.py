@@ -325,9 +325,12 @@ class SettingsService:
                 report.weekly.enabled and not current.report.weekly.enabled
             )
             smtp = current.smtp
-            if newly_enabled and (
-                smtp is None or not smtp.host or not smtp.password
-            ):
+            smtp_ready = bool(
+                smtp is not None
+                and smtp.host
+                and (not smtp.username or smtp.password)
+            )
+            if newly_enabled and not smtp_ready:
                 raise SettingsError("启用日报/周报前需要先配置 SMTP 邮件服务器")
         storage.save_app_settings(section, sanitized, self.db_path)
         return self.load()

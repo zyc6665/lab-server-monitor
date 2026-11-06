@@ -281,6 +281,19 @@ def _load_auth(data: dict[str, Any], *, allow_missing_secrets: bool = False) -> 
                 return AuthConfig(type=auth_type)
             raise ConfigError("SSH key path does not exist")
         key_path = Path(key_path_raw).expanduser()
+        if allow_missing_secrets and (
+            not key_path.exists() or not key_path.is_file() or not os.access(key_path, os.R_OK)
+        ):
+            # A packaged instance may be copied to another PC where the seeded
+            # key path does not exist.  Start anyway so the browser settings
+            # page can be used to supply a fresh key/password.
+            return AuthConfig(
+                type=auth_type,
+                key_path=key_path,
+                passphrase=passphrase,
+                passphrase_env=passphrase_env,
+                key_data=key_data,
+            )
         if not key_path.exists():
             raise ConfigError(f"SSH key path does not exist: {key_path}")
         if not key_path.is_file():
