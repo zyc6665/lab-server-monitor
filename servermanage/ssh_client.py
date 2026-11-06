@@ -9,6 +9,28 @@ import paramiko
 from servermanage.models import CommandResult, HostConfig
 
 
+def _load_inline_private_key(key_data: str, passphrase: str | None) -> paramiko.PKey:
+    """Load an in-memory private key by trying each concrete paramiko key type.
+
+    ``paramiko.PKey.from_private_key`` is the abstract base factory and is broken
+    on pinned paramiko 3.5.1, so dispatch to concrete classes instead. Errors are
+    re-raised as ``ValueError`` without ever including key material or passphrase.
+    """
+    last_error: Exception | None = None
+    for cls in (paramiko.RSAKey, paramiko.Ed25519Key, paramiko.ECDSAKey, paramiko.DSSKey):
+        try:
+            return cls.from_private_key(
+                io.StringIO(key_data),
+                password=passphrase or None,
+            )
+        except paramiko.PasswordRequiredException as exc:
+            raise ValueError("SSH private key is encrypted; passphrase required") from exc
+        except paramiko.SSHException as exc:
+            last_error = exc
+            continue
+    raise ValueError("Invalid SSH private key") from last_error
+
+
 class SSHClientWrapper:
     def __init__(
         self,
@@ -39,9 +61,9 @@ class SSHClientWrapper:
             kwargs["password"] = self.host.auth.password
         elif self.host.auth.type == "key":
             if self.host.auth.key_data:
-                kwargs["pkey"] = paramiko.PKey.from_private_key(
-                    io.StringIO(self.host.auth.key_data),
-                    password=self.host.auth.passphrase or None,
+                kwargs["pkey"] = _load_inline_private_key(
+                    self.host.auth.key_data,
+                    self.host.auth.passphrase,
                 )
             elif self.host.auth.key_path:
                 kwargs["key_filename"] = str(Path(self.host.auth.key_path).expanduser())

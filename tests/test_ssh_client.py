@@ -1,8 +1,10 @@
 from pathlib import Path
 
+import io
+
+import paramiko
 import pytest
 
-import servermanage.ssh_client as ssh_client
 from servermanage.models import AuthConfig, HostConfig
 from servermanage.ssh_client import SSHClientWrapper
 
@@ -139,76 +141,75 @@ def test_ssh_client_uses_key_passphrase_when_configured():
     assert client.kwargs["passphrase"] == "key-passphrase"
 
 
-def test_ssh_client_uses_inline_key(monkeypatch):
-    sentinel = object()
-    monkeypatch.setattr(
-        ssh_client.paramiko.PKey,
-        "from_private_key",
-        classmethod(lambda cls, stream, password=None: sentinel),
-    )
-    host = HostConfig(
-        name="h",
-        host="10.0.0.1",
-        port=22,
-        username="u",
-        auth=AuthConfig(type="key", key_data="-----BEGIN KEY-----"),
-    )
-    wrapper = SSHClientWrapper(host=host, connect_timeout=5)
-    kwargs = wrapper._build_connect_kwargs()
-    assert kwargs["pkey"] is sentinel
-    assert "key_filename" not in kwargs
+@pytest.fixture(scope="module")
+def rsa_key():
+    return paramiko.RSAKey.generate(2048)
 
 
-def test_ssh_client_inline_key_passes_passphrase(monkeypatch):
-    sentinel = object()
-    captured = {}
+@pytest.fixture(scope="module")
+def plain_pem(rsa_key):
+    buf = io.StringIO()
+    rsa_key.write_private_key(buf)
+    return buf.getvalue()
 
-    def fake_from_private_key(cls, stream, password=None):
-        captured["password"] = password
-        return sentinel
 
-    monkeypatch.setattr(
-        ssh_client.paramiko.PKey,
-        "from_private_key",
-        classmethod(fake_from_private_key),
-    )
-    host = HostConfig(
+@pytest.fixture(scope="module")
+def encrypted_pem(rsa_key):
+    buf = io.StringIO()
+    rsa_key.write_private_key(buf, password="correct-pass")
+    return buf.getvalue()
+
+
+def _inline_host(key_data, passphrase=None, key_path=None):
+    return HostConfig(
         name="h",
         host="10.0.0.1",
         port=22,
         username="u",
         auth=AuthConfig(
             type="key",
-            key_data="-----BEGIN KEY-----",
-            passphrase="secret-pass",
+            key_data=key_data,
+            key_path=key_path,
+            passphrase=passphrase,
         ),
     )
+
+
+def test_ssh_client_uses_inline_key(plain_pem):
+    host = _inline_host(plain_pem)
     wrapper = SSHClientWrapper(host=host, connect_timeout=5)
-    assert wrapper._build_connect_kwargs()["pkey"] is sentinel
-    assert captured["password"] == "secret-pass"
+    kwargs = wrapper._build_connect_kwargs()
+    assert isinstance(kwargs["pkey"], paramiko.PKey)
+    assert "key_filename" not in kwargs
 
 
-def test_ssh_client_inline_key_without_passphrase_passes_none(monkeypatch):
-    captured = {}
+def test_ssh_client_inline_key_encrypted_with_passphrase(encrypted_pem):
+    host = _inline_host(encrypted_pem, passphrase="correct-pass")
+    wrapper = SSHClientWrapper(host=host, connect_timeout=5)
+    kwargs = wrapper._build_connect_kwargs()
+    assert isinstance(kwargs["pkey"], paramiko.PKey)
 
-    def fake_from_private_key(cls, stream, password=None):
-        captured["password"] = password
-        return object()
 
-    monkeypatch.setattr(
-        ssh_client.paramiko.PKey,
-        "from_private_key",
-        classmethod(fake_from_private_key),
-    )
-    host = HostConfig(
-        name="h",
-        host="10.0.0.1",
-        port=22,
-        username="u",
-        auth=AuthConfig(type="key", key_data="-----BEGIN KEY-----"),
-    )
-    SSHClientWrapper(host=host, connect_timeout=5)._build_connect_kwargs()
-    assert captured["password"] is None
+def test_ssh_client_inline_key_encrypted_without_passphrase_raises(encrypted_pem):
+    host = _inline_host(encrypted_pem)
+    wrapper = SSHClientWrapper(host=host, connect_timeout=5)
+    with pytest.raises(ValueError, match="passphrase required"):
+        wrapper._build_connect_kwargs()
+
+
+def test_ssh_client_inline_key_encrypted_wrong_passphrase_raises(encrypted_pem):
+    host = _inline_host(encrypted_pem, passphrase="wrong-pass")
+    wrapper = SSHClientWrapper(host=host, connect_timeout=5)
+    with pytest.raises(ValueError):
+        wrapper._build_connect_kwargs()
+
+
+def test_ssh_client_inline_key_wins_over_key_path(plain_pem):
+    host = _inline_host(plain_pem, key_path="/tmp/id_rsa")
+    wrapper = SSHClientWrapper(host=host, connect_timeout=5)
+    kwargs = wrapper._build_connect_kwargs()
+    assert isinstance(kwargs["pkey"], paramiko.PKey)
+    assert "key_filename" not in kwargs
 
 
 def test_ssh_client_key_auth_without_key_raises():
