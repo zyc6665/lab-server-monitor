@@ -3,8 +3,12 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from servermanage.alerts import AlertEngine
-from servermanage.disk_health import AlertEvent
+from servermanage.alerts import AlertEngine, evaluate_disk_alerts
+from servermanage.disk_health import (
+    AlertEvent,
+    DiskHealthReport,
+    PhysicalDriveInfo,
+)
 from servermanage.models import AlertsConfig
 from servermanage.storage import find_latest_alert, list_alerts
 
@@ -277,3 +281,125 @@ def test_db_error_does_not_raise(tmp_path: Path):
 
     assert engine.process([_event()]) == []
     assert notifier.calls == []
+
+
+# ---------------------------------------------------------------------------
+# Fix round — Important 1: real error_increase must break cooldown
+# ---------------------------------------------------------------------------
+
+
+def _disk_events(reasons: list[str]):
+    """Go through the REAL producer path (evaluate_disk_alerts)."""
+    report = DiskHealthReport(
+        host_name="gpu-01",
+        collected_at=BASE,
+        status="ok",
+        physical_drives=[
+            PhysicalDriveInfo(
+                controller=0,
+                enclosure=252,
+                slot=3,
+                did=7,
+                media_errors=2,
+                other_errors=0,
+                health="warning",
+                reasons=list(reasons),
+            )
+        ],
+    )
+    return evaluate_disk_alerts(report)
+
+
+def test_real_error_increase_alert_breaks_cooldown(tmp_path: Path):
+    db_path = tmp_path / "servermanage.db"
+    clock = FakeClock()
+    notifier = FakeNotifier()
+    engine = _engine(db_path, clock, notifier)
+
+    events = _disk_events(["media_errors", "error_increase"])
+    assert len(events) == 1
+    event = events[0]
+    # Prove the fingerprint alone cannot carry the signal: the builder only
+    # uses reasons[0]=="media_errors".
+    assert "error_increase" not in event.fingerprint
+    assert "error_increase" in event.reasons
+
+    assert engine.process(events) == events
+
+    clock.advance(minutes=5)
+    assert engine.process(events) == events
+
+    assert len(notifier.calls) == 2
+    assert len(list_alerts(db_path)) == 2
+
+
+def test_real_media_error_alert_without_increase_is_skipped(tmp_path: Path):
+    db_path = tmp_path / "servermanage.db"
+    clock = FakeClock()
+    notifier = FakeNotifier()
+    engine = _engine(db_path, clock, notifier)
+
+    events = _disk_events(["media_errors"])
+    assert len(events) == 1
+    assert "error_increase" not in events[0].reasons
+
+    assert engine.process(events) == events
+
+    clock.advance(minutes=5)
+    assert engine.process(events) == []
+
+    assert len(notifier.calls) == 1
+    assert len(list_alerts(db_path)) == 1
+
+
+# ---------------------------------------------------------------------------
+# Fix round — Important 2: failed dispatch must not consume the cooldown
+# ---------------------------------------------------------------------------
+
+
+class FlakyNotifier:
+    """Returns whatever ``channels`` currently holds and records every call."""
+
+    def __init__(self, channels: list[str] | None = None) -> None:
+        self.channels = list(channels) if channels is not None else []
+        self.calls = 0
+
+    def dispatch(self, event: AlertEvent, config: AlertsConfig) -> list[str]:
+        self.calls += 1
+        return list(self.channels)
+
+
+def test_failed_dispatch_retries_next_cycle(tmp_path: Path):
+    db_path = tmp_path / "servermanage.db"
+    clock = FakeClock()
+    notifier = FlakyNotifier(channels=[])
+    engine = _engine(db_path, clock, notifier)
+    event = _event()
+
+    # First cycle: every channel fails -> nothing sent, but the alert is stored.
+    assert engine.process([event]) == []
+    assert len(list_alerts(db_path)) == 1
+    assert list_alerts(db_path)[0]["notified_channels"] == ""
+
+    # One minute later the channel recovers: the un-notified row must NOT
+    # suppress the retry even though it is well inside the cooldown window.
+    clock.advance(minutes=1)
+    notifier.channels = ["desktop"]
+    assert engine.process([event]) == [event]
+
+    assert notifier.calls == 2
+    assert find_latest_alert(event.fingerprint, db_path)["notified_channels"] == "desktop"
+
+
+def test_successful_notify_still_suppressed_within_cooldown(tmp_path: Path):
+    db_path = tmp_path / "servermanage.db"
+    clock = FakeClock()
+    notifier = FakeNotifier()
+    engine = _engine(db_path, clock, notifier)
+    event = _event()
+
+    assert engine.process([event]) == [event]
+
+    clock.advance(minutes=1)
+    assert engine.process([event]) == []
+    assert len(list_alerts(db_path)) == 1

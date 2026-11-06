@@ -103,6 +103,11 @@ class AlertEvent:
     title: str
     message: str
     fingerprint: str
+    # Rule reasons that produced the event (e.g. ``("media_errors",
+    # "error_increase")``).  Kept so downstream dedupe can act on the real
+    # signal instead of trying to recover it from a localized message.  Defaults
+    # to empty so existing constructors stay valid.
+    reasons: tuple[str, ...] = ()
 
 
 # ---------------------------------------------------------------------------

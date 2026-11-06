@@ -215,6 +215,7 @@ def _physical_drive_alert(host_name: str, drive: PhysicalDriveInfo) -> AlertEven
         fingerprint=fingerprint_for(
             "disk", host_name, *_drive_identity(drive), reason
         ),
+        reasons=tuple(drive.reasons or ()),
     )
 
 
@@ -236,6 +237,7 @@ def _virtual_drive_alert(host_name: str, vd: VirtualDriveInfo) -> AlertEvent:
         fingerprint=fingerprint_for(
             "disk", host_name, f"c{vd.controller}", f"vd{vd.vd_id}", reason
         ),
+        reasons=tuple(vd.reasons or ()),
     )
 
 
@@ -338,6 +340,18 @@ def _as_utc(value: datetime) -> datetime:
     if value.tzinfo is None:
         return value.replace(tzinfo=timezone.utc)
     return value
+
+
+def _has_error_increase(event: AlertEvent) -> bool:
+    """True when the event reports a growing error count.
+
+    The structured ``reasons`` tuple is the authoritative signal.  The
+    fingerprint substring is kept as a defensive fallback for producers that
+    still embed the marker there.
+    """
+    if _ERROR_INCREASE_MARKER in tuple(event.reasons or ()):
+        return True
+    return _ERROR_INCREASE_MARKER in event.fingerprint.lower()
 
 
 class AlertEngine:
@@ -472,7 +486,7 @@ class AlertEngine:
 
     def _should_skip(self, event: AlertEvent, now: datetime) -> bool:
         """Return True when this event is a duplicate inside the cooldown window."""
-        if _ERROR_INCREASE_MARKER in event.fingerprint.lower():
+        if _has_error_increase(event):
             return False
 
         try:
@@ -487,6 +501,13 @@ class AlertEngine:
             return False
 
         if latest is None or latest.get("status") != "active":
+            return False
+
+        # A previous attempt that no channel accepted must be retried: an
+        # un-notified active row does not consume the cooldown, otherwise a
+        # transient notification outage would silence the alert for the whole
+        # cooldown window.
+        if not latest.get("notified_channels"):
             return False
 
         created_at = _parse_iso(latest.get("created_at"))
