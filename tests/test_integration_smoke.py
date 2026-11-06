@@ -21,11 +21,13 @@ is performed and the database lives under ``tmp_path``.
 
 from __future__ import annotations
 
+import re
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
 
 from servermanage.app import MonitorService
+from servermanage.config import load_config_from_mapping
 from servermanage.disk_health import collect_disk_health
 from servermanage.models import (
     AppConfig,
@@ -51,6 +53,7 @@ from servermanage.storage import (
     get_host_snapshot,
     purge_old_data,
 )
+from servermanage.settings import SettingsService
 from servermanage.web import create_app
 
 FIX = Path(__file__).parent / "fixtures" / "storcli"
@@ -358,3 +361,79 @@ def test_full_cycle_with_mock_ssh(tmp_path: Path):
     assert len(get_all_host_snapshots(db_path)) == 4
     assert len(get_all_disk_health(db_path)) == 4
     assert _count_rows(db_path, "disk_pd_snapshot") == EXPECTED_TOTAL_DRIVES
+
+
+def test_web_settings_end_to_end(tmp_path):
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text("servers: []\n", encoding="utf-8")
+    base = load_config_from_mapping({}, allow_empty_servers=True)
+    settings = SettingsService(
+        config_path=config_path,
+        db_path=tmp_path / "m.db",
+        base_config=base,
+    )
+    app = create_app(
+        config=settings.load(),
+        db_path=tmp_path / "m.db",
+        settings_service=settings,
+        on_config_changed=lambda cfg: None,
+    )
+    client = app.test_client()
+
+    page = client.get("/setup").get_data(as_text=True)
+    token = re.search(r'name="csrf_token" value="([^"]+)"', page).group(1)
+    assert client.post(
+        "/setup",
+        data={
+            "username": "admin",
+            "password": "AdminPass!23",
+            "confirm": "AdminPass!23",
+            "csrf_token": token,
+        },
+    ).status_code == 302
+    assert client.post(
+        "/login",
+        data={"username": "admin", "password": "AdminPass!23"},
+    ).status_code == 302
+
+    # A rendered page seeds the session CSRF token used by subsequent writes.
+    client.get("/settings")
+    with client.session_transaction() as sess:
+        token = sess["csrf_token"]
+    headers = {"X-CSRF-Token": token}
+
+    assert client.put(
+        "/api/settings/hosts/a100",
+        headers=headers,
+        json={
+            "host": "202.119.189.245",
+            "username": "zhouyc",
+            "auth_type": "password",
+            "password": "topsecret-pw",
+            "disk_mounts": ["/", "/data"],
+        },
+    ).status_code == 200
+    assert client.put(
+        "/api/settings/report", headers=headers, json={"daily_enabled": False}
+    ).status_code == 200
+    assert client.put(
+        "/api/settings/monitoring",
+        headers=headers,
+        json={"poll_interval_seconds": 300},
+    ).status_code == 200
+
+    saved = settings.load()
+    assert saved.servers[0].name == "a100"
+    assert saved.servers[0].disk_mounts == ["/", "/data"]
+    assert saved.servers[0].auth.type == "password"
+    assert saved.report.daily_enabled is False
+    assert saved.app.poll_interval_seconds == 300
+
+    # The settings page exposes the six editable sections.
+    page = client.get("/settings").get_data(as_text=True)
+    assert page.count("data-section=") >= 6
+
+    # Overview still exposes the live dashboard fields after the settings save.
+    overview = client.get("/api/overview").get_json()
+    assert overview is not None
+    assert "logged_in_user_count" in overview["hosts"][0]
