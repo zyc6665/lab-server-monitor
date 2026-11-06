@@ -22,11 +22,20 @@ is performed and the database lives under ``tmp_path``.
 from __future__ import annotations
 
 import re
+import socket
 import sqlite3
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+import pytest
+
+from servermanage import alerts as alerts_module
+from servermanage import runtime
+from servermanage.alerts import AlertEngine, Notifier, SilenceRegistry
 from servermanage.app import MonitorService
+from servermanage.disk_health import AlertEvent
+from servermanage.models import AlertsConfig, SMTPConfig, WebhookConfig
+from servermanage.storage import list_alerts
 from servermanage.config import load_config_from_mapping
 from servermanage.disk_health import collect_disk_health
 from servermanage.models import (
@@ -437,3 +446,319 @@ def test_web_settings_end_to_end(tmp_path):
     overview = client.get("/api/overview").get_json()
     assert overview is not None
     assert "logged_in_user_count" in overview["hosts"][0]
+
+
+# ===========================================================================
+# Task 13: v1.2 end-to-end integration (setup/import, silence, aggregation,
+# recovery and runtime).  These tests only use temp databases/directories and
+# never open a real SSH, SMTP or webhook connection.
+# ===========================================================================
+
+ADMIN_PASSWORD = "Integration-Admin-Pass-2026"
+
+YAML_TWO_HOSTS = """hosts:
+  - name: lab-a
+    host: 10.10.0.11
+    port: 22
+    username: ubuntu
+    auth_type: key
+    key_path: /home/ubuntu/.ssh/id_rsa
+    group: 实验室
+    owner: 张三
+    location: A栋
+  - name: lab-b
+    host: 10.10.0.12
+    username: ubuntu
+    auth_type: key
+    key_path: /home/ubuntu/.ssh/id_rsa
+    group: 机房
+"""
+
+CSV_ONE_HOST = (
+    "name,host,port,username,auth_type,key_path,group,owner\n"
+    "lab-c,10.10.0.13,22,ubuntu,key,/home/ubuntu/.ssh/id_rsa,机房,李四\n"
+)
+
+
+def _settings_app(tmp_path: Path):
+    cfg_path = tmp_path / "config.yaml"
+    cfg_path.write_text("servers: []\n", encoding="utf-8")
+    db_path = tmp_path / "settings.db"
+    base = load_config_from_mapping({}, allow_empty_servers=True)
+    service = SettingsService(config_path=cfg_path, db_path=db_path, base_config=base)
+    changed: list[AppConfig] = []
+    app = create_app(
+        config=service.load(),
+        db_path=db_path,
+        settings_service=service,
+        on_config_changed=changed.append,
+    )
+    return app, service, db_path, changed
+
+
+def _setup_and_login(client) -> str:
+    """Run first-run /setup, log in and return the session CSRF token."""
+    page = client.get("/setup").get_data(as_text=True)
+    token = re.search(r'name="csrf_token" value="([^"]+)"', page).group(1)
+    setup = client.post(
+        "/setup",
+        data={
+            "username": "admin",
+            "password": ADMIN_PASSWORD,
+            "confirm": ADMIN_PASSWORD,
+            "csrf_token": token,
+        },
+    )
+    assert setup.status_code == 302
+    login = client.post(
+        "/login", data={"username": "admin", "password": ADMIN_PASSWORD}
+    )
+    assert login.status_code == 302
+    client.get("/settings")
+    with client.session_transaction() as sess:
+        return sess["csrf_token"]
+
+
+def test_setup_login_import_preview_confirm_then_settings(tmp_path: Path):
+    """Scenario 1: /setup → login → import previews/confirms YAML+CSV → settings."""
+    app, service, _db, changed = _settings_app(tmp_path)
+    client = app.test_client()
+    headers = {"X-CSRF-Token": _setup_and_login(client)}
+
+    # Preview parses both hosts but must not write anything.
+    preview = client.post(
+        "/api/settings/hosts/import/preview",
+        headers=headers,
+        json={"format": "yaml", "content": YAML_TWO_HOSTS},
+    )
+    assert preview.status_code == 200
+    assert [c["name"] for c in preview.get_json()["candidates"]] == ["lab-a", "lab-b"]
+    assert service.load().servers == []
+
+    # Confirming the same YAML creates both hosts.
+    imported = client.post(
+        "/api/settings/hosts/import",
+        headers=headers,
+        json={"format": "yaml", "content": YAML_TWO_HOSTS},
+    )
+    assert imported.status_code == 200
+    assert sorted(imported.get_json()["created"]) == ["lab-a", "lab-b"]
+
+    # A second import path uses CSV text.
+    csv_preview = client.post(
+        "/api/settings/hosts/import/preview",
+        headers=headers,
+        json={"format": "csv", "content": CSV_ONE_HOST},
+    )
+    assert csv_preview.status_code == 200
+    assert [c["name"] for c in csv_preview.get_json()["candidates"]] == ["lab-c"]
+    csv_import = client.post(
+        "/api/settings/hosts/import",
+        headers=headers,
+        json={"format": "csv", "content": CSV_ONE_HOST},
+    )
+    assert csv_import.get_json()["created"] == ["lab-c"]
+
+    # /api/settings exposes the imported hosts together with their groups.
+    settings = client.get("/api/settings").get_json()
+    by_name = {host["name"]: host for host in settings["hosts"]}
+    assert set(by_name) == {"lab-a", "lab-b", "lab-c"}
+    assert by_name["lab-a"]["group"] == "实验室"
+    assert by_name["lab-b"]["group"] == "机房"
+    assert by_name["lab-c"]["group"] == "机房"
+    assert by_name["lab-a"]["owner"] == "张三"
+    assert {"实验室", "机房"} <= {host["group"] for host in settings["hosts"]}
+
+    # The running monitor config was refreshed with the same inventory.
+    assert {server.name for server in service.load().servers} == {
+        "lab-a",
+        "lab-b",
+        "lab-c",
+    }
+    assert changed, "import must trigger an on_config_changed refresh"
+
+
+def test_global_silence_suppresses_then_delete_realerts(tmp_path: Path):
+    """Scenario 2: a global silence mutes the engine; deleting it re-alerts."""
+    cfg_path = tmp_path / "config.yaml"
+    cfg_path.write_text("servers: []\n", encoding="utf-8")
+    db_path = tmp_path / "silence.db"
+    base = load_config_from_mapping({}, allow_empty_servers=True)
+    service = SettingsService(config_path=cfg_path, db_path=db_path, base_config=base)
+    service.load()  # initialise the SQLite schema
+
+    now = datetime(2026, 11, 6, 12, 0, tzinfo=timezone.utc)
+    silence_id = service.add_silence(
+        "all",
+        None,
+        "计划维护",
+        now - timedelta(hours=1),
+        now + timedelta(hours=1),
+        created_by="admin",
+    )
+
+    class RecordingNotifier:
+        def __init__(self) -> None:
+            self.events: list[AlertEvent] = []
+
+        def dispatch(self, event: AlertEvent, config: AlertsConfig) -> list[str]:
+            self.events.append(event)
+            return ["desktop"]
+
+        def dispatch_batch(
+            self, events: list[AlertEvent], config: AlertsConfig
+        ) -> list[str]:
+            self.events.extend(events)
+            return ["desktop"]
+
+    notifier = RecordingNotifier()
+    engine = AlertEngine(
+        db_path,
+        AlertsConfig(enabled=True, aggregate_by_host=False),
+        notifier,
+        clock=lambda: now,
+        silence_checker=SilenceRegistry(db_path, clock=lambda: now),
+    )
+    event = AlertEvent(
+        host_name="gpu-01",
+        category="system",
+        severity="warning",
+        title="CPU 使用率过高",
+        message="CPU 使用率 95% 超过阈值",
+        fingerprint="system:gpu-01:cpu",
+    )
+
+    # While the global silence is active: no DB row, no notification.
+    assert engine.process([event]) == []
+    assert list_alerts(db_path) == []
+    assert notifier.events == []
+
+    # Deleting the silence lets the next identical cycle alert again.
+    assert service.delete_silence(silence_id) is True
+    assert engine.process([event]) == [event]
+    rows = list_alerts(db_path)
+    assert [row["fingerprint"] for row in rows] == ["system:gpu-01:cpu"]
+    assert len(notifier.events) == 1
+
+
+def test_three_system_events_one_batch_all_channels_and_single_recovery(
+    tmp_path: Path, monkeypatch
+):
+    """Scenario 3: same-host batch fan-out + exactly one recovery notification."""
+    db_path = tmp_path / "batch.db"
+    calls: dict[str, list] = {"desktop": [], "email": [], "webhook": []}
+
+    def fake_desktop(title: str, message: str) -> bool:
+        calls["desktop"].append((title, message))
+        return True
+
+    def fake_email(smtp, report) -> bool:
+        calls["email"].append(report)
+        return True
+
+    def fake_webhook(webhook, event, **kwargs) -> bool:
+        calls["webhook"].append(event)
+        return True
+
+    monkeypatch.setattr(alerts_module, "send_desktop_notification", fake_desktop)
+    monkeypatch.setattr(alerts_module, "send_report", fake_email)
+    monkeypatch.setattr(alerts_module, "send_webhook", fake_webhook)
+
+    smtp = SMTPConfig(
+        host="smtp.example.com",
+        port=25,
+        username="u",
+        password="p",
+        use_ssl=False,
+        from_addr="alerts@example.com",
+        to_addrs=["ops@example.com"],
+    )
+    config = AlertsConfig(
+        enabled=True,
+        desktop_notification=True,
+        email=True,
+        webhook=WebhookConfig(
+            enabled=True, type="wecom", url="https://example.invalid/hook", url_env=None
+        ),
+        aggregate_by_host=True,
+        notify_on_recovery=True,
+        cooldown_minutes=60,
+    )
+    notifier = Notifier(smtp=smtp)
+    engine = AlertEngine(
+        db_path,
+        config,
+        notifier,
+        clock=lambda: datetime(2026, 11, 6, 2, 0, tzinfo=timezone.utc),
+    )
+
+    events = [
+        AlertEvent("gpu-01", "system", "warning", "CPU 使用率过高", "cpu 95%", "system:gpu-01:cpu"),
+        AlertEvent("gpu-01", "system", "critical", "内存不足", "mem 98%", "system:gpu-01:memory"),
+        AlertEvent("gpu-01", "system", "warning", "负载过高", "load 40", "system:gpu-01:load"),
+    ]
+    assert engine.process(events) == events
+
+    # One merged batch per channel, even though three alerts fired.
+    assert len(calls["desktop"]) == 1
+    assert len(calls["email"]) == 1
+    assert len(calls["webhook"]) == 1
+    assert "3 项告警" in calls["desktop"][0][0]
+
+    rows = list_alerts(db_path)
+    assert len(rows) == 3
+    assert all(row["notified_channels"] == "desktop,email,webhook" for row in rows)
+
+    # Recovery: only one event, dispatched once per channel.
+    for bucket in calls.values():
+        bucket.clear()
+    recovery = engine.resolve_missing("gpu-01", set(), category="system")
+    assert len(recovery) == 1
+    assert recovery[0].fingerprint == "recovery:gpu-01:system"
+    assert len(calls["desktop"]) == 1
+    assert len(calls["email"]) == 1
+    assert len(calls["webhook"]) == 1
+
+    # A second sweep must not emit another recovery notice.
+    assert engine.resolve_missing("gpu-01", set(), category="system") == []
+
+
+def test_runtime_lock_port_fallback_and_state_file(tmp_path: Path):
+    """Scenario 4: single-instance lock, port fallback and readable runtime.json."""
+    lock_path = tmp_path / "runtime" / "servermonitor.lock"
+
+    first = runtime.acquire_single_instance(lock_path)
+    try:
+        assert first.acquired is True
+        assert lock_path.parent.is_dir()
+        second = runtime.acquire_single_instance(lock_path)
+        try:
+            assert second.acquired is False
+        finally:
+            second.release()
+    finally:
+        first.release()
+
+    holder = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        holder.bind(("127.0.0.1", 0))
+        holder.listen(1)
+        occupied = holder.getsockname()[1]
+
+        chosen = runtime.find_available_port("127.0.0.1", occupied, span=10)
+        assert chosen != occupied
+        assert occupied < chosen < occupied + 10
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+            probe.bind(("127.0.0.1", chosen))
+    finally:
+        holder.close()
+
+    state_path = tmp_path / "runtime" / "runtime.json"
+    runtime.write_runtime_state(
+        state_path, url=f"http://127.0.0.1:{chosen}", port=chosen, pid=4321
+    )
+    assert runtime.read_runtime_state(state_path) == {
+        "url": f"http://127.0.0.1:{chosen}",
+        "port": chosen,
+        "pid": 4321,
+    }

@@ -629,3 +629,44 @@ def test_test_batch_reports_connection_failure(client, monkeypatch):
     item = resp.get_json()["results"][0]
     assert item["ok"] is False
     assert "connection refused" in item["detail"]
+
+
+def test_host_import_preview_then_confirm_creates_grouped_hosts(client):
+    """Task 13: preview parses without writing, confirm persists hosts + groups."""
+    yaml_text = (
+        "hosts:\n"
+        "  - name: imp-a\n"
+        "    host: 10.9.0.1\n"
+        "    username: ubuntu\n"
+        "    auth_type: key\n"
+        "    key_path: /home/u/.ssh/id_rsa\n"
+        "    group: GPU\n"
+        "  - name: imp-b\n"
+        "    host: 10.9.0.2\n"
+        "    username: ubuntu\n"
+        "    auth_type: key\n"
+        "    key_path: /home/u/.ssh/id_rsa\n"
+        "    group: 机房\n"
+    )
+
+    preview = client.post(
+        "/api/settings/hosts/import/preview",
+        json={"format": "yaml", "content": yaml_text},
+    )
+    assert preview.status_code == 200
+    assert [c["name"] for c in preview.get_json()["candidates"]] == [
+        "imp-a",
+        "imp-b",
+    ]
+    assert client.get("/api/settings").get_json()["hosts"] == []
+
+    imported = client.post(
+        "/api/settings/hosts/import",
+        json={"format": "yaml", "content": yaml_text},
+    )
+    assert imported.status_code == 200
+    assert sorted(imported.get_json()["created"]) == ["imp-a", "imp-b"]
+
+    hosts = {h["name"]: h for h in client.get("/api/settings").get_json()["hosts"]}
+    assert hosts["imp-a"]["group"] == "GPU"
+    assert hosts["imp-b"]["group"] == "机房"

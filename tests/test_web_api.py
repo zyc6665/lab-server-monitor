@@ -368,3 +368,44 @@ def test_logout_clears_session(env):
     assert response.status_code == 302
 
     assert client.get("/api/overview").status_code == 401
+
+
+def test_overview_reflects_imported_host_groups(tmp_path):
+    """Task 13: hosts imported through SettingsService show up grouped on /overview."""
+    from servermanage.config import load_config_from_mapping
+    from servermanage.settings import SettingsService
+    from servermanage.web.routes import _build_overview
+
+    cfg_path = tmp_path / "config.yaml"
+    cfg_path.write_text("servers: []\n", encoding="utf-8")
+    db_path = tmp_path / "import-overview.db"
+    base = load_config_from_mapping({}, allow_empty_servers=True)
+    service = SettingsService(config_path=cfg_path, db_path=db_path, base_config=base)
+
+    service.import_hosts(
+        [
+            {
+                "name": "imp-a",
+                "host": "10.9.0.1",
+                "username": "ubuntu",
+                "auth_type": "key",
+                "key_path": "/home/u/.ssh/id_rsa",
+                "group": "GPU",
+            },
+            {
+                "name": "imp-b",
+                "host": "10.9.0.2",
+                "username": "ubuntu",
+                "auth_type": "key",
+                "key_path": "/home/u/.ssh/id_rsa",
+                "group": "机房",
+            },
+        ]
+    )
+
+    payload = _build_overview(service.load(), db_path)
+    assert payload["meta"]["groups"] == ["GPU", "机房"]
+    by_name = {host["name"]: host for host in payload["hosts"]}
+    assert set(by_name) == {"imp-a", "imp-b"}
+    assert by_name["imp-a"]["group"] == "GPU"
+    assert by_name["imp-b"]["group"] == "机房"
