@@ -1,0 +1,427 @@
+{
+"Controllers":[
+{
+	"Command Status" : {
+		"CLI Version" : "007.2705.0000.0000 August 24, 2023",
+		"Operating system" : "Linux 6.8.0-60-generic",
+		"Controller" : 0,
+		"Status" : "Success",
+		"Description" : "Show Drive Information Succeeded."
+	},
+	"Response Data" : {
+		"Drive /c0/e134/s0" : [
+			{
+				"EID:Slt" : "134:0",
+				"DID" : 0,
+				"State" : "Onln",
+				"DG" : 0,
+				"Size" : "893.750 GB",
+				"Intf" : "SATA",
+				"Med" : "SSD",
+				"SED" : "N",
+				"PI" : "N",
+				"SeSz" : "512B",
+				"Model" : "SAMSUNG MZ7LH960HAJR-00005",
+				"Sp" : "U",
+				"Type" : "-"
+			}
+		],
+		"Drive /c0/e134/s0 - Detailed Information" : {
+			"Drive /c0/e134/s0 State" : {
+				"Shield Counter" : 0,
+				"Media Error Count" : 0,
+				"Other Error Count" : 0,
+				"Drive Temperature" : " 30C (86.00 F)",
+				"Predictive Failure Count" : 0,
+				"S.M.A.R.T alert flagged by drive" : "No"
+			},
+			"Drive /c0/e134/s0 Device attributes" : {
+				"SN" : "S45NNA0TB23277      ",
+				"Manufacturer Id" : "ATA     ",
+				"Model Number" : "SAMSUNG MZ7LH960HAJR-00005",
+				"NAND Vendor" : "NA",
+				"WWN" : "5002538E02B05FB6",
+				"Firmware Revision" : "HXT7B04Q",
+				"Raw size" : "894.252 GB [0x6fc81ab0 Sectors]",
+				"Coerced size" : "893.750 GB [0x6fb80000 Sectors]",
+				"Non Coerced size" : "893.752 GB [0x6fb81ab0 Sectors]",
+				"Device Speed" : "6.0Gb/s",
+				"Link Speed" : "6.0Gb/s",
+				"NCQ setting" : "Enabled",
+				"Write Cache" : "Enabled",
+				"Logical Sector Size" : "512B",
+				"Physical Sector Size" : "4 KB",
+				"Connector Name" : "C0   x1"
+			},
+			"Drive /c0/e134/s0 Policies/Settings" : {
+				"Drive position" : "DriveGroup:0, Span:0, Row:0",
+				"Enclosure position" : "1",
+				"Connected Port Number" : "0(path0) ",
+				"Sequence Number" : 2,
+				"Commissioned Spare" : "No",
+				"Emergency Spare" : "No",
+				"Last Predictive Failure Event Sequence Number" : 0,
+				"Successful diagnostics completion on" : "N/A",
+				"FDE Type" : "None",
+				"SED Capable" : "No",
+				"SED Enabled" : "No",
+				"Secured" : "No",
+				"Cryptographic Erase Capable" : "Yes",
+				"Sanitize Support" : "CryptoErase, BlockErase",
+				"Locked" : "No",
+				"Needs EKM Attention" : "No",
+				"PI Eligible" : "No",
+				"Drive is formatted for PI" : "No",
+				"PI type" : "No PI",
+				"Number of bytes of user data in LBA" : "0 KB",
+				"Certified" : "No",
+				"Wide Port Capable" : "No",
+				"Unmap capable" : "Yes",
+				"Unmap capable for LDs" : "No",
+				"Multipath" : "No",
+				"Port Information" : [
+					{
+						"Port" : 0,
+						"Status" : "Active",
+						"Linkspeed" : "6.0Gb/s",
+						"SAS address" : "0x300062b20c0877c1"
+					}
+				]
+			},
+			"Inquiry Data" : "40 00 ff 3f 37 c8 10 00 00 00 00 00 3f 00 00 00 00 00 00 00 34 53 4e 35 41 4e 54 30 32 42 32 33 37 37 20 20 20 20 20 20 00 00 00 00 00 00 58 48 37 54 30 42 51 34 41 53 53 4d 4e 55 20 47 5a 4d 4c 37 39 48 30 36 41 48 52 4a 30 2d 30 30 35 30 20 20 20 20 20 20 20 20 20 20 20 20 20 20 10 80 00 40 00 2f 00 40 00 02 00 02 07 00 ff 3f 10 00 3f 00 10 fc fb 00 10 bd ff ff ff 0f 00 00 07 00 "
+		},
+		"Drive /c0/e134/s1" : [
+			{
+				"EID:Slt" : "134:1",
+				"DID" : 1,
+				"State" : "Onln",
+				"DG" : 0,
+				"Size" : "893.750 GB",
+				"Intf" : "SATA",
+				"Med" : "SSD",
+				"SED" : "N",
+				"PI" : "N",
+				"SeSz" : "512B",
+				"Model" : "SAMSUNG MZ7LH960HAJR-00005",
+				"Sp" : "U",
+				"Type" : "-"
+			}
+		],
+		"Drive /c0/e134/s1 - Detailed Information" : {
+			"Drive /c0/e134/s1 State" : {
+				"Shield Counter" : 0,
+				"Media Error Count" : 0,
+				"Other Error Count" : 0,
+				"Drive Temperature" : " 29C (84.20 F)",
+				"Predictive Failure Count" : 0,
+				"S.M.A.R.T alert flagged by drive" : "No"
+			},
+			"Drive /c0/e134/s1 Device attributes" : {
+				"SN" : "S45NNA0TB22970      ",
+				"Manufacturer Id" : "ATA     ",
+				"Model Number" : "SAMSUNG MZ7LH960HAJR-00005",
+				"NAND Vendor" : "NA",
+				"WWN" : "5002538E02B05E83",
+				"Firmware Revision" : "HXT7B04Q",
+				"Raw size" : "894.252 GB [0x6fc81ab0 Sectors]",
+				"Coerced size" : "893.750 GB [0x6fb80000 Sectors]",
+				"Non Coerced size" : "893.752 GB [0x6fb81ab0 Sectors]",
+				"Device Speed" : "6.0Gb/s",
+				"Link Speed" : "6.0Gb/s",
+				"NCQ setting" : "Enabled",
+				"Write Cache" : "Enabled",
+				"Logical Sector Size" : "512B",
+				"Physical Sector Size" : "4 KB",
+				"Connector Name" : "C0   x1"
+			},
+			"Drive /c0/e134/s1 Policies/Settings" : {
+				"Drive position" : "DriveGroup:0, Span:0, Row:1",
+				"Enclosure position" : "0",
+				"Connected Port Number" : "1(path0) ",
+				"Sequence Number" : 2,
+				"Commissioned Spare" : "No",
+				"Emergency Spare" : "No",
+				"Last Predictive Failure Event Sequence Number" : 0,
+				"Successful diagnostics completion on" : "N/A",
+				"FDE Type" : "None",
+				"SED Capable" : "No",
+				"SED Enabled" : "No",
+				"Secured" : "No",
+				"Cryptographic Erase Capable" : "Yes",
+				"Sanitize Support" : "CryptoErase, BlockErase",
+				"Locked" : "No",
+				"Needs EKM Attention" : "No",
+				"PI Eligible" : "No",
+				"Drive is formatted for PI" : "No",
+				"PI type" : "No PI",
+				"Number of bytes of user data in LBA" : "0 KB",
+				"Certified" : "No",
+				"Wide Port Capable" : "No",
+				"Unmap capable" : "Yes",
+				"Unmap capable for LDs" : "No",
+				"Multipath" : "No",
+				"Port Information" : [
+					{
+						"Port" : 0,
+						"Status" : "Active",
+						"Linkspeed" : "6.0Gb/s",
+						"SAS address" : "0x300062b20c0877c3"
+					}
+				]
+			},
+			"Inquiry Data" : "40 00 ff 3f 37 c8 10 00 00 00 00 00 3f 00 00 00 00 00 00 00 34 53 4e 35 41 4e 54 30 32 42 39 32 30 37 20 20 20 20 20 20 00 00 00 00 00 00 58 48 37 54 30 42 51 34 41 53 53 4d 4e 55 20 47 5a 4d 4c 37 39 48 30 36 41 48 52 4a 30 2d 30 30 35 30 20 20 20 20 20 20 20 20 20 20 20 20 20 20 10 80 00 40 00 2f 00 40 00 02 00 02 07 00 ff 3f 10 00 3f 00 10 fc fb 00 10 bd ff ff ff 0f 00 00 07 00 "
+		},
+		"Drive /c0/e134/s2" : [
+			{
+				"EID:Slt" : "134:2",
+				"DID" : 4,
+				"State" : "Onln",
+				"DG" : 1,
+				"Size" : "20.008 TB",
+				"Intf" : "SATA",
+				"Med" : "HDD",
+				"SED" : "N",
+				"PI" : "N",
+				"SeSz" : "512B",
+				"Model" : "WDC  WUH722222ALE6L4",
+				"Sp" : "U",
+				"Type" : "-"
+			}
+		],
+		"Drive /c0/e134/s2 - Detailed Information" : {
+			"Drive /c0/e134/s2 State" : {
+				"Shield Counter" : 0,
+				"Media Error Count" : 0,
+				"Other Error Count" : 0,
+				"Drive Temperature" : " 29C (84.20 F)",
+				"Predictive Failure Count" : 0,
+				"S.M.A.R.T alert flagged by drive" : "No"
+			},
+			"Drive /c0/e134/s2 Device attributes" : {
+				"SN" : "21J1N8PN            ",
+				"Manufacturer Id" : "ATA     ",
+				"Model Number" : "WDC  WUH722222ALE6L4",
+				"NAND Vendor" : "NA",
+				"WWN" : "5000CCA412DCEF82",
+				"Firmware Revision" : "LNGNW730",
+				"Raw size" : "20.009 TB [0xa01400000 Sectors]",
+				"Coerced size" : "20.008 TB [0xa01300000 Sectors]",
+				"Non Coerced size" : "20.008 TB [0xa01300000 Sectors]",
+				"Device Speed" : "6.0Gb/s",
+				"Link Speed" : "6.0Gb/s",
+				"NCQ setting" : "Enabled",
+				"Write Cache" : "Enabled",
+				"Logical Sector Size" : "512B",
+				"Physical Sector Size" : "4 KB",
+				"Connector Name" : "C0   x1"
+			},
+			"Drive /c0/e134/s2 Policies/Settings" : {
+				"Drive position" : "DriveGroup:1, Span:0, Row:0",
+				"Enclosure position" : "0",
+				"Connected Port Number" : "3(path0) ",
+				"Sequence Number" : 2,
+				"Commissioned Spare" : "No",
+				"Emergency Spare" : "No",
+				"Last Predictive Failure Event Sequence Number" : 0,
+				"Successful diagnostics completion on" : "N/A",
+				"FDE Type" : "None",
+				"SED Capable" : "No",
+				"SED Enabled" : "No",
+				"Secured" : "No",
+				"Cryptographic Erase Capable" : "No",
+				"Sanitize Support" : "OverWrite",
+				"Locked" : "No",
+				"Needs EKM Attention" : "No",
+				"PI Eligible" : "No",
+				"Drive is formatted for PI" : "No",
+				"PI type" : "No PI",
+				"Number of bytes of user data in LBA" : "0 KB",
+				"Certified" : "No",
+				"Wide Port Capable" : "No",
+				"Unmap capable" : "No",
+				"Unmap capable for LDs" : "No",
+				"Multipath" : "No",
+				"Port Information" : [
+					{
+						"Port" : 0,
+						"Status" : "Active",
+						"Linkspeed" : "6.0Gb/s",
+						"SAS address" : "0x300062b20c0877c5"
+					}
+				]
+			},
+			"Inquiry Data" : "5a 04 ff 3f 37 c8 10 00 00 00 00 00 3f 00 00 00 00 00 00 00 31 32 31 4a 38 4e 4e 50 20 20 20 20 20 20 20 20 20 20 20 20 03 00 00 00 38 00 4e 4c 4e 47 37 57 30 33 44 57 20 43 57 20 48 55 32 37 32 32 32 32 4c 41 36 45 34 4c 20 20 20 20 20 20 20 20 20 20 20 20 20 20 20 20 20 20 20 20 10 80 00 40 00 2f 00 40 00 02 00 02 07 00 ff 3f 10 00 3f 00 10 fc fb 00 00 59 ff ff ff 0f 00 00 07 00 "
+		},
+		"Drive /c0/e134/s3" : [
+			{
+				"EID:Slt" : "134:3",
+				"DID" : 3,
+				"State" : "Onln",
+				"DG" : 1,
+				"Size" : "20.008 TB",
+				"Intf" : "SATA",
+				"Med" : "HDD",
+				"SED" : "N",
+				"PI" : "N",
+				"SeSz" : "512B",
+				"Model" : "WDC  WUH722222ALE6L4",
+				"Sp" : "U",
+				"Type" : "-"
+			}
+		],
+		"Drive /c0/e134/s3 - Detailed Information" : {
+			"Drive /c0/e134/s3 State" : {
+				"Shield Counter" : 0,
+				"Media Error Count" : 0,
+				"Other Error Count" : 0,
+				"Drive Temperature" : " 30C (86.00 F)",
+				"Predictive Failure Count" : 0,
+				"S.M.A.R.T alert flagged by drive" : "No"
+			},
+			"Drive /c0/e134/s3 Device attributes" : {
+				"SN" : "21J1TRXN            ",
+				"Manufacturer Id" : "ATA     ",
+				"Model Number" : "WDC  WUH722222ALE6L4",
+				"NAND Vendor" : "NA",
+				"WWN" : "5000CCA412DD003F",
+				"Firmware Revision" : "LNGNW730",
+				"Raw size" : "20.009 TB [0xa01400000 Sectors]",
+				"Coerced size" : "20.008 TB [0xa01300000 Sectors]",
+				"Non Coerced size" : "20.008 TB [0xa01300000 Sectors]",
+				"Device Speed" : "6.0Gb/s",
+				"Link Speed" : "6.0Gb/s",
+				"NCQ setting" : "Enabled",
+				"Write Cache" : "Enabled",
+				"Logical Sector Size" : "512B",
+				"Physical Sector Size" : "4 KB",
+				"Connector Name" : "C0   x1"
+			},
+			"Drive /c0/e134/s3 Policies/Settings" : {
+				"Drive position" : "DriveGroup:1, Span:0, Row:1",
+				"Enclosure position" : "0",
+				"Connected Port Number" : "4(path0) ",
+				"Sequence Number" : 2,
+				"Commissioned Spare" : "No",
+				"Emergency Spare" : "No",
+				"Last Predictive Failure Event Sequence Number" : 0,
+				"Successful diagnostics completion on" : "N/A",
+				"FDE Type" : "None",
+				"SED Capable" : "No",
+				"SED Enabled" : "No",
+				"Secured" : "No",
+				"Cryptographic Erase Capable" : "No",
+				"Sanitize Support" : "OverWrite",
+				"Locked" : "No",
+				"Needs EKM Attention" : "No",
+				"PI Eligible" : "No",
+				"Drive is formatted for PI" : "No",
+				"PI type" : "No PI",
+				"Number of bytes of user data in LBA" : "0 KB",
+				"Certified" : "No",
+				"Wide Port Capable" : "No",
+				"Unmap capable" : "No",
+				"Unmap capable for LDs" : "No",
+				"Multipath" : "No",
+				"Port Information" : [
+					{
+						"Port" : 0,
+						"Status" : "Active",
+						"Linkspeed" : "6.0Gb/s",
+						"SAS address" : "0x300062b20c0877c7"
+					}
+				]
+			},
+			"Inquiry Data" : "5a 04 ff 3f 37 c8 10 00 00 00 00 00 3f 00 00 00 00 00 00 00 31 32 31 4a 52 54 4e 58 20 20 20 20 20 20 20 20 20 20 20 20 03 00 00 00 38 00 4e 4c 4e 47 37 57 30 33 44 57 20 43 57 20 48 55 32 37 32 32 32 32 4c 41 36 45 34 4c 20 20 20 20 20 20 20 20 20 20 20 20 20 20 20 20 20 20 20 20 10 80 00 40 00 2f 00 40 00 02 00 02 07 00 ff 3f 10 00 3f 00 10 fc fb 00 00 59 ff ff ff 0f 00 00 07 00 "
+		},
+		"Drive /c0/e134/s4" : [
+			{
+				"EID:Slt" : "134:4",
+				"DID" : 2,
+				"State" : "Onln",
+				"DG" : 1,
+				"Size" : "20.008 TB",
+				"Intf" : "SATA",
+				"Med" : "HDD",
+				"SED" : "N",
+				"PI" : "N",
+				"SeSz" : "512B",
+				"Model" : "WDC  WUH722222ALE6L4",
+				"Sp" : "U",
+				"Type" : "-"
+			}
+		],
+		"Drive /c0/e134/s4 - Detailed Information" : {
+			"Drive /c0/e134/s4 State" : {
+				"Shield Counter" : 0,
+				"Media Error Count" : 0,
+				"Other Error Count" : 0,
+				"Drive Temperature" : " 28C (82.40 F)",
+				"Predictive Failure Count" : 0,
+				"S.M.A.R.T alert flagged by drive" : "No"
+			},
+			"Drive /c0/e134/s4 Device attributes" : {
+				"SN" : "21J2G1AN            ",
+				"Manufacturer Id" : "ATA     ",
+				"Model Number" : "WDC  WUH722222ALE6L4",
+				"NAND Vendor" : "NA",
+				"WWN" : "5000CCA412DD4C77",
+				"Firmware Revision" : "LNGNW730",
+				"Raw size" : "20.009 TB [0xa01400000 Sectors]",
+				"Coerced size" : "20.008 TB [0xa01300000 Sectors]",
+				"Non Coerced size" : "20.008 TB [0xa01300000 Sectors]",
+				"Device Speed" : "6.0Gb/s",
+				"Link Speed" : "6.0Gb/s",
+				"NCQ setting" : "Enabled",
+				"Write Cache" : "Enabled",
+				"Logical Sector Size" : "512B",
+				"Physical Sector Size" : "4 KB",
+				"Connector Name" : "C1   x1"
+			},
+			"Drive /c0/e134/s4 Policies/Settings" : {
+				"Drive position" : "DriveGroup:1, Span:0, Row:2",
+				"Enclosure position" : "0",
+				"Connected Port Number" : "2(path1) ",
+				"Sequence Number" : 2,
+				"Commissioned Spare" : "No",
+				"Emergency Spare" : "No",
+				"Last Predictive Failure Event Sequence Number" : 0,
+				"Successful diagnostics completion on" : "N/A",
+				"FDE Type" : "None",
+				"SED Capable" : "No",
+				"SED Enabled" : "No",
+				"Secured" : "No",
+				"Cryptographic Erase Capable" : "No",
+				"Sanitize Support" : "OverWrite",
+				"Locked" : "No",
+				"Needs EKM Attention" : "No",
+				"PI Eligible" : "No",
+				"Drive is formatted for PI" : "No",
+				"PI type" : "No PI",
+				"Number of bytes of user data in LBA" : "0 KB",
+				"Certified" : "No",
+				"Wide Port Capable" : "No",
+				"Unmap capable" : "No",
+				"Unmap capable for LDs" : "No",
+				"Multipath" : "No",
+				"Port Information" : [
+					{
+						"Port" : 0,
+						"Status" : "Active",
+						"Linkspeed" : "6.0Gb/s",
+						"SAS address" : "0x0"
+					},
+					{
+						"Port" : 1,
+						"Status" : "Active",
+						"Linkspeed" : "6.0Gb/s",
+						"SAS address" : "0x300062b20c0877c0"
+					}
+				]
+			},
+			"Inquiry Data" : "5a 04 ff 3f 37 c8 10 00 00 00 00 00 3f 00 00 00 00 00 00 00 31 32 32 4a 31 47 4e 41 20 20 20 20 20 20 20 20 20 20 20 20 03 00 00 00 38 00 4e 4c 4e 47 37 57 30 33 44 57 20 43 57 20 48 55 32 37 32 32 32 32 4c 41 36 45 34 4c 20 20 20 20 20 20 20 20 20 20 20 20 20 20 20 20 20 20 20 20 10 80 00 40 00 2f 00 40 00 02 00 02 07 00 ff 3f 10 00 3f 00 10 fc fb 00 00 59 ff ff ff 0f 00 00 07 00 "
+		}
+	}
+}
+]
+}
+

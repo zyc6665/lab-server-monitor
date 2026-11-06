@@ -1,0 +1,42 @@
+{
+"Controllers":[
+{
+	"Command Status" : {
+		"CLI Version" : "007.2705.0000.0000 August 24, 2023",
+		"Operating system" : "Linux 6.8.0-60-generic",
+		"Controller" : 0,
+		"Status" : "Success",
+		"Description" : "None"
+	},
+	"Response Data" : {
+		"Virtual Drives" : [
+			{
+				"DG/VD" : "0/0",
+				"TYPE" : "RAID1",
+				"State" : "Optl",
+				"Access" : "RW",
+				"Consist" : "Yes",
+				"Cache" : "RWBD",
+				"Cac" : "-",
+				"sCC" : "ON",
+				"Size" : "893.750 GB",
+				"Name" : ""
+			},
+			{
+				"DG/VD" : "1/1",
+				"TYPE" : "RAID5",
+				"State" : "Optl",
+				"Access" : "RW",
+				"Consist" : "Yes",
+				"Cache" : "RWBD",
+				"Cac" : "-",
+				"sCC" : "ON",
+				"Size" : "40.018 TB",
+				"Name" : ""
+			}
+		]
+	}
+}
+]
+}
+

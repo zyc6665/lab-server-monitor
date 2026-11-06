@@ -1,0 +1,30 @@
+{
+"Controllers":[
+{
+	"Command Status" : {
+		"CLI Version" : "007.2705.0000.0000 August 24, 2023",
+		"Operating system" : "Linux 4.15.0-213-generic",
+		"Controller" : 0,
+		"Status" : "Success",
+		"Description" : "None"
+	},
+	"Response Data" : {
+		"Virtual Drives" : [
+			{
+				"DG/VD" : "0/0",
+				"TYPE" : "RAID1",
+				"State" : "Optl",
+				"Access" : "RW",
+				"Consist" : "Yes",
+				"Cache" : "RWTD",
+				"Cac" : "-",
+				"sCC" : "ON",
+				"Size" : "446.625 GB",
+				"Name" : ""
+			}
+		]
+	}
+}
+]
+}
+

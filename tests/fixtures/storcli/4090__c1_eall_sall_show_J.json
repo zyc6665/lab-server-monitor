@@ -1,0 +1,48 @@
+{
+"Controllers":[
+{
+	"Command Status" : {
+		"CLI Version" : "007.2705.0000.0000 August 24, 2023",
+		"Operating system" : "Linux 5.4.0-216-generic",
+		"Controller" : 1,
+		"Status" : "Success",
+		"Description" : "Show Drive Information Succeeded."
+	},
+	"Response Data" : {
+		"Drive Information" : [
+			{
+				"EID:Slt" : "252:4",
+				"DID" : 0,
+				"State" : "Onln",
+				"DG" : 0,
+				"Size" : "893.750 GB",
+				"Intf" : "SATA",
+				"Med" : "SSD",
+				"SED" : "N",
+				"PI" : "N",
+				"SeSz" : "512B",
+				"Model" : "INTEL SSDSC2KB960GZ",
+				"Sp" : "U",
+				"Type" : "-"
+			},
+			{
+				"EID:Slt" : "252:5",
+				"DID" : 1,
+				"State" : "Onln",
+				"DG" : 0,
+				"Size" : "893.750 GB",
+				"Intf" : "SATA",
+				"Med" : "SSD",
+				"SED" : "N",
+				"PI" : "N",
+				"SeSz" : "512B",
+				"Model" : "INTEL SSDSC2KB960GZ",
+				"Sp" : "U",
+				"Type" : "-"
+			}
+		]
+	}
+}
+]
+}
+

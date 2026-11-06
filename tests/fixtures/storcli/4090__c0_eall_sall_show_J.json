@@ -1,0 +1,108 @@
+{
+"Controllers":[
+{
+	"Command Status" : {
+		"CLI Version" : "007.2705.0000.0000 August 24, 2023",
+		"Operating system" : "Linux 5.4.0-216-generic",
+		"Controller" : 0,
+		"Status" : "Success",
+		"Description" : "Show Drive Information Succeeded."
+	},
+	"Response Data" : {
+		"Drive Information" : [
+			{
+				"EID:Slt" : "252:0",
+				"DID" : 20,
+				"State" : "Onln",
+				"DG" : 0,
+				"Size" : "14.551 TB",
+				"Intf" : "SATA",
+				"Med" : "HDD",
+				"SED" : "N",
+				"PI" : "N",
+				"SeSz" : "512B",
+				"Model" : "WUH721816ALE6L4",
+				"Sp" : "U",
+				"Type" : "-"
+			},
+			{
+				"EID:Slt" : "252:1",
+				"DID" : 21,
+				"State" : "Onln",
+				"DG" : 0,
+				"Size" : "14.551 TB",
+				"Intf" : "SATA",
+				"Med" : "HDD",
+				"SED" : "N",
+				"PI" : "N",
+				"SeSz" : "512B",
+				"Model" : "WUH721816ALE6L4",
+				"Sp" : "U",
+				"Type" : "-"
+			},
+			{
+				"EID:Slt" : "252:2",
+				"DID" : 22,
+				"State" : "Onln",
+				"DG" : 0,
+				"Size" : "14.551 TB",
+				"Intf" : "SATA",
+				"Med" : "HDD",
+				"SED" : "N",
+				"PI" : "N",
+				"SeSz" : "512B",
+				"Model" : "WUH721816ALE6L4",
+				"Sp" : "U",
+				"Type" : "-"
+			},
+			{
+				"EID:Slt" : "252:3",
+				"DID" : 23,
+				"State" : "Onln",
+				"DG" : 0,
+				"Size" : "14.551 TB",
+				"Intf" : "SATA",
+				"Med" : "HDD",
+				"SED" : "N",
+				"PI" : "N",
+				"SeSz" : "512B",
+				"Model" : "WUH721816ALE6L4",
+				"Sp" : "U",
+				"Type" : "-"
+			},
+			{
+				"EID:Slt" : "252:4",
+				"DID" : 24,
+				"State" : "Onln",
+				"DG" : 0,
+				"Size" : "14.551 TB",
+				"Intf" : "SATA",
+				"Med" : "HDD",
+				"SED" : "N",
+				"PI" : "N",
+				"SeSz" : "512B",
+				"Model" : "WUH721816ALE6L4",
+				"Sp" : "U",
+				"Type" : "-"
+			},
+			{
+				"EID:Slt" : "252:5",
+				"DID" : 25,
+				"State" : "Onln",
+				"DG" : 0,
+				"Size" : "14.551 TB",
+				"Intf" : "SATA",
+				"Med" : "HDD",
+				"SED" : "N",
+				"PI" : "N",
+				"SeSz" : "512B",
+				"Model" : "WUH721816ALE6L4",
+				"Sp" : "U",
+				"Type" : "-"
+			}
+		]
+	}
+}
+]
+}
+
