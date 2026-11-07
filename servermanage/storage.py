@@ -187,6 +187,30 @@ CREATE INDEX IF NOT EXISTS idx_alert_silences_ends_at
     ON alert_silences(ends_at);
 """
 
+# Table added by the v1.4 SSH terminal feature (Task 1): metadata-only audit of
+# interactive SSH sessions.  Terminal input/output is never stored.  ``username``
+# is the dashboard admin account, ``server_username`` the SSH login account, and
+# ``remote_addr`` is always ``127.0.0.1`` in desktop (loopback-only) mode.  Time
+# columns are ISO-8601 UTC strings.
+_CREATE_SSH_AUDIT_TABLES_SQL = """
+CREATE TABLE IF NOT EXISTS ssh_audit_sessions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    host_name TEXT NOT NULL,
+    username TEXT NOT NULL,
+    server_username TEXT,
+    remote_addr TEXT NOT NULL,
+    started_at TEXT NOT NULL,
+    ended_at TEXT,
+    status TEXT NOT NULL DEFAULT 'active',
+    error TEXT
+);
+"""
+
+_CREATE_SSH_AUDIT_INDEX_SQL = """
+CREATE INDEX IF NOT EXISTS idx_ssh_audit_started_at
+    ON ssh_audit_sessions(started_at);
+"""
+
 
 def _disk_percent_value(percent: str) -> int:
     digits = "".join(ch for ch in percent if ch.isdigit())
@@ -232,6 +256,8 @@ def init_storage(db_path: Path) -> None:
         conn.executescript(_CREATE_SETTINGS_TABLES_SQL)
         conn.executescript(_CREATE_SILENCE_TABLES_SQL)
         conn.executescript(_CREATE_SILENCE_INDEX_SQL)
+        conn.executescript(_CREATE_SSH_AUDIT_TABLES_SQL)
+        conn.executescript(_CREATE_SSH_AUDIT_INDEX_SQL)
 
 
 def persist_host_reports(
@@ -1184,6 +1210,96 @@ def set_task_state(
 
 
 # ---------------------------------------------------------------------------
+# SSH session audit (metadata only)
+# ---------------------------------------------------------------------------
+
+
+def _ssh_audit_now() -> str:
+    """Current UTC instant as an ISO-8601 string for audit timestamps."""
+    return datetime.now(timezone.utc).isoformat()
+
+
+def record_ssh_session_start(
+    host_name: str,
+    username: str,
+    server_username: str | None = None,
+    remote_addr: str = "127.0.0.1",
+    started_at: str | None = None,
+    *,
+    db_path: Path,
+) -> int:
+    """Insert an ``active`` audit row and return its row id.
+
+    ``host_name`` is the dashboard host label, ``username`` the dashboard admin
+    account, ``server_username`` the SSH login account and ``remote_addr`` the
+    caller address (always ``127.0.0.1`` in loopback-only desktop mode).  Only
+    session metadata is stored; terminal input/output is never recorded.
+    """
+    db_path = Path(db_path)
+    init_storage(db_path)
+    started = started_at if started_at is not None else _ssh_audit_now()
+
+    with sqlite3.connect(db_path) as conn:
+        cursor = conn.execute(
+            "INSERT INTO ssh_audit_sessions"
+            " (host_name, username, server_username, remote_addr, started_at,"
+            " status)"
+            " VALUES (?, ?, ?, ?, ?, 'active')",
+            (host_name, username, server_username, remote_addr, started),
+        )
+        conn.commit()
+        return int(cursor.lastrowid)
+
+
+def record_ssh_session_end(
+    session_id: int,
+    status: str = "closed",
+    error: str | None = None,
+    ended_at: str | None = None,
+    *,
+    db_path: Path,
+) -> bool:
+    """Finalise an audit row, returning ``True`` when the row was updated."""
+    db_path = Path(db_path)
+    if not db_path.exists():
+        return False
+    ended = ended_at if ended_at is not None else _ssh_audit_now()
+
+    with sqlite3.connect(db_path) as conn:
+        cursor = conn.execute(
+            "UPDATE ssh_audit_sessions"
+            " SET status = ?, error = ?, ended_at = ?"
+            " WHERE id = ?",
+            (status, error, ended, session_id),
+        )
+        conn.commit()
+        return cursor.rowcount > 0
+
+
+def list_ssh_sessions(db_path: Path, limit: int = 100) -> list[sqlite3.Row]:
+    """Return audit rows ordered by ``started_at`` (newest first)."""
+    db_path = Path(db_path)
+    if not db_path.exists():
+        return []
+
+    try:
+        with sqlite3.connect(db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            rows = conn.execute(
+                "SELECT id, host_name, username, server_username, remote_addr,"
+                " started_at, ended_at, status, error"
+                " FROM ssh_audit_sessions"
+                " ORDER BY started_at DESC, id DESC"
+                " LIMIT ?",
+                (limit,),
+            ).fetchall()
+    except sqlite3.OperationalError:
+        return []
+
+    return list(rows)
+
+
+# ---------------------------------------------------------------------------
 # Retention
 # ---------------------------------------------------------------------------
 
@@ -1206,14 +1322,15 @@ def purge_old_data(
 
     Covers ``host_metrics_history``, the ``disk_health_snapshot`` header table,
     the three disk snapshot tables, alerts that are both older than the cutoff
-    and ``status = 'resolved'``, and silence rows whose ``ends_at`` is before
-    the cutoff.  Active alerts are never purged.  Pass ``now`` in tests to pin
-    the cutoff.
+    and ``status = 'resolved'``, silence rows whose ``ends_at`` is before
+    the cutoff, and SSH audit rows whose ``started_at`` is before the cutoff.
+    Active alerts are never purged.  Pass ``now`` in tests to pin the cutoff.
     """
     db_path = Path(db_path)
     counts = {table: 0 for table in _PURGE_TABLES}
     counts["alerts"] = 0
     counts["alert_silences"] = 0
+    counts["ssh_audit_sessions"] = 0
     if not db_path.exists():
         return counts
 
@@ -1235,6 +1352,12 @@ def purge_old_data(
             "DELETE FROM alert_silences WHERE ends_at < ?", (cutoff,)
         )
         counts["alert_silences"] = (
+            cursor.rowcount if cursor.rowcount is not None else 0
+        )
+        cursor = conn.execute(
+            "DELETE FROM ssh_audit_sessions WHERE started_at < ?", (cutoff,)
+        )
+        counts["ssh_audit_sessions"] = (
             cursor.rowcount if cursor.rowcount is not None else 0
         )
         conn.commit()
