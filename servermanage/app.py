@@ -12,6 +12,7 @@ from __future__ import annotations
 import argparse
 import logging
 import os
+import sys
 import threading
 from dataclasses import replace
 from datetime import datetime, timezone
@@ -123,14 +124,67 @@ def configure_logging(log_dir: Path = Path("logs")) -> None:
     )
     file_handler.setFormatter(formatter)
 
-    stream_handler = logging.StreamHandler()
-    stream_handler.setFormatter(formatter)
-
     root = logging.getLogger()
     root.setLevel(logging.INFO)
     root.addHandler(file_handler)
-    root.addHandler(stream_handler)
+    # A windowed (PyInstaller ``--noconsole``) build has ``sys.stderr is None``;
+    # attaching a StreamHandler to it would surface as "NoneType has no attribute
+    # write" the first time anything logs.  Only add the console handler when a
+    # real stderr stream exists.
+    if sys.stderr is not None:
+        stream_handler = logging.StreamHandler()
+        stream_handler.setFormatter(formatter)
+        root.addHandler(stream_handler)
     _LOGGING_CONFIGURED = True
+
+
+def default_config_path() -> Path:
+    """Return the ``config.yaml`` to use when ``--config`` is omitted.
+
+    In a frozen (PyInstaller) build the executable tree is searched so a packaged
+    desktop install finds its shipped ``config/config.yaml``; a source checkout
+    falls back to the repo-level ``config/config.yaml``.  When no frozen
+    candidate exists the first (exe-dir) candidate is returned so the subsequent
+    load error names a sensible location.
+    """
+    if getattr(sys, "frozen", False):
+        exe = Path(sys.executable)
+        candidates = [
+            exe.parent / "config" / "config.yaml",
+            exe.parents[2] / "config" / "config.yaml",
+            Path.cwd() / "config" / "config.yaml",
+        ]
+        for candidate in candidates:
+            if candidate.exists():
+                return candidate
+        return candidates[0]
+    return Path(__file__).resolve().parents[1] / "config" / "config.yaml"
+
+
+def watch_parent_stdin(on_eof: Callable[[], None], stream=None) -> None:
+    """Block reading *stream* until EOF, then invoke ``on_eof`` once.
+
+    The desktop shell spawns the backend with ``--parent-stdin`` and keeps the
+    child's stdin pipe open.  When the Electron parent exits the pipe closes and
+    this watcher fires ``on_eof`` (usually ``server.close``) to shut the sidecar
+    down.  It reads one byte at a time so it never buffers protocol data, and is
+    meant to run on a daemon thread.
+    """
+    if stream is None:
+        stream = getattr(sys, "stdin", None)
+    if stream is None:
+        # No stdin pipe (e.g. a windowed build): nothing to watch.
+        LOGGER.warning("Parent-stdin watchdog has no stdin stream to watch")
+        return
+    try:
+        while True:
+            chunk = stream.read(1)
+            if not chunk:
+                break
+    except (OSError, ValueError):  # A closed/invalid stdin also means EOF.
+        pass
+    LOGGER.info("Parent stdin closed; shutting down headless service")
+    on_eof()
 
 
 def load_runtime(
@@ -569,11 +623,33 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Run the server polling monitor service."
     )
-    parser.add_argument("--config", required=True, help="Path to config.yaml")
+    parser.add_argument(
+        "--config",
+        default=None,
+        help="Path to config.yaml (defaults to the bundled repo/exe-tree config).",
+    )
     parser.add_argument(
         "--dotenv",
         default=None,
         help="Optional dotenv path loaded before config parsing.",
+    )
+    parser.add_argument(
+        "--headless",
+        action="store_true",
+        default=False,
+        help="Run without the system tray or browser (desktop sidecar mode).",
+    )
+    parser.add_argument(
+        "--parent-stdin",
+        action="store_true",
+        default=False,
+        help="Shut the service down when the parent process closes stdin.",
+    )
+    parser.add_argument(
+        "--start-hidden",
+        action="store_true",
+        default=False,
+        help="Accepted for desktop parity; no effect in the Python service.",
     )
     return parser
 
@@ -660,15 +736,30 @@ def main(
     tray_handle = None
     try:
         try:
+            config_path = (
+                Path(args.config) if args.config else default_config_path()
+            )
             config, db_path, settings = load_runtime_with_settings(
-                Path(args.config),
+                config_path,
                 Path(args.dotenv) if args.dotenv else None,
             )
         except Exception as exc:  # pragma: no cover - integration path
             LOGGER.exception("Failed to load runtime configuration: %s", exc)
             return 1
 
+        # Desktop mode is signalled by Electron via ``SERVERMONITOR_DESKTOP=1``.
+        # It implies headless (no tray/browser) *and* restricts the dashboard to
+        # loopback; a plain ``--headless`` CLI service keeps the LAN-bind ability
+        # (ruling R1), so host validation is gated on the desktop env only.
+        desktop = os.environ.get("SERVERMONITOR_DESKTOP") == "1"
+        headless = bool(args.headless) or desktop
         host = str(config.dashboard.host)
+        if desktop and host not in {"", "0.0.0.0", "::", "::0", "127.0.0.1"}:
+            LOGGER.error(
+                "Desktop mode requires a loopback dashboard host, got %r", host
+            )
+            return 2
+
         preferred_port = int(config.dashboard.port)
         port = choose_port(
             host,
@@ -694,16 +785,27 @@ def main(
             _RUNTIME_STATE_PATH, url=url, port=port, pid=os.getpid()
         )
 
-        if bool(getattr(config.app, "open_browser_on_start", True)):
+        if not headless and bool(
+            getattr(config.app, "open_browser_on_start", True)
+        ):
             threading.Timer(0.8, open_browser, [url]).start()
 
-        if bool(getattr(config.app, "tray_enabled", True)):
+        if not headless and bool(getattr(config.app, "tray_enabled", True)):
             tray_handle = start_tray(
                 url=url,
                 log_dir=configured_log_dir,
                 on_exit=server.close,
                 enabled=True,
             )
+
+        # Desktop sidecar lifecycle: when the Electron parent dies its stdin pipe
+        # closes and the watcher stops this blocking server loop.
+        if args.parent_stdin:
+            threading.Thread(
+                target=watch_parent_stdin,
+                args=(server.close,),
+                daemon=True,
+            ).start()
 
         server.run()
     except KeyboardInterrupt:  # pragma: no cover - interactive path
