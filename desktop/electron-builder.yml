@@ -1,0 +1,14 @@
+appId: com.lab.servermonitor
+productName: 服务器轮询监测工具
+directories:
+  output: release-electron
+files:
+  - electron/**
+  - build/icon.ico
+  - package.json
+extraResources:
+  - from: ../dist/backend/servermonitor-backend
+    to: backend
+win:
+  target: dir
+  icon: build/icon.ico
