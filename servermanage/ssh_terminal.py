@@ -16,7 +16,7 @@ import secrets
 import socket
 import threading
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Callable, Iterator
 
 from servermanage.models import HostConfig
@@ -61,6 +61,10 @@ class SshTerminalSession:
     reader_thread: threading.Thread | None = None
     received_chunks: int = 0
     received_bytes: int = 0
+    transport_closed: bool = False
+    _close_lock: threading.Lock = field(
+        default_factory=threading.Lock, repr=False, compare=False
+    )
 
     def touch(self, now: float) -> None:
         self.last_activity = now
@@ -79,8 +83,13 @@ class SshTerminalSession:
         self.channel.resize_pty(width=cols, height=rows)
 
     def close(self) -> None:
-        """Close the channel and the owning SSH client.  Idempotent."""
-        self.closed = True
+        """Close the channel and the owning SSH client.  Idempotent and safe
+        to call from both the reader thread and an API thread."""
+        with self._close_lock:
+            self.closed = True
+            if self.transport_closed:
+                return
+            self.transport_closed = True
         try:
             self.channel.close()
         except Exception:  # noqa: BLE001 - never let teardown crash callers
@@ -107,11 +116,14 @@ class SshTerminalManager:
         sweep_interval: float = 30.0,
         read_chunk_size: int = DEFAULT_READ_CHUNK_SIZE,
         thread_join_timeout: float = 5.0,
+        closed_session_retention: int = 32,
     ) -> None:
         if max_sessions < 1:
             raise ValueError("max_sessions must be >= 1")
         if output_queue_size < 1:
             raise ValueError("output_queue_size must be >= 1")
+        if closed_session_retention < 0:
+            raise ValueError("closed_session_retention must be >= 0")
         self.max_sessions = max_sessions
         self.idle_timeout_seconds = idle_timeout_seconds
         self.output_queue_size = output_queue_size
@@ -119,10 +131,15 @@ class SshTerminalManager:
         self.connect_timeout = connect_timeout
         self.read_chunk_size = read_chunk_size
         self.thread_join_timeout = thread_join_timeout
+        self.closed_session_retention = closed_session_retention
         self._clock = clock
         self._ssh_factory = ssh_factory or self._default_ssh_factory
         self._lock = threading.RLock()
         self._sessions: dict[str, SshTerminalSession] = {}
+        # Recently closed sessions keep their output buffer so a consumer can
+        # drain the final chunks after EOF/close.  Bounded to avoid unbounded
+        # memory growth; these are never counted against max_sessions.
+        self._closed_sessions: dict[str, SshTerminalSession] = {}
         self._reserved_ids: set[str] = set()
         self._pending = 0
         self._stop_event = threading.Event()
@@ -188,8 +205,17 @@ class SshTerminalManager:
         return session_id
 
     def get_session(self, session_id: str) -> SshTerminalSession | None:
+        """Return a live session, or a recently closed one retained for draining."""
         with self._lock:
-            return self._sessions.get(session_id)
+            session = self._sessions.get(session_id)
+            if session is not None:
+                return session
+            return self._closed_sessions.get(session_id)
+
+    def is_active(self, session_id: str) -> bool:
+        """True only while the session is registered as live."""
+        with self._lock:
+            return session_id in self._sessions
 
     @property
     def active_count(self) -> int:
@@ -232,11 +258,19 @@ class SshTerminalManager:
             yield chunk
 
     def close(self, session_id: str) -> bool:
-        """Close a session (channel + client) and join its reader thread."""
+        """Close a session (channel + client) and join its reader thread.
+
+        Idempotent: closing an already closed/unknown session returns ``False``
+        and never raises.  The session is unregistered immediately so it stops
+        counting against ``max_sessions``; its buffer is retained briefly so
+        :meth:`get_output` can still drain final chunks.
+        """
         with self._lock:
             session = self._sessions.pop(session_id, None)
-        if session is None:
-            return False
+            if session is None:
+                return False
+            session.closed = True
+            self._remember_closed_locked(session)
         session.close()
         thread = session.reader_thread
         if thread is not None and thread is not threading.current_thread():
@@ -269,6 +303,8 @@ class SshTerminalManager:
             session_ids = list(self._sessions)
         for session_id in session_ids:
             self.close(session_id)
+        with self._lock:
+            self._closed_sessions.clear()
 
     # -- internals ---------------------------------------------------------
 
@@ -278,17 +314,24 @@ class SshTerminalManager:
     def _new_session_id_locked(self) -> str:
         while True:
             candidate = secrets.token_urlsafe(32)
-            if candidate not in self._sessions and candidate not in self._reserved_ids:
+            if (
+                candidate not in self._sessions
+                and candidate not in self._closed_sessions
+                and candidate not in self._reserved_ids
+            ):
                 return candidate
 
     def _require_session(self, session_id: str) -> SshTerminalSession:
         with self._lock:
-            session = self._sessions.get(session_id)
+            session = self._sessions.get(session_id) or self._closed_sessions.get(
+                session_id
+            )
         if session is None:
             raise SessionNotFoundError(f"Unknown terminal session: {session_id}")
         return session
 
     def _reader_loop(self, session: SshTerminalSession) -> None:
+        error: str | None = None
         try:
             while not session.closed:
                 try:
@@ -296,16 +339,21 @@ class SshTerminalManager:
                 except socket.timeout:
                     continue
                 except Exception as exc:  # noqa: BLE001 - isolate per-session errors
-                    if session.closed:
-                        return
-                    self._mark_error(session, exc)
+                    # An explicit close() may have caused the underlying socket
+                    # to fail; only record a real read error.
+                    if not session.closed:
+                        error = f"{type(exc).__name__}: {exc}"
                     return
                 if not chunk:
-                    break
+                    # Natural EOF: remote shell exited (or channel closed).
+                    return
                 self._store_output(session, chunk)
         finally:
-            with self._lock:
-                session.closed = True
+            # Whatever ended the loop (EOF, error, or explicit close), always
+            # unregister the session and tear down its channel/client so the
+            # concurrency slot is released immediately instead of waiting for
+            # the idle reaper.
+            self._finalize_session(session, error)
 
     def _store_output(self, session: SshTerminalSession, chunk: bytes) -> None:
         with self._lock:
@@ -325,10 +373,28 @@ class SshTerminalManager:
             except queue.Full:  # pragma: no cover - consumer raced us
                 pass
 
-    def _mark_error(self, session: SshTerminalSession, exc: BaseException) -> None:
+    def _finalize_session(
+        self, session: SshTerminalSession, error: str | None = None
+    ) -> None:
         with self._lock:
-            session.error = f"{type(exc).__name__}: {exc}"
+            if error is not None and session.error is None:
+                session.error = error
+            session.closed = True
+            if self._sessions.get(session.session_id) is session:
+                self._sessions.pop(session.session_id, None)
+            self._remember_closed_locked(session)
         session.close()
+
+    def _remember_closed_locked(self, session: SshTerminalSession) -> None:
+        """Keep a bounded reference so final output can still be drained."""
+        if self.closed_session_retention <= 0:
+            return
+        # Re-insert to make this the most recently retained entry.
+        self._closed_sessions.pop(session.session_id, None)
+        self._closed_sessions[session.session_id] = session
+        while len(self._closed_sessions) > self.closed_session_retention:
+            oldest = next(iter(self._closed_sessions))
+            self._closed_sessions.pop(oldest, None)
 
     def _start_reaper(self) -> None:
         thread = threading.Thread(

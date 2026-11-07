@@ -281,7 +281,7 @@ def test_close_closes_channel_and_client_and_joins_reader():
     assert fake.channel().closed is True
     assert fake.clients[0].closed is True
     assert reader.is_alive() is False
-    assert manager.get_session(session_id) is None
+    assert manager.is_active(session_id) is False
     assert manager.active_count == 0
     assert manager.close(session_id) is False
 
@@ -349,10 +349,70 @@ def test_channel_read_exception_marks_session_closed_with_error():
         assert session.error is not None
         assert "RuntimeError" in session.error
         assert "channel boom" in session.error
+        # A failed session is unregistered and its transport torn down.
+        assert manager.is_active(session_id) is False
+        assert fake.channel().closed is True
+        assert fake.clients[0].closed is True
         # The manager keeps working after a broken session.
         assert manager.create(_host("gpu-02"), cols=80, rows=24)
+        assert manager.active_count == 1
     finally:
         manager.shutdown()
+
+
+def test_natural_eof_unregisters_session_and_releases_slot():
+    manager, fake = _manager(max_sessions=1)
+    try:
+        session_id = manager.create(_host(), cols=80, rows=24)
+        channel = fake.channel()
+        channel.feed(b"bye")
+        channel.finish()
+
+        _wait_until(lambda: manager.active_count == 0)
+
+        assert manager.is_active(session_id) is False
+        assert channel.closed is True
+        assert fake.clients[0].closed is True
+        # Final buffered output is still drainable after the session closed.
+        assert manager.get_output(session_id) == [b"bye"]
+
+        # The freed slot can be reused immediately (no 1800s wait).
+        replacement = manager.create(_host("gpu-02"), cols=80, rows=24)
+        assert manager.is_active(replacement) is True
+        assert manager.active_count == 1
+    finally:
+        manager.shutdown()
+
+
+def test_get_output_after_manager_close_drains_buffered_chunks():
+    manager, fake = _manager()
+    try:
+        session_id = manager.create(_host(), cols=80, rows=24)
+        channel = fake.channel()
+        channel.feed(b"tail")
+        _wait_until(lambda: manager.get_session(session_id).received_chunks >= 1)
+
+        assert manager.close(session_id) is True
+
+        assert manager.get_output(session_id) == [b"tail"]
+    finally:
+        manager.shutdown()
+
+
+def test_shutdown_closes_all_sessions_and_is_idempotent():
+    manager, fake = _manager()
+    first = manager.create(_host("h1"), cols=80, rows=24)
+    second = manager.create(_host("h2"), cols=80, rows=24)
+
+    manager.shutdown()
+
+    assert manager.active_count == 0
+    assert manager.is_active(first) is False
+    assert manager.is_active(second) is False
+    assert all(client.closed for client in fake.clients)
+
+    # Idempotent: a second shutdown must not raise.
+    manager.shutdown()
 
 
 def test_reap_idle_closes_expired_sessions():
@@ -375,7 +435,7 @@ def test_reap_idle_closes_expired_sessions():
         reaped = manager.reap_idle()
 
         assert reaped == [stale_id]
-        assert manager.get_session(stale_id) is None
+        assert manager.is_active(stale_id) is False
         assert manager.get_session(fresh_id) is not None
         assert fake.clients[0].closed is True
     finally:
@@ -398,7 +458,7 @@ def test_idle_timeout_reaps_on_create():
         now[0] += 20
         manager.create(_host("fresh"), cols=80, rows=24)
 
-        assert manager.get_session(stale_id) is None
+        assert manager.is_active(stale_id) is False
         assert manager.active_count == 1
     finally:
         manager.shutdown()
