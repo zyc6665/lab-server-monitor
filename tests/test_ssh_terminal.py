@@ -344,7 +344,10 @@ def test_channel_read_exception_marks_session_closed_with_error():
         session_id = manager.create(_host(), cols=80, rows=24)
         fake.channel().error = RuntimeError("channel boom")
 
-        _wait_until(lambda: manager.get_session(session_id).closed)
+        _wait_until(
+            lambda: fake.channel().closed
+            and manager.get_session(session_id).error is not None
+        )
         session = manager.get_session(session_id)
         assert session.error is not None
         assert "RuntimeError" in session.error
@@ -368,7 +371,7 @@ def test_natural_eof_unregisters_session_and_releases_slot():
         channel.feed(b"bye")
         channel.finish()
 
-        _wait_until(lambda: manager.active_count == 0)
+        _wait_until(lambda: not manager.is_active(session_id) and channel.closed)
 
         assert manager.is_active(session_id) is False
         assert channel.closed is True
