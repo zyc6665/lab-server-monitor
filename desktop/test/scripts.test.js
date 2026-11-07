@@ -78,9 +78,9 @@ test('build-portable.ps1 copies the root launchers and docs', () => {
   }
 });
 
-test('build-portable.ps1 compresses to the v1.3 release zip', () => {
+test('build-portable.ps1 compresses to the v1.3.1 release zip', () => {
   assertContains(build, 'Compress-Archive');
-  assertContains(build, '服务器轮询监测工具-Windows-x64-v1.3.zip');
+  assertContains(build, '服务器轮询监测工具-Windows-x64-v1.3.1.zip');
   assertContains(build, 'release', 'release output dir');
 });
 

@@ -14,6 +14,13 @@ build/
 dist/
 *.egg-info/
 
+# Desktop build outputs
+desktop/node_modules/
+desktop/release-electron/
+desktop/build/portable/
+release/
+.tmp/
+
 # Virtual environments
 .venv/
 venv/

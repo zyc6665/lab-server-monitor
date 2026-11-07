@@ -9,7 +9,7 @@
 #   3. pnpm install + pnpm run build (electron-builder --win, target dir).
 #   4. Stage win-unpacked under desktop/build/portable/servermonitor and add
 #      resources/backend, a seeded config, data/, logs/, launchers and docs.
-#   5. Compress-Archive into release/服务器轮询监测工具-Windows-x64-v1.3.zip.
+#   5. Compress-Archive into release/服务器轮询监测工具-Windows-x64-v1.3.1.zip.
 #
 # Upgrade safety: only the staging directory is ever removed. The source
 # config/, data/ and logs/ directories are never deleted; the config file is
@@ -158,7 +158,7 @@ foreach ($name in $launchers) {
 # --- 4. Compress into the release zip --------------------------------------
 $releaseDir = Join-Path $projectRoot 'release'
 New-Item -ItemType Directory -Path $releaseDir -Force | Out-Null
-$zipPath = Join-Path $releaseDir '服务器轮询监测工具-Windows-x64-v1.3.zip'
+$zipPath = Join-Path $releaseDir '服务器轮询监测工具-Windows-x64-v1.3.1.zip'
 
 if (Test-Path $zipPath) {
     # Compress-Archive -Force overwrites the existing archive in place.
