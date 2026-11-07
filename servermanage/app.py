@@ -181,7 +181,7 @@ def watch_parent_stdin(on_eof: Callable[[], None], stream=None) -> None:
             chunk = stream.read(1)
             if not chunk:
                 break
-    except (OSError, ValueError):  # A closed/invalid stdin also means EOF.
+    except (OSError, ValueError, EOFError):  # A closed/invalid stdin means EOF.
         pass
     LOGGER.info("Parent stdin closed; shutting down headless service")
     on_eof()
@@ -722,12 +722,28 @@ def main(
     configured_log_dir = Path(log_dir) if log_dir is not None else Path("logs")
     configure_logging(configured_log_dir)
 
+    # Desktop mode is signalled by Electron via ``SERVERMONITOR_DESKTOP=1``.
+    # It implies headless (no tray/browser) *and* restricts the dashboard to
+    # loopback; a plain ``--headless`` CLI service keeps the LAN-bind ability
+    # (ruling R1), so host validation is gated on the desktop env only.
+    # Computed before the single-instance branch so a headless sidecar that loses
+    # the lock never opens a browser to "focus" the other instance.
+    desktop = os.environ.get("SERVERMONITOR_DESKTOP") == "1"
+    headless = bool(args.headless) or desktop
+
     # 1) Single-instance guard first: the config (and thus the real data dir) is
     #    not loaded yet, so the bootstrap lock path lives in ``data/`` (§3.7/R3).
     lock = acquire_single_instance(_LOCK_PATH)
     if not lock.acquired:
-        # Another copy owns the lock: surface its dashboard and exit 0.
-        _focus_running_instance()
+        # Another copy owns the lock.  A GUI instance surfaces the existing
+        # dashboard; a headless/desktop sidecar must never spawn a browser.
+        if headless:
+            LOGGER.info(
+                "Another instance is already running; headless service exiting "
+                "without opening a browser"
+            )
+        else:
+            _focus_running_instance()
         lock.release()
         return 0
 
@@ -747,12 +763,6 @@ def main(
             LOGGER.exception("Failed to load runtime configuration: %s", exc)
             return 1
 
-        # Desktop mode is signalled by Electron via ``SERVERMONITOR_DESKTOP=1``.
-        # It implies headless (no tray/browser) *and* restricts the dashboard to
-        # loopback; a plain ``--headless`` CLI service keeps the LAN-bind ability
-        # (ruling R1), so host validation is gated on the desktop env only.
-        desktop = os.environ.get("SERVERMONITOR_DESKTOP") == "1"
-        headless = bool(args.headless) or desktop
         host = str(config.dashboard.host)
         if desktop and host not in {"", "0.0.0.0", "::", "::0", "127.0.0.1"}:
             LOGGER.error(

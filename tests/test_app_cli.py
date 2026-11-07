@@ -274,6 +274,18 @@ def test_watch_parent_stdin_reads_until_eof_then_fires():
     assert stream.read() == b""
 
 
+def test_watch_parent_stdin_tolerates_eof_error():
+    class _EofStream:
+        def read(self, _n):
+            raise EOFError
+
+    calls: list = []
+
+    app.watch_parent_stdin(lambda: calls.append(1), stream=_EofStream())
+
+    assert calls == [1]
+
+
 # ---------------------------------------------------------------------------
 # Logging safety
 # ---------------------------------------------------------------------------
@@ -323,6 +335,36 @@ def test_headless_service_may_bind_lan_host(monkeypatch, tmp_path):
     assert exit_code == 0
     assert rec["built_host"] == "10.0.0.5"
     assert rec["server"].ran is True
+
+
+def test_headless_lock_lost_does_not_open_browser(monkeypatch, tmp_path):
+    config = build_config(host="0.0.0.0")
+    rec = _prepare(monkeypatch, tmp_path, config)
+    rec["lock"].acquired = False
+
+    def _should_not_load(*_a, **_k):
+        raise AssertionError("config must not be loaded when the lock is held")
+
+    monkeypatch.setattr(app, "load_runtime_with_settings", _should_not_load)
+
+    exit_code = app.main(["--config", str(tmp_path / "config.yaml"), "--headless"])
+
+    assert exit_code == 0
+    assert rec["browser_urls"] == []
+    assert rec["lock"].release_count == 1
+
+
+def test_desktop_lock_lost_does_not_open_browser(monkeypatch, tmp_path):
+    config = build_config(host="127.0.0.1")
+    rec = _prepare(monkeypatch, tmp_path, config)
+    rec["lock"].acquired = False
+    monkeypatch.setenv("SERVERMONITOR_DESKTOP", "1")
+
+    exit_code = app.main(["--config", str(tmp_path / "config.yaml")])
+
+    assert exit_code == 0
+    assert rec["browser_urls"] == []
+    assert rec["lock"].release_count == 1
 
 
 def test_desktop_mode_rejects_non_loopback_host(monkeypatch, tmp_path):
