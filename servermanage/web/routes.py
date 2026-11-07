@@ -39,7 +39,7 @@ from flask import (
     url_for,
 )
 
-from servermanage import disk_capacity, host_import, storage
+from servermanage import disk_capacity, host_import, host_probe, storage
 from servermanage.disk_health import AlertEvent
 from servermanage.models import AuthConfig, HostConfig, WebhookConfig
 from servermanage.notify_webhook import send_webhook
@@ -863,6 +863,20 @@ def register_routes(app: Flask) -> None:
         if path.startswith("/api/"):
             return jsonify({"error": "unauthorized"}), 401
         return redirect(url_for("login"))
+
+    # -- host connection probe ---------------------------------------------
+
+    @app.post("/api/settings/hosts/probe")
+    def probe_host_settings():
+        payload = request.get_json(silent=True) or {}
+        if not isinstance(payload, dict) or not str(payload.get("host") or "").strip():
+            return jsonify({"ok": False, "status": "invalid", "message": "请填写服务器地址"}), 400
+        try:
+            result = host_probe.probe_host(payload)
+        except Exception as exc:  # defensive; probe_host normally reports failures
+            LOGGER.exception("Host probe failed unexpectedly")
+            return jsonify({"ok": False, "status": "error", "message": f"探测失败：{exc}"}), 200
+        return jsonify(asdict(result)), 200
 
     # -- SSH terminal (desktop-only, loopback-only) ------------------------
 
