@@ -8,29 +8,100 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
-  {% if session.get('logged_in') %}
-  <header class="topbar">
-    <div class="brand">服务器监控</div>
-    <nav class="nav" aria-label="主导航">
-      <a href="{{ url_for('overview_page') }}" class="nav-link{% if active_page == 'overview' %} active{% endif %}">概览</a>
-      <a href="{{ url_for('alerts_page') }}" class="nav-link{% if active_page == 'alerts' %} active{% endif %}">告警</a>
-      <a href="{{ url_for('settings_page') }}" class="nav-link{% if active_page == 'settings' %} active{% endif %}">设置</a>
-    </nav>
-    <form method="post" action="{{ url_for('logout') }}" class="logout-form">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      {% if session.get('username') %}<span class="current-user">{{ session.get('username') }}</span>{% endif %}
-      <button type="submit" class="link-button">退出</button>
-    </form>
-  </header>
-  {% endif %}
+  {# Custom title bar: always rendered so the browser build stays harmless.
+     The whole bar is a drag region; interactive controls opt out via no-drag. #}
+  <div class="titlebar" id="app-titlebar">
+    <div class="titlebar-brand">
+      <span class="titlebar-icon" aria-hidden="true">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="7" rx="2"/><rect x="3" y="13" width="18" height="7" rx="2"/><path d="M7 7.5h.01M7 16.5h.01"/></svg>
+      </span>
+      <span class="titlebar-title">服务器监控</span>
+    </div>
+    <div class="titlebar-drag" aria-hidden="true"></div>
+    <div class="window-controls windowControl no-drag" role="group" aria-label="窗口控制">
+      <button type="button" class="window-control" data-window-action="minimize" title="最小化" aria-label="最小化">
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M2.5 6h7"/></svg>
+      </button>
+      <button type="button" class="window-control" data-window-action="maximize" title="最大化" aria-label="最大化">
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2.5" y="2.5" width="7" height="7" rx="1"/></svg>
+      </button>
+      <button type="button" class="window-control window-control-close" data-window-action="close" title="关闭" aria-label="关闭">
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M3 3l6 6M9 3l-6 6"/></svg>
+      </button>
+    </div>
+  </div>
 
-  <main class="container">
-    {% block content %}{% endblock %}
-  </main>
+  {% set is_app = session.get('logged_in') %}
+  {% set page_titles = {'overview': '概览', 'hosts': '主机', 'disk_health': '磁盘健康', 'alerts': '告警', 'terminal': '终端', 'settings': '设置'} %}
+  <div class="app-body{% if not is_app %} app-body-auth{% endif %}">
+    {% if is_app %}
+    <aside class="sidebar" aria-label="侧边导航">
+      <nav class="sidebar-nav" aria-label="主导航">
+        <a href="{{ url_for('overview_page') }}" class="sidebar-link{% if active_page == 'overview' %} active{% endif %}">
+          <span class="sidebar-icon" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg></span>
+          <span class="sidebar-label">概览</span>
+        </a>
+        <a href="{{ url_for('overview_page') }}#host-table" class="sidebar-link{% if active_page == 'hosts' %} active{% endif %}">
+          <span class="sidebar-icon" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="7" rx="2"/><rect x="3" y="13" width="18" height="7" rx="2"/><path d="M7 7.5h.01M7 16.5h.01"/></svg></span>
+          <span class="sidebar-label">主机</span>
+        </a>
+        <a href="{{ url_for('overview_page') }}#disk-health" class="sidebar-link{% if active_page == 'disk_health' %} active{% endif %}">
+          <span class="sidebar-icon" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/><path d="M12 8v4l2.5 2.5"/></svg></span>
+          <span class="sidebar-label">磁盘健康</span>
+        </a>
+        <a href="{{ url_for('alerts_page') }}" class="sidebar-link{% if active_page == 'alerts' %} active{% endif %}">
+          <span class="sidebar-icon" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg></span>
+          <span class="sidebar-label">告警</span>
+        </a>
+        <a href="/terminal" class="sidebar-link{% if active_page == 'terminal' %} active{% endif %}">
+          <span class="sidebar-icon" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9l3 3-3 3M13 15h4"/></svg></span>
+          <span class="sidebar-label">终端</span>
+        </a>
+        <a href="{{ url_for('settings_page') }}" class="sidebar-link{% if active_page == 'settings' %} active{% endif %}">
+          <span class="sidebar-icon" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9c0 .66.39 1.26 1 1.51H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></span>
+          <span class="sidebar-label">设置</span>
+        </a>
+      </nav>
+      <div class="sidebar-footer">
+        <span class="sidebar-version">v1.4 桌面客户端</span>
+      </div>
+    </aside>
+    {% endif %}
 
-  <footer class="page-footer">
-    <span>服务器轮询监测 · 数据每 30 秒自动刷新</span>
-  </footer>
+    <div class="app-main">
+      {% if is_app %}
+      <header class="topbar">
+        <div class="topbar-heading">
+          <span class="topbar-title">{{ page_titles.get(active_page, '概览') }}</span>
+        </div>
+        <div class="topbar-status">
+          <span class="conn-status"><span class="conn-dot" aria-hidden="true"></span>已连接</span>
+          <span class="topbar-meta">数据每 30 秒自动刷新</span>
+          {% if session.get('username') %}
+          <span class="current-user">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-6 8-6s8 2 8 6"/></svg>
+            {{ session.get('username') }}
+          </span>
+          {% endif %}
+          <form method="post" action="{{ url_for('logout') }}" class="logout-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="link-button">退出</button>
+          </form>
+        </div>
+      </header>
+      {% endif %}
+
+      <main class="{% if is_app %}container{% else %}auth-main{% endif %}">
+        {% block content %}{% endblock %}
+      </main>
+
+      {% if is_app %}
+      <footer class="page-footer">
+        <span>服务器轮询监测 · 数据每 30 秒自动刷新</span>
+      </footer>
+      {% endif %}
+    </div>
+  </div>
 
   <script src="{{ url_for('static', filename='app.js') }}"></script>
   {% block scripts %}{% endblock %}
