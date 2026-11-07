@@ -1,5 +1,8 @@
 {% extends "base.html" %}
 {% block title %}设置 - 服务器监控{% endblock %}
+{% block head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='settings-wizard.css') }}">
+{% endblock %}
 
 {% block content %}
 <div id="settings-root" data-csrf="{{ csrf_token() }}">
@@ -58,6 +61,7 @@
     </div>
 
     <div class="section-toolbar">
+      <button class="primary-button" id="wizard-open-button" {% if not settings.writable %}disabled{% endif %}>连接向导</button>
       <button class="secondary-button" id="import-open-button" {% if not settings.writable %}disabled{% endif %}>批量导入</button>
       <button class="secondary-button" id="test-batch-button" {% if not settings.writable %}disabled{% endif %}>批量测试连接</button>
       <span class="form-status" id="host-batch-status"></span>
@@ -346,6 +350,63 @@
   </section>
 </div>
 
+<div class="wizard-overlay" id="wizard-overlay" hidden>
+  <div class="wizard-dialog" role="dialog" aria-modal="true" aria-labelledby="wizard-title">
+    <div class="wizard-head">
+      <div>
+        <h2 id="wizard-title">添加服务器</h2>
+        <p id="wizard-subtitle">第 1 步，共 2 步 · 连接信息</p>
+      </div>
+      <button type="button" class="wizard-close" id="wizard-close" aria-label="关闭">×</button>
+    </div>
+    <div class="wizard-steps" aria-hidden="true">
+      <span class="wizard-step active" data-step-dot="1">1 连接</span>
+      <span class="wizard-step" data-step-dot="2">2 确认</span>
+    </div>
+
+    <div class="wizard-step-panel" data-step-panel="1">
+      <div class="settings-grid">
+        <label class="field"><span>地址 / IP</span><input data-wizard-field="host" placeholder="10.0.0.10" autocomplete="off"></label>
+        <label class="field"><span>端口</span><input type="number" data-wizard-field="port" value="22" min="1" max="65535"></label>
+        <label class="field"><span>登录用户</span><input data-wizard-field="username" placeholder="root" autocomplete="off"></label>
+        <label class="field"><span>认证方式</span>
+          <select data-wizard-field="auth_type">
+            <option value="key">SSH 私钥</option>
+            <option value="password">密码</option>
+          </select>
+        </label>
+        <label class="field wizard-key-only"><span>私钥路径（本机已有）</span><input data-wizard-field="key_path" placeholder="C:/Users/你/.ssh/id_ed25519"></label>
+        <label class="field wizard-key-only span-2"><span>或粘贴私钥内容</span><textarea data-wizard-field="private_key" rows="4" placeholder="-----BEGIN OPENSSH PRIVATE KEY-----"></textarea></label>
+        <label class="field wizard-key-only"><span>私钥口令（可选）</span><input type="password" data-wizard-field="passphrase"></label>
+        <label class="field wizard-password-only"><span>SSH 密码</span><input type="password" data-wizard-field="password"></label>
+      </div>
+      <p class="wizard-hint">密码/私钥只用于本次探测，保存后加密存储，不会回显。</p>
+      <p class="form-status" id="wizard-status"></p>
+      <div class="wizard-actions">
+        <button type="button" class="secondary-button" id="wizard-cancel">取消</button>
+        <button type="button" class="primary-button" id="wizard-test">连接并识别</button>
+      </div>
+    </div>
+
+    <div class="wizard-step-panel" data-step-panel="2" hidden>
+      <div class="probe-summary" id="wizard-probe-summary"></div>
+      <div class="settings-grid">
+        <label class="field"><span>主机名称（唯一）</span><input data-wizard-field="name"></label>
+        <label class="field"><span>分组</span><input data-wizard-field="group" placeholder="未分组"></label>
+        <label class="field"><span>负责人</span><input data-wizard-field="owner"></label>
+        <label class="field"><span>位置</span><input data-wizard-field="location"></label>
+        <label class="field span-2"><span>容量监控目录（逗号分隔）</span><input data-wizard-field="disk_mounts" value="/, /data"></label>
+        <label class="field span-2"><span>备注</span><textarea data-wizard-field="notes" rows="2"></textarea></label>
+      </div>
+      <p class="form-status" id="wizard-save-status"></p>
+      <div class="wizard-actions">
+        <button type="button" class="secondary-button" id="wizard-back">上一步</button>
+        <button type="button" class="primary-button" id="wizard-save">保存主机</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script>
 window.__SETTINGS__ = {{ settings|tojson }};
 window.__SETTINGS_RUNTIME__ = {{ runtime|tojson }};
@@ -355,4 +416,5 @@ window.__SETTINGS_SILENCES__ = {{ silences|tojson }};
 
 {% block scripts %}
 <script src="{{ url_for('static', filename='settings.js') }}"></script>
+<script src="{{ url_for('static', filename='settings-wizard.js') }}"></script>
 {% endblock %}

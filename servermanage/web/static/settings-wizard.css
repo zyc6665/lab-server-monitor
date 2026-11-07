@@ -1,0 +1,47 @@
+/* Host connection wizard (v1.4). */
+.wizard-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(15, 23, 42, .48);
+  backdrop-filter: blur(2px);
+}
+.wizard-overlay[hidden] { display: none; }
+.wizard-dialog {
+  width: min(760px, 100%);
+  max-height: calc(100vh - 48px);
+  overflow: auto;
+  background: #fff;
+  border: 1px solid #dbe3ef;
+  border-radius: 16px;
+  box-shadow: 0 24px 70px rgba(15, 23, 42, .28);
+  padding: 22px 24px 20px;
+}
+.wizard-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.wizard-head h2 { margin: 0 0 4px; font-size: 20px; color: #0f172a; }
+.wizard-head p { margin: 0; font-size: 13px; color: #64748b; }
+.wizard-close { border: 0; background: transparent; font-size: 26px; line-height: 1; color: #94a3b8; cursor: pointer; }
+.wizard-close:hover { color: #475569; }
+.wizard-steps { display: flex; gap: 18px; margin: 18px 0 14px; padding-bottom: 12px; border-bottom: 1px solid #eef2f7; }
+.wizard-step { font-size: 13px; color: #94a3b8; }
+.wizard-step.active { color: #2563eb; font-weight: 600; }
+.wizard-step-panel { padding-top: 4px; }
+.wizard-hint { font-size: 12px; color: #64748b; margin: 8px 0; }
+.wizard-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 16px; }
+.probe-summary {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin-bottom: 14px;
+  font-size: 13px;
+  color: #334155;
+}
+.probe-summary dl { display: grid; grid-template-columns: 120px 1fr; gap: 6px 12px; margin: 0; }
+.probe-summary dt { color: #64748b; }
+.probe-summary dd { margin: 0; color: #0f172a; }
+.probe-summary .warn { color: #b45309; }
