@@ -1617,3 +1617,17 @@ def register_routes(app: Flask) -> None:
             runtime=runtime,
             silences=silences,
         )
+
+    @app.get("/terminal")
+    def terminal_page():
+        config = _config(app)
+        hosts = [
+            {"name": host.name, "host": host.host, "group": host.group}
+            for host in config.servers
+        ]
+        return render_template(
+            "terminal.html",
+            active_page="terminal",
+            hosts=hosts,
+            desktop_mode=os.environ.get("SERVERMONITOR_DESKTOP") == "1",
+        )

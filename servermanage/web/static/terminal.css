@@ -1,0 +1,43 @@
+/* SSH terminal page (v1.4) — kept separate so the dashboard styles stay stable. */
+.terminal-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 520px;
+  background: #0f172a;
+  border: 1px solid #1e293b;
+  border-radius: 12px;
+  padding: 14px;
+  box-shadow: 0 12px 30px rgba(15, 23, 42, .18);
+}
+.terminal-toolbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; color: #cbd5e1; }
+.terminal-toolbar .field-inline { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; }
+.terminal-toolbar select {
+  background: #111c33; color: #e2e8f0; border: 1px solid #334155;
+  border-radius: 8px; padding: 7px 10px; min-width: 220px;
+}
+.terminal-shell .btn-primary { background: #2563eb; color: #fff; border-color: #2563eb; }
+.terminal-shell .btn-primary:hover { background: #1d4ed8; }
+.terminal-status { font-size: 12px; color: #94a3b8; }
+.terminal-tabs { display: flex; gap: 6px; flex-wrap: wrap; min-height: 0; }
+.terminal-tab {
+  display: inline-flex; align-items: center; gap: 8px; padding: 6px 10px;
+  background: #111c33; border: 1px solid #273449; border-bottom: 2px solid transparent;
+  border-radius: 8px 8px 0 0; color: #cbd5e1; font-size: 12px; cursor: pointer;
+}
+.terminal-tab.active { border-bottom-color: #3b82f6; color: #fff; background: #16233c; }
+.terminal-tab .tab-close { color: #94a3b8; font-weight: 700; line-height: 1; }
+.terminal-tab .tab-close:hover { color: #fca5a5; }
+.terminal-panes { position: relative; flex: 1; min-height: 430px; background: #0b1220; border-radius: 8px; overflow: hidden; }
+.terminal-pane { position: absolute; inset: 0; padding: 8px; display: none; }
+.terminal-pane.active { display: block; }
+.terminal-pane .xterm { height: 100%; }
+.terminal-empty {
+  position: absolute; inset: 0; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 10px; color: #64748b; font-size: 13px;
+}
+.terminal-empty[hidden] { display: none; }
+@media (max-width: 900px) {
+  .terminal-shell { min-height: 420px; }
+  .terminal-panes { min-height: 340px; }
+}
