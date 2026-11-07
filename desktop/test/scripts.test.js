@@ -66,7 +66,14 @@ test('build-portable.ps1 seeds config from the example, and always creates data/
 });
 
 test('build-portable.ps1 copies the root launchers and docs', () => {
-  for (const name of ['启动.bat', '停止.bat', '注册开机自启.ps1', '使用说明.txt', 'README.md']) {
+  for (const name of [
+    '启动.bat',
+    '停止.bat',
+    '注册开机自启.ps1',
+    '允许局域网访问.ps1',
+    '使用说明.txt',
+    'README.md',
+  ]) {
     assertContains(build, name, name);
   }
 });

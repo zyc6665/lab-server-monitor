@@ -468,91 +468,95 @@ docker compose down
 
 ## Windows PC 绿色包（免 Docker）
 
-除上面的 Docker 部署外，本项目还提供 **Windows 11 绿色包**：用 PyInstaller 打成
-`onedir` 目录，解压即用，自带常驻 Web 看板（`http://127.0.0.1:8080`），不依赖
-Docker，也不需要安装 Python。
+除上面的 Docker 部署外，本项目还提供 **Windows 11 桌面版绿色包**（v1.3）：基于
+Electron 的独立窗口程序，内置 Python 后台 sidecar，解压即用，不依赖 Docker，
+也不需要安装 Python。关闭窗口会最小化到系统托盘继续监测，局域网其它电脑仍可用
+浏览器访问同一看板。
 
 ### 和 Docker 版的区别
 
-| 项目 | Docker 版（旧） | Windows PC 绿色包（新） |
+| 项目 | Docker 版（旧） | Windows 桌面版（v1.3） |
 | --- | --- | --- |
-| 运行方式 | `supercronic` 定时执行日报 | 常驻服务 + 内置调度器 + 本地 Web 看板 |
-| 配置文件 | 根目录 `config.yaml` / `.env` | `config/config.yaml` / `config/.env` |
-| 示例模板 | 根目录 `config.yaml.example` / `.env.example`（保留不动） | `config/config.yaml.example` / `config/.env.example` |
+| 运行方式 | `supercronic` 定时执行日报 | Electron 窗口 + 内置调度器 + 本地 Web 看板 |
+| 配置文件 | 根目录 `config.yaml` / `.env` | `config/config.yaml` / `config/.env`（可选） |
 | 数据库 | 容器内 `data/servermanage.db` | `data/servermonitor.db` |
-| 登录方式 | 私钥或密码 | 示例统一用**密码**，无需私钥文件 |
-| 启停 | `docker compose up/down` | `启动.bat` / `停止.bat` |
+| 登录方式 | 私钥或密码 | 首次 `/setup` 设置管理员，局域网同样用密码登录 |
+| 启停 | `docker compose up/down` | `启动.bat` / 托盘退出 / `停止.bat` |
+| 程序结构 | 单体容器 | `servermonitor.exe`（Electron）+ `resources\backend\servermonitor-backend.exe`（Python sidecar） |
 
-> 根目录旧的 `config.yaml.example`、`.env.example` 仍服务于 Docker 文档，请勿删除；
-> PC 版请改用 `config/` 下的新模板。
+### 一、构建绿色包（开发者，可选）
 
-### 一、构建（开发者，可选）
-
-在装有 Python 3.11+ 的 Windows 上，于项目根目录执行：
+在装有 Node.js/pnpm 与 Python 3.11+ 的 Windows 上，于项目根目录执行：
 
 ```powershell
-pwsh packaging/build.ps1
+pwsh desktop/scripts/build-portable.ps1
 ```
 
-脚本会 `pip install -e ".[build]"` 安装 PyInstaller，然后执行
-`python -m PyInstaller packaging/servermonitor.spec --noconfirm --clean`，
-产物为 `dist/servermonitor/servermonitor.exe`（onedir 形式）。
+脚本会构建 Python 后端 sidecar、执行 `pnpm install` 与 `pnpm run build`（electron-builder），
+把产物组装到 `desktop/build/portable/servermonitor/`，并压缩为
+`release/服务器轮询监测工具-Windows-x64-v1.3.zip`。
 
-### 二、组装绿色包目录
-
-把下面这些内容一起拷进 `dist/servermonitor/`：
+### 二、解压后的目录结构
 
 ```text
-dist/servermonitor/
-├── servermonitor.exe        # 构建产物
-├── config/
-│   ├── config.yaml          # 由 config.yaml.example 复制并填写
-│   └── .env                 # 由 .env.example 复制并填写
-├── data/                    # 存放 servermonitor.db（可空目录）
-├── logs/                    # 运行日志（可空目录）
+服务器轮询监测工具/
+├── servermonitor.exe                            # Electron 主程序（入口）
+├── resources\backend\servermonitor-backend.exe  # Python 后台 sidecar
+├── config\
+│   ├── config.yaml                              # 首次运行由 config.yaml.example 生成
+│   └── .env                                     # 可选
+├── data\                                        # servermonitor.db、runtime.json、electron\
+├── logs\                                        # servermonitor.log、desktop.log
 ├── 启动.bat
 ├── 停止.bat
-└── 注册开机自启.ps1
+├── 注册开机自启.ps1
+├── 允许局域网访问.ps1
+└── 使用说明.txt
 ```
 
-首次使用：
+> 解压后请保持目录完整，不要把 `servermonitor.exe` 单独移动；`resources`、`config`、
+> `data`、`logs` 必须与它位于同一目录。
 
-```text
-copy config\config.yaml.example config\config.yaml
-copy config\.env.example config\.env
-```
+### 三、启动 / 停止 / 开机自启 / 局域网访问
 
-然后编辑 `config\config.yaml`（服务器 IP、SMTP 等）与 `config\.env`（密码）。
+- **启动**：双击 `启动.bat`（或直接双击 `servermonitor.exe`），显示独立主窗口；
+  首次启动自动进入 `/setup`（初始化管理员），登录后在「设置」页添加主机。
+  关闭窗口 = 最小化到系统托盘，后台继续监测；托盘菜单提供 显示主窗口 / 打开日志目录 /
+  复制看板地址 / 退出。
+- **停止**：优先用托盘「退出」（会先优雅停止后台服务）；也可双击 `停止.bat` 强制结束
+  `servermonitor.exe` 与 `servermonitor-backend.exe`。
+- **开机自启**：右键 `注册开机自启.ps1` →「使用 PowerShell 运行」。脚本创建计划任务
+  `ServerMonitorDashboard`（登录时触发），直接执行 `servermonitor.exe --start-hidden`，
+  只在托盘运行、不弹窗口；可重复运行（先删除同名任务），权限不足时回退到「启动」文件夹快捷方式。
+- **局域网访问**：先在「设置 → 看板与安全」把监听地址设为 `0.0.0.0`（仅本机可用 `127.0.0.1`），
+  再以管理员权限运行 `允许局域网访问.ps1`，它会为 `resources\backend\servermonitor-backend.exe`
+  添加名为「服务器轮询监测工具」的 TCP 入站规则（专用网络，可重复运行）。其它电脑访问
+  `http://本机IP:端口`。
 
-### 三、启动 / 停止 / 开机自启
+> `config\.env` 可选：不建也能启动，凭据在「设置」页填写后用 DPAPI 加密入库。
 
-- **启动**：双击 `启动.bat`（会自检 `servermonitor.exe`、`config\config.yaml`、
-  `config\.env`，缺文件给出中文提示并暂停），后台最小化启动，浏览器访问
-  `http://127.0.0.1:8080`。
-- **停止**：双击 `停止.bat`，会先检测 `servermonitor.exe` 是否存在，存在才结束进程，
-  否则给出提示。
-- **开机自启**：右键 `注册开机自启.ps1` →「使用 PowerShell 运行」。脚本会创建计划任务
-  `ServerMonitorDashboard`（登录时触发），可重复运行（先删除同名任务）；权限不足时自动
-  回退到「启动」文件夹快捷方式。
+### 四、网页在线设置
 
-> 1.1 起 `config\.env` 可选：`启动.bat` 只在文件存在时传入，首次也可以不建 `.env`，
-> 直接打开网页完成首次设置。
+启动后进入「设置」页即可修改主机与 SSH、监控与存储、通知、报告、磁盘健康、看板与安全等，
+全部在浏览器里完成，无需手工编辑配置文件；敏感值（SSH 密码/私钥、邮箱密码、Webhook 地址）
+用当前 Windows 账户的 DPAPI 加密保存在 `data\servermonitor.db`，界面永不回显原文。
 
-### 四、网页在线设置（1.1 新增）
+---
 
-1. 初次启动后打开 `http://127.0.0.1:8080`，本机会自动跳到 `/setup`，设置管理员密码。
-2. 登录后进入「设置」页，可在浏览器里修改：
-   - 主机与 SSH 凭据（密码或粘贴私钥）
-   - 通知（桌面/邮件/Webhook）与各类阈值
-   - 日报/周报启停与发送时间
-   - 磁盘健康规则、每台主机的容量监控目录（默认 `/` 和 `/data`）
-   - 看板监听地址/端口、管理员密码
-3. 保存后轮询任务立即按新配置运行；监听地址/端口改动需要重启程序。
-4. 敏感值（SSH 密码/私钥、邮箱密码、Webhook 地址）用**当前 Windows 账户的 DPAPI**
-   加密保存在 `data\servermonitor.db`，界面永不回显原文。
-5. 把整个文件夹拷到另一台电脑时，请在新电脑重新 `/setup` 并重新填写凭据；
-   主机清单、阈值等非敏感配置会保留。
-6. 在 Linux/Docker 下运行时设置页为只读，继续使用 `config.yaml` + `.env`。
+## v1.3 更新（桌面版）
+
+版本 **1.3.0** 将绿色包从「后台服务 + 浏览器」升级为 **Electron 独立桌面程序**：
+
+- 独立主窗口（默认 1280×800，最小 1024×700），关闭窗口最小化到系统托盘继续监测；
+  托盘菜单支持显示主窗口、打开日志目录、复制看板地址、退出。
+- 单实例运行：`userData` 固定在程序目录 `data\electron`，不同解压目录互不影响。
+- 后台 Python 服务以 `--headless` sidecar 运行（`resources\backend\servermonitor-backend.exe`），
+  不再自己打开浏览器或托盘，避免双窗口 / 双托盘。
+- 局域网访问保持可用：`允许局域网访问.ps1` 一键添加防火墙规则；端口顺延后可在托盘
+  「复制看板地址」或设置页看到真实地址。
+- 开机自启改为计划任务直接执行 `servermonitor.exe --start-hidden`，只驻留托盘。
+- 升级：先备份 `config\`、`data\`、`logs\`，再解压新版本到新文件夹（或保留原目录只替换
+  程序文件），切勿删除 `data\servermonitor.db`。
 
 ---
 

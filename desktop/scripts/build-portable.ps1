@@ -1,4 +1,4 @@
-﻿# ============================================================================
+# ============================================================================
 # Build the desktop Electron app and assemble the portable Windows release zip.
 #
 # Usage (from anywhere):  powershell -NoProfile -File desktop/scripts/build-portable.ps1
@@ -144,7 +144,7 @@ foreach ($dirName in 'data', 'logs') {
 }
 
 # Copy the user-facing launchers and docs if present.
-$launchers = @('启动.bat', '停止.bat', '注册开机自启.ps1', '使用说明.txt', 'README.md')
+$launchers = @('启动.bat', '停止.bat', '注册开机自启.ps1', '允许局域网访问.ps1', '使用说明.txt', 'README.md')
 foreach ($name in $launchers) {
     $source = Join-Path $projectRoot $name
     if (Test-Path $source) {
