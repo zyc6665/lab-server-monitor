@@ -708,7 +708,27 @@ def _build_server(*, config, db_path, settings, service, host: str, port: int):
         on_config_changed=service.apply_config,
         session_cookie_suffix=str(port),
     )
-    return create_server(app_obj, host=host, port=port)
+    from servermanage.web.routes import get_ssh_terminal_manager
+
+    terminal_manager = get_ssh_terminal_manager(app_obj)
+    server = create_server(
+        app_obj,
+        host=host,
+        port=port,
+        threads=32,
+        channel_timeout=3600,
+    )
+
+    original_close = server.close
+
+    def close_server() -> None:
+        try:
+            terminal_manager.shutdown()
+        finally:
+            original_close()
+
+    server.close = close_server
+    return server
 
 
 def main(

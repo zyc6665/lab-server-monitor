@@ -153,7 +153,7 @@ def test_headless_main_serves_setup_and_overview_without_network(monkeypatch, tm
 
     captured: dict = {}
 
-    def fake_create_server(flask_app, host, port):
+    def fake_create_server(flask_app, host, port, **kwargs):
         server = _FakeWaitressServer(flask_app)
         captured.update(server=server, host=host, port=port)
         return server

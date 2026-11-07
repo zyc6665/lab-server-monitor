@@ -15,8 +15,10 @@ HTML page routes.
 
 from __future__ import annotations
 
+import base64
 import hmac
 import logging
+import os
 import secrets
 import smtplib
 import time
@@ -28,6 +30,7 @@ from typing import Any
 
 from flask import (
     Flask,
+    Response,
     jsonify,
     redirect,
     render_template,
@@ -43,6 +46,11 @@ from servermanage.notify_webhook import send_webhook
 from servermanage.runtime import read_runtime_state
 from servermanage.settings import SettingsError
 from servermanage.ssh_client import SSHClientWrapper
+from servermanage.ssh_terminal import (
+    SessionNotFoundError,
+    SshTerminalManager,
+    TerminalLimitError,
+)
 from servermanage.timeutil import resolve_timezone
 
 LOGGER = logging.getLogger(__name__)
@@ -74,6 +82,22 @@ def _config(app: Flask):
 
 def _db_path(app: Flask):
     return app.config["DB_PATH"]
+
+
+def get_ssh_terminal_manager(app: Flask) -> SshTerminalManager:
+    """Return the app-scoped SSH terminal manager, creating it on first use."""
+    manager = app.extensions.get("ssh_terminal")
+    if manager is None:
+        manager = SshTerminalManager()
+        app.extensions["ssh_terminal"] = manager
+    return manager
+
+
+def _terminal_request_allowed() -> bool:
+    """Desktop-only terminal: require desktop launch and a loopback request."""
+    if os.environ.get("SERVERMONITOR_DESKTOP") != "1":
+        return False
+    return _is_loopback(request.remote_addr)
 
 
 def _settings_service(app: Flask):
@@ -805,6 +829,13 @@ def register_routes(app: Flask) -> None:
                 return jsonify({"error": "setup_required"}), 428
             return redirect(url_for("setup"))
 
+        # 1b) Unauthenticated API calls must be 401 even for POST/PUT/DELETE;
+        # otherwise a missing session yields a CSRF 400 which is misleading.
+        if path.startswith("/api/") and service is not None:
+            api_config = _config(app)
+            if api_config.dashboard.auth.enabled and not session.get("logged_in"):
+                return jsonify({"error": "unauthorized"}), 401
+
         # 2) CSRF protection for state-changing requests.  Enforced only when a
         #    settings service is wired in, so the legacy app built by
         #    ``tests/test_web_api.py`` (no service) keeps working unchanged.
@@ -832,6 +863,152 @@ def register_routes(app: Flask) -> None:
         if path.startswith("/api/"):
             return jsonify({"error": "unauthorized"}), 401
         return redirect(url_for("login"))
+
+    # -- SSH terminal (desktop-only, loopback-only) ------------------------
+
+    def _terminal_denied():
+        if not _terminal_request_allowed():
+            return jsonify({"error": "forbidden", "message": "SSH 终端仅限本机桌面客户端"}), 403
+        return None
+
+    def _find_host(name: str):
+        for host in _config(app).servers:
+            if host.name == name:
+                return host
+        return None
+
+    @app.post("/api/ssh/sessions")
+    def create_ssh_session():
+        denied = _terminal_denied()
+        if denied is not None:
+            return denied
+        payload = request.get_json(silent=True) or {}
+        host_name = str(payload.get("host_name") or "").strip()
+        host = _find_host(host_name)
+        if host is None:
+            return jsonify({"error": "host_not_found"}), 404
+        try:
+            cols = max(20, min(400, int(payload.get("cols", 80))))
+            rows = max(5, min(200, int(payload.get("rows", 24))))
+        except (TypeError, ValueError):
+            return jsonify({"error": "invalid_size"}), 400
+        manager = get_ssh_terminal_manager(app)
+        try:
+            session_id = manager.create(host, cols=cols, rows=rows)
+        except TerminalLimitError:
+            return jsonify({"error": "terminal_limit"}), 429
+        except Exception as exc:  # SSH failures must surface as JSON
+            LOGGER.warning("SSH terminal create failed for %s: %s", host_name, exc)
+            return jsonify({"error": "ssh_failed", "message": str(exc)}), 502
+        audit_id = storage.record_ssh_session_start(
+            host_name,
+            username=str(session.get("username") or "admin"),
+            server_username=host.username,
+            remote_addr=request.remote_addr or "127.0.0.1",
+            db_path=_db_path(app),
+        )
+        app.extensions.setdefault("ssh_audit", {})[session_id] = audit_id
+        return jsonify({"session_id": session_id}), 201
+
+    def _terminal_session_or_none(session_id: str):
+        manager = get_ssh_terminal_manager(app)
+        try:
+            return manager.get_session(session_id)
+        except SessionNotFoundError:
+            return None
+
+    @app.post("/api/ssh/sessions/<session_id>/input")
+    def ssh_terminal_input(session_id: str):
+        denied = _terminal_denied()
+        if denied is not None:
+            return denied
+        if _terminal_session_or_none(session_id) is None:
+            return jsonify({"error": "session_not_found"}), 404
+        payload = request.get_json(silent=True) or {}
+        data = payload.get("data", "")
+        if not isinstance(data, str):
+            return jsonify({"error": "invalid_data"}), 400
+        try:
+            get_ssh_terminal_manager(app).send_input(session_id, data)
+        except SessionNotFoundError:
+            return jsonify({"error": "session_not_found"}), 404
+        return "", 204
+
+    @app.post("/api/ssh/sessions/<session_id>/resize")
+    def ssh_terminal_resize(session_id: str):
+        denied = _terminal_denied()
+        if denied is not None:
+            return denied
+        if _terminal_session_or_none(session_id) is None:
+            return jsonify({"error": "session_not_found"}), 404
+        payload = request.get_json(silent=True) or {}
+        try:
+            cols = max(20, min(400, int(payload.get("cols", 80))))
+            rows = max(5, min(200, int(payload.get("rows", 24))))
+        except (TypeError, ValueError):
+            return jsonify({"error": "invalid_size"}), 400
+        try:
+            get_ssh_terminal_manager(app).resize(session_id, cols, rows)
+        except SessionNotFoundError:
+            return jsonify({"error": "session_not_found"}), 404
+        return "", 204
+
+    def _finish_ssh_audit(session_id: str, status: str, error: str | None = None) -> None:
+        audit_id = app.extensions.get("ssh_audit", {}).pop(session_id, None)
+        if audit_id is None:
+            return
+        try:
+            storage.record_ssh_session_end(
+                audit_id, status=status, error=error, db_path=_db_path(app)
+            )
+        except Exception:  # auditing must never break the session close
+            LOGGER.exception("Failed to finalise SSH audit row %s", audit_id)
+
+    @app.delete("/api/ssh/sessions/<session_id>")
+    def ssh_terminal_close(session_id: str):
+        denied = _terminal_denied()
+        if denied is not None:
+            return denied
+        manager = get_ssh_terminal_manager(app)
+        closed = manager.close(session_id)
+        if not closed and _terminal_session_or_none(session_id) is None:
+            return jsonify({"error": "session_not_found"}), 404
+        _finish_ssh_audit(session_id, "closed")
+        return "", 204
+
+    @app.get("/api/ssh/sessions/<session_id>/stream")
+    def ssh_terminal_stream(session_id: str):
+        denied = _terminal_denied()
+        if denied is not None:
+            return denied
+        manager = get_ssh_terminal_manager(app)
+        if _terminal_session_or_none(session_id) is None:
+            return jsonify({"error": "session_not_found"}), 404
+
+        def generate():
+            outcome = "closed"
+            error_text = None
+            try:
+                for chunk in manager.stream(session_id):
+                    if chunk:
+                        yield b"data: " + base64.b64encode(chunk) + b"\n\n"
+                    else:
+                        yield b": keepalive\n\n"
+            except Exception as exc:  # client disconnect / SSH error
+                outcome = "error"
+                error_text = f"{type(exc).__name__}: {exc}"
+                LOGGER.info("SSH terminal stream ended with error: %s", error_text)
+            finally:
+                try:
+                    manager.close(session_id)
+                finally:
+                    _finish_ssh_audit(session_id, outcome, error_text)
+
+        return Response(
+            generate(),
+            mimetype="text/event-stream",
+            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+        )
 
     # -- first-run setup ---------------------------------------------------
 
