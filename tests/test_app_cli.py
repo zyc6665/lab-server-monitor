@@ -367,16 +367,16 @@ def test_desktop_lock_lost_does_not_open_browser(monkeypatch, tmp_path):
     assert rec["lock"].release_count == 1
 
 
-def test_desktop_mode_rejects_non_loopback_host(monkeypatch, tmp_path):
+def test_desktop_mode_forces_loopback_host(monkeypatch, tmp_path):
     config = build_config(host="10.0.0.5")
     rec = _prepare(monkeypatch, tmp_path, config)
     monkeypatch.setenv("SERVERMONITOR_DESKTOP", "1")
 
     exit_code = app.main(["--config", str(tmp_path / "config.yaml")])
 
-    assert exit_code == 2
-    assert rec["server"].ran is False
-    assert rec["lock"].release_count == 1
+    assert exit_code == 0
+    assert rec["built_host"] == "127.0.0.1"
+    assert rec["server"].ran is True
 
 
 def test_desktop_mode_skips_browser_and_tray(monkeypatch, tmp_path):

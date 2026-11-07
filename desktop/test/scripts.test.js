@@ -70,7 +70,6 @@ test('build-portable.ps1 copies the root launchers and docs', () => {
     '启动.bat',
     '停止.bat',
     '注册开机自启.ps1',
-    '允许局域网访问.ps1',
     '使用说明.txt',
     'README.md',
   ]) {
@@ -78,9 +77,9 @@ test('build-portable.ps1 copies the root launchers and docs', () => {
   }
 });
 
-test('build-portable.ps1 compresses to the v1.3.1 release zip', () => {
+test('build-portable.ps1 compresses to the v1.4 release zip', () => {
   assertContains(build, 'Compress-Archive');
-  assertContains(build, '服务器轮询监测工具-Windows-x64-v1.3.1.zip');
+  assertContains(build, '服务器轮询监测工具-Windows-x64-v1.4.zip');
   assertContains(build, 'release', 'release output dir');
 });
 

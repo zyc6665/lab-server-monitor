@@ -40,7 +40,7 @@ app:
 # dashboard：本地 Web 看板
 # ---------------------------------------------------------------------------
 dashboard:
-  host: "0.0.0.0"
+  host: "127.0.0.1"
   port: 8080
   session_lifetime_hours: 12
   session_secret_env: "DASHBOARD_SECRET"

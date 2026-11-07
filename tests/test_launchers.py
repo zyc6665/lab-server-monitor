@@ -64,51 +64,27 @@ def test_autostart_task_runs_exe_with_start_hidden() -> None:
     assert "Register-ScheduledTask" in text
 
 
-def test_firewall_helper_creates_named_rule_for_backend() -> None:
-    text = read_text("允许局域网访问.ps1")
-
-    assert "服务器轮询监测工具" in text, "防火墙规则名必须固定为 服务器轮询监测工具"
-    assert "New-NetFirewallRule" in text
-    assert "Remove-NetFirewallRule" in text, "重复运行应先删除同名旧规则"
-    assert "resources\\backend\\servermonitor-backend.exe" in text
-    assert re.search(r"-\s*Program\s+\$BackendExe", text, re.IGNORECASE)
-    assert re.search(r"-\s*Direction\s+Inbound", text, re.IGNORECASE)
-    assert re.search(r"-\s*Action\s+Allow", text, re.IGNORECASE)
-    assert re.search(r"-\s*Protocol\s+TCP", text, re.IGNORECASE)
-    assert re.search(r"-\s*Profile\s+Private", text, re.IGNORECASE)
-    # Must require an elevated shell before touching the firewall.
-    assert "IsInRole" in text
-    assert "Administrator" in text
-
-
-def test_pyproject_version_is_1_3_0() -> None:
+def test_pyproject_version_is_1_4_0() -> None:
     data = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
-    assert data["project"]["version"] == "1.3.1"
+    assert data["project"]["version"] == "1.4.0"
 
 
-def test_user_guide_covers_v13_desktop_workflow() -> None:
+def test_user_guide_covers_v14_desktop_workflow() -> None:
     text = read_text("使用说明.txt")
 
-    assert "1.3" in text
+    assert "1.4" in text
     assert "/setup" in text, "首次启动说明必须提到 /setup 初始化管理员"
     assert "托盘" in text, "必须说明关闭窗口隐藏到托盘的行为"
-    assert "允许局域网访问.ps1" in text, "必须说明局域网访问前运行防火墙脚本"
+    assert "SSH 终端" in text
     assert "config" in text and "data" in text and "logs" in text, (
         "升级说明必须提示备份/保留 config、data、logs"
     )
 
 
-def test_readme_covers_v13_desktop_workflow() -> None:
+def test_readme_covers_v14_desktop_workflow() -> None:
     text = read_text("README.md")
 
-    assert "1.3.1" in text
-    assert "允许局域网访问.ps1" in text
+    assert "1.4.0" in text
+    assert "SSH 终端" in text
     assert "servermonitor.exe" in text
     assert "--start-hidden" in text, "README 应说明开机自启走 --start-hidden"
-
-
-def test_build_portable_ships_firewall_helper() -> None:
-    text = read_text("desktop/scripts/build-portable.ps1")
-    assert "允许局域网访问.ps1" in text, (
-        "portable 组装脚本必须把防火墙脚本一起复制进绿色包"
-    )

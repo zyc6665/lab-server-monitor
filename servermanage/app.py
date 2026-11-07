@@ -785,11 +785,16 @@ def main(
             return 1
 
         host = str(config.dashboard.host)
-        if desktop and host not in {"", "0.0.0.0", "::", "::0", "127.0.0.1"}:
-            LOGGER.error(
-                "Desktop mode requires a loopback dashboard host, got %r", host
-            )
-            return 2
+        if desktop:
+            # v1.4 is a single-machine desktop client: never bind a routable
+            # interface, even if an upgraded config.yaml still says 0.0.0.0.
+            if host not in {"", "127.0.0.1", "localhost", "::1"}:
+                LOGGER.warning(
+                    "Desktop mode is single-machine only; overriding dashboard "
+                    "host %r with 127.0.0.1",
+                    host,
+                )
+            host = "127.0.0.1"
 
         preferred_port = int(config.dashboard.port)
         port = choose_port(

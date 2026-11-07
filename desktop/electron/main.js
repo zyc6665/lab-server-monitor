@@ -85,6 +85,8 @@ function createWindow() {
     minHeight: 700,
     title: APP_TITLE,
     show: false,
+    frame: false,
+    backgroundColor: '#f6f8fb',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -180,6 +182,26 @@ function registerIpc() {
     }
     clipboard.writeText(currentRuntimeUrl);
     return { ok: true, url: currentRuntimeUrl };
+  });
+
+  ipcMain.handle('window:action', (event, action) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    if (!win) {
+      return { ok: false };
+    }
+    if (action === 'minimize') {
+      win.minimize();
+    } else if (action === 'maximize') {
+      if (win.isMaximized()) {
+        win.unmaximize();
+      } else {
+        win.maximize();
+      }
+      return { ok: true, maximized: win.isMaximized() };
+    } else if (action === 'close') {
+      win.close();
+    }
+    return { ok: true };
   });
 }
 

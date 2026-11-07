@@ -8,4 +8,5 @@ contextBridge.exposeInMainWorld('desktopBridge', {
   isDesktop: true,
   restartBackend: () => ipcRenderer.invoke('desktop:restart-backend'),
   copyDashboardUrl: () => ipcRenderer.invoke('desktop:copy-url'),
+  windowAction: (action) => ipcRenderer.invoke('window:action', action),
 });
