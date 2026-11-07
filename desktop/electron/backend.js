@@ -75,6 +75,7 @@ function createBackendController(options = {}) {
   let child = null;
   let running = false;
   let stopping = false;
+  let currentExit = null;
 
   function ensureLogsDir() {
     try {
@@ -121,11 +122,48 @@ function createBackendController(options = {}) {
     return args;
   }
 
-  function handleExit(proc, code, signal) {
+  /**
+   * Remove any runtime.json left behind by a previous run. Without this a
+   * restart or a second launch could read the stale port of an earlier
+   * backend (especially when `auto_port_fallback` picks a different port).
+   */
+  function clearRuntimeFile() {
+    let exists = false;
+    try {
+      exists = Boolean(fsImpl.existsSync?.(runtimeFile));
+    } catch (error) {
+      exists = false;
+    }
+    if (!exists && typeof fsImpl.rmSync !== 'function') {
+      return;
+    }
+    try {
+      if (typeof fsImpl.rmSync === 'function') {
+        fsImpl.rmSync(runtimeFile, { force: true });
+      } else if (typeof fsImpl.unlinkSync === 'function') {
+        try {
+          fsImpl.unlinkSync(runtimeFile);
+        } catch (error) {
+          if (!error || error.code !== 'ENOENT') {
+            throw error;
+          }
+        }
+      }
+    } catch (error) {
+      logger.warn?.('failed to clear stale runtime.json', error);
+    }
+  }
+
+  function handleExit(proc, code, signal, error = null) {
     const wasCurrent = child === proc;
     if (wasCurrent) {
       child = null;
       running = false;
+      currentExit = {
+        code: code ?? null,
+        signal: signal ?? null,
+        error: error ? String(error.message || error) : null,
+      };
     }
     writeLog('exit', `backend exited (code=${code}, signal=${signal})`);
     const expected = stopping;
@@ -137,8 +175,8 @@ function createBackendController(options = {}) {
       if (typeof onUnexpectedExit === 'function') {
         try {
           onUnexpectedExit(code ?? null, signal ?? null);
-        } catch (error) {
-          logger.error?.('onUnexpectedExit threw', error);
+        } catch (callbackError) {
+          logger.error?.('onUnexpectedExit threw', callbackError);
         }
       }
     }
@@ -149,6 +187,7 @@ function createBackendController(options = {}) {
       return Promise.reject(new Error('Backend process is already running'));
     }
     ensureLogsDir();
+    clearRuntimeFile();
 
     const args = buildArgs();
     const spawnOptions = {
@@ -173,6 +212,7 @@ function createBackendController(options = {}) {
 
       child = proc;
       stopping = false;
+      currentExit = null;
       let settled = false;
       let exitHandled = false;
 
@@ -200,6 +240,10 @@ function createBackendController(options = {}) {
         }
         writeLog('error', `backend process error: ${error && error.message ? error.message : error}`);
         logger.error?.('backend process error', error);
+        if (!exitHandled) {
+          exitHandled = true;
+          handleExit(proc, null, null, error);
+        }
       });
       proc.once('spawn', () => {
         if (settled) {
@@ -234,6 +278,15 @@ function createBackendController(options = {}) {
         lastError = new Error('runtime.json exists but does not contain a valid url/port');
       } catch (error) {
         lastError = error;
+      }
+      if (currentExit) {
+        const details = [`code=${currentExit.code}`, `signal=${currentExit.signal}`];
+        if (currentExit.error) {
+          details.push(`error=${currentExit.error}`);
+        }
+        throw new Error(
+          `Backend process exited before runtime was ready (${details.join(', ')})`,
+        );
       }
       if (clock.now() >= deadline) {
         const detail =

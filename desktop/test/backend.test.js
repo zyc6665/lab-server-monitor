@@ -22,10 +22,12 @@ function createFakeFs(initialFiles = {}) {
   const files = { ...initialFiles };
   const writes = [];
   const dirs = [];
+  const removed = [];
   return {
     files,
     writes,
     dirs,
+    removed,
     existsSync(filePath) {
       return Object.prototype.hasOwnProperty.call(files, filePath);
     },
@@ -47,6 +49,25 @@ function createFakeFs(initialFiles = {}) {
     },
     writeFileSync(filePath, data) {
       files[filePath] = String(data);
+    },
+    rmSync(filePath, options = {}) {
+      const existed = Object.prototype.hasOwnProperty.call(files, filePath);
+      if (!existed && !options.force) {
+        const error = new Error(`ENOENT: no such file or directory, rm '${filePath}'`);
+        error.code = 'ENOENT';
+        throw error;
+      }
+      removed.push(filePath);
+      delete files[filePath];
+    },
+    unlinkSync(filePath) {
+      if (!Object.prototype.hasOwnProperty.call(files, filePath)) {
+        const error = new Error(`ENOENT: no such file or directory, unlink '${filePath}'`);
+        error.code = 'ENOENT';
+        throw error;
+      }
+      removed.push(filePath);
+      delete files[filePath];
     },
   };
 }
@@ -80,11 +101,17 @@ function createFakeSpawn() {
         child.emit('close', 0, null);
       });
     } else {
-      setImmediate(() => child.emit('spawn'));
+      setImmediate(() => {
+        if (typeof spawnImpl.onSpawn === 'function') {
+          spawnImpl.onSpawn(child, record);
+        }
+        child.emit('spawn');
+      });
     }
     return child;
   };
   spawnImpl.calls = calls;
+  spawnImpl.onSpawn = null;
   return spawnImpl;
 }
 
@@ -300,10 +327,13 @@ test('an unexpected exit invokes onUnexpectedExit exactly once', async () => {
 });
 
 test('restart() does not duplicate exit listeners across restarts', async () => {
-  const fsImpl = createFakeFs({
-    [RUNTIME_FILE]: JSON.stringify({ url: 'http://127.0.0.1:8124', port: 8124 }),
-  });
+  const fsImpl = createFakeFs();
   const spawnImpl = createFakeSpawn();
+  spawnImpl.onSpawn = () =>
+    fsImpl.writeFileSync(
+      RUNTIME_FILE,
+      JSON.stringify({ url: 'http://127.0.0.1:8124', port: 8124 }),
+    );
   let unexpectedCount = 0;
   const controller = createBackendController({
     appDir: APP_DIR,
@@ -331,6 +361,102 @@ test('restart() does not duplicate exit listeners across restarts', async () => 
   await flushAsync();
 
   assert.equal(unexpectedCount, 1);
+});
+
+test('start() removes a stale data/runtime.json before spawning', async () => {
+  const stale = JSON.stringify({ url: 'http://127.0.0.1:7777', port: 7777 });
+  const fsImpl = createFakeFs({ [RUNTIME_FILE]: stale });
+  const spawnImpl = createFakeSpawn();
+  const controller = createBackendController({
+    appDir: APP_DIR,
+    executablePath: EXECUTABLE,
+    spawnImpl,
+    fsImpl,
+  });
+
+  await controller.start();
+
+  assert.ok(fsImpl.removed.includes(RUNTIME_FILE), 'expected the stale runtime file to be removed');
+  assert.equal(fsImpl.existsSync(RUNTIME_FILE), false);
+});
+
+test('restart() does not resolve with the previous run\'s runtime port', async () => {
+  const fsImpl = createFakeFs();
+  const spawnImpl = createFakeSpawn();
+  let port = 8100;
+  spawnImpl.onSpawn = () => {
+    port += 1;
+    fsImpl.writeFileSync(
+      RUNTIME_FILE,
+      JSON.stringify({ url: `http://127.0.0.1:${port}`, port }),
+    );
+  };
+  const controller = createBackendController({
+    appDir: APP_DIR,
+    executablePath: EXECUTABLE,
+    spawnImpl,
+    fsImpl,
+  });
+
+  const first = await controller.start().then(() => controller.waitForRuntime());
+  assert.equal(first.port, 8101);
+
+  const afterRestart = await controller.restart();
+  assert.equal(afterRestart.port, 8102);
+});
+
+test('waitForRuntime() rejects early when the child exits before writing runtime', async () => {
+  const fsImpl = createFakeFs();
+  const spawnImpl = createFakeSpawn();
+  const controller = createBackendController({
+    appDir: APP_DIR,
+    executablePath: EXECUTABLE,
+    spawnImpl,
+    fsImpl,
+    startupTimeoutMs: 30000,
+  });
+
+  await controller.start();
+  const child = spawnImpl.calls[0].child;
+  child.emit('exit', 3, 'SIGTERM');
+  await flushAsync();
+
+  await assert.rejects(
+    controller.waitForRuntime(),
+    /Backend process exited before runtime was ready \(code=3, signal=SIGTERM\)/,
+  );
+});
+
+test('start() rejects when a backend is already running', async () => {
+  const spawnImpl = createFakeSpawn();
+  const controller = createBackendController({
+    appDir: APP_DIR,
+    executablePath: EXECUTABLE,
+    spawnImpl,
+    fsImpl: createFakeFs(),
+  });
+
+  await controller.start();
+  await assert.rejects(controller.start(), /already running/);
+  assert.equal(spawnImpl.calls.length, 1);
+});
+
+test('a post-spawn process error clears the running state', async () => {
+  const fsImpl = createFakeFs();
+  const spawnImpl = createFakeSpawn();
+  const controller = createBackendController({
+    appDir: APP_DIR,
+    executablePath: EXECUTABLE,
+    spawnImpl,
+    fsImpl,
+  });
+
+  await controller.start();
+  const child = spawnImpl.calls[0].child;
+  child.emit('error', new Error('EPIPE'));
+  await flushAsync();
+
+  assert.equal(controller.isRunning(), false);
 });
 
 test('start() rejects when the spawned process emits an error', async () => {
