@@ -2,13 +2,19 @@
 {% block title %}告警 - 服务器监控{% endblock %}
 
 {% block content %}
-<h1 class="page-title">告警</h1>
+<div class="page-head">
+  <h1 class="page-title">告警</h1>
+</div>
 
 <section class="card">
   <div class="section-head">
-    <h2>活动告警</h2>
-    <span class="muted" id="alert-count">共 {{ alerts|length }} 条</span>
+    <h2>告警列表</h2>
+    <div class="alert-filters" id="alert-status-filter" role="tablist" aria-label="告警状态筛选">
+      <button type="button" class="alert-filter active" data-status="active" role="tab" aria-selected="true">活动</button>
+      <button type="button" class="alert-filter" data-status="all" role="tab" aria-selected="false">全部</button>
+    </div>
   </div>
+  <p class="muted" id="alert-count">共 {{ alerts|length }} 条</p>
   <p class="empty" id="alerts-empty"{% if alerts %} hidden{% endif %}>暂无数据</p>
   <div class="table-wrap">
     <table class="data-table" id="alerts-table"{% if not alerts %} hidden{% endif %}>

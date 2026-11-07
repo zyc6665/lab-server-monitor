@@ -8,18 +8,42 @@
 {% block content %}
 <h1 class="page-title">概览</h1>
 
-<section class="summary-grid" aria-label="汇总">
-  <article class="card summary-card">
-    <div class="summary-label">在线</div>
-    <div class="summary-value" id="summary-online">{{ summary.online }}</div>
+<section class="stat-grid" aria-label="汇总">
+  <article class="card stat-card stat-card-total">
+    <span class="stat-icon" aria-hidden="true">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="7" rx="2"/><rect x="3" y="13" width="18" height="7" rx="2"/><path d="M7 7.5h.01M7 16.5h.01"/></svg>
+    </span>
+    <div class="stat-body">
+      <div class="stat-label">主机总数</div>
+      <div class="stat-value" id="summary-total">{{ hosts|length }}</div>
+    </div>
   </article>
-  <article class="card summary-card">
-    <div class="summary-label">离线</div>
-    <div class="summary-value" id="summary-offline">{{ summary.offline }}</div>
+  <article class="card stat-card stat-card-online">
+    <span class="stat-icon" aria-hidden="true">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
+    </span>
+    <div class="stat-body">
+      <div class="stat-label">在线</div>
+      <div class="stat-value" id="summary-online">{{ summary.online }}</div>
+    </div>
   </article>
-  <article class="card summary-card">
-    <div class="summary-label">活动告警</div>
-    <div class="summary-value summary-alert" id="summary-alerts">{{ summary.active_alerts }}</div>
+  <article class="card stat-card stat-card-offline">
+    <span class="stat-icon" aria-hidden="true">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+    </span>
+    <div class="stat-body">
+      <div class="stat-label">离线</div>
+      <div class="stat-value" id="summary-offline">{{ summary.offline }}</div>
+    </div>
+  </article>
+  <article class="card stat-card stat-card-alert">
+    <span class="stat-icon" aria-hidden="true">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
+    </span>
+    <div class="stat-body">
+      <div class="stat-label">活动告警</div>
+      <div class="stat-value" id="summary-alerts">{{ summary.active_alerts }}</div>
+    </div>
   </article>
 </section>
 
@@ -69,6 +93,7 @@
           <th>登录用户</th>
           <th>磁盘健康</th>
           <th>采集时间</th>
+          <th>操作</th>
         </tr>
       </thead>
       <tbody id="host-table-body">
@@ -102,6 +127,9 @@
             <span class="health-counts">健康 {{ host.disk_health.healthy }} · 告警 {{ host.disk_health.warning }} · 严重 {{ host.disk_health.critical }}</span>
           </td>
           <td class="mono">{{ host.collected_at or '—' }}</td>
+          <td class="host-actions">
+            <a class="btn-link terminal-link" href="/terminal?host={{ host.name|urlencode }}">终端</a>
+          </td>
         </tr>
         {% endfor %}
       </tbody>

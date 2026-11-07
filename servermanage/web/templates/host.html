@@ -16,7 +16,17 @@
 </section>
 {% else %}
 {% set metrics = detail.metrics %}
-<h1 class="page-title">{{ name }}</h1>
+<div class="page-head host-head">
+  <div class="page-head-main">
+    <h1 class="page-title">{{ name }}</h1>
+    <p class="page-subtitle muted">
+      {{ detail.host or '—' }}{% if detail.group %} · {{ detail.group }}{% endif %}{% if detail.owner %} · 负责人 {{ detail.owner }}{% endif %}
+    </p>
+  </div>
+  <div class="page-actions">
+    <a class="primary-button button-link" href="/terminal?host={{ name|urlencode }}">打开终端</a>
+  </div>
+</div>
 
 <section class="card">
   <div class="section-head">

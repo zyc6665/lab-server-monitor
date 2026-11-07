@@ -6,6 +6,8 @@
   'use strict';
 
   var REFRESH_MS = 30000;
+  // 告警页当前筛选：active（默认，仅活动告警）或 all（全部）。
+  var alertStatus = 'active';
 
   function redirectToLogin() {
     if (window.location.pathname !== '/login') {
@@ -77,8 +79,9 @@
     return badge;
   }
 
-  function updateSummary(summary) {
+  function updateSummary(summary, hosts) {
     if (!summary) { return; }
+    setText('summary-total', Array.isArray(hosts) ? hosts.length : 0);
     setText('summary-online', summary.online == null ? 0 : summary.online);
     setText('summary-offline', summary.offline == null ? 0 : summary.offline);
     setText('summary-alerts', summary.active_alerts == null ? 0 : summary.active_alerts);
@@ -142,6 +145,16 @@
     tr.appendChild(healthCell);
 
     tr.appendChild(textCell(host.collected_at, 'mono'));
+
+    // 操作列：终端入口。用 DOM API + textContent 构建，避免把主机名当 HTML。
+    var actionCell = document.createElement('td');
+    actionCell.className = 'host-actions';
+    var terminalLink = document.createElement('a');
+    terminalLink.className = 'btn-link terminal-link';
+    terminalLink.href = '/terminal?host=' + encodeURIComponent(host.name || '');
+    terminalLink.textContent = '终端';
+    actionCell.appendChild(terminalLink);
+    tr.appendChild(actionCell);
     return tr;
   }
 
@@ -277,16 +290,37 @@
   function refreshOverview() {
     return fetchJson('/api/overview').then(function (data) {
       if (!data) { return; }
-      updateSummary(data.summary);
+      updateSummary(data.summary, data.hosts);
       updateHosts(data.hosts);
     });
   }
 
+  function alertsUrl(status) {
+    if (!status || status === 'active') { return '/api/alerts?status=active'; }
+    if (status === 'all') { return '/api/alerts'; }
+    return '/api/alerts?status=' + encodeURIComponent(status);
+  }
+
   function refreshAlerts() {
-    return fetchJson('/api/alerts?status=active').then(function (data) {
+    return fetchJson(alertsUrl(alertStatus)).then(function (data) {
       if (!data) { return; }
       updateAlerts(data.alerts);
     });
+  }
+
+  function setAlertFilter(status) {
+    alertStatus = status === 'all' ? 'all' : 'active';
+    var filters = document.querySelectorAll('.alert-filter');
+    for (var i = 0; i < filters.length; i += 1) {
+      var isActive = filters[i].getAttribute('data-status') === alertStatus;
+      if (isActive) {
+        filters[i].classList.add('active');
+      } else {
+        filters[i].classList.remove('active');
+      }
+      filters[i].setAttribute('aria-selected', isActive ? 'true' : 'false');
+    }
+    refreshAlerts().catch(function () {});
   }
 
   function refreshAll() {
@@ -334,6 +368,17 @@
     if (statusFilter) { statusFilter.addEventListener('change', applyHostFilters); }
     if (keywordFilter) { keywordFilter.addEventListener('input', applyHostFilters); }
     applyHostFilters();
+
+    // 告警页状态筛选（活动 / 全部）：切换后按状态重新拉取。
+    var alertFilterBar = document.getElementById('alert-status-filter');
+    if (alertFilterBar) {
+      alertFilterBar.addEventListener('click', function (event) {
+        var target = event.target;
+        if (target && target.classList && target.classList.contains('alert-filter')) {
+          setAlertFilter(target.getAttribute('data-status'));
+        }
+      });
+    }
 
     refreshAll();
     window.setInterval(refreshAll, REFRESH_MS);
