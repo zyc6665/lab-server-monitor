@@ -66,7 +66,7 @@ def test_autostart_task_runs_exe_with_start_hidden() -> None:
 
 def test_pyproject_version_is_1_4_0() -> None:
     data = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
-    assert data["project"]["version"] == "1.4.0"
+    assert data["project"]["version"] == "1.4.1"
 
 
 def test_user_guide_covers_v14_desktop_workflow() -> None:
@@ -84,7 +84,7 @@ def test_user_guide_covers_v14_desktop_workflow() -> None:
 def test_readme_covers_v14_desktop_workflow() -> None:
     text = read_text("README.md")
 
-    assert "1.4.0" in text
+    assert "1.4.1" in text
     assert "SSH 终端" in text
     assert "servermonitor.exe" in text
     assert "--start-hidden" in text, "README 应说明开机自启走 --start-hidden"

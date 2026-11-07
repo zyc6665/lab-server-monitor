@@ -155,7 +155,10 @@
     payload.tags = [];
     status("wizard-save-status", "正在保存…");
     api("PUT", "/api/settings/hosts/" + encodeURIComponent(name), payload)
-      .then(function () { window.location.reload(); })
+      .then(function () {
+        try { sessionStorage.setItem("servermonitor-settings-tab", "hosts"); } catch (e) {}
+        window.location.reload();
+      })
       .catch(function (error) { status("wizard-save-status", error.message, true); });
   }
 

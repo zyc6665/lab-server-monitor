@@ -633,3 +633,37 @@ a:hover { text-decoration: underline; }
 }
 
 
+
+/* -- settings page tabs ------------------------------------------------- */
+.settings-tabs {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 2px 0 18px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.94);
+  backdrop-filter: blur(8px);
+}
+.settings-tab {
+  border: 0;
+  border-radius: 8px;
+  padding: 8px 14px;
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  cursor: pointer;
+}
+.settings-tab:hover { background: var(--accent-soft); color: var(--text); }
+.settings-tab.active { background: var(--accent); color: #fff; }
+.settings-card { max-width: 1120px; }
+.settings-card[hidden] { display: none !important; }
+.settings-card .section-head { margin-bottom: 14px; }
+.settings-card .field input,
+.settings-card .field select,
+.settings-card .field textarea { min-height: 36px; }
+.settings-empty { padding: 18px; text-align: center; color: var(--text-muted); }

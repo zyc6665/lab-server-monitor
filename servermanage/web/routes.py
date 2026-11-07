@@ -757,29 +757,36 @@ def _build_overview(config, db_path) -> dict[str, Any]:
 
 
 def _build_host_detail(name: str, config, db_path) -> dict[str, Any] | None:
-    """Build the ``/api/host/<name>`` payload, or ``None`` when unknown."""
-    snapshot = storage.get_host_snapshot(name, db_path)
-    if snapshot is None:
-        return None
+    """Build the ``/api/host/<name>`` payload, or ``None`` when unknown.
 
+    A host that is configured but has not been polled yet is still valid: the
+    detail page opens with empty metrics instead of a 404, which is important
+    right after adding a host (or while the first collection is failing).
+    """
+    snapshot = storage.get_host_snapshot(name, db_path)
     addresses = {server.name: server.host for server in config.servers}
     servers_by_name = {server.name: server for server in config.servers}
+    server = servers_by_name.get(name)
+    if snapshot is None and server is None:
+        return None
+
     tz = resolve_timezone(config.app.timezone)
     disk = storage.get_disk_health(name, db_path)
     if disk is not None:
         disk = dict(disk)
         disk["collected_at"] = _to_local_iso(disk.get("collected_at"), tz)
-    server = servers_by_name.get(name)
     return {
         "name": name,
         "host": addresses.get(name),
-        "collected_at": _to_local_iso(snapshot.get("collected_at"), tz),
-        "success": snapshot.get("success"),
+        "collected_at": (
+            _to_local_iso(snapshot.get("collected_at"), tz) if snapshot else None
+        ),
+        "success": snapshot.get("success") if snapshot else None,
         "group": (server.group if server is not None else None) or "未分组",
         "owner": server.owner if server is not None else "",
         "location": server.location if server is not None else "",
         "tags": list(server.tags) if server is not None else [],
-        "metrics": snapshot.get("metrics") or {},
+        "metrics": (snapshot.get("metrics") or {}) if snapshot else {},
         "disk": disk,
     }
 
@@ -1575,18 +1582,87 @@ def register_routes(app: Flask) -> None:
             hosts=data["hosts"],
         )
 
+    @app.get("/hosts")
+    def hosts_page():
+        data = _build_overview(_config(app), _db_path(app))
+        return render_template(
+            "hosts.html",
+            active_page="hosts",
+            summary=data["summary"],
+            meta=data["meta"],
+            hosts=data["hosts"],
+        )
+
     @app.get("/host/<name>")
     def host_page(name: str):
         detail = _build_host_detail(name, _config(app), _db_path(app))
         if detail is None:
             return (
                 render_template(
-                    "host.html", active_page="overview", name=name, detail=None
+                    "host.html", active_page="hosts", name=name, detail=None
                 ),
                 404,
             )
         return render_template(
-            "host.html", active_page="overview", name=name, detail=detail
+            "host.html", active_page="hosts", name=name, detail=detail
+        )
+
+    @app.get("/disk-health")
+    def disk_health_page():
+        config = _config(app)
+        db_path = _db_path(app)
+        tz = resolve_timezone(config.app.timezone)
+        healths = {
+            item["host_name"]: item for item in storage.get_all_disk_health(db_path)
+        }
+        names = []
+        for server in config.servers:
+            if server.name not in names:
+                names.append(server.name)
+        for host_name in healths:
+            if host_name not in names:
+                names.append(host_name)
+
+        addresses = {server.name: server.host for server in config.servers}
+        groups = {server.name: (server.group or "未分组") for server in config.servers}
+        host_rows: list[dict[str, Any]] = []
+        drives: list[dict[str, Any]] = []
+        totals = {"healthy": 0, "warning": 0, "critical": 0, "drives": 0}
+        for host_name in sorted(names):
+            health = healths.get(host_name)
+            counts = _disk_health_summary(health)
+            totals["healthy"] += counts["healthy"]
+            totals["warning"] += counts["warning"]
+            totals["critical"] += counts["critical"]
+            totals["drives"] += counts["healthy"] + counts["warning"] + counts["critical"]
+            host_rows.append(
+                {
+                    "name": host_name,
+                    "host": addresses.get(host_name),
+                    "group": groups.get(host_name, "未分组"),
+                    "status": counts["status"],
+                    "healthy": counts["healthy"],
+                    "warning": counts["warning"],
+                    "critical": counts["critical"],
+                    "controller_count": len((health or {}).get("controllers") or []),
+                    "vd_count": len((health or {}).get("virtual_drives") or []),
+                    "pd_count": len((health or {}).get("physical_drives") or []),
+                    "message": (health or {}).get("message"),
+                    "collected_at": _to_local_iso((health or {}).get("collected_at"), tz),
+                }
+            )
+            for drive in (health or {}).get("physical_drives") or []:
+                if not isinstance(drive, dict):
+                    continue
+                item = dict(drive)
+                item["host_name"] = host_name
+                drives.append(item)
+        return render_template(
+            "disk_health.html",
+            active_page="disk_health",
+            hosts=host_rows,
+            drives=drives,
+            totals=totals,
         )
 
     @app.get("/alerts")

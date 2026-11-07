@@ -495,7 +495,7 @@ pwsh desktop/scripts/build-portable.ps1
 
 脚本会构建 Python 后端 sidecar、执行 `pnpm install` 与 `pnpm run build`（electron-builder），
 把产物组装到 `desktop/build/portable/servermonitor/`，并压缩为
-`release/服务器轮询监测工具-Windows-x64-v1.4.zip`。
+`release/服务器轮询监测工具-Windows-x64-v1.4.1.zip`。
 
 ### 二、解压后的目录结构
 
@@ -541,7 +541,7 @@ pwsh desktop/scripts/build-portable.ps1
 
 ## v1.4 更新（桌面客户端）
 
-版本 **1.4.0** 将绿色包升级为真正的 Windows 桌面客户端（纯单机，不再提供局域网浏览器访问）：
+版本 **1.4.1** 将绿色包升级为真正的 Windows 桌面客户端（纯单机，不再提供局域网浏览器访问）：
 
 - 无边框窗口 + 自定义标题栏（最小化/最大化/关闭），220px 左侧导航，PVS 风格卡片与圆角表格。
 - 添加主机改为两步「连接向导」：先填写 SSH 连接信息并测试，再自动识别主机名/系统/CPU/内存/挂载点/storcli/sudo，确认后保存。

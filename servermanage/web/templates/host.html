@@ -2,11 +2,11 @@
 {% block title %}{{ name }} - 服务器监控{% endblock %}
 
 {% macro pct(value) -%}
-{%- if value is none -%}—{%- elif value is string -%}{{ value }}{%- else -%}{{ '%.1f'|format(value) }}%{%- endif -%}
+{%- if value is undefined or value is none -%}—{%- elif value is string -%}{{ value }}{%- else -%}{{ '%.1f'|format(value) }}%{%- endif -%}
 {%- endmacro %}
 
 {% block content %}
-<nav class="breadcrumb"><a href="{{ url_for('overview_page') }}">概览</a> / <span>{{ name }}</span></nav>
+<nav class="breadcrumb"><a href="{{ url_for('hosts_page') }}">主机</a> / <span>{{ name }}</span></nav>
 
 {% if detail is none %}
 <section class="card">
@@ -31,8 +31,8 @@
 <section class="card">
   <div class="section-head">
     <h2>指标详情</h2>
-    <span class="badge {{ 'badge-online' if detail.success else 'badge-offline' }}">
-      {{ '采集成功' if detail.success else '采集失败' }}
+    <span class="badge {% if detail.success %}badge-online{% elif detail.success is none %}badge-muted{% else %}badge-offline{% endif %}">
+      {% if detail.success %}采集成功{% elif detail.success is none %}等待首次采集{% else %}采集失败{% endif %}
     </span>
   </div>
   <dl class="kv-grid">

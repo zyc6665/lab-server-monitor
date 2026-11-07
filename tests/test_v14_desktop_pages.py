@@ -52,3 +52,49 @@ def test_v14_pages_are_wired(tmp_path):
     assert "SSH 终端" in terminal
     assert "vendor/xterm/xterm.js" in terminal
     assert "terminal.js" in terminal
+
+
+def test_hosts_and_disk_health_pages_are_wired(tmp_path):
+    client = _logged_in_client(tmp_path)
+
+    hosts = client.get("/hosts")
+    assert hosts.status_code == 200
+    hosts_html = hosts.get_data(as_text=True)
+    assert "主机列表" in hosts_html
+    assert 'id="host-table"' in hosts_html
+
+    disk = client.get("/disk-health")
+    assert disk.status_code == 200
+    disk_html = disk.get_data(as_text=True)
+    assert "物理盘明细" in disk_html
+    assert "磁盘健康" in disk_html
+
+    settings = client.get("/settings").get_data(as_text=True)
+    assert "settings-tabs.js" in settings
+    assert 'data-settings-tab="monitoring"' in settings
+
+
+def test_configured_host_without_snapshot_opens_detail(tmp_path):
+    client = _logged_in_client(tmp_path)
+    settings = client.get("/settings").get_data(as_text=True)
+    token = re.search(r'data-csrf="([^"]+)"', settings).group(1)
+    response = client.put(
+        "/api/settings/hosts/new-host",
+        json={
+            "name": "new-host",
+            "host": "10.0.0.9",
+            "port": 22,
+            "username": "tester",
+            "auth_type": "password",
+            "password": "secret",
+            "disk_mounts": ["/", "/data"],
+            "group": "实验室",
+            "owner": "张三",
+            "tags": [],
+        },
+        headers={"X-CSRF-Token": token},
+    )
+    assert response.status_code in (200, 201)
+    detail = client.get("/host/new-host")
+    assert detail.status_code == 200
+    assert "等待首次采集" in detail.get_data(as_text=True)

@@ -8,6 +8,11 @@
   var initial = window.__SETTINGS__ || {};
   var writable = !!initial.writable;
 
+  function reloadToHosts() {
+    try { sessionStorage.setItem("servermonitor-settings-tab", "hosts"); } catch (e) {}
+    window.location.reload();
+  }
+
   function qs(selector, parent) {
     return (parent || document).querySelector(selector);
   }
@@ -195,7 +200,7 @@
       var name = button.getAttribute("data-host-delete");
       if (!window.confirm("确定删除主机 " + name + " 吗？")) return;
       api("DELETE", "/api/settings/hosts/" + encodeURIComponent(name))
-        .then(function () { window.location.reload(); })
+        .then(function () { reloadToHosts(); })
         .catch(function (error) { window.alert(error.message); });
     });
   });
@@ -206,7 +211,7 @@
       var newName = window.prompt("复制为新的主机名称", name + "-copy");
       if (!newName) return;
       api("POST", "/api/settings/hosts/" + encodeURIComponent(name) + "/copy", { new_name: newName })
-        .then(function () { window.location.reload(); })
+        .then(function () { reloadToHosts(); })
         .catch(function (error) { window.alert(error.message); });
     });
   });
@@ -237,7 +242,7 @@
     var name = hostField("name").value.trim();
     if (!name) { status(hostStatus, "主机名称不能为空", true); return; }
     api("PUT", "/api/settings/hosts/" + encodeURIComponent(name), hostPayload())
-      .then(function () { window.location.reload(); })
+      .then(function () { reloadToHosts(); })
       .catch(function (error) { status(hostStatus, error.message, true); });
   });
 
@@ -431,7 +436,7 @@
             (result.updated || []).length + " 台，跳过 " + (result.skipped || []).length +
             " 台，失败 " + (result.failed || []).length + " 台";
           status(importStatus, text, (result.failed || []).length > 0);
-          window.setTimeout(function () { window.location.reload(); }, 800);
+          window.setTimeout(reloadToHosts, 250);
         })
         .catch(function (error) { status(importStatus, error.message, true); });
     });

@@ -2,7 +2,7 @@
 {% block title %}概览 - 服务器监控{% endblock %}
 
 {% macro pct(value) -%}
-{%- if value is none -%}—{%- elif value is string -%}{{ value }}{%- else -%}{{ '%.1f'|format(value) }}%{%- endif -%}
+{%- if value is undefined or value is none -%}—{%- elif value is string -%}{{ value }}{%- else -%}{{ '%.1f'|format(value) }}%{%- endif -%}
 {%- endmacro %}
 
 {% block content %}

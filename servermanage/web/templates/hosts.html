@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+{% block title %}主机 - 服务器监控{% endblock %}
+
+{% macro pct(value) -%}
+{%- if value is undefined or value is none -%}—{%- elif value is string -%}{{ value }}{%- else -%}{{ '%.1f'|format(value) }}%{%- endif -%}
+{%- endmacro %}
+
+{% block content %}
+<div class="page-head">
+  <div class="page-head-main">
+    <h1 class="page-title">主机</h1>
+    <p class="page-subtitle muted">共 {{ hosts|length }} 台 · 在线 {{ summary.online }} · 离线 {{ summary.offline }}</p>
+  </div>
+</div>
+
+<section class="card filter-bar" id="host-filter">
+  <label class="filter-field">分组
+    <select id="filter-group">
+      <option value="">全部分组</option>
+      {% for group in meta.groups %}
+      <option value="{{ group }}">{{ group }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label class="filter-field">状态
+    <select id="filter-status">
+      <option value="">全部</option>
+      <option value="online">在线</option>
+      <option value="offline">离线</option>
+      <option value="alert">有告警</option>
+      <option value="silenced">静默</option>
+    </select>
+  </label>
+  <label class="filter-field filter-keyword">关键字
+    <input type="search" id="filter-keyword" placeholder="名称 / 地址 / 负责人" />
+  </label>
+  <span class="muted" id="filter-count"></span>
+</section>
+
+<section class="card">
+  <div class="section-head">
+    <h2>主机列表</h2>
+    <span class="muted" id="host-count">共 {{ hosts|length }} 台</span>
+  </div>
+  <p class="empty" id="empty-state"{% if hosts %} hidden{% endif %}>暂无数据</p>
+  <div class="table-wrap">
+    <table class="data-table" id="host-table"{% if not hosts %} hidden{% endif %}>
+      <thead>
+        <tr>
+          <th>名称</th><th>地址</th><th>分组</th><th>负责人</th><th>状态</th>
+          <th>CPU</th><th>内存</th><th>磁盘</th><th>GPU 显存</th><th>登录用户</th>
+          <th>磁盘健康</th><th>采集时间</th><th>操作</th>
+        </tr>
+      </thead>
+      <tbody id="host-table-body">
+        {% for host in hosts %}
+        <tr data-host="{{ host.name }}"
+            data-group="{{ host.group }}"
+            data-owner="{{ host.owner }}"
+            data-online="{{ '1' if host.online else '0' }}"
+            data-silenced="{{ '1' if host.silenced else '0' }}"
+            data-alert-count="{{ host.active_alert_count }}"
+            data-search="{{ (host.name ~ ' ' ~ (host.host or '') ~ ' ' ~ host.group ~ ' ' ~ host.owner ~ ' ' ~ host.location)|lower }}">
+          <td><a href="{{ url_for('host_page', name=host.name) }}">{{ host.name }}</a></td>
+          <td class="mono">{{ host.host or '—' }}</td>
+          <td>{{ host.group or '—' }}</td>
+          <td>{{ host.owner or '—' }}</td>
+          <td>
+            <span class="badge {{ 'badge-online' if host.online else 'badge-offline' }}">{{ '在线' if host.online else '离线' }}</span>
+            {% if host.silenced %}<span class="badge badge-silenced" title="静默至 {{ host.silenced_until or '—' }}">静默</span>{% endif %}
+          </td>
+          <td>{{ pct(host.cpu_percent) }}</td>
+          <td>{{ pct(host.memory_percent) }}</td>
+          <td>{{ pct(host.disk_percent) }}</td>
+          <td>{{ pct(host.gpu_memory_percent) }}</td>
+          <td>{{ host.logged_in_user_count }}</td>
+          <td>
+            <span class="health health-{{ host.disk_health.status }}">{{ host.disk_health.status }}</span>
+            <span class="health-counts">健康 {{ host.disk_health.healthy }} · 告警 {{ host.disk_health.warning }} · 严重 {{ host.disk_health.critical }}</span>
+          </td>
+          <td class="mono">{{ host.collected_at or '—' }}</td>
+          <td class="host-actions"><a class="btn-link terminal-link" href="/terminal?host={{ host.name|urlencode }}">终端</a></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}
