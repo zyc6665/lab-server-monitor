@@ -71,13 +71,17 @@ try {
     Write-Host 'Installing desktop dependencies (pnpm install) ...' -ForegroundColor Cyan
     # strictDepBuilds=false keeps pnpm from treating ignored dependency build
     # scripts as a hard install failure; the packages we need are still linked.
+    $ErrorActionPreference = 'Continue'
     pnpm install --config.strictDepBuilds=false
+    $ErrorActionPreference = 'Stop'
     if ($LASTEXITCODE -ne 0) {
         throw "pnpm install failed (exit code $LASTEXITCODE). See output above."
     }
 
     Write-Host 'Building desktop app (pnpm run build / electron-builder) ...' -ForegroundColor Cyan
+    $ErrorActionPreference = 'Continue'
     pnpm run build
+    $ErrorActionPreference = 'Stop'
     if ($LASTEXITCODE -ne 0) {
         throw "pnpm run build (electron-builder) failed (exit code $LASTEXITCODE). See output above."
     }
@@ -184,3 +188,4 @@ finally {
 
 $sizeMb = [math]::Round((Get-Item $zipPath).Length / 1MB, 2)
 Write-Host ("Portable release created: {0} ({1} MB)" -f $zipPath, $sizeMb) -ForegroundColor Green
+
