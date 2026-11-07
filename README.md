@@ -470,19 +470,18 @@ docker compose down
 
 ## Windows PC 绿色包（免 Docker）
 
-除上面的 Docker 部署外，本项目还提供 **Windows 11 桌面版绿色包**（v1.3）：基于
-Electron 的独立窗口程序，内置 Python 后台 sidecar，解压即用，不依赖 Docker，
-也不需要安装 Python。关闭窗口会最小化到系统托盘继续监测，局域网其它电脑仍可用
-浏览器访问同一看板。
+除上面的 Docker 部署外，本项目还提供 **Windows 11 桌面版绿色包**（v1.4）：Electron 客户端，内置 Python 后台 sidecar，解压即用，不依赖 Docker，
+也不需要安装 Python。无边框窗口、左侧导航、系统托盘，关闭窗口后继续在后台监测。
+v1.4 为**纯单机客户端**，不再提供局域网浏览器访问。
 
 ### 和 Docker 版的区别
 
-| 项目 | Docker 版（旧） | Windows 桌面版（v1.3） |
+| 项目 | Docker 版（旧） | Windows 桌面客户端（v1.4） |
 | --- | --- | --- |
 | 运行方式 | `supercronic` 定时执行日报 | Electron 窗口 + 内置调度器 + 本地 Web 看板 |
 | 配置文件 | 根目录 `config.yaml` / `.env` | `config/config.yaml` / `config/.env`（可选） |
 | 数据库 | 容器内 `data/servermanage.db` | `data/servermonitor.db` |
-| 登录方式 | 私钥或密码 | 首次 `/setup` 设置管理员，局域网同样用密码登录 |
+| 登录方式 | 私钥或密码 | 首次 `/setup` 设置管理员密码 |
 | 启停 | `docker compose up/down` | `启动.bat` / 托盘退出 / `停止.bat` |
 | 程序结构 | 单体容器 | `servermonitor.exe`（Electron）+ `resources\backend\servermonitor-backend.exe`（Python sidecar） |
 
@@ -496,7 +495,7 @@ pwsh desktop/scripts/build-portable.ps1
 
 脚本会构建 Python 后端 sidecar、执行 `pnpm install` 与 `pnpm run build`（electron-builder），
 把产物组装到 `desktop/build/portable/servermonitor/`，并压缩为
-`release/服务器轮询监测工具-Windows-x64-v1.3.zip`。
+`release/服务器轮询监测工具-Windows-x64-v1.4.zip`。
 
 ### 二、解压后的目录结构
 
@@ -512,14 +511,13 @@ pwsh desktop/scripts/build-portable.ps1
 ├── 启动.bat
 ├── 停止.bat
 ├── 注册开机自启.ps1
-├── 允许局域网访问.ps1
 └── 使用说明.txt
 ```
 
 > 解压后请保持目录完整，不要把 `servermonitor.exe` 单独移动；`resources`、`config`、
 > `data`、`logs` 必须与它位于同一目录。
 
-### 三、启动 / 停止 / 开机自启 / 局域网访问
+### 三、启动 / 停止 / 开机自启
 
 - **启动**：双击 `启动.bat`（或直接双击 `servermonitor.exe`），显示独立主窗口；
   首次启动自动进入 `/setup`（初始化管理员），登录后在「设置」页添加主机。
@@ -530,10 +528,6 @@ pwsh desktop/scripts/build-portable.ps1
 - **开机自启**：右键 `注册开机自启.ps1` →「使用 PowerShell 运行」。脚本创建计划任务
   `ServerMonitorDashboard`（登录时触发），直接执行 `servermonitor.exe --start-hidden`，
   只在托盘运行、不弹窗口；可重复运行（先删除同名任务），权限不足时回退到「启动」文件夹快捷方式。
-- **局域网访问**：先在「设置 → 看板与安全」把监听地址设为 `0.0.0.0`（仅本机可用 `127.0.0.1`），
-  再以管理员权限运行 `允许局域网访问.ps1`，它会为 `resources\backend\servermonitor-backend.exe`
-  添加名为「服务器轮询监测工具」的 TCP 入站规则（专用网络，可重复运行）。其它电脑访问
-  `http://本机IP:端口`。
 
 > `config\.env` 可选：不建也能启动，凭据在「设置」页填写后用 DPAPI 加密入库。
 
@@ -545,17 +539,24 @@ pwsh desktop/scripts/build-portable.ps1
 
 ---
 
-## v1.3 更新（桌面版）
+## v1.4 更新（桌面客户端）
 
-版本 **1.3.0** 将绿色包从「后台服务 + 浏览器」升级为 **Electron 独立桌面程序**：
+版本 **1.4.0** 将绿色包升级为真正的 Windows 桌面客户端（纯单机，不再提供局域网浏览器访问）：
+
+- 无边框窗口 + 自定义标题栏（最小化/最大化/关闭），220px 左侧导航，PVS 风格卡片与圆角表格。
+- 添加主机改为两步「连接向导」：先填写 SSH 连接信息并测试，再自动识别主机名/系统/CPU/内存/挂载点/storcli/sudo，确认后保存。
+- 内置多标签 SSH 终端（仅本机桌面客户端可用），会话仅记录元数据（主机、时间、来源），不记录命令与输出。
+- 后端只监听 `127.0.0.1`，纯单机；`允许局域网访问.ps1` 已移除。
+
+## v1.3 更新（桌面壳）
+
+版本 **1.3.0** 将绿色包从「后台服务 + 浏览器」升级为 **Electron 独立窗口程序**：
 
 - 独立主窗口（默认 1280×800，最小 1024×700），关闭窗口最小化到系统托盘继续监测；
   托盘菜单支持显示主窗口、打开日志目录、复制看板地址、退出。
 - 单实例运行：`userData` 固定在程序目录 `data\electron`，不同解压目录互不影响。
 - 后台 Python 服务以 `--headless` sidecar 运行（`resources\backend\servermonitor-backend.exe`），
   不再自己打开浏览器或托盘，避免双窗口 / 双托盘。
-- 局域网访问保持可用：`允许局域网访问.ps1` 一键添加防火墙规则；端口顺延后可在托盘
-  「复制看板地址」或设置页看到真实地址。
 - 开机自启改为计划任务直接执行 `servermonitor.exe --start-hidden`，只驻留托盘。
 - 升级：先备份 `config\`、`data\`、`logs\`，再解压新版本到新文件夹（或保留原目录只替换
   程序文件），切勿删除 `data\servermonitor.db`。
