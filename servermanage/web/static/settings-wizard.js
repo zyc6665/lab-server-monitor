@@ -101,7 +101,14 @@
     row("内核", result.kernel);
     row("CPU 核数", result.cpu_cores);
     row("内存 (MB)", result.memory_total_mb);
-    var mounts = result.mounts ? Object.keys(result.mounts) : [];
+    var mounts = [];
+    if (Array.isArray(result.mounts)) {
+      mounts = result.mounts.map(function (item) {
+        return item && (item.mountpoint || item.mount);
+      }).filter(Boolean);
+    } else if (result.mounts) {
+      mounts = Object.keys(result.mounts);
+    }
     row("挂载点", mounts.join(", "));
     row("storcli", result.storcli_available ? (result.storcli_path || "可用") : "不可用", !result.storcli_available);
     row("免密 sudo", result.sudo_available ? "可用" : "不可用", !result.sudo_available);

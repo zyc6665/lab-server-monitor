@@ -26,3 +26,4 @@ def test_settings_wizard_uses_probe_and_csrf() -> None:
     assert "X-CSRF-Token" in js
     assert "private_key" in js
     assert "disk_mounts" in js
+    assert "Array.isArray(result.mounts)" in js
