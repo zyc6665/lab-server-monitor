@@ -38,9 +38,13 @@ class SSHClientWrapper:
         host: HostConfig,
         connect_timeout: int,
         client_factory: Callable[[], paramiko.SSHClient] | None = None,
+        keepalive_interval: int = 30,
+        shell_timeout: float = 1.0,
     ) -> None:
         self.host = host
         self.connect_timeout = connect_timeout
+        self.keepalive_interval = keepalive_interval
+        self.shell_timeout = shell_timeout
         self._client_factory = client_factory or self._default_client_factory
         self._client: paramiko.SSHClient | None = None
 
@@ -81,6 +85,28 @@ class SSHClientWrapper:
             client.connect(**self._build_connect_kwargs())
             self._client = client
         return self._client
+
+    def open_shell(
+        self,
+        term: str = "xterm-256color",
+        width: int = 120,
+        height: int = 30,
+    ) -> paramiko.Channel:
+        """Open an interactive PTY shell channel over the reused connection.
+
+        Reuses :meth:`_get_client` so the terminal shares the same connect logic
+        (auth, timeouts) as command execution.  Transport keepalive keeps idle
+        sessions from being dropped by intermediate firewalls, and a channel
+        timeout keeps the reader thread responsive to close requests.  Callers
+        must never touch the private ``_client`` directly.
+        """
+        client = self._get_client()
+        transport = client.get_transport()
+        if transport is not None:
+            transport.set_keepalive(self.keepalive_interval)
+        channel = client.invoke_shell(term=term, width=width, height=height)
+        channel.settimeout(self.shell_timeout)
+        return channel
 
     def run(self, command: str, timeout: int) -> CommandResult:
         client = self._get_client()
