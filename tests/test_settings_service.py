@@ -579,3 +579,20 @@ def test_save_alerts_v12_toggles(tmp_path):
     alerts = svc.public_settings()["alerts"]
     assert alerts["aggregate_by_host"] is False
     assert alerts["notify_on_recovery"] is False
+
+
+# ---------------------------------------------------------------------------
+# Task 5: desktop mode flag
+# ---------------------------------------------------------------------------
+
+
+def test_public_settings_desktop_mode_true(tmp_path, monkeypatch):
+    monkeypatch.setenv("SERVERMONITOR_DESKTOP", "1")
+    svc = _service(tmp_path)
+    assert svc.public_settings()["desktop_mode"] is True
+
+
+def test_public_settings_desktop_mode_false(tmp_path, monkeypatch):
+    monkeypatch.delenv("SERVERMONITOR_DESKTOP", raising=False)
+    svc = _service(tmp_path)
+    assert svc.public_settings()["desktop_mode"] is False

@@ -97,10 +97,21 @@
     if (button) button.disabled = true;
     api("PUT", "/api/settings/" + sectionName, payload)
       .then(function (result) {
+        var formStatus = button
+          ? button.parentElement.querySelector(".form-status")
+          : null;
+        status(qs("#settings-root"), "");
+        window.__SETTINGS__[sectionName] = payload;
+        if (result && result.restart_required && window.desktopBridge) {
+          status(formStatus, "正在重启后台…");
+          return window.desktopBridge.restartBackend().then(function (restartResult) {
+            var ok = !!(restartResult && restartResult.ok);
+            status(formStatus, ok ? "已重启" : "重启失败", !ok);
+          });
+        }
         var message = "已保存";
         if (result && result.restart_required) message = "已保存，重启程序后生效";
-        status(qs("#settings-root"), "");
-        status(button ? button.parentElement.querySelector(".form-status") : null, message);
+        status(formStatus, message);
         if (!button) return;
         var note = document.createElement("p");
         note.className = "form-status form-status-ok";
@@ -108,7 +119,6 @@
         var existing = button.nextElementSibling;
         if (existing && existing.classList.contains("form-status")) existing.remove();
         button.insertAdjacentElement("afterend", note);
-        window.__SETTINGS__[sectionName] = payload;
       })
       .catch(function (error) {
         status(button ? button.parentElement.querySelector(".form-status") : null, error.message, true);

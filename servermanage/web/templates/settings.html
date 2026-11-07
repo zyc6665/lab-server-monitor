@@ -33,8 +33,10 @@
         <input type="number" min="1" data-field="retention_days" value="{{ settings.monitoring.retention_days }}">
       </label>
       <label class="check-row"><input type="checkbox" data-field="auto_port_fallback" {% if settings.monitoring.auto_port_fallback %}checked{% endif %}> 端口占用时自动顺延</label>
+      {% if not settings.desktop_mode %}
       <label class="check-row"><input type="checkbox" data-field="tray_enabled" {% if settings.monitoring.tray_enabled %}checked{% endif %}> 启用系统托盘</label>
       <label class="check-row"><input type="checkbox" data-field="open_browser_on_start" {% if settings.monitoring.open_browser_on_start %}checked{% endif %}> 启动时自动打开浏览器</label>
+      {% endif %}
     </div>
     <button class="primary-button" data-save="monitoring" {% if not settings.writable %}disabled{% endif %}>保存监控与存储</button>
   </section>

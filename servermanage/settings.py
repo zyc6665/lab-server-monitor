@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 import hmac
+import os
 import types
 from copy import deepcopy
 from dataclasses import fields, replace
@@ -342,6 +343,7 @@ class SettingsService:
         config = self.load()
         return {
             "writable": self.is_writable(),
+            "desktop_mode": os.environ.get("SERVERMONITOR_DESKTOP") == "1",
             "setup_required": self.setup_required(),
             "monitoring": {
                 "timezone": config.app.timezone,

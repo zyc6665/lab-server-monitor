@@ -144,6 +144,31 @@ def test_settings_page_has_v12_checkbox_fields(client):
         assert f'data-field="{field}"' in html
 
 
+def test_settings_page_hides_desktop_owned_toggles_in_desktop_mode(client, monkeypatch):
+    monkeypatch.setenv("SERVERMONITOR_DESKTOP", "1")
+
+    html = client.get("/settings").get_data(as_text=True)
+
+    assert 'data-field="tray_enabled"' not in html
+    assert 'data-field="open_browser_on_start"' not in html
+
+
+def test_settings_page_shows_toggles_outside_desktop_mode(client, monkeypatch):
+    monkeypatch.delenv("SERVERMONITOR_DESKTOP", raising=False)
+
+    html = client.get("/settings").get_data(as_text=True)
+
+    assert 'data-field="tray_enabled"' in html
+    assert 'data-field="open_browser_on_start"' in html
+
+
+def test_settings_js_restarts_backend_in_desktop_mode(client):
+    source = client.get("/static/settings.js").get_data(as_text=True)
+
+    assert "desktopBridge" in source
+    assert "restartBackend" in source
+
+
 def test_settings_js_decodes_legacy_gbk_upload(client):
     source = client.get("/static/settings.js").get_data(as_text=True)
 
