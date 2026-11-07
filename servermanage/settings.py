@@ -274,7 +274,28 @@ class SettingsService:
             self._save_host_entries(
                 [_host_entry_from_config(host) for host in self.base_config.servers]
             )
-        return self._apply_secrets(config)
+        return self._normalise_placeholder_services(self._apply_secrets(config))
+
+    @staticmethod
+    def _normalise_placeholder_services(config: AppConfig) -> AppConfig:
+        """Disable report delivery when only the example SMTP block exists.
+
+        The shipped example used to contain ``smtp.example.com`` while daily and
+        weekly reports were enabled, so a fresh install tried to email
+        ``ops@example.com`` every day and filled the log with DNS errors.  Treat
+        the placeholder as "not configured" and switch its reports off; the user
+        can enable them in the web settings page after entering a real server.
+        """
+        smtp = config.smtp
+        placeholder = smtp is not None and (
+            (smtp.host or "").strip().lower() in {"", "smtp.example.com"}
+        )
+        if not placeholder:
+            return config
+        report = config.report
+        weekly = replace(report.weekly, enabled=False)
+        report = replace(report, daily_enabled=False, weekly=weekly)
+        return replace(config, report=report)
 
     def is_writable(self) -> bool:
         """True only where secrets can be encrypted (Windows DPAPI)."""

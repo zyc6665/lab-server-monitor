@@ -83,7 +83,7 @@ def test_firewall_helper_creates_named_rule_for_backend() -> None:
 
 def test_pyproject_version_is_1_3_0() -> None:
     data = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
-    assert data["project"]["version"] == "1.3.0"
+    assert data["project"]["version"] == "1.3.1"
 
 
 def test_user_guide_covers_v13_desktop_workflow() -> None:
@@ -101,7 +101,7 @@ def test_user_guide_covers_v13_desktop_workflow() -> None:
 def test_readme_covers_v13_desktop_workflow() -> None:
     text = read_text("README.md")
 
-    assert "1.3.0" in text
+    assert "1.3.1" in text
     assert "允许局域网访问.ps1" in text
     assert "servermonitor.exe" in text
     assert "--start-hidden" in text, "README 应说明开机自启走 --start-hidden"

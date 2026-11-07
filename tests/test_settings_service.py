@@ -512,7 +512,7 @@ def test_enabling_report_without_smtp_is_rejected(tmp_path):
     svc.save_section(
         "smtp",
         {
-            "host": "smtp.example.com",
+            "host": "mail.lab.internal",
             "port": 587,
             "username": "monitor",
             "password": "smtp-secret",

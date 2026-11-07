@@ -706,6 +706,7 @@ def _build_server(*, config, db_path, settings, service, host: str, port: int):
         db_path=db_path,
         settings_service=settings,
         on_config_changed=service.apply_config,
+        session_cookie_suffix=str(port),
     )
     return create_server(app_obj, host=host, port=port)
 

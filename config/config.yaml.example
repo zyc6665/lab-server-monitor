@@ -92,7 +92,7 @@ disk_health:
     alert_on_error_increase: true
 
 # ---------------------------------------------------------------------------
-# smtp：日报邮件发送（不需要邮件时可整段删除）
+# smtp：日报邮件发送（不需要邮件时保持示例值即可；网页「设置 → 通知」可随时配置）
 # ---------------------------------------------------------------------------
 smtp:
   host: "smtp.example.com"
@@ -117,7 +117,7 @@ ssh:
 report:
   subject_prefix: "[Server Daily Report]"
   include_failed_hosts: true
-  daily_enabled: true
+  daily_enabled: false
   daily_time: "09:00"
   executive:
     enabled: false
@@ -125,7 +125,7 @@ report:
     to_addrs:
       - "leader@example.com"
   weekly:
-    enabled: true
+    enabled: false
     subject_prefix: "[Server Weekly Report]"
     busy_threshold: 70.0
     idle_threshold: 20.0

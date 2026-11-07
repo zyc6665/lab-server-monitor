@@ -330,13 +330,47 @@ def _csrf_token() -> str:
     return token
 
 
+def _csrf_failure_response():
+    """Return a helpful response instead of an unstyled 400 for an expired page.
+
+    A session cookie can legitimately go stale when the backend is restarted,
+    when two copies share a host, or when a page was left open across an
+    upgrade.  The old implementation returned the bare text "CSRF 校验失败",
+    which looked like a broken white screen in the desktop window.  Now:
+    - ``/logout`` always succeeds (logging out is not a sensitive action);
+    - ``/api/*`` returns JSON so the JS can show a clear message;
+    - other HTML form posts render a small, readable page asking to refresh.
+    """
+    if request.path == "/logout":
+        session.clear()
+        return redirect(url_for("login"))
+    if request.path.startswith("/api/"):
+        return (
+            jsonify(
+                {
+                    "error": "csrf_failed",
+                    "message": "页面已过期，请刷新页面后重试",
+                }
+            ),
+            400,
+        )
+    surface = "登录" if request.path == "/login" else "当前"
+    return (
+        render_template(
+            "csrf_error.html",
+            message=f"{surface}页面的安全令牌已过期，请刷新页面后重试。",
+        ),
+        400,
+    )
+
+
 def _require_csrf():
     """Validate the CSRF token for a state-changing request.
 
-    Returns ``None`` when the token is valid, otherwise a ``(body, 400)`` tuple
-    ready to be returned from ``before_request``.  Accepts either the hidden
-    ``csrf_token`` form field or the ``X-CSRF-Token`` header so plain HTML forms
-    and fetch()/XHR clients both work.
+    Returns ``None`` when the token is valid; otherwise a readable response
+    (never bare text).  Accepts either the hidden ``csrf_token`` form field or
+    the ``X-CSRF-Token`` header so plain HTML forms and fetch()/XHR clients both
+    work.
     """
     expected = session.get("csrf_token")
     supplied = request.form.get("csrf_token") or request.headers.get("X-CSRF-Token")
@@ -346,9 +380,9 @@ def _require_csrf():
         or not isinstance(supplied, str)
         or not supplied
     ):
-        return ("CSRF 校验失败", 400)
+        return _csrf_failure_response()
     if not hmac.compare_digest(expected, supplied):
-        return ("CSRF 校验失败", 400)
+        return _csrf_failure_response()
     return None
 
 

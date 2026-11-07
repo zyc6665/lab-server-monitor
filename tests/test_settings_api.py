@@ -587,6 +587,45 @@ def test_new_write_apis_require_csrf(client):
         client.environ_base["HTTP_X_CSRF_TOKEN"] = token
 
 
+def test_csrf_failure_api_returns_readable_json(client):
+    token = client.environ_base.pop("HTTP_X_CSRF_TOKEN")
+    try:
+        resp = client.post(
+            "/api/settings/hosts/import",
+            json={"format": "csv", "content": CSV_SAMPLE},
+        )
+    finally:
+        client.environ_base["HTTP_X_CSRF_TOKEN"] = token
+    assert resp.status_code == 400
+    body = resp.get_json()
+    assert body["error"] == "csrf_failed"
+    assert "刷新" in body["message"]
+
+
+def test_csrf_failure_logout_still_logs_out(client):
+    # No token at all: logout must never leave the user on a bare 400 page.
+    resp = client.post("/logout", data={})
+    assert resp.status_code == 302
+    assert resp.headers["Location"].endswith("/login")
+    # Session was cleared, so the dashboard is no longer reachable.
+    assert client.get("/").status_code == 302
+
+
+
+def test_session_cookie_name_isolated_by_port(tmp_path):
+    from servermanage.web import create_app
+
+    cfg_path = tmp_path / "config.yaml"
+    cfg_path.write_text("servers: []\n", encoding="utf-8")
+    db = tmp_path / "c.db"
+    base = load_config_from_mapping({}, allow_empty_servers=True)
+    svc = SettingsService(config_path=cfg_path, db_path=db, base_config=base)
+    app = create_app(
+        config=svc.load(), db_path=db, settings_service=svc, session_cookie_suffix="8123"
+    )
+    assert app.config["SESSION_COOKIE_NAME"] == "servermonitor_session_8123"
+
+
 def test_test_batch_reports_each_host_without_leaking_secrets(client, monkeypatch):
     import servermanage.web.routes as routes
 

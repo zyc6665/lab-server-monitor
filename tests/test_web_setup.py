@@ -113,7 +113,7 @@ def test_api_returns_428_while_setup_required(tmp_path):
     assert resp.get_json() == {"error": "setup_required"}
 
 
-def test_logout_requires_csrf_once_service_wired(tmp_path):
+def test_logout_tolerates_expired_csrf_once_service_wired(tmp_path):
     client = _app(tmp_path).test_client()
     _do_setup(client)
     _do_login(client)
@@ -124,7 +124,8 @@ def test_logout_requires_csrf_once_service_wired(tmp_path):
     assert resp.headers["Location"].endswith("/login")
 
     _do_login(client)
-    assert client.post("/logout").status_code == 400
+    # An expired page token must not strand the user on a bare 400 screen.
+    assert client.post("/logout").status_code == 302
 
 
 def test_ack_accepts_csrf_header_once_service_wired(tmp_path):

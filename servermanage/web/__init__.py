@@ -30,6 +30,7 @@ def create_app(
     db_path: Path,
     settings_service=None,
     on_config_changed: Callable[[AppConfig], None] | None = None,
+    session_cookie_suffix: str | None = None,
 ) -> Flask:
     """Build the dashboard Flask app.
 
@@ -59,6 +60,16 @@ def create_app(
             "进程重启后登录会话将失效。"
         )
     app.secret_key = secret
+
+    # Isolate this dashboard's session cookie from other Flask apps (notably an
+    # older v1.2 instance or a second copy of the tool) running on the same
+    # host.  Cookies are scoped by host, not port, so without a distinct name an
+    # old session cookie makes every POST fail CSRF after an upgrade.
+    cookie_name = "servermonitor_session"
+    if session_cookie_suffix:
+        cookie_name = f"servermonitor_session_{session_cookie_suffix}"
+    app.config["SESSION_COOKIE_NAME"] = cookie_name
+    app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 
     lifetime_hours = config.dashboard.session_lifetime_hours or 12
     app.permanent_session_lifetime = timedelta(hours=lifetime_hours)
