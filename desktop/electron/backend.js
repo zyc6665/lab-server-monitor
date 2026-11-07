@@ -8,7 +8,7 @@ const { backendPath, configPath, dotenvPath, dataDir, logsDir } = require('./pat
 
 const DEFAULT_STARTUP_TIMEOUT_MS = 30000;
 const DEFAULT_POLL_INTERVAL_MS = 250;
-const DEFAULT_STOP_TIMEOUT_MS = 3000;
+const DEFAULT_STOP_TIMEOUT_MS = 7000;
 
 function isNonEmptyString(value) {
   return typeof value === 'string' && value.trim() !== '';
