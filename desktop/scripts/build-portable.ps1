@@ -1,4 +1,4 @@
-# ============================================================================
+﻿# ============================================================================
 # Build the desktop Electron app and assemble the portable Windows release zip.
 #
 # Usage (from anywhere):  powershell -NoProfile -File desktop/scripts/build-portable.ps1

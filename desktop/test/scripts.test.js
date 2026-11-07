@@ -131,3 +131,13 @@ test('verify-package.ps1 exits non-zero with a clear message on failure', () => 
   assertContains(verify, '$ErrorActionPreference', 'ErrorActionPreference');
   assert.match(verify, /throw|exit\s+1/i, 'non-zero exit on failure');
 });
+
+// ---------------------------------------------------------------------------
+// Encoding guard: Windows PowerShell 5.1 needs a UTF-8 BOM to read the
+// Chinese literals (launcher names, zip name) in build-portable.ps1.
+// ---------------------------------------------------------------------------
+
+test('build-portable.ps1 keeps its UTF-8 BOM', () => {
+  const buf = fs.readFileSync(path.join(scriptsDir, 'build-portable.ps1'));
+  assert.deepEqual([...buf.subarray(0, 3)], [0xef, 0xbb, 0xbf], 'build-portable.ps1 must start with UTF-8 BOM');
+});
