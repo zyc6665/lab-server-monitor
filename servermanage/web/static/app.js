@@ -12,6 +12,7 @@
   var lastAlerts = [];
   var alertSeverity = '';
   var alertKeyword = '';
+  var alertHost = '';
   var selectedAlertIds = {};
   var hostsLoaded = false;
   var hostSortKey = '';
@@ -907,6 +908,7 @@
     var keyword = (alertKeyword || '').trim().toLowerCase();
     return lastAlerts.filter(function (alert) {
       if (alertSeverity && (alert.severity || '') !== alertSeverity) { return false; }
+      if (alertHost && (alert.host_name || '') !== alertHost) { return false; }
       if (!keyword) { return true; }
       return [alert.host_name, alert.title, alert.message, alert.category]
         .filter(function (part) { return part; })
@@ -1271,6 +1273,7 @@
 
     var alertSearch = document.getElementById('alert-search');
     var alertSeverityFilter = document.getElementById('alert-severity-filter');
+    var alertHostFilter = document.getElementById('alert-host-filter');
     var alertExport = document.getElementById('alert-export');
     // 支持从命令面板/外部链接带 q、severity 参数进入告警页时直接带上筛选条件。
     if (alertSearch && alertSearch.value) {
@@ -1278,6 +1281,9 @@
     }
     if (alertSeverityFilter && alertSeverityFilter.value) {
       alertSeverity = alertSeverityFilter.value;
+    }
+    if (alertHostFilter && alertHostFilter.value) {
+      alertHost = alertHostFilter.value;
     }
     if (alertSearch) {
       alertSearch.addEventListener('input', function () {
@@ -1299,6 +1305,12 @@
     if (alertSeverityFilter) {
       alertSeverityFilter.addEventListener('change', function () {
         alertSeverity = alertSeverityFilter.value || '';
+        renderAlertRows();
+      });
+    }
+    if (alertHostFilter) {
+      alertHostFilter.addEventListener('change', function () {
+        alertHost = alertHostFilter.value || '';
         renderAlertRows();
       });
     }

@@ -83,13 +83,16 @@
       if (addedAlerts >= alertLimit) { return; }
       if (q && !alertMatches(alert, q)) { return; }
       var label = severityLabel(alert.severity);
+      var alertParams = [];
+      if (alert.host_name) { alertParams.push('host=' + encodeURIComponent(alert.host_name)); }
+      if (q) { alertParams.push('q=' + encodeURIComponent(q)); }
       next.push({
         type: 'alert',
         label: alert.title || alert.message || '告警',
         meta: [alert.host_name || '', label, alert.created_at || ''].filter(Boolean).join(' · '),
         severity: alert.severity || 'info',
         severityLabel: label,
-        href: '/alerts?q=' + encodeURIComponent(q || alert.host_name || '')
+        href: '/alerts' + (alertParams.length ? '?' + alertParams.join('&') : '')
       });
       addedAlerts += 1;
     });

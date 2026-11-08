@@ -22,6 +22,12 @@
       <option value="warning"{% if request.args.get('severity') == 'warning' %} selected{% endif %}>警告</option>
       <option value="info"{% if request.args.get('severity') == 'info' %} selected{% endif %}>提示</option>
     </select>
+    <select id="alert-host-filter" class="alert-severity-filter" aria-label="告警主机筛选">
+      <option value="">全部主机</option>
+      {% for host_name in hosts %}
+      <option value="{{ host_name }}"{% if request.args.get('host') == host_name %} selected{% endif %}>{{ host_name }}</option>
+      {% endfor %}
+    </select>
     <button type="button" class="btn-secondary" id="alert-export">导出 CSV</button>
     <button type="button" class="btn-secondary" id="alert-bulk-ack" disabled>批量确认</button>
   </div>

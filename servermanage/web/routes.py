@@ -2491,7 +2491,10 @@ def register_routes(app: Flask) -> None:
             resolve_timezone(config.app.timezone),
         )
         return render_template(
-            "alerts.html", active_page="alerts", alerts=alerts
+            "alerts.html",
+            active_page="alerts",
+            alerts=alerts,
+            hosts=[host.name for host in config.servers],
         )
 
     @app.get("/settings")
