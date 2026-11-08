@@ -360,22 +360,6 @@ def _merge_daily_summary(
         "SELECT * FROM host_daily_summary WHERE day = ? AND host_name = ? AND tz = ?",
         (day, host_name, tz_key),
     ).fetchone()
-    columns = [
-        "cpu_sum",
-        "cpu_max",
-        "cpu_min",
-        "memory_pct_sum",
-        "memory_pct_max",
-        "disk_pct_sum",
-        "disk_pct_max",
-        "gpu_util_sum",
-        "gpu_util_max",
-        "gpu_memory_pct_sum",
-        "gpu_memory_pct_max",
-        "load_sum",
-        "users_sum",
-        "processes_sum",
-    ]
     if existing is None:
         row = {
             "day": day,
@@ -386,9 +370,6 @@ def _merge_daily_summary(
             "success_count": 1,
             "updated_at": updated_at,
         }
-        for column in columns:
-            row[column] = values.get(column.removesuffix("_sum").removesuffix("_max"))
-        # Above name mapping is not one-to-one for max/min/sum; fill explicitly.
         row.update(
             {
                 "cpu_sum": values.get("cpu"),
