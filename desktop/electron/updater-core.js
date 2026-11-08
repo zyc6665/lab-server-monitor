@@ -48,9 +48,14 @@ function findAssets(release) {
     assets.find((asset) => /\.zip\.sha256$/i.test(String((asset && asset.name) || '')));
   return {
     name: zip.name,
-    url: zip.browser_download_url || zip.url,
+    // Prefer the GitHub API asset URL: the browser_download_url redirects to
+    // objects.githubusercontent.com, which is frequently blocked from mainland
+    // China, while api.github.com asset downloads work through the same host as
+    // release checks.
+    url: zip.url || zip.browser_download_url,
+    browserUrl: zip.browser_download_url || null,
     size: zip.size,
-    checksumUrl: sha ? sha.browser_download_url || sha.url : null,
+    checksumUrl: sha ? sha.url || sha.browser_download_url : null,
     checksumName: sha ? sha.name : null,
   };
 }
@@ -156,13 +161,27 @@ function createUpdaterCore(options = {}) {
     const downloadDir = pathImpl.join(updatesDir, 'download');
     fsImpl.mkdirSync(downloadDir, { recursive: true });
     const target = pathImpl.join(downloadDir, update.asset_name || `servermonitor-${update.version}.zip`);
-    const response = await fetchImpl(update.asset_url, { redirect: 'follow' });
+    const response = await fetchImpl(update.asset_url, {
+      redirect: 'follow',
+      headers: {
+        Accept: 'application/octet-stream',
+        'User-Agent': 'servermonitor-desktop-updater',
+      },
+      signal: AbortSignal.timeout(30 * 60 * 1000),
+    });
     if (!response.ok) throw new Error(`下载更新包失败: HTTP ${response.status}`);
     const bytes = Buffer.from(await response.arrayBuffer());
 
     let expected = null;
     if (update.checksum_url) {
-      const checksumResponse = await fetchImpl(update.checksum_url, { redirect: 'follow' });
+      const checksumResponse = await fetchImpl(update.checksum_url, {
+        redirect: 'follow',
+        headers: {
+          Accept: 'application/octet-stream',
+          'User-Agent': 'servermonitor-desktop-updater',
+        },
+        signal: AbortSignal.timeout(60 * 1000),
+      });
       if (checksumResponse.ok) {
         const text = await checksumResponse.text();
         const match = String(text).trim().match(/[a-fA-F0-9]{64}/);

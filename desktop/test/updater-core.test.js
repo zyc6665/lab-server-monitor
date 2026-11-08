@@ -62,6 +62,16 @@ test('findAssets requires a zip and prefers matching sha256', () => {
   assert.equal(assets.checksumUrl, 'https://example.test/v1.5.1.zip.sha256');
 });
 
+test('findAssets prefers GitHub API asset urls over browser download urls', () => {
+  const rel = release('1.5.1');
+  rel.assets[0].url = 'https://api.github.com/repos/zyc6665/lab-server-monitor/releases/assets/1';
+  rel.assets[1].url = 'https://api.github.com/repos/zyc6665/lab-server-monitor/releases/assets/2';
+  const assets = findAssets(rel);
+  assert.equal(assets.url, rel.assets[0].url);
+  assert.equal(assets.checksumUrl, rel.assets[1].url);
+  assert.equal(assets.browserUrl, rel.assets[0].browser_download_url);
+});
+
 test('checkForUpdate returns update-available and caches result', async () => {
   let calls = 0;
   const fetchImpl = async () => {
@@ -110,7 +120,8 @@ test('downloadAndVerify checks sha256 and writes the zip', async () => {
   const content = Buffer.from('fake-zip-bytes');
   const digest = crypto.createHash('sha256').update(content).digest('hex');
   const dir = tempDir();
-  const fetchImpl = async (url) => {
+  const fetchImpl = async (url, options = {}) => {
+    assert.equal(options.headers?.Accept, 'application/octet-stream');
     if (String(url).endsWith('.sha256')) {
       return {
         ok: true,
