@@ -789,6 +789,98 @@ def fetch_host_history(
     return points
 
 
+def fetch_overview_history(
+    db_path: Path,
+    *,
+    range_key: str = "24h",
+    tz: tzinfo = timezone.utc,
+    now: datetime | None = None,
+) -> list[dict[str, object]]:
+    """Return fleet-wide average chart points for the overview page."""
+    db_path = Path(db_path)
+    if not db_path.exists():
+        return []
+    if range_key not in ("24h", "7d", "30d"):
+        raise ValueError("range_key must be 24h, 7d or 30d")
+    current = now or datetime.now(timezone.utc)
+    if current.tzinfo is None:
+        current = current.replace(tzinfo=timezone.utc)
+
+    if range_key == "24h":
+        cutoff = (current - timedelta(hours=24)).astimezone(timezone.utc).isoformat()
+        with sqlite3.connect(db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            rows = conn.execute(
+                """
+                SELECT collected_at,
+                       AVG(cpu_usage_percent) AS cpu,
+                       AVG(CASE WHEN memory_total_mb > 0
+                                THEN memory_used_mb * 100.0 / memory_total_mb END) AS memory,
+                       AVG(disk_used_percent) AS disk,
+                       AVG(gpu_utilization_percent) AS gpu_util,
+                       AVG(CASE WHEN gpu_memory_total_mb > 0
+                                THEN gpu_memory_used_mb * 100.0 / gpu_memory_total_mb END) AS gpu_memory,
+                       AVG(load_1) AS load_1
+                  FROM host_metrics_history
+                 WHERE success = 1 AND collected_at >= ?
+                 GROUP BY collected_at
+                 ORDER BY collected_at ASC
+                """,
+                (cutoff,),
+            ).fetchall()
+        return [
+            {
+                "t": _parse_collected_at(row["collected_at"]).astimezone(tz).isoformat(),
+                "cpu": row["cpu"],
+                "memory": row["memory"],
+                "disk": row["disk"],
+                "gpu_util": row["gpu_util"],
+                "gpu_memory": row["gpu_memory"],
+                "load_1": row["load_1"],
+            }
+            for row in rows
+        ]
+
+    days = 7 if range_key == "7d" else 30
+    start_day = (current.astimezone(tz).date() - timedelta(days=days - 1)).isoformat()
+    with sqlite3.connect(db_path) as conn:
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute(
+            """
+            SELECT day,
+                   SUM(cpu_sum) AS cpu_sum,
+                   SUM(memory_pct_sum) AS memory_sum,
+                   SUM(disk_pct_sum) AS disk_sum,
+                   SUM(gpu_util_sum) AS gpu_util_sum,
+                   SUM(gpu_memory_pct_sum) AS gpu_memory_sum,
+                   SUM(load_sum) AS load_sum,
+                   SUM(sample_count) AS sample_count
+              FROM host_daily_summary
+             WHERE tz = ? AND day >= ?
+             GROUP BY day
+             ORDER BY day ASC
+            """,
+            (_tz_key(tz), start_day),
+        ).fetchall()
+    points = []
+    for row in rows:
+        count = int(row["sample_count"] or 0)
+        if count <= 0:
+            continue
+        points.append(
+            {
+                "t": str(row["day"]),
+                "cpu": (float(row["cpu_sum"]) / count) if row["cpu_sum"] is not None else None,
+                "memory": (float(row["memory_sum"]) / count) if row["memory_sum"] is not None else None,
+                "disk": (float(row["disk_sum"]) / count) if row["disk_sum"] is not None else None,
+                "gpu_util": (float(row["gpu_util_sum"]) / count) if row["gpu_util_sum"] is not None else None,
+                "gpu_memory": (float(row["gpu_memory_sum"]) / count) if row["gpu_memory_sum"] is not None else None,
+                "load_1": (float(row["load_sum"]) / count) if row["load_sum"] is not None else None,
+            }
+        )
+    return points
+
+
 def list_task_states(db_path: Path) -> list[dict[str, object]]:
     db_path = Path(db_path)
     if not db_path.exists():

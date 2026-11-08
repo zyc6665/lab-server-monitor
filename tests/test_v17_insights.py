@@ -114,6 +114,21 @@ def test_host_history_24h_returns_points(tmp_path: Path) -> None:
     assert "t" in point
 
 
+def test_overview_history_returns_fleet_average(tmp_path: Path) -> None:
+    client, _app, _db_path = _client(tmp_path)
+
+    response = client.get("/api/overview/history?range=24h")
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["range"] == "24h"
+    assert len(payload["points"]) == 1
+    point = payload["points"][0]
+    assert point["cpu"] == 12.5
+    assert point["memory"] == 25.0
+    assert client.get("/api/overview/history?range=99d").status_code == 400
+
+
 def test_host_history_7d_and_invalid(tmp_path: Path) -> None:
     client, _app, _db_path = _client(tmp_path)
 
@@ -129,7 +144,7 @@ def test_system_health_payload(tmp_path: Path) -> None:
 
     assert response.status_code == 200
     payload = response.get_json()
-    assert payload["version"] == "0.1.3"
+    assert payload["version"] == "0.1.4"
     assert payload["hosts_configured"] == 1
     assert payload["db_path"] == str(db_path)
     assert payload["db_size_bytes"] > 0

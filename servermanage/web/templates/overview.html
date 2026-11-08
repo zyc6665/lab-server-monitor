@@ -56,6 +56,24 @@
   <ul class="focus-list" id="focus-alert-list"></ul>
 </section>
 
+<section class="card" id="overview-trend">
+  <div class="section-head">
+    <h2>整体趋势</h2>
+    <div class="range-tabs" role="group" aria-label="整体趋势时间范围">
+      <button type="button" class="range-tab active" data-overview-range="24h">24 小时</button>
+      <button type="button" class="range-tab" data-overview-range="7d">7 天</button>
+      <button type="button" class="range-tab" data-overview-range="30d">30 天</button>
+    </div>
+  </div>
+  <div class="trend-grid overview-trend-grid">
+    <div class="trend-block"><h3>CPU 平均 <span class="trend-latest" data-overview-latest="cpu"></span></h3><svg viewBox="0 0 300 84" data-overview-trend="cpu" role="img" aria-label="整体 CPU 趋势"></svg></div>
+    <div class="trend-block"><h3>内存平均 <span class="trend-latest" data-overview-latest="memory"></span></h3><svg viewBox="0 0 300 84" data-overview-trend="memory" role="img" aria-label="整体内存趋势"></svg></div>
+    <div class="trend-block"><h3>磁盘平均 <span class="trend-latest" data-overview-latest="disk"></span></h3><svg viewBox="0 0 300 84" data-overview-trend="disk" role="img" aria-label="整体磁盘趋势"></svg></div>
+    <div class="trend-block"><h3>GPU 平均 <span class="trend-latest" data-overview-latest="gpu_util"></span></h3><svg viewBox="0 0 300 84" data-overview-trend="gpu_util" role="img" aria-label="整体 GPU 趋势"></svg></div>
+  </div>
+  <p class="empty" id="overview-trend-empty" hidden>暂无历史数据，等待采集后生成趋势。</p>
+</section>
+
 <section class="card filter-bar" id="host-filter">
   <label class="filter-field">分组
     <select id="filter-group">
