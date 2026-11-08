@@ -59,6 +59,11 @@ def test_alert_search_severity_and_csv_export_are_wired(tmp_path):
     assert "alertKeyword" in js
     assert "alertSeverity" in js
 
+    assert 'id="alert-select-all"' in html
+    assert 'id="alert-bulk-ack"' in html
+    assert "bulkAckSelected" in js
+    assert "selectedAlertIds" in js
+
 
 def test_alert_silence_dialog_and_js_are_wired(tmp_path):
     client, _ = _client(tmp_path)

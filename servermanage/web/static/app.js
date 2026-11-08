@@ -12,6 +12,7 @@
   var lastAlerts = [];
   var alertSeverity = '';
   var alertKeyword = '';
+  var selectedAlertIds = {};
   var hostsLoaded = false;
   var hostSortKey = '';
   var hostSortDir = 1;
@@ -408,6 +409,18 @@
     var tr = document.createElement('tr');
     if (alert.id != null) { tr.setAttribute('data-alert-row', alert.id); }
 
+    var checkCell = document.createElement('td');
+    checkCell.className = 'check-col';
+    if (alert.status === 'active' && alert.id != null) {
+      var checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      checkbox.className = 'alert-select';
+      checkbox.setAttribute('data-alert-id', alert.id);
+      checkbox.checked = Boolean(selectedAlertIds[alert.id]);
+      checkCell.appendChild(checkbox);
+    }
+    tr.appendChild(checkCell);
+
     var severityCell = document.createElement('td');
     var severity = document.createElement('span');
     severity.className = 'severity severity-' + (alert.severity || 'info');
@@ -518,13 +531,74 @@
       'alert-count',
       '共 ' + lastAlerts.length + ' 条' + (visible.length !== lastAlerts.length ? '（显示 ' + visible.length + ' 条）' : '')
     );
+    updateAlertSelectionSummary();
   }
 
   function updateAlerts(alerts) {
     if (!Array.isArray(alerts)) { return; }
     updateFocusAlerts(alerts);
     lastAlerts = alerts;
+    var activeIds = {};
+    alerts.forEach(function (alert) {
+      if (alert && alert.status === 'active' && alert.id != null) { activeIds[alert.id] = true; }
+    });
+    Object.keys(selectedAlertIds).forEach(function (alertId) {
+      if (!activeIds[alertId]) { delete selectedAlertIds[alertId]; }
+    });
     renderAlertRows();
+  }
+
+  function updateAlertSelectionSummary() {
+    var count = Object.keys(selectedAlertIds).length;
+    var button = document.getElementById('alert-bulk-ack');
+    if (button) {
+      button.disabled = count === 0;
+      button.textContent = count ? '批量确认 (' + count + ')' : '批量确认';
+    }
+    var selectAll = document.getElementById('alert-select-all');
+    if (selectAll) {
+      var boxes = document.querySelectorAll('.alert-select');
+      selectAll.checked = boxes.length > 0 && count === boxes.length;
+      selectAll.indeterminate = count > 0 && count < boxes.length;
+    }
+  }
+
+  function setAlertSelected(checkbox) {
+    var alertId = checkbox.getAttribute('data-alert-id');
+    if (!alertId) { return; }
+    if (checkbox.checked) { selectedAlertIds[alertId] = true; }
+    else { delete selectedAlertIds[alertId]; }
+    updateAlertSelectionSummary();
+  }
+
+  function setAllAlertsSelected(checked) {
+    selectedAlertIds = {};
+    var boxes = document.querySelectorAll('.alert-select');
+    Array.prototype.forEach.call(boxes, function (box) {
+      box.checked = checked;
+      if (checked) {
+        var alertId = box.getAttribute('data-alert-id');
+        if (alertId) { selectedAlertIds[alertId] = true; }
+      }
+    });
+    updateAlertSelectionSummary();
+  }
+
+  function bulkAckSelected() {
+    var ids = Object.keys(selectedAlertIds);
+    if (!ids.length) { return; }
+    var button = document.getElementById('alert-bulk-ack');
+    if (button) { button.disabled = true; }
+    Promise.all(ids.map(function (alertId) {
+      return fetchJson('/api/alerts/' + encodeURIComponent(alertId) + '/ack', { method: 'POST' });
+    })).then(function () {
+      selectedAlertIds = {};
+      showToast('已确认 ' + ids.length + ' 条告警', 'success');
+      return refreshAlerts();
+    }).catch(function () {
+      showToast('批量确认失败，请重试', 'error');
+      if (button) { button.disabled = false; }
+    });
   }
 
   function exportAlertsCsv() {
@@ -731,6 +805,17 @@
         renderAlertRows();
       });
     }
+    document.addEventListener('change', function (event) {
+      var target = event.target;
+      if (!target) { return; }
+      if (target.classList && target.classList.contains('alert-select')) {
+        setAlertSelected(target);
+      } else if (target.id === 'alert-select-all') {
+        setAllAlertsSelected(Boolean(target.checked));
+      }
+    });
+    var bulkAck = document.getElementById('alert-bulk-ack');
+    if (bulkAck) { bulkAck.addEventListener('click', bulkAckSelected); }
     if (alertSeverityFilter) {
       alertSeverityFilter.addEventListener('change', function () {
         alertSeverity = alertSeverityFilter.value || '';

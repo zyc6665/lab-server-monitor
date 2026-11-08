@@ -23,6 +23,7 @@
       <option value="info">提示</option>
     </select>
     <button type="button" class="btn-secondary" id="alert-export">导出 CSV</button>
+    <button type="button" class="btn-secondary" id="alert-bulk-ack" disabled>批量确认</button>
   </div>
   <p class="muted" id="alert-count">共 {{ alerts|length }} 条</p>
   <p class="empty" id="alerts-empty"{% if alerts %} hidden{% endif %}>暂无数据</p>
@@ -30,6 +31,7 @@
     <table class="data-table" id="alerts-table"{% if not alerts %} hidden{% endif %}>
       <thead>
         <tr>
+          <th class="check-col"><input type="checkbox" id="alert-select-all" aria-label="全选活动告警"></th>
           <th>级别</th>
           <th>类别</th>
           <th>主机</th>
@@ -43,6 +45,11 @@
       <tbody id="alerts-body">
         {% for alert in alerts %}
         <tr data-alert-row="{{ alert.id }}">
+          <td class="check-col">
+            {% if alert.status == 'active' %}
+            <input type="checkbox" class="alert-select" data-alert-id="{{ alert.id }}" aria-label="选择告警">
+            {% endif %}
+          </td>
           <td><span class="severity severity-{{ alert.severity }}">{{ alert.severity }}</span></td>
           <td>{{ alert.category }}</td>
           <td>{{ alert.host_name }}</td>

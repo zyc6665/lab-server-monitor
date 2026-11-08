@@ -604,6 +604,7 @@ a:hover { text-decoration: underline; }
 .btn-link:hover { background: var(--accent-soft); border-color: var(--accent); text-decoration: none; }
 
 /* Alerts status filter tabs. */
+.check-col { width: 34px; text-align: center; }
 .alert-toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 10px 0 6px; }
 .alert-search { min-width: 240px; flex: 1 1 260px; }
 .alert-severity-filter { flex: 0 0 auto; }
