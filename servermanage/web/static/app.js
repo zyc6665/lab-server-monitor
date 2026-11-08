@@ -379,8 +379,39 @@
     return tr;
   }
 
+  function updateFocusAlerts(alerts) {
+    var list = document.getElementById('focus-alert-list');
+    if (!list) { return; }
+    var visible = alerts.slice(0, 5);
+    while (list.firstChild) { list.removeChild(list.firstChild); }
+    for (var i = 0; i < visible.length; i += 1) {
+      var alert = visible[i] || {};
+      var item = document.createElement('li');
+      item.className = 'focus-item';
+      var dot = document.createElement('span');
+      dot.className = 'focus-dot focus-' + (alert.severity || 'info');
+      item.appendChild(dot);
+      var content = document.createElement('div');
+      content.className = 'focus-content';
+      var title = document.createElement('div');
+      title.className = 'focus-title';
+      title.textContent = alert.title || alert.category || '告警';
+      content.appendChild(title);
+      var meta = document.createElement('div');
+      meta.className = 'focus-meta';
+      meta.textContent = [alert.host_name, alert.message, alert.created_at]
+        .filter(function (part) { return part; }).join(' · ');
+      content.appendChild(meta);
+      item.appendChild(content);
+      list.appendChild(item);
+    }
+    var empty = document.getElementById('focus-empty');
+    if (empty) { empty.hidden = visible.length > 0; }
+  }
+
   function updateAlerts(alerts) {
     if (!Array.isArray(alerts)) { return; }
+    updateFocusAlerts(alerts);
     var body = document.getElementById('alerts-body');
     var table = document.getElementById('alerts-table');
     var empty = document.getElementById('alerts-empty');

@@ -28,6 +28,52 @@
   </div>
 </div>
 
+{% set mem = metrics.memory %}
+{% set ns = namespace(root_disk=None, gpu=None) %}
+{% for row in metrics.disk_usage or [] %}
+  {% if row.mountpoint == '/' %}{% set ns.root_disk = row.percent %}{% endif %}
+{% endfor %}
+{% for gpu in metrics.gpu_summary or [] %}
+  {% if loop.first %}{% set ns.gpu = gpu.utilization_percent %}{% endif %}
+{% endfor %}
+<section class="stat-grid host-stat-grid" aria-label="主机摘要">
+  <article class="card stat-card {% if detail.success %}stat-card-online{% elif detail.success is none %}stat-card-total{% else %}stat-card-offline{% endif %}">
+    <div class="stat-body">
+      <div class="stat-label">采集状态</div>
+      <div class="stat-value stat-value-text">{% if detail.success %}正常{% elif detail.success is none %}等待采集{% else %}异常{% endif %}</div>
+      <div class="stat-foot mono">{{ detail.collected_at or '—' }}</div>
+    </div>
+  </article>
+  <article class="card stat-card stat-card-total">
+    <div class="stat-body">
+      <div class="stat-label">CPU 使用率</div>
+      <div class="stat-value">{{ pct(metrics.cpu_usage_percent) }}</div>
+      <div class="stat-foot">{{ metrics.cpu_core_count or '—' }} 核心</div>
+    </div>
+  </article>
+  <article class="card stat-card stat-card-total">
+    <div class="stat-body">
+      <div class="stat-label">内存使用率</div>
+      <div class="stat-value">{% if mem and mem.total_mb %}{{ '%.1f'|format(mem.used_mb / mem.total_mb * 100) }}%{% else %}—{% endif %}</div>
+      <div class="stat-foot">{% if mem %}{{ mem.used_mb }} / {{ mem.total_mb }} MB{% else %}—{% endif %}</div>
+    </div>
+  </article>
+  <article class="card stat-card stat-card-total">
+    <div class="stat-body">
+      <div class="stat-label">根目录磁盘</div>
+      <div class="stat-value">{{ pct(ns.root_disk) }}</div>
+      <div class="stat-foot">GPU 利用率 {{ pct(ns.gpu) }}</div>
+    </div>
+  </article>
+</section>
+
+<nav class="host-subnav" aria-label="主机页面导航">
+  <a href="#host-actions">诊断与操作</a>
+  <a href="#host-trend">历史趋势</a>
+  <a href="#logged-in-users">登录用户</a>
+  <a href="#disk-array">磁盘阵列</a>
+</nav>
+
 <section class="card" id="host-actions">
   <div class="section-head">
     <h2>诊断与操作</h2>

@@ -129,3 +129,51 @@ def test_v16_retention_fields_and_collection_status_ui(tmp_path):
     assert response.get_json()["statuses"]["new-host"]["state"] == "done"
 
 
+def test_v19_theme_and_overview_focus_panel(tmp_path):
+    client = _logged_in_client(tmp_path)
+    overview = client.get("/").get_data(as_text=True)
+    assert 'id="theme-toggle"' in overview
+    assert 'id="focus-alert-list"' in overview
+    assert "重点关注" in overview
+    assert "theme.js" in overview
+    assert "v0.1.3 桌面客户端" in overview
+
+    theme_js = client.get("/static/theme.js").get_data(as_text=True)
+    assert "servermonitor-theme" in theme_js
+    assert "data-theme" in theme_js
+
+    css = client.get("/static/style.css").get_data(as_text=True)
+    assert 'html[data-theme="dark"]' in css
+    assert ".host-subnav" in css
+
+
+def test_v19_host_summary_cards_and_subnav(tmp_path):
+    client = _logged_in_client(tmp_path)
+    settings = client.get("/settings").get_data(as_text=True)
+    token = re.search(r'data-csrf="([^"]+)"', settings).group(1)
+    response = client.put(
+        "/api/settings/hosts/new-host",
+        json={
+            "name": "new-host",
+            "host": "10.0.0.9",
+            "port": 22,
+            "username": "tester",
+            "auth_type": "password",
+            "password": "secret",
+            "disk_mounts": ["/", "/data"],
+            "group": "实验室",
+            "owner": "张三",
+            "tags": [],
+        },
+        headers={"X-CSRF-Token": token},
+    )
+    assert response.status_code in (200, 201)
+
+    html = client.get("/host/new-host").get_data(as_text=True)
+    assert 'class="stat-grid host-stat-grid"' in html
+    assert 'class="host-subnav"' in html
+    assert "采集状态" in html
+    assert "CPU 使用率" in html
+    assert "根目录磁盘" in html
+
+

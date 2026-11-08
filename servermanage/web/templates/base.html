@@ -6,6 +6,7 @@
   <meta name="csrf-token" content="{{ csrf_token() }}">
   <title>{% block title %}服务器监控{% endblock %}</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <script src="{{ url_for('static', filename='theme.js') }}"></script>
   {% block head %}{% endblock %}
 </head>
 <body>
@@ -64,7 +65,7 @@
         </a>
       </nav>
       <div class="sidebar-footer">
-        <span class="sidebar-version">v1.4.1 桌面客户端</span>
+        <span class="sidebar-version">v{{ app_version }} 桌面客户端</span>
       </div>
     </aside>
     {% endif %}
@@ -76,6 +77,10 @@
           <span class="topbar-title">{{ page_titles.get(active_page, '概览') }}</span>
         </div>
         <div class="topbar-status">
+          <button type="button" class="theme-toggle" id="theme-toggle" title="切换深色/浅色主题" aria-label="切换深色/浅色主题">
+            <svg class="theme-icon theme-icon-moon" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+            <svg class="theme-icon theme-icon-sun" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
+          </button>
           <span class="conn-status"><span class="conn-dot" aria-hidden="true"></span>已连接</span>
           <span class="topbar-meta">数据每 30 秒自动刷新</span>
           {% if session.get('username') %}

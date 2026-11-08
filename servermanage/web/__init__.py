@@ -16,6 +16,7 @@ from typing import Callable
 
 from flask import Flask
 
+from servermanage import __version__ as APP_VERSION
 from servermanage.models import AppConfig
 from servermanage.web.routes import register_routes
 
@@ -90,6 +91,10 @@ def create_app(
     app.config["ON_CONFIG_CHANGED"] = on_config_changed
     app.config["ON_HOSTS_IMPORTED"] = on_hosts_imported
     app.config["COLLECTION_STATUS_PROVIDER"] = collection_status_provider
+
+    @app.context_processor
+    def _inject_app_meta():
+        return {"app_version": APP_VERSION}
 
     register_routes(app)
     return app

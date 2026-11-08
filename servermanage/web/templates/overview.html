@@ -47,6 +47,15 @@
   </article>
 </section>
 
+<section class="card focus-card" id="focus-card">
+  <div class="section-head">
+    <h2>重点关注</h2>
+    <a class="muted" href="{{ url_for('alerts_page') }}">查看全部告警 →</a>
+  </div>
+  <p class="empty focus-empty" id="focus-empty">当前没有活动告警</p>
+  <ul class="focus-list" id="focus-alert-list"></ul>
+</section>
+
 <section class="card filter-bar" id="host-filter">
   <label class="filter-field">分组
     <select id="filter-group">
