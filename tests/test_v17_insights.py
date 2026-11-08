@@ -189,7 +189,7 @@ def test_system_health_payload(tmp_path: Path) -> None:
 
     assert response.status_code == 200
     payload = response.get_json()
-    assert payload["version"] == "0.1.12"
+    assert payload["version"] == "0.1.13"
     assert payload["hosts_configured"] == 1
     assert payload["db_path"] == str(db_path)
     assert payload["db_size_bytes"] > 0
@@ -294,6 +294,33 @@ def test_saved_host_collect_without_callback_is_conflict(tmp_path: Path) -> None
     response = client.post(f"/api/settings/hosts/{HOST_NAME}/collect")
 
     assert response.status_code == 409
+
+
+def test_saved_hosts_batch_collect_queues_known_names(tmp_path: Path) -> None:
+    client, app, _db_path = _client(tmp_path)
+    calls: list[list[str]] = []
+    app.config["ON_HOSTS_IMPORTED"] = lambda names: calls.append(list(names))
+
+    response = client.post(
+        "/api/settings/hosts/collect",
+        json={"names": [HOST_NAME, "missing-host"]},
+    )
+
+    assert response.status_code == 200
+    assert response.get_json() == {"ok": True, "count": 1}
+    assert calls == [[HOST_NAME]]
+
+
+def test_saved_hosts_batch_collect_without_body_queues_all(tmp_path: Path) -> None:
+    client, app, _db_path = _client(tmp_path)
+    calls: list[list[str]] = []
+    app.config["ON_HOSTS_IMPORTED"] = lambda names: calls.append(list(names))
+
+    response = client.post("/api/settings/hosts/collect")
+
+    assert response.status_code == 200
+    assert response.get_json() == {"ok": True, "count": 1}
+    assert calls == [[HOST_NAME]]
 
 
 def test_host_detail_renders_diagnostics_and_trend(tmp_path: Path) -> None:

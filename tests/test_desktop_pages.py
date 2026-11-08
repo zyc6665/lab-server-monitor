@@ -223,6 +223,8 @@ def test_host_rows_have_quick_collect_and_percent_meters(client):
         assert 'class="pct-meter"' in html
         assert 'class="pct-meter-fill"' in html
         assert 'class="pct-value"' in html
+        assert 'id="collect-abnormal-hosts"' in html
+        assert 'id="collect-all-hosts"' in html
 
 
 def test_overview_keeps_filter_bar_and_host_columns(client):
@@ -281,7 +283,12 @@ def test_app_js_keeps_terminal_and_filter_logic():
     assert "30000" in source or "REFRESH_MS" in source
     assert "function percentCell" in source
     assert "function collectHost" in source
+    assert "function collectAllHosts" in source
+    assert "function collectAbnormalHosts" in source
+    assert "function collectHosts" in source
     assert "pollHostCollection" in source
+    assert "pollHostsCollection" in source
+    assert "/api/settings/hosts/collect" in source
     assert "/api/settings/hosts/" in source
 
 

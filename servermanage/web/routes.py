@@ -1881,6 +1881,42 @@ def register_routes(app: Flask) -> None:
             return jsonify({"error": "collection_failed"}), 500
         return jsonify({"ok": True})
 
+    @app.post("/api/settings/hosts/collect")
+    def api_collect_saved_hosts():
+        """Queue an immediate collection for several saved hosts.
+
+        The browser sends ``{"names": [...]}``; an empty or omitted list means
+        every saved host. Unknown names are ignored instead of failing the
+        whole batch.
+        """
+        config = _config(app)
+        saved_names = [host.name for host in config.servers]
+        payload = request.get_json(silent=True)
+        if payload is None:
+            selected = saved_names
+        elif not isinstance(payload, dict):
+            return jsonify({"error": "invalid_payload"}), 400
+        else:
+            raw_names = payload.get("names")
+            if raw_names is None:
+                selected = saved_names
+            elif not isinstance(raw_names, list):
+                return jsonify({"error": "invalid_payload"}), 400
+            else:
+                wanted = {str(name) for name in raw_names}
+                selected = [name for name in saved_names if name in wanted]
+        if not selected:
+            return jsonify({"ok": True, "count": 0})
+        callback = app.config.get("ON_HOSTS_IMPORTED")
+        if callback is None:
+            return jsonify({"error": "collection_unavailable"}), 409
+        try:
+            callback(selected)
+        except Exception:  # noqa: BLE001 - surface a stable error
+            LOGGER.exception("batch collection failed for %s", selected)
+            return jsonify({"error": "collection_failed"}), 500
+        return jsonify({"ok": True, "count": len(selected)})
+
     @app.post("/api/settings/hosts/<name>/copy")
     def api_copy_host(name: str):
         service, error = _settings_or_404(app)

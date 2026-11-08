@@ -560,6 +560,106 @@
     tick();
   }
 
+  function hostIsAbnormal(host) {
+    if (!host || host.online === false) { return true; }
+    if (Number(host.active_alert_count || 0) > 0) { return true; }
+    var diskStatus = String((host.disk_health && host.disk_health.status) || '').toLowerCase();
+    return diskStatus === 'warning' || diskStatus === 'critical';
+  }
+
+  function collectAllHosts(button) {
+    var names = lastHosts.map(function (host) { return host && host.name; }).filter(Boolean);
+    if (!names.length) {
+      showToast('暂无可采集的主机', 'info');
+      return;
+    }
+    collectHosts(names, button);
+  }
+
+  function collectAbnormalHosts(button) {
+    var names = lastHosts
+      .filter(hostIsAbnormal)
+      .map(function (host) { return host && host.name; })
+      .filter(Boolean);
+    if (!names.length) {
+      showToast('没有异常主机需要采集', 'info');
+      return;
+    }
+    collectHosts(names, button);
+  }
+
+  function collectHosts(names, button) {
+    if (!names || !names.length || !button || button.disabled) { return; }
+    var original = button.textContent || '采集';
+    button.disabled = true;
+    button.textContent = '采集中…';
+    fetchJson('/api/settings/hosts/collect', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ names: names })
+    }).then(function (payload) {
+      if (!payload || !payload.ok) {
+        throw new Error('collect failed');
+      }
+      if (!payload.count) {
+        button.disabled = false;
+        button.textContent = original;
+        showToast('没有匹配的主机', 'info');
+        return;
+      }
+      showToast('已提交采集：' + payload.count + ' 台', 'success');
+      pollHostsCollection(names, button, original);
+    }).catch(function () {
+      button.disabled = false;
+      button.textContent = original;
+      showToast('批量采集提交失败', 'error');
+    });
+  }
+
+  function pollHostsCollection(names, button, original) {
+    var deadline = Date.now() + 90000;
+    var url = '/api/settings/hosts/collection-status?names=' + encodeURIComponent(names.join(','));
+    function restore() {
+      button.disabled = false;
+      button.textContent = original;
+    }
+    function tick() {
+      fetchJson(url).then(function (payload) {
+        var statuses = (payload && payload.statuses) || {};
+        var pending = names.filter(function (name) {
+          var state = statuses[name] && statuses[name].state;
+          return state !== 'done' && state !== 'error';
+        });
+        if (!pending.length) {
+          var failed = names.filter(function (name) {
+            return statuses[name] && statuses[name].state === 'error';
+          });
+          restore();
+          if (failed.length) {
+            showToast('采集完成，失败 ' + failed.length + ' 台', 'error');
+          } else {
+            showToast('采集完成：' + names.length + ' 台', 'success');
+          }
+          refreshOverview().catch(function () {});
+          return;
+        }
+        if (Date.now() < deadline) {
+          window.setTimeout(tick, 1500);
+        } else {
+          restore();
+          showToast('采集仍在后台进行：' + pending.length + ' 台', 'info');
+        }
+      }).catch(function () {
+        if (Date.now() < deadline) {
+          window.setTimeout(tick, 2000);
+        } else {
+          restore();
+        }
+      });
+    }
+    tick();
+  }
+
   function setHostSort(key) {
     if (!key) { return; }
     if (hostSortKey === key) {
@@ -1003,6 +1103,19 @@
     if (statusFilter) { statusFilter.addEventListener('change', applyHostFilters); }
     if (keywordFilter) { keywordFilter.addEventListener('input', applyHostFilters); }
     applyHostFilters();
+
+    var collectAllButton = document.getElementById('collect-all-hosts');
+    var collectAbnormalButton = document.getElementById('collect-abnormal-hosts');
+    if (collectAllButton) {
+      collectAllButton.addEventListener('click', function () {
+        collectAllHosts(collectAllButton);
+      });
+    }
+    if (collectAbnormalButton) {
+      collectAbnormalButton.addEventListener('click', function () {
+        collectAbnormalHosts(collectAbnormalButton);
+      });
+    }
 
     // 告警页状态筛选（活动 / 全部）：切换后按状态重新拉取。
     var alertFilterBar = document.getElementById('alert-status-filter');

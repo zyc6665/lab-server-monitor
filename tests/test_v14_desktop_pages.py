@@ -145,7 +145,7 @@ def test_v19_theme_and_overview_focus_panel(tmp_path):
     assert 'id="alert-trend"' in overview
     assert 'data-alert-trend' in overview
     assert "theme.js" in overview
-    assert "v0.1.12 桌面客户端" in overview
+    assert "v0.1.13 桌面客户端" in overview
 
     app_js = client.get("/static/app.js").get_data(as_text=True)
     assert "bindAlertRanges" in app_js
@@ -160,6 +160,7 @@ def test_v19_theme_and_overview_focus_panel(tmp_path):
     assert ".host-subnav" in css
     assert ".pct-meter" in css
     assert ".host-actions" in css
+    assert ".host-bulk-actions" in css
 
 
 def test_v19_host_summary_cards_and_subnav(tmp_path):

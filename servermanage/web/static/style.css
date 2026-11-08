@@ -587,6 +587,15 @@ a:hover { text-decoration: underline; }
 }
 .button-link:hover { text-decoration: none; }
 
+/* 主机列表批量采集按钮组 */
+.host-bulk-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
 /* Table row operation links (overview 终端/采集 column). */
 .host-actions {
   display: flex;
