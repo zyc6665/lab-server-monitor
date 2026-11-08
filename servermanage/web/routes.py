@@ -985,13 +985,19 @@ def _report_number(value: Any) -> float | None:
         return None
 
 
-def _build_host_report(detail: dict[str, Any], generated_at: datetime) -> str:
+def _build_host_report(
+    detail: dict[str, Any],
+    generated_at: datetime,
+    *,
+    include_heading: bool = True,
+) -> str:
     """Render a plain-text diagnostic report for one host snapshot."""
     metrics = detail.get("metrics") or {}
     lines: list[str] = []
-    lines.append("服务器轮询监测 · 主机诊断报告")
-    lines.append("=" * 46)
-    lines.append(f"生成时间：{generated_at.strftime('%Y-%m-%d %H:%M:%S %Z')}")
+    if include_heading:
+        lines.append("服务器轮询监测 · 主机诊断报告")
+        lines.append("=" * 46)
+        lines.append(f"生成时间：{generated_at.strftime('%Y-%m-%d %H:%M:%S %Z')}")
     lines.append(f"主机名称：{detail.get('name') or '—'}")
     lines.append(f"主机地址：{detail.get('host') or '—'}")
     lines.append(f"分组：{detail.get('group') or '未分组'}")
@@ -1172,6 +1178,98 @@ def _report_filename(name: str, generated_at: datetime) -> str:
         for char in name
     ).strip("_") or "host"
     return f"host-report-{safe}-{generated_at.strftime('%Y%m%d-%H%M%S')}.txt"
+
+
+def _fleet_report_filename(generated_at: datetime) -> str:
+    return f"fleet-report-{generated_at.strftime('%Y%m%d-%H%M%S')}.txt"
+
+
+def _build_fleet_report(config: Any, db_path: Path, generated_at: datetime) -> str:
+    """Render one plain-text inspection report covering every configured host.
+
+    The report opens with a fleet-wide summary and per-host one-line snapshot,
+    then appends the detailed diagnostic report for each host.  It is meant to
+    be saved or mailed as a point-in-time handover/check-up artifact.
+    """
+    details: list[dict[str, Any]] = []
+    for server in config.servers:
+        detail = _build_host_detail(server.name, config, db_path)
+        if detail is not None:
+            details.append(detail)
+    total = len(details)
+    succeeded = sum(1 for detail in details if detail.get("success") is True)
+    failed = sum(1 for detail in details if detail.get("success") is False)
+    waiting = total - succeeded - failed
+    active_alerts = sum(
+        1
+        for detail in details
+        for alert in (detail.get("alerts") or [])
+        if alert.get("status") == "active"
+    )
+    disk_attention = sum(
+        1
+        for detail in details
+        if str((detail.get("disk") or {}).get("status") or "").lower()
+        not in ("", "ok", "healthy")
+    )
+
+    lines: list[str] = [
+        "服务器轮询监测 · 全网巡检报告",
+        "=" * 50,
+        f"生成时间：{generated_at.strftime('%Y-%m-%d %H:%M:%S %Z')}",
+        f"主机总数：{total}",
+        f"采集成功：{succeeded}",
+        f"采集失败：{failed}",
+        f"等待首次采集：{waiting}",
+        f"活动告警：{active_alerts}",
+        f"磁盘阵列异常：{disk_attention}",
+        "",
+        "[主机摘要]",
+    ]
+    if not details:
+        lines.append("  （未配置主机）")
+    for detail in details:
+        metrics = detail.get("metrics") or {}
+        cpu = _report_number(metrics.get("cpu_usage_percent"))
+        memory = metrics.get("memory") or {}
+        total_mb = _report_number(memory.get("total_mb"))
+        used_mb = _report_number(memory.get("used_mb"))
+        mem_percent = (
+            used_mb / total_mb * 100 if total_mb and used_mb is not None else None
+        )
+        root_percent = None
+        for row in metrics.get("disk_usage") or []:
+            if str(row.get("mountpoint") or "") == "/":
+                root_percent = _report_number(row.get("percent"))
+                break
+        success = detail.get("success")
+        status_text = "成功" if success is True else ("失败" if success is False else "等待采集")
+        host_alerts = sum(
+            1 for alert in (detail.get("alerts") or []) if alert.get("status") == "active"
+        )
+        lines.append(
+            "  {} | {} | {} | 状态 {} | CPU {} | 内存 {} | 根目录 {} | 活动告警 {}".format(
+                detail.get("name") or "—",
+                detail.get("host") or "—",
+                detail.get("group") or "未分组",
+                status_text,
+                f"{cpu:.1f}%" if cpu is not None else "—",
+                f"{mem_percent:.1f}%" if mem_percent is not None else "—",
+                f"{root_percent:.1f}%" if root_percent is not None else "—",
+                host_alerts,
+            )
+        )
+    lines.append("")
+    for index, detail in enumerate(details, 1):
+        lines.append("-" * 60)
+        lines.append(f"【主机 {index}/{total}】{detail.get('name') or '—'}")
+        lines.append("-" * 60)
+        lines.append(
+            _build_host_report(detail, generated_at, include_heading=False).rstrip()
+        )
+        lines.append("")
+    lines.append("（报告由服务器轮询监测工具自动生成）")
+    return "\n".join(lines) + "\n"
 
 
 def register_routes(app: Flask) -> None:
@@ -1562,6 +1660,21 @@ def register_routes(app: Flask) -> None:
             headers={
                 "Content-Disposition": (
                     f'attachment; filename="{_report_filename(name, generated_at)}"'
+                )
+            },
+        )
+
+    @app.get("/api/overview/report")
+    def api_overview_report():
+        config = _config(app)
+        generated_at = datetime.now(resolve_timezone(config.app.timezone))
+        text = _build_fleet_report(config, _db_path(app), generated_at)
+        return Response(
+            "﻿" + text,
+            mimetype="text/plain",
+            headers={
+                "Content-Disposition": (
+                    f'attachment; filename="{_fleet_report_filename(generated_at)}"'
                 )
             },
         )

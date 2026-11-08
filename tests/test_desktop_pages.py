@@ -236,6 +236,8 @@ def test_host_rows_have_quick_collect_and_percent_meters(client):
         assert 'class="pct-value"' in html
         assert 'id="collect-abnormal-hosts"' in html
         assert 'id="collect-all-hosts"' in html
+        assert 'id="export-fleet-report"' in html
+        assert "巡检报告" in html
         assert 'id="export-hosts"' in html
         assert "导出 CSV" in html
 
@@ -311,6 +313,28 @@ def test_host_report_download_contains_diagnostics(client):
     assert "磁盘阵列状态为 warning" in text
     assert "[最近告警]" in text
     assert "CPU 使用率过高" in text
+
+
+def test_fleet_report_download_contains_summary_and_hosts(client):
+    response = client.get("/api/overview/report")
+    assert response.status_code == 200
+    disposition = response.headers.get("Content-Disposition", "")
+    assert "attachment" in disposition
+    assert "fleet-report-" in disposition
+    assert disposition.endswith('.txt"') or disposition.endswith(".txt")
+    text = response.get_data(as_text=True)
+    assert text.startswith("﻿")
+    assert "服务器轮询监测 · 全网巡检报告" in text
+    assert "主机总数：1" in text
+    assert "采集成功：1" in text
+    assert "活动告警：1" in text
+    assert "磁盘阵列异常：1" in text
+    assert "[主机摘要]" in text
+    assert f"{HOST_NAME} | {HOST_ADDRESS} | GPU | 状态 成功" in text
+    assert f"【主机 1/1】{HOST_NAME}" in text
+    assert "CPU 使用率：42.5%" in text
+    assert "CPU 使用率过高" in text
+    assert "报告由服务器轮询监测工具自动生成" in text
 
 
 def test_static_assets_are_versioned(client):
