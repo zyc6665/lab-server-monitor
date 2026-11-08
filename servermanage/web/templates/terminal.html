@@ -1,8 +1,8 @@
 {% extends "base.html" %}
 {% block title %}终端 - 服务器监控{% endblock %}
 {% block head %}
-<link rel="stylesheet" href="{{ url_for('static', filename='vendor/xterm/xterm.css') }}">
-<link rel="stylesheet" href="{{ url_for('static', filename='terminal.css') }}">
+<link rel="stylesheet" href="{{ asset_url('vendor/xterm/xterm.css') }}">
+<link rel="stylesheet" href="{{ asset_url('terminal.css') }}">
 {% endblock %}
 {% block content %}
 <div class="page-head">
@@ -40,7 +40,7 @@
 </script>
 {% endblock %}
 {% block scripts %}
-<script src="{{ url_for('static', filename='vendor/xterm/xterm.js') }}"></script>
-<script src="{{ url_for('static', filename='vendor/xterm/addon-fit.js') }}"></script>
-<script src="{{ url_for('static', filename='terminal.js') }}"></script>
+<script src="{{ asset_url('vendor/xterm/xterm.js') }}"></script>
+<script src="{{ asset_url('vendor/xterm/addon-fit.js') }}"></script>
+<script src="{{ asset_url('terminal.js') }}"></script>
 {% endblock %}

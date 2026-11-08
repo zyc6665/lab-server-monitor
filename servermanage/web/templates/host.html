@@ -24,6 +24,7 @@
     </p>
   </div>
   <div class="page-actions">
+    <a class="secondary-button button-link" id="host-report-button" href="{{ url_for('api_host_report', name=name) }}">导出诊断报告</a>
     <a class="primary-button button-link" href="/terminal?host={{ name|urlencode }}">打开终端</a>
   </div>
 </div>
@@ -329,5 +330,5 @@
 
 {% block scripts %}
 <script>window.__HOST_NAME__ = {{ name|tojson }};</script>
-<script src="{{ url_for('static', filename='host-detail.js') }}"></script>
+<script src="{{ asset_url('host-detail.js') }}"></script>
 {% endblock %}

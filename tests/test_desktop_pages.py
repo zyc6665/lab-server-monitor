@@ -267,6 +267,35 @@ def test_host_page_keeps_disk_array_and_logged_in_users(client):
     assert "Physical Drives" in html
 
 
+def test_host_page_has_diagnostic_report_button(client):
+    html = _page(client, f"/host/{HOST_NAME}")
+    assert 'id="host-report-button"' in html
+    assert f"/api/host/{HOST_NAME}/report" in html
+    assert "导出诊断报告" in html
+
+
+def test_host_report_download_contains_diagnostics(client):
+    response = client.get(f"/api/host/{HOST_NAME}/report")
+    assert response.status_code == 200
+    disposition = response.headers.get("Content-Disposition", "")
+    assert "attachment" in disposition
+    assert "host-report-gpu-01-" in disposition
+    assert disposition.endswith('.txt"') or disposition.endswith(".txt")
+    text = response.get_data(as_text=True)
+    assert text.startswith("﻿")
+    assert "服务器轮询监测 · 主机诊断报告" in text
+    assert f"主机名称：{HOST_NAME}" in text
+    assert "CPU 使用率：42.5%" in text
+    assert "1 drive needs attention" in text
+    assert "磁盘阵列状态为 warning" in text
+
+
+def test_static_assets_are_versioned(client):
+    html = _page(client, "/")
+    assert "/static/style.css?v=" in html
+    assert "/static/app.js?v=" in html
+
+
 # -- alerts -----------------------------------------------------------------
 
 

@@ -970,6 +970,190 @@ def _build_host_detail(name: str, config, db_path) -> dict[str, Any] | None:
     }
 
 
+def _report_number(value: Any) -> float | None:
+    """Return *value* as a float, accepting values such as ``"45%"``."""
+    if value is None or value == "":
+        return None
+    try:
+        return float(str(value).strip().rstrip("%"))
+    except (TypeError, ValueError):
+        return None
+
+
+def _build_host_report(detail: dict[str, Any], generated_at: datetime) -> str:
+    """Render a plain-text diagnostic report for one host snapshot."""
+    metrics = detail.get("metrics") or {}
+    lines: list[str] = []
+    lines.append("服务器轮询监测 · 主机诊断报告")
+    lines.append("=" * 46)
+    lines.append(f"生成时间：{generated_at.strftime('%Y-%m-%d %H:%M:%S %Z')}")
+    lines.append(f"主机名称：{detail.get('name') or '—'}")
+    lines.append(f"主机地址：{detail.get('host') or '—'}")
+    lines.append(f"分组：{detail.get('group') or '未分组'}")
+    lines.append(f"负责人：{detail.get('owner') or '—'}")
+    lines.append(f"位置：{detail.get('location') or '—'}")
+    tags = detail.get("tags") or []
+    lines.append(f"标签：{', '.join(str(tag) for tag in tags) if tags else '—'}")
+    success = detail.get("success")
+    status_text = "成功" if success else ("失败" if success is False else "等待首次采集")
+    lines.append(f"采集状态：{status_text}")
+    lines.append(f"采集时间：{detail.get('collected_at') or '—'}")
+    lines.append("")
+    lines.append("[系统概览]")
+    lines.append(f"  操作系统：{metrics.get('os_pretty_name') or '—'}")
+    lines.append(f"  内核版本：{metrics.get('kernel_version') or '—'}")
+    lines.append(f"  主机名：{metrics.get('hostname') or '—'}")
+    lines.append(f"  运行时长：{metrics.get('uptime') or '—'}")
+    lines.append(f"  CPU 核心：{metrics.get('cpu_core_count') if metrics.get('cpu_core_count') is not None else '—'}")
+    cpu = _report_number(metrics.get("cpu_usage_percent"))
+    lines.append(f"  CPU 使用率：{f'{cpu:.1f}%' if cpu is not None else '—'}")
+    memory = metrics.get("memory") or {}
+    total_mb = _report_number(memory.get("total_mb"))
+    used_mb = _report_number(memory.get("used_mb"))
+    if total_mb and used_mb is not None:
+        mem_percent = used_mb / total_mb * 100
+        lines.append(f"  内存：{used_mb:.0f} / {total_mb:.0f} MB（{mem_percent:.1f}%）")
+    else:
+        mem_percent = None
+        lines.append("  内存：—")
+    load = metrics.get("load_average") or {}
+    if load:
+        lines.append(
+            "  负载（1/5/15）：{} / {} / {}".format(
+                load.get("load_1", "—"), load.get("load_5", "—"), load.get("load_15", "—")
+            )
+        )
+    else:
+        lines.append("  负载（1/5/15）：—")
+    lines.append("")
+    lines.append("[磁盘挂载]")
+    mounts = []
+    for row in metrics.get("disk_usage") or []:
+        filesystem = str(row.get("filesystem") or "")
+        mountpoint = str(row.get("mountpoint") or "")
+        if filesystem in _VIRTUAL_FILESYSTEMS:
+            continue
+        if filesystem.startswith("/dev/loop") or mountpoint.startswith("/snap"):
+            continue
+        mounts.append(row)
+    if mounts:
+        for row in mounts:
+            lines.append(
+                "  {}  {}  {}/{}（{}）".format(
+                    row.get("mountpoint") or "—",
+                    row.get("filesystem") or "—",
+                    row.get("used") or "—",
+                    row.get("size") or "—",
+                    row.get("percent") or "—",
+                )
+            )
+    else:
+        lines.append("  （无）")
+    lines.append("")
+    lines.append("[GPU]")
+    gpus = metrics.get("gpu_summary") or []
+    if gpus:
+        for gpu in gpus:
+            lines.append(
+                "  GPU{} {}：利用率 {}%，显存 {}/{} MB，温度 {}°C".format(
+                    gpu.get("index", "—"),
+                    gpu.get("name") or "—",
+                    gpu.get("utilization_percent", "—"),
+                    gpu.get("memory_used_mb", "—"),
+                    gpu.get("memory_total_mb", "—"),
+                    gpu.get("temperature_c", "—"),
+                )
+            )
+    else:
+        lines.append("  （无 GPU 数据）")
+    lines.append("")
+    lines.append("[当前登录用户]")
+    users = metrics.get("logged_in_users") or []
+    if users:
+        for user in users:
+            lines.append(
+                "  {}  终端 {}  来源 {}  登录 {}".format(
+                    user.get("username") or "—",
+                    user.get("terminal") or "—",
+                    user.get("remote_host") or "—",
+                    user.get("login_at") or "—",
+                )
+            )
+    else:
+        lines.append("  （无登录会话）")
+    lines.append("")
+    lines.append("[CPU 占用前 3 进程]")
+    processes = metrics.get("top_cpu_processes") or []
+    if processes:
+        for proc in processes[:3]:
+            command = " ".join(str(proc.get("command") or "").split())
+            if len(command) > 120:
+                command = command[:117] + "..."
+            lines.append(
+                "  PID {}  {}  CPU {}%  内存 {}%  {}".format(
+                    proc.get("pid", "—"),
+                    proc.get("username") or "—",
+                    proc.get("cpu_percent", "—"),
+                    proc.get("mem_percent", "—"),
+                    command or "—",
+                )
+            )
+    else:
+        lines.append("  （无进程数据）")
+    lines.append("")
+    lines.append("[磁盘阵列健康]")
+    disk = detail.get("disk") or {}
+    if disk:
+        lines.append(f"  状态：{disk.get('status') or '—'}")
+        lines.append(f"  消息：{disk.get('message') or '—'}")
+        lines.append(f"  采集时间：{disk.get('collected_at') or '—'}")
+    else:
+        lines.append("  （暂无磁盘阵列数据）")
+    lines.append("")
+    lines.append("[最近采集异常]")
+    errors = detail.get("errors") or []
+    if errors:
+        for err in errors:
+            lines.append(f"  - {err.get('stage') or 'unknown'}：{err.get('message') or '—'}")
+    else:
+        lines.append("  （无）")
+    lines.append("")
+    lines.append("[重点关注]")
+    attention: list[str] = []
+    if success is False:
+        attention.append("最近一次采集失败，请检查 SSH 连接和凭据。")
+    elif success is None:
+        attention.append("尚未完成首次采集，请先测试连接并立即采集。")
+    for err in errors:
+        attention.append(f"采集异常：{err.get('stage') or 'unknown'} - {err.get('message') or '未知错误'}")
+    if cpu is not None and cpu >= 90:
+        attention.append(f"CPU 使用率达到 {cpu:.1f}%，请检查高负载进程。")
+    if mem_percent is not None and mem_percent >= 90:
+        attention.append(f"内存使用率达到 {mem_percent:.1f}%，请检查内存占用。")
+    for row in mounts:
+        percent = _report_number(row.get("percent"))
+        if percent is not None and percent >= 90:
+            attention.append(f"挂载点 {row.get('mountpoint') or '—'} 使用率达到 {percent:.0f}%。")
+    disk_status = str(disk.get("status") or "").lower()
+    if disk_status and disk_status not in ("ok", "healthy"):
+        attention.append(f"磁盘阵列状态为 {disk.get('status')}：{disk.get('message') or '请检查存储控制器'}。")
+    if not attention:
+        attention.append("未发现明显异常。")
+    for item in attention:
+        lines.append(f"  - {item}")
+    lines.append("")
+    lines.append("（报告由服务器轮询监测工具自动生成）")
+    return "\n".join(lines) + "\n"
+
+
+def _report_filename(name: str, generated_at: datetime) -> str:
+    safe = "".join(
+        char if (char.isascii() and (char.isalnum() or char in "-_")) else "_"
+        for char in name
+    ).strip("_") or "host"
+    return f"host-report-{safe}-{generated_at.strftime('%Y%m%d-%H%M%S')}.txt"
+
+
 def register_routes(app: Flask) -> None:
     """Register auth guards, API routes and the login/logout endpoints."""
 
@@ -1343,6 +1527,24 @@ def register_routes(app: Flask) -> None:
         if detail is None:
             return jsonify({"error": "not found"}), 404
         return jsonify(detail)
+
+    @app.get("/api/host/<name>/report")
+    def api_host_report(name: str):
+        detail = _build_host_detail(name, _config(app), _db_path(app))
+        if detail is None:
+            return jsonify({"error": "not found"}), 404
+        config = _config(app)
+        generated_at = datetime.now(resolve_timezone(config.app.timezone))
+        text = _build_host_report(detail, generated_at)
+        return Response(
+            "﻿" + text,
+            mimetype="text/plain",
+            headers={
+                "Content-Disposition": (
+                    f'attachment; filename="{_report_filename(name, generated_at)}"'
+                )
+            },
+        )
 
     @app.get("/api/host/<name>/history")
     def api_host_history(name: str):

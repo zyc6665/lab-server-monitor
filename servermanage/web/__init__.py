@@ -14,7 +14,7 @@ from datetime import timedelta
 from pathlib import Path
 from typing import Callable
 
-from flask import Flask
+from flask import Flask, url_for
 
 from servermanage import __version__ as APP_VERSION
 from servermanage.models import AppConfig
@@ -94,7 +94,10 @@ def create_app(
 
     @app.context_processor
     def _inject_app_meta():
-        return {"app_version": APP_VERSION}
+        def asset_url(filename: str) -> str:
+            return url_for("static", filename=filename, v=APP_VERSION)
+
+        return {"app_version": APP_VERSION, "asset_url": asset_url}
 
     register_routes(app)
     return app

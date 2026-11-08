@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}设置 - 服务器监控{% endblock %}
 {% block head %}
-<link rel="stylesheet" href="{{ url_for('static', filename='settings-wizard.css') }}">
+<link rel="stylesheet" href="{{ asset_url('settings-wizard.css') }}">
 {% endblock %}
 
 {% block content %}
@@ -516,10 +516,10 @@ window.__SETTINGS_SILENCES__ = {{ silences|tojson }};
 {% endblock %}
 
 {% block scripts %}
-<script src="{{ url_for('static', filename='settings-tabs.js') }}"></script>
-<script src="{{ url_for('static', filename='settings-ssh-config.js') }}"></script>
-<script src="{{ url_for('static', filename='settings.js') }}"></script>
-<script src="{{ url_for('static', filename='settings-wizard.js') }}"></script>
-<script src="{{ url_for('static', filename='settings-update.js') }}"></script>
-<script src="{{ url_for('static', filename='settings-health.js') }}"></script>
+<script src="{{ asset_url('settings-tabs.js') }}"></script>
+<script src="{{ asset_url('settings-ssh-config.js') }}"></script>
+<script src="{{ asset_url('settings.js') }}"></script>
+<script src="{{ asset_url('settings-wizard.js') }}"></script>
+<script src="{{ asset_url('settings-update.js') }}"></script>
+<script src="{{ asset_url('settings-health.js') }}"></script>
 {% endblock %}
