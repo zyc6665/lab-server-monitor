@@ -96,6 +96,12 @@ class AppRuntimeConfig:
     disk_poll_interval_seconds: int = 86400
     concurrency: int = 8
     retention_days: int = 90
+    host_metrics_max_points: int = 100
+    disk_health_retention_days: int = 7
+    disk_health_max_batches: int = 100
+    host_daily_summary_retention_days: int = 90
+    alert_history_retention_days: int = 30
+    ssh_audit_retention_days: int = 30
     timezone: str = "Asia/Shanghai"
     auto_port_fallback: bool = True
     tray_enabled: bool = True

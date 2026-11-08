@@ -50,9 +50,17 @@ from servermanage.scheduler import (
 from servermanage.ssh_client import SSHClientWrapper
 from servermanage.storage import (
     _extract_disk_used_percent,
+    backfill_daily_summary,
     get_disk_health,
     init_storage,
     persist_host_reports,
+    prune_alert_history,
+    prune_alert_silences,
+    prune_daily_summary,
+    prune_disk_health,
+    prune_host_metrics,
+    prune_retention,
+    prune_ssh_audit,
     purge_old_data,
     save_disk_health,
     save_host_snapshot,
@@ -277,6 +285,8 @@ class MonitorService:
         self._tz = resolve_timezone(config.app.timezone)
         # Consecutive failed status collections per host (for the offline message).
         self._failure_counts: dict[str, int] = {}
+        self._collection_states: dict[str, dict] = {}
+        self._collection_lock = threading.Lock()
         self._running = False
 
     def apply_config(self, new_config: AppConfig) -> None:
@@ -309,6 +319,12 @@ class MonitorService:
 
     # -- polling jobs ------------------------------------------------------
 
+    def _config_for_hosts(self, host_names: set[str] | None) -> AppConfig:
+        if not host_names:
+            return self.config
+        selected = [host for host in self.config.servers if host.name in host_names]
+        return replace(self.config, servers=selected)
+
     def run_once(self) -> dict:
         """Run one status cycle immediately followed by one disk cycle."""
         status_result = self.run_status_once()
@@ -319,21 +335,21 @@ class MonitorService:
             "alerts": status_result["alerts"] + disk_result["alerts"],
         }
 
-    def run_status_once(self) -> dict:
+    def run_status_once(self, host_names: set[str] | None = None) -> dict:
         """Poll every host's system metrics and reconcile system/offline alerts.
 
-        Returns ``{"hosts": <reports>, "alerts": <notification count>}``. ``alerts``
-        counts newly dispatched alert notifications plus recovery notices produced
-        by ``resolve`` / ``resolve_missing`` this cycle; recovery notices are
-        informational and travel through the same notifier pipeline.
+        When *host_names* is given only those configured hosts are polled (used
+        by the import auto-collection task).  Returns
+        ``{"hosts": <reports>, "alerts": <notification count>}``.
         """
-        reports = list(self.collect_status(self.config))
-        storage_enabled = bool(getattr(self.config.storage, "enabled", True))
-        offline_threshold = max(1, int(self.config.alerts.offline_failures))
+        config = self._config_for_hosts(host_names)
+        reports = list(self.collect_status(config))
+        storage_enabled = bool(getattr(config.storage, "enabled", True))
+        offline_threshold = max(1, int(config.alerts.offline_failures))
         events: list = []
         recovery_count = 0
-        notifications_on = bool(self.config.alerts.enabled) and bool(
-            getattr(self.config.alerts, "notify_on_recovery", True)
+        notifications_on = bool(config.alerts.enabled) and bool(
+            getattr(config.alerts, "notify_on_recovery", True)
         )
         # Only hosts that produced a successful report this cycle may have stale
         # system alerts resolved from them (see the reconciliation loop below).
@@ -343,10 +359,10 @@ class MonitorService:
         # reported successfully (see successful_hosts), so a host going dark
         # never closes its own system alerts.
         active: dict[str, set[str]] = {
-            host.name: set() for host in self.config.servers
+            host.name: set() for host in config.servers
         }
         success_reports = []
-        host_mounts = {host.name: host.disk_mounts for host in self.config.servers}
+        host_mounts = {host.name: host.disk_mounts for host in config.servers}
 
         for report in reports:
             host_name = report.host_name
@@ -372,7 +388,7 @@ class MonitorService:
                 for event in evaluate_system_alerts(
                     host_name,
                     report.metrics,
-                    self.config.alerts.thresholds,
+                    config.alerts.thresholds,
                     disk_percent=disk_percent,
                     disk_mounts=disk_statuses,
                 ):
@@ -393,11 +409,18 @@ class MonitorService:
                 DailyReport(
                     generated_at=datetime.now(timezone.utc),
                     reports=success_reports,
-                    subject_prefix=self.config.report.subject_prefix,
+                    subject_prefix=config.report.subject_prefix,
                 ),
                 self.db_path,
                 disk_mounts=host_mounts,
+                tz=self._tz,
             )
+            try:
+                prune_host_metrics(
+                    self.db_path, config.app.host_metrics_max_points
+                )
+            except Exception:  # pragma: no cover - pruning must not break polling
+                LOGGER.exception("Failed to prune host metrics history")
 
         notified = self.engine.process(events)
 
@@ -416,22 +439,23 @@ class MonitorService:
 
         return {"hosts": len(reports), "alerts": len(notified) + recovery_count}
 
-    def run_disk_once(self) -> dict:
+    def run_disk_once(self, host_names: set[str] | None = None) -> dict:
         """Poll disk health on every enabled host and reconcile disk alerts.
 
         ``alerts`` counts newly dispatched disk alert notifications plus disk
         recovery notices generated while reconciling polled hosts.
         """
-        if not bool(getattr(self.config.disk_health, "enabled", True)):
+        config = self._config_for_hosts(host_names)
+        if not bool(getattr(config.disk_health, "enabled", True)):
             # Globally disabled: no SSH attempts at all.
             return {"disk_reports": 0, "alerts": 0}
 
-        storage_enabled = bool(getattr(self.config.storage, "enabled", True))
+        storage_enabled = bool(getattr(config.storage, "enabled", True))
         temperature_threshold_c = float(
-            self.config.alerts.thresholds.disk_temperature_c
+            config.alerts.thresholds.disk_temperature_c
         )
-        notifications_on = bool(self.config.alerts.enabled) and bool(
-            getattr(self.config.alerts, "notify_on_recovery", True)
+        notifications_on = bool(config.alerts.enabled) and bool(
+            getattr(config.alerts, "notify_on_recovery", True)
         )
         disk_recovery_count = 0
         events: list = []
@@ -440,7 +464,7 @@ class MonitorService:
         active: dict[str, set[str]] = {}
         disk_reports = []
 
-        for host in self.config.servers:
+        for host in config.servers:
             override = host.disk_health
             if (
                 override is not None
@@ -456,14 +480,14 @@ class MonitorService:
             )
 
             runner = SSHClientWrapper(
-                host=host, connect_timeout=self.config.ssh.connect_timeout
+                host=host, connect_timeout=config.ssh.connect_timeout
             )
             try:
                 report = self.collect_disk(
                     host,
                     runner,
-                    config=self.config.disk_health,
-                    command_timeout=self.config.ssh.command_timeout,
+                    config=config.disk_health,
+                    command_timeout=config.ssh.command_timeout,
                     previous=previous,
                     override=host.disk_health,
                     temperature_threshold_c=temperature_threshold_c,
@@ -481,6 +505,16 @@ class MonitorService:
             for event in evaluate_disk_alerts(report):
                 events.append(event)
                 active[host.name].add(event.fingerprint)
+
+        if storage_enabled and disk_reports:
+            try:
+                prune_disk_health(
+                    self.db_path,
+                    config.app.disk_health_retention_days,
+                    config.app.disk_health_max_batches,
+                )
+            except Exception:  # pragma: no cover - pruning must not break polling
+                LOGGER.exception("Failed to prune disk health history")
 
         notified = self.engine.process(events)
 
@@ -546,12 +580,102 @@ class MonitorService:
         self.send_report(self.config.smtp, rendered)
 
     def run_purge(self) -> dict:
-        """Delete data older than the configured retention window."""
-        counts = purge_old_data(
-            self.db_path, self.config.app.retention_days
-        )
-        LOGGER.info("Purged old data: %s", counts)
+        """Legacy entry point; now applies the full v1.6 retention matrix."""
+        counts = prune_retention(self.db_path, self.config)
+        LOGGER.info("Applied retention policy: %s", counts)
         return counts
+
+    def run_retention_cleanup(self) -> dict:
+        """Hourly lightweight cleanup for low-volume history tables."""
+        counts: dict[str, int] = {}
+        try:
+            counts["alert_history"] = prune_alert_history(
+                self.db_path, self.config.app.alert_history_retention_days
+            )
+            counts["ssh_audit"] = prune_ssh_audit(
+                self.db_path, self.config.app.ssh_audit_retention_days
+            )
+            counts["daily_summary"] = prune_daily_summary(
+                self.db_path, self.config.app.host_daily_summary_retention_days
+            )
+            counts["alert_silences"] = prune_alert_silences(self.db_path)
+        except Exception:  # pragma: no cover - cleanup must never kill the scheduler
+            LOGGER.exception("Retention cleanup failed")
+        LOGGER.info("Retention cleanup: %s", counts)
+        return counts
+
+    # -- import auto-collection -------------------------------------------
+
+    def schedule_host_collection(
+        self, names: list[str] | set[str], *, include_disk: bool = True
+    ) -> None:
+        """Collect status (and optionally disk) for *names* on a daemon thread."""
+        selected = [str(name) for name in names if str(name)]
+        if not selected:
+            return
+        with self._collection_lock:
+            for name in selected:
+                self._collection_states[name] = {
+                    "state": "pending",
+                    "started_at": None,
+                    "finished_at": None,
+                    "error": None,
+                }
+
+        def worker() -> None:
+            with self._collection_lock:
+                for name in selected:
+                    self._collection_states[name] = {
+                        "state": "running",
+                        "started_at": datetime.now(timezone.utc).isoformat(),
+                        "finished_at": None,
+                        "error": None,
+                    }
+            try:
+                self.run_status_once(set(selected))
+                if include_disk:
+                    self.run_disk_once(set(selected))
+                with self._collection_lock:
+                    for name in selected:
+                        state = dict(self._collection_states.get(name, {}))
+                        state.update(
+                            {
+                                "state": "done",
+                                "finished_at": datetime.now(timezone.utc).isoformat(),
+                                "error": None,
+                            }
+                        )
+                        self._collection_states[name] = state
+            except Exception as exc:  # pragma: no cover - worker isolation
+                LOGGER.exception("Import auto-collection failed")
+                with self._collection_lock:
+                    for name in selected:
+                        state = dict(self._collection_states.get(name, {}))
+                        state.update(
+                            {
+                                "state": "error",
+                                "finished_at": datetime.now(timezone.utc).isoformat(),
+                                "error": str(exc),
+                            }
+                        )
+                        self._collection_states[name] = state
+
+        threading.Thread(
+            target=worker, name="host-import-collection", daemon=True
+        ).start()
+
+    def collection_status(self, names: list[str] | None = None) -> dict[str, dict]:
+        with self._collection_lock:
+            if names:
+                return {
+                    name: dict(
+                        self._collection_states.get(
+                            name, {"state": "unknown"}
+                        )
+                    )
+                    for name in names
+                }
+            return {name: dict(state) for name, state in self._collection_states.items()}
 
     # -- lifecycle ---------------------------------------------------------
 
@@ -592,12 +716,25 @@ class MonitorService:
                     ),
                 )
             )
-        tasks.append(ScheduledTask("purge", 86400, self.run_purge))
+        tasks.append(
+            ScheduledTask("retention_cleanup", 3600, self.run_retention_cleanup)
+        )
         return tasks
 
     def start(self) -> None:
         """Build the scheduler, register all jobs and start its thread."""
         self._tz = resolve_timezone(self.config.app.timezone)
+        try:
+            init_storage(self.db_path)
+            backfilled = backfill_daily_summary(self.db_path, self._tz)
+            if backfilled:
+                LOGGER.info("Backfilled %s daily summary rows", backfilled)
+            LOGGER.info(
+                "Startup retention: %s",
+                prune_retention(self.db_path, self.config),
+            )
+        except Exception:  # pragma: no cover - startup cleanup is best effort
+            LOGGER.exception("Startup retention/backfill failed")
         self._scheduler = self._scheduler_factory(
             self._build_tasks(),
             db_path=self.db_path,
@@ -707,6 +844,8 @@ def _build_server(*, config, db_path, settings, service, host: str, port: int):
         settings_service=settings,
         on_config_changed=service.apply_config,
         session_cookie_suffix=str(port),
+        on_hosts_imported=getattr(service, "schedule_host_collection", None),
+        collection_status_provider=getattr(service, "collection_status", None),
     )
     from servermanage.web.routes import get_ssh_terminal_manager
 

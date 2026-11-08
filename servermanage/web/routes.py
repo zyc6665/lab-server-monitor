@@ -463,6 +463,17 @@ def _refresh_config(app: Flask) -> None:
         callback(new_config)
 
 
+def _notify_hosts_imported(app: Flask, names: list[str]) -> None:
+    """Trigger background collection after hosts were created/updated."""
+    callback = app.config.get("ON_HOSTS_IMPORTED")
+    if callback is None or not names:
+        return
+    try:
+        callback(sorted({str(name) for name in names if str(name)}))
+    except Exception:  # pragma: no cover - collection must not break the save
+        LOGGER.exception("on_hosts_imported callback failed")
+
+
 def _parse_iso(value: Any) -> datetime | None:
     """Parse a stored ISO timestamp; naive values are treated as UTC."""
     if not isinstance(value, str) or not value:
@@ -1228,6 +1239,22 @@ def register_routes(app: Flask) -> None:
         _refresh_config(app)
         return jsonify({"ok": True, "restart_required": section == "dashboard"})
 
+    @app.get("/api/settings/hosts/collection-status")
+    def api_host_collection_status():
+        provider = app.config.get("COLLECTION_STATUS_PROVIDER")
+        if provider is None:
+            return jsonify({"statuses": {}})
+        raw_names = request.args.get("names")
+        names = None
+        if raw_names is not None:
+            names = [item.strip() for item in raw_names.split(",") if item.strip()]
+        try:
+            statuses = provider(names)
+        except Exception:  # noqa: BLE001 - status is best effort
+            LOGGER.exception("collection_status provider failed")
+            statuses = {}
+        return jsonify({"statuses": statuses})
+
     @app.get("/api/settings/hosts")
     def api_list_hosts():
         service, error = _settings_or_404(app)
@@ -1251,6 +1278,7 @@ def register_routes(app: Flask) -> None:
         except SettingsError as exc:
             return jsonify({"error": str(exc)}), 400
         _refresh_config(app)
+        _notify_hosts_imported(app, [name])
         return jsonify({"ok": True})
 
     @app.delete("/api/settings/hosts/<name>")
@@ -1463,6 +1491,7 @@ def register_routes(app: Flask) -> None:
         except SettingsError as exc:
             return jsonify({"error": str(exc)}), 400
         _refresh_config(app)
+        _notify_hosts_imported(app, result.get("created", []) + result.get("updated", []))
         return jsonify(
             {
                 "ok": True,
@@ -1495,6 +1524,7 @@ def register_routes(app: Flask) -> None:
         except SettingsError as exc:
             return jsonify({"error": str(exc)}), 400
         _refresh_config(app)
+        _notify_hosts_imported(app, result.get("created", []) + result.get("updated", []))
         return jsonify({"ok": True, "parse_errors": parsed.errors, **result})
 
     @app.post("/api/settings/hosts/test-batch")
@@ -1569,6 +1599,7 @@ def register_routes(app: Flask) -> None:
         except SettingsError as exc:
             return jsonify({"error": str(exc)}), 400
         _refresh_config(app)
+        _notify_hosts_imported(app, [new_name])
         return jsonify({"ok": True, "name": new_name})
 
     # -- Task 9: alert silences --------------------------------------------

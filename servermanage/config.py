@@ -86,6 +86,16 @@ def _load_app(data: Any) -> AppRuntimeConfig:
         disk_poll_interval_seconds=int(mapping.get("disk_poll_interval_seconds", 86400)),
         concurrency=int(mapping.get("concurrency", 8)),
         retention_days=int(mapping.get("retention_days", 90)),
+        host_metrics_max_points=int(mapping.get("host_metrics_max_points", 100)),
+        disk_health_retention_days=int(mapping.get("disk_health_retention_days", 7)),
+        disk_health_max_batches=int(mapping.get("disk_health_max_batches", 100)),
+        host_daily_summary_retention_days=int(
+            mapping.get("host_daily_summary_retention_days", 90)
+        ),
+        alert_history_retention_days=int(
+            mapping.get("alert_history_retention_days", 30)
+        ),
+        ssh_audit_retention_days=int(mapping.get("ssh_audit_retention_days", 30)),
         timezone=str(mapping.get("timezone", "Asia/Shanghai")),
         auto_port_fallback=bool(mapping.get("auto_port_fallback", True)),
         tray_enabled=bool(mapping.get("tray_enabled", True)),

@@ -552,14 +552,14 @@ def test_start_registers_expected_tasks(tmp_path: Path):
         "disk_poll",
         "daily_report",
         "weekly_report",
-        "purge",
+        "retention_cleanup",
     ]
     by_name = {task.name: task for task in scheduler.tasks}
     assert by_name["status_poll"].interval_seconds == 600
     assert by_name["disk_poll"].interval_seconds == 86400
     assert by_name["daily_report"].interval_seconds == 0
     assert by_name["weekly_report"].interval_seconds == 0
-    assert by_name["purge"].interval_seconds == 86400
+    assert by_name["retention_cleanup"].interval_seconds == 3600
     assert by_name["daily_report"].target_time is not None
     assert by_name["weekly_report"].target_time is not None
     assert getattr(scheduler.tz, "key", None) == "Asia/Shanghai"
@@ -589,7 +589,7 @@ def test_start_skips_disabled_report_tasks(tmp_path: Path):
     service.start()
 
     names = [task.name for task in created["scheduler"].tasks]
-    assert names == ["status_poll", "disk_poll", "purge"]
+    assert names == ["status_poll", "disk_poll", "retention_cleanup"]
 
 
 # ---------------------------------------------------------------------------

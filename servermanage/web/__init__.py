@@ -31,6 +31,8 @@ def create_app(
     settings_service=None,
     on_config_changed: Callable[[AppConfig], None] | None = None,
     session_cookie_suffix: str | None = None,
+    on_hosts_imported: Callable[[list[str]], None] | None = None,
+    collection_status_provider: Callable[[list[str] | None], dict] | None = None,
 ) -> Flask:
     """Build the dashboard Flask app.
 
@@ -86,6 +88,8 @@ def create_app(
     # setup gate and no CSRF) fully working.
     app.config["SETTINGS_SERVICE"] = settings_service
     app.config["ON_CONFIG_CHANGED"] = on_config_changed
+    app.config["ON_HOSTS_IMPORTED"] = on_hosts_imported
+    app.config["COLLECTION_STATUS_PROVIDER"] = collection_status_provider
 
     register_routes(app)
     return app

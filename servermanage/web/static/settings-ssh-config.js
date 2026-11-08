@@ -120,7 +120,12 @@
       if (payload.skipped && payload.skipped.length) parts.push(`跳过 ${payload.skipped.length} 台`);
       if (payload.failed && payload.failed.length) parts.push(`失败 ${payload.failed.length} 台`);
       setStatus(`导入完成：${parts.join("，") || "无变化"}`);
-      window.location.reload();
+      const names = (payload.created || []).concat(payload.updated || []);
+      if (window.servermonitorWatchCollection) {
+        window.servermonitorWatchCollection(names);
+      } else {
+        window.location.reload();
+      }
     } catch (error) {
       setStatus(`导入失败：${error.message || error}`, true);
     } finally {

@@ -157,7 +157,11 @@
     api("PUT", "/api/settings/hosts/" + encodeURIComponent(name), payload)
       .then(function () {
         try { sessionStorage.setItem("servermonitor-settings-tab", "hosts"); } catch (e) {}
-        window.location.reload();
+        if (window.servermonitorWatchCollection) {
+          window.servermonitorWatchCollection([name]);
+        } else {
+          window.location.reload();
+        }
       })
       .catch(function (error) { status("wizard-save-status", error.message, true); });
   }

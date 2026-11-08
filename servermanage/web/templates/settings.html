@@ -43,8 +43,23 @@
       <label class="field"><span>并发数</span>
         <input type="number" min="1" max="32" data-field="concurrency" value="{{ settings.monitoring.concurrency }}">
       </label>
-      <label class="field"><span>历史保留天数</span>
-        <input type="number" min="1" data-field="retention_days" value="{{ settings.monitoring.retention_days }}">
+      <label class="field"><span>每台状态曲线保留点数</span>
+        <input type="number" min="10" max="10000" data-field="host_metrics_max_points" value="{{ settings.monitoring.host_metrics_max_points }}">
+      </label>
+      <label class="field"><span>磁盘健康保留天数</span>
+        <input type="number" min="1" max="365" data-field="disk_health_retention_days" value="{{ settings.monitoring.disk_health_retention_days }}">
+      </label>
+      <label class="field"><span>磁盘健康最多保留批次</span>
+        <input type="number" min="1" max="1000" data-field="disk_health_max_batches" value="{{ settings.monitoring.disk_health_max_batches }}">
+      </label>
+      <label class="field"><span>每日汇总保留天数</span>
+        <input type="number" min="7" max="3650" data-field="host_daily_summary_retention_days" value="{{ settings.monitoring.host_daily_summary_retention_days }}">
+      </label>
+      <label class="field"><span>告警历史保留天数</span>
+        <input type="number" min="1" max="3650" data-field="alert_history_retention_days" value="{{ settings.monitoring.alert_history_retention_days }}">
+      </label>
+      <label class="field"><span>SSH 审计保留天数</span>
+        <input type="number" min="1" max="3650" data-field="ssh_audit_retention_days" value="{{ settings.monitoring.ssh_audit_retention_days }}">
       </label>
       <label class="check-row"><input type="checkbox" data-field="auto_port_fallback" {% if settings.monitoring.auto_port_fallback %}checked{% endif %}> 端口占用时自动顺延</label>
       {% if not settings.desktop_mode %}
@@ -77,6 +92,7 @@
       <button class="secondary-button" id="import-open-button" {% if not settings.writable %}disabled{% endif %}>批量导入</button>
       <button class="secondary-button" id="test-batch-button" {% if not settings.writable %}disabled{% endif %}>批量测试连接</button>
       <span class="form-status" id="host-batch-status"></span>
+      <span class="form-status" id="host-collection-status"></span>
     </div>
 
     <div class="table-wrap">

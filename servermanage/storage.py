@@ -134,6 +134,30 @@ CREATE TABLE IF NOT EXISTS task_state (
     last_run_at TEXT NOT NULL,
     last_result TEXT
 );
+CREATE TABLE IF NOT EXISTS host_daily_summary (
+    day TEXT NOT NULL,
+    host_name TEXT NOT NULL,
+    tz TEXT NOT NULL DEFAULT 'UTC',
+    host TEXT NOT NULL,
+    sample_count INTEGER NOT NULL DEFAULT 0,
+    success_count INTEGER NOT NULL DEFAULT 0,
+    cpu_sum REAL,
+    cpu_max REAL,
+    cpu_min REAL,
+    memory_pct_sum REAL,
+    memory_pct_max REAL,
+    disk_pct_sum REAL,
+    disk_pct_max REAL,
+    gpu_util_sum REAL,
+    gpu_util_max REAL,
+    gpu_memory_pct_sum REAL,
+    gpu_memory_pct_max REAL,
+    load_sum REAL,
+    users_sum REAL,
+    processes_sum REAL,
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (day, host_name, tz)
+);
 """
 
 _CREATE_EXTENDED_INDEX_SQL = """
@@ -147,6 +171,8 @@ CREATE INDEX IF NOT EXISTS idx_alerts_fingerprint
     ON alerts(fingerprint);
 CREATE INDEX IF NOT EXISTS idx_alerts_created_at
     ON alerts(created_at);
+CREATE INDEX IF NOT EXISTS idx_host_daily_summary_day
+    ON host_daily_summary(day);
 """
 
 # Tables added by the web-settings monitor (Task 3): persisted application
@@ -260,16 +286,164 @@ def init_storage(db_path: Path) -> None:
         conn.executescript(_CREATE_SSH_AUDIT_INDEX_SQL)
 
 
+def _percent_value(used: float | None, total: float | None) -> float | None:
+    if used is None or total is None or float(total) <= 0:
+        return None
+    return float(used) / float(total) * 100.0
+
+
+def _tz_key(tz: tzinfo) -> str:
+    """Stable identifier for a timezone used to partition daily summaries."""
+    key = getattr(tz, "key", None)
+    if key:
+        return str(key)
+    return "UTC" if tz == timezone.utc else str(tz)
+
+
+def _merge_daily_summary(
+    conn: sqlite3.Connection,
+    *,
+    day: str,
+    host_name: str,
+    host: str,
+    tz_key: str,
+    values: dict[str, float | int | None],
+    updated_at: str,
+) -> None:
+    """Accumulate one successful sample into ``host_daily_summary``.
+
+    The table stores sums/max/min instead of averages so a day remains exact even
+    after every raw point for that day has been pruned.  Missing values are
+    ignored rather than written as zero.
+    """
+    existing = conn.execute(
+        "SELECT * FROM host_daily_summary WHERE day = ? AND host_name = ? AND tz = ?",
+        (day, host_name, tz_key),
+    ).fetchone()
+    columns = [
+        "cpu_sum",
+        "cpu_max",
+        "cpu_min",
+        "memory_pct_sum",
+        "memory_pct_max",
+        "disk_pct_sum",
+        "disk_pct_max",
+        "gpu_util_sum",
+        "gpu_util_max",
+        "gpu_memory_pct_sum",
+        "gpu_memory_pct_max",
+        "load_sum",
+        "users_sum",
+        "processes_sum",
+    ]
+    if existing is None:
+        row = {
+            "day": day,
+            "host_name": host_name,
+            "tz": tz_key,
+            "host": host,
+            "sample_count": 1,
+            "success_count": 1,
+            "updated_at": updated_at,
+        }
+        for column in columns:
+            row[column] = values.get(column.removesuffix("_sum").removesuffix("_max"))
+        # Above name mapping is not one-to-one for max/min/sum; fill explicitly.
+        row.update(
+            {
+                "cpu_sum": values.get("cpu"),
+                "cpu_max": values.get("cpu"),
+                "cpu_min": values.get("cpu"),
+                "memory_pct_sum": values.get("memory_pct"),
+                "memory_pct_max": values.get("memory_pct"),
+                "disk_pct_sum": values.get("disk_pct"),
+                "disk_pct_max": values.get("disk_pct"),
+                "gpu_util_sum": values.get("gpu_util"),
+                "gpu_util_max": values.get("gpu_util"),
+                "gpu_memory_pct_sum": values.get("gpu_memory_pct"),
+                "gpu_memory_pct_max": values.get("gpu_memory_pct"),
+                "load_sum": values.get("load"),
+                "users_sum": values.get("users"),
+                "processes_sum": values.get("processes"),
+            }
+        )
+        conn.execute(
+            """
+            INSERT INTO host_daily_summary
+                (day, host_name, tz, host, sample_count, success_count,
+                 cpu_sum, cpu_max, cpu_min, memory_pct_sum, memory_pct_max,
+                 disk_pct_sum, disk_pct_max, gpu_util_sum, gpu_util_max,
+                 gpu_memory_pct_sum, gpu_memory_pct_max, load_sum, users_sum,
+                 processes_sum, updated_at)
+            VALUES
+                (:day, :host_name, :tz, :host, :sample_count, :success_count,
+                 :cpu_sum, :cpu_max, :cpu_min, :memory_pct_sum, :memory_pct_max,
+                 :disk_pct_sum, :disk_pct_max, :gpu_util_sum, :gpu_util_max,
+                 :gpu_memory_pct_sum, :gpu_memory_pct_max, :load_sum, :users_sum,
+                 :processes_sum, :updated_at)
+            """,
+            row,
+        )
+        return
+
+    updated = dict(existing)
+    updated["sample_count"] = int(existing["sample_count"]) + 1
+    updated["success_count"] = int(existing["success_count"]) + 1
+    updated["updated_at"] = updated_at
+    for prefix, value in (
+        ("cpu", values.get("cpu")),
+        ("memory_pct", values.get("memory_pct")),
+        ("disk_pct", values.get("disk_pct")),
+        ("gpu_util", values.get("gpu_util")),
+        ("gpu_memory_pct", values.get("gpu_memory_pct")),
+        ("load", values.get("load")),
+        ("users", values.get("users")),
+        ("processes", values.get("processes")),
+    ):
+        if value is None:
+            continue
+        updated[f"{prefix}_sum"] = float(existing[f"{prefix}_sum"] or 0) + float(value)
+        if f"{prefix}_max" in updated:
+            old_max = existing[f"{prefix}_max"]
+            updated[f"{prefix}_max"] = (
+                float(value) if old_max is None else max(float(old_max), float(value))
+            )
+        if f"{prefix}_min" in updated:
+            old_min = existing[f"{prefix}_min"]
+            updated[f"{prefix}_min"] = (
+                float(value) if old_min is None else min(float(old_min), float(value))
+            )
+    conn.execute(
+        """
+        UPDATE host_daily_summary SET
+            host = :host, sample_count = :sample_count,
+            success_count = :success_count, cpu_sum = :cpu_sum,
+            cpu_max = :cpu_max, cpu_min = :cpu_min,
+            memory_pct_sum = :memory_pct_sum, memory_pct_max = :memory_pct_max,
+            disk_pct_sum = :disk_pct_sum, disk_pct_max = :disk_pct_max,
+            gpu_util_sum = :gpu_util_sum, gpu_util_max = :gpu_util_max,
+            gpu_memory_pct_sum = :gpu_memory_pct_sum,
+            gpu_memory_pct_max = :gpu_memory_pct_max,
+            load_sum = :load_sum, users_sum = :users_sum,
+            processes_sum = :processes_sum, updated_at = :updated_at
+        WHERE day = :day AND host_name = :host_name AND tz = :tz
+        """,
+        updated,
+    )
+
+
 def persist_host_reports(
     report: DailyReport,
     db_path: Path,
     *,
     disk_mounts: Mapping[str, Sequence[str]] | None = None,
+    tz: tzinfo = timezone.utc,
 ) -> None:
     db_path = Path(db_path)
     init_storage(db_path)
 
     rows: list[tuple] = []
+    summary_rows: list[dict[str, object]] = []
     collected_at = datetime.now(timezone.utc).isoformat()
 
     for host_report in report.reports:
@@ -306,12 +480,45 @@ def persist_host_reports(
                 load.load_15 if load else None,
             )
         )
+        memory_used = memory.used_mb if memory else None
+        memory_total = memory.total_mb if memory else None
+        gpu_used = (
+            sum(gpu.memory_used_mb for gpu in metrics.gpu_summary)
+            if metrics.gpu_summary
+            else None
+        )
+        gpu_total = (
+            sum(gpu.memory_total_mb for gpu in metrics.gpu_summary)
+            if metrics.gpu_summary
+            else None
+        )
+        summary_rows.append(
+            {
+                "day": _parse_collected_at(row_collected_at)
+                .astimezone(tz)
+                .date()
+                .isoformat(),
+                "host_name": host_report.host_name,
+                "host": host_report.host,
+                "values": {
+                    "cpu": metrics.cpu_usage_percent,
+                    "memory_pct": _percent_value(memory_used, memory_total),
+                    "disk_pct": _extract_disk_used_percent(host_report, host_mounts),
+                    "gpu_util": _extract_gpu_utilization_percent(host_report),
+                    "gpu_memory_pct": _percent_value(gpu_used, gpu_total),
+                    "load": load.load_1 if load else None,
+                    "users": len(metrics.logged_in_users),
+                    "processes": metrics.total_processes,
+                },
+            }
+        )
 
     if not rows:
         LOGGER.info("No successful host reports to persist")
         return
 
     with sqlite3.connect(db_path) as conn:
+        conn.row_factory = sqlite3.Row
         conn.executemany(
             """
             INSERT INTO host_metrics_history (
@@ -323,9 +530,108 @@ def persist_host_reports(
             """,
             rows,
         )
+        for summary_row in summary_rows:
+            _merge_daily_summary(
+                conn,
+                day=str(summary_row["day"]),
+                host_name=str(summary_row["host_name"]),
+                host=str(summary_row["host"]),
+                tz_key=_tz_key(tz),
+                values=summary_row["values"],  # type: ignore[arg-type]
+                updated_at=collected_at,
+            )
         conn.commit()
 
     LOGGER.info("Persisted %s host metric rows to %s", len(rows), db_path)
+
+
+def backfill_daily_summary(db_path: Path, tz: tzinfo = timezone.utc) -> int:
+    """Create missing daily summary rows from existing raw history.
+
+    Existing summary rows are left untouched, so calling this on every startup
+    is idempotent and never doubles counts.  Only days that still have raw
+    samples can be reconstructed; that is enough for the upgrade path because
+    pruning starts after this function has run.
+    """
+    db_path = Path(db_path)
+    if not db_path.exists():
+        return 0
+    with sqlite3.connect(db_path) as conn:
+        conn.row_factory = sqlite3.Row
+        raw_rows = conn.execute(
+            """
+            SELECT collected_at, host_name, host, cpu_usage_percent,
+                   memory_used_mb, memory_total_mb, disk_used_percent,
+                   gpu_utilization_percent, gpu_memory_used_mb,
+                   gpu_memory_total_mb, total_processes, logged_in_user_count,
+                   load_1
+              FROM host_metrics_history
+             WHERE success = 1
+            """
+        ).fetchall()
+        aggregated: dict[tuple[str, str, str, str], dict[str, float | int | None]] = {}
+        tz_key = _tz_key(tz)
+        for row in raw_rows:
+            day = _parse_collected_at(row["collected_at"]).astimezone(tz).date().isoformat()
+            key = (day, row["host_name"], row["host"], tz_key)
+            bucket = aggregated.setdefault(
+                key,
+                {
+                    "sample_count": 0,
+                    "cpu_sum": 0.0, "cpu_max": None, "cpu_min": None,
+                    "memory_pct_sum": 0.0, "memory_pct_max": None,
+                    "disk_pct_sum": 0.0, "disk_pct_max": None,
+                    "gpu_util_sum": 0.0, "gpu_util_max": None,
+                    "gpu_memory_pct_sum": 0.0, "gpu_memory_pct_max": None,
+                    "load_sum": 0.0, "users_sum": 0.0, "processes_sum": 0.0,
+                },
+            )
+            bucket["sample_count"] = int(bucket["sample_count"] or 0) + 1
+            values = {
+                "cpu": row["cpu_usage_percent"],
+                "memory_pct": _percent_value(row["memory_used_mb"], row["memory_total_mb"]),
+                "disk_pct": row["disk_used_percent"],
+                "gpu_util": row["gpu_utilization_percent"],
+                "gpu_memory_pct": _percent_value(row["gpu_memory_used_mb"], row["gpu_memory_total_mb"]),
+                "load": row["load_1"],
+                "users": row["logged_in_user_count"],
+                "processes": row["total_processes"],
+            }
+            for prefix, value in values.items():
+                if value is None:
+                    continue
+                bucket[f"{prefix}_sum"] = float(bucket.get(f"{prefix}_sum") or 0) + float(value)
+                max_key = f"{prefix}_max"
+                if max_key in bucket:
+                    bucket[max_key] = float(value) if bucket[max_key] is None else max(float(bucket[max_key]), float(value))
+                min_key = f"{prefix}_min"
+                if min_key in bucket:
+                    bucket[min_key] = float(value) if bucket[min_key] is None else min(float(bucket[min_key]), float(value))
+
+        inserted = 0
+        now = datetime.now(timezone.utc).isoformat()
+        for (day, host_name, host, tz_key), bucket in aggregated.items():
+            exists = conn.execute(
+                "SELECT 1 FROM host_daily_summary WHERE day = ? AND host_name = ? AND tz = ?",
+                (day, host_name, tz_key),
+            ).fetchone()
+            if exists:
+                continue
+            conn.execute(
+                """
+                INSERT INTO host_daily_summary
+                    (day, host_name, tz, host, sample_count, success_count,
+                     cpu_sum, cpu_max, cpu_min, memory_pct_sum, memory_pct_max,
+                     disk_pct_sum, disk_pct_max, gpu_util_sum, gpu_util_max,
+                     gpu_memory_pct_sum, gpu_memory_pct_max, load_sum, users_sum,
+                     processes_sum, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (day, host_name, tz_key, host, bucket["sample_count"], bucket["sample_count"], bucket["cpu_sum"], bucket["cpu_max"], bucket["cpu_min"], bucket["memory_pct_sum"], bucket["memory_pct_max"], bucket["disk_pct_sum"], bucket["disk_pct_max"], bucket["gpu_util_sum"], bucket["gpu_util_max"], bucket["gpu_memory_pct_sum"], bucket["gpu_memory_pct_max"], bucket["load_sum"], bucket["users_sum"], bucket["processes_sum"], now),
+            )
+            inserted += 1
+        conn.commit()
+    return inserted
 
 
 def _parse_collected_at(value: str) -> datetime:
@@ -393,6 +699,35 @@ def _local_week_utc_bounds(
     return start, end
 
 
+def _summary_rows_for_week(
+    db_path: Path, week_start: date, week_end: date, tz: tzinfo = timezone.utc
+) -> list[sqlite3.Row]:
+    if not Path(db_path).exists():
+        return []
+    with sqlite3.connect(db_path) as conn:
+        conn.row_factory = sqlite3.Row
+        try:
+            return conn.execute(
+                "SELECT * FROM host_daily_summary WHERE day >= ? AND day <= ? AND tz = ?"
+                " ORDER BY host_name, day",
+                (week_start.isoformat(), week_end.isoformat(), _tz_key(tz)),
+            ).fetchall()
+        except sqlite3.OperationalError:
+            return []
+
+
+def _summary_avg(row: sqlite3.Row, prefix: str) -> float | None:
+    count = row["sample_count"]
+    total = row[f"{prefix}_sum"]
+    if not count or total is None:
+        return None
+    return float(total) / int(count)
+
+
+def _summary_extreme(row: sqlite3.Row, prefix: str, kind: str) -> float | None:
+    return row[f"{prefix}_{kind}"]
+
+
 def fetch_daily_points_for_week(
     db_path: Path,
     week_start: date,
@@ -401,15 +736,27 @@ def fetch_daily_points_for_week(
 ) -> list[dict[str, object]]:
     """Per-day averages per host for the week, bucketed by *local* day.
 
-    Raw rows are fetched over the local week converted to a ``[start, end)``
-    UTC instant window and grouped in Python by ``dt.astimezone(tz).date()``;
-    any bucket outside ``[week_start, week_end]`` is dropped defensively.
-    Passing ``tz=UTC`` (the default) reproduces the legacy
-    ``DATE(collected_at)`` bucketing exactly.
+    Prefers the compact ``host_daily_summary`` table (which survives raw-point
+    pruning); falls back to the legacy raw-history aggregation when no summary
+    rows exist for the week.
     """
     db_path = Path(db_path)
     if not db_path.exists():
         return []
+
+    summary_rows = _summary_rows_for_week(db_path, week_start, week_end, tz)
+    if summary_rows:
+        return [
+            {
+                "day": row["day"],
+                "host_name": row["host_name"],
+                "host": row["host"],
+                "cpu_avg": _summary_avg(row, "cpu"),
+                "memory_percent": _summary_avg(row, "memory_pct"),
+                "gpu_util": _summary_avg(row, "gpu_util"),
+            }
+            for row in summary_rows
+        ]
 
     start_dt, end_dt = _local_week_utc_bounds(week_start, week_end, tz)
     start_iso = start_dt.isoformat()
@@ -471,19 +818,46 @@ def fetch_weekly_metrics(
 ) -> list[dict[str, object]]:
     """Weekly per-host metrics, aggregating as the mean of daily means.
 
-    Raw rows are fetched over the local week converted to a ``[start, end)``
-    UTC instant window and bucketed by ``dt.astimezone(tz).date()`` (buckets
-    outside ``[week_start, week_end]`` are dropped defensively).  For every host
-    we first compute a mean per
-    local day and then average those daily means over the week, so each day
-    carries equal weight regardless of how many samples it holds.  ``*_max`` /
-    ``*_min`` stay raw extremes over every sample and ``sample_count`` stays
-    the raw sample count.  Passing ``tz=UTC`` (the default) reproduces the old
-    behaviour for evenly-sampled data.
+    Prefers ``host_daily_summary`` so reports remain valid after raw-point
+    pruning; falls back to the legacy raw-history aggregation when no summary
+    rows exist for the week.  ``*_max`` / ``*_min`` stay raw extremes over the
+    week and ``sample_count`` stays the raw sample count.
     """
     db_path = Path(db_path)
     if not db_path.exists():
         return []
+
+    summary_rows = _summary_rows_for_week(db_path, week_start, week_end, tz)
+    if summary_rows:
+        grouped: dict[tuple[str, str], list[sqlite3.Row]] = {}
+        for row in summary_rows:
+            grouped.setdefault((row["host_name"], row["host"]), []).append(row)
+        results = []
+        for (host_name, host), rows in grouped.items():
+            results.append(
+                {
+                    "host_name": host_name,
+                    "host": host,
+                    "sample_count": sum(int(r["sample_count"]) for r in rows),
+                    "success_count": sum(int(r["success_count"]) for r in rows),
+                    "cpu_avg": _mean([_summary_avg(r, "cpu") for r in rows]),
+                    "cpu_max": _max_or_none([_summary_extreme(r, "cpu", "max") for r in rows]),
+                    "cpu_min": _min_or_none([_summary_extreme(r, "cpu", "min") for r in rows]),
+                    "memory_avg_percent": _mean([_summary_avg(r, "memory_pct") for r in rows]),
+                    "memory_max_percent": _max_or_none([_summary_extreme(r, "memory_pct", "max") for r in rows]),
+                    "disk_avg_percent": _mean([_summary_avg(r, "disk_pct") for r in rows]),
+                    "disk_max_percent": _max_or_none([_summary_extreme(r, "disk_pct", "max") for r in rows]),
+                    "gpu_util_avg": _mean([_summary_avg(r, "gpu_util") for r in rows]),
+                    "gpu_util_max": _max_or_none([_summary_extreme(r, "gpu_util", "max") for r in rows]),
+                    "gpu_memory_avg_percent": _mean([_summary_avg(r, "gpu_memory_pct") for r in rows]),
+                    "gpu_memory_max_percent": _max_or_none([_summary_extreme(r, "gpu_memory_pct", "max") for r in rows]),
+                    "load_avg": _mean([_summary_avg(r, "load") for r in rows]),
+                    "users_avg": _mean([_summary_avg(r, "users") for r in rows]),
+                    "processes_avg": _mean([_summary_avg(r, "processes") for r in rows]),
+                }
+            )
+        results.sort(key=lambda item: item["host_name"])
+        return results
 
     start_dt, end_dt = _local_week_utc_bounds(week_start, week_end, tz)
     start_iso = start_dt.isoformat()
@@ -1362,6 +1736,195 @@ def purge_old_data(
         )
         conn.commit()
 
+    return counts
+
+
+def prune_host_metrics(db_path: Path, max_points_per_host: int = 100) -> int:
+    """Keep only the newest *max_points_per_host* rows for every host."""
+    db_path = Path(db_path)
+    if not db_path.exists():
+        return 0
+    limit = max(1, int(max_points_per_host))
+    with sqlite3.connect(db_path) as conn:
+        cursor = conn.execute(
+            """
+            DELETE FROM host_metrics_history
+             WHERE id NOT IN (
+                SELECT id FROM (
+                    SELECT id,
+                           ROW_NUMBER() OVER (
+                               PARTITION BY host_name
+                               ORDER BY collected_at DESC, id DESC
+                           ) AS rn
+                      FROM host_metrics_history
+                ) ranked
+                WHERE ranked.rn <= ?
+             )
+            """,
+            (limit,),
+        )
+        deleted = cursor.rowcount if cursor.rowcount is not None else 0
+        conn.commit()
+    return deleted
+
+
+def prune_disk_health(
+    db_path: Path,
+    retention_days: int = 7,
+    max_batches_per_host: int = 100,
+    *,
+    now: datetime | None = None,
+) -> dict[str, int]:
+    """Prune disk batches beyond *retention_days* or newest *max_batches_per_host*."""
+    db_path = Path(db_path)
+    counts = {
+        "disk_health_snapshot": 0,
+        "disk_controller_snapshot": 0,
+        "disk_vd_snapshot": 0,
+        "disk_pd_snapshot": 0,
+    }
+    if not db_path.exists():
+        return counts
+    reference = now if now is not None else datetime.now(timezone.utc)
+    cutoff = (reference - timedelta(days=max(1, int(retention_days)))).isoformat()
+    keep_count = max(1, int(max_batches_per_host))
+    with sqlite3.connect(db_path) as conn:
+        headers = conn.execute(
+            "SELECT host_name, collected_at FROM disk_health_snapshot"
+            " ORDER BY host_name, collected_at DESC"
+        ).fetchall()
+        keep: dict[str, int] = {}
+        to_delete: list[tuple[str, str]] = []
+        for host_name, collected_at in headers:
+            index = keep.get(host_name, 0)
+            keep[host_name] = index + 1
+            if index >= keep_count or collected_at < cutoff:
+                to_delete.append((host_name, collected_at))
+        for host_name, collected_at in to_delete:
+            conn.execute(
+                "DELETE FROM disk_health_snapshot WHERE host_name = ? AND collected_at = ?",
+                (host_name, collected_at),
+            )
+        counts["disk_health_snapshot"] = len(to_delete)
+        for table in (
+            "disk_controller_snapshot",
+            "disk_vd_snapshot",
+            "disk_pd_snapshot",
+        ):
+            cursor = conn.execute(
+                f"""
+                DELETE FROM {table}
+                 WHERE NOT EXISTS (
+                    SELECT 1 FROM disk_health_snapshot h
+                     WHERE h.host_name = {table}.host_name
+                       AND h.collected_at = {table}.collected_at
+                 )
+                """
+            )
+            counts[table] = cursor.rowcount if cursor.rowcount is not None else 0
+        conn.commit()
+    return counts
+
+
+def prune_alert_history(
+    db_path: Path, retention_days: int = 30, *, now: datetime | None = None
+) -> int:
+    """Delete only resolved alerts older than *retention_days*."""
+    db_path = Path(db_path)
+    if not db_path.exists():
+        return 0
+    reference = now if now is not None else datetime.now(timezone.utc)
+    cutoff = (reference - timedelta(days=max(1, int(retention_days)))).isoformat()
+    with sqlite3.connect(db_path) as conn:
+        cursor = conn.execute(
+            "DELETE FROM alerts WHERE status = 'resolved' AND created_at < ?",
+            (cutoff,),
+        )
+        deleted = cursor.rowcount if cursor.rowcount is not None else 0
+        conn.commit()
+    return deleted
+
+
+def prune_ssh_audit(
+    db_path: Path, retention_days: int = 30, *, now: datetime | None = None
+) -> int:
+    """Delete only ended SSH audit rows older than *retention_days*."""
+    db_path = Path(db_path)
+    if not db_path.exists():
+        return 0
+    reference = now if now is not None else datetime.now(timezone.utc)
+    cutoff = (reference - timedelta(days=max(1, int(retention_days)))).isoformat()
+    with sqlite3.connect(db_path) as conn:
+        cursor = conn.execute(
+            "DELETE FROM ssh_audit_sessions"
+            " WHERE ended_at IS NOT NULL AND started_at < ?",
+            (cutoff,),
+        )
+        deleted = cursor.rowcount if cursor.rowcount is not None else 0
+        conn.commit()
+    return deleted
+
+
+def prune_daily_summary(
+    db_path: Path, retention_days: int = 90, *, now: datetime | None = None
+) -> int:
+    """Delete daily summary rows older than *retention_days* (local-date key)."""
+    db_path = Path(db_path)
+    if not db_path.exists():
+        return 0
+    reference = now if now is not None else datetime.now(timezone.utc)
+    cutoff_day = (
+        reference - timedelta(days=max(1, int(retention_days)))
+    ).date().isoformat()
+    with sqlite3.connect(db_path) as conn:
+        cursor = conn.execute(
+            "DELETE FROM host_daily_summary WHERE day < ?", (cutoff_day,)
+        )
+        deleted = cursor.rowcount if cursor.rowcount is not None else 0
+        conn.commit()
+    return deleted
+
+
+def prune_alert_silences(db_path: Path, *, now: datetime | None = None) -> int:
+    """Delete silence rows whose window already ended."""
+    db_path = Path(db_path)
+    if not db_path.exists():
+        return 0
+    reference = now if now is not None else datetime.now(timezone.utc)
+    with sqlite3.connect(db_path) as conn:
+        cursor = conn.execute(
+            "DELETE FROM alert_silences WHERE ends_at < ?", (reference.isoformat(),)
+        )
+        deleted = cursor.rowcount if cursor.rowcount is not None else 0
+        conn.commit()
+    return deleted
+
+
+def prune_retention(db_path: Path, config, *, now: datetime | None = None) -> dict[str, int]:
+    """Apply the full v1.6 retention matrix and return per-key counts."""
+    app = config.app if hasattr(config, "app") else config
+    counts: dict[str, int] = {}
+    counts["host_metrics_history"] = prune_host_metrics(
+        db_path, app.host_metrics_max_points
+    )
+    counts.update(
+        prune_disk_health(
+            db_path,
+            app.disk_health_retention_days,
+            app.disk_health_max_batches,
+            now=now,
+        )
+    )
+    counts["host_daily_summary"] = prune_daily_summary(
+        db_path, app.host_daily_summary_retention_days, now=now
+    )
+    counts["alerts"] = prune_alert_history(
+        db_path, app.alert_history_retention_days, now=now
+    )
+    counts["ssh_audit_sessions"] = prune_ssh_audit(
+        db_path, app.ssh_audit_retention_days, now=now
+    )
+    counts["alert_silences"] = prune_alert_silences(db_path, now=now)
     return counts
 
 

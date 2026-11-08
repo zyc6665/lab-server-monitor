@@ -29,6 +29,7 @@ from servermanage.config import load_config
 from servermanage.models import (
     AlertsConfig,
     AppConfig,
+    AppRuntimeConfig,
     AuthConfig,
     DashboardAuthConfig,
     DashboardConfig,
@@ -97,6 +98,17 @@ _SECTION_HOSTS = "hosts"
 
 _HOST_AUTH_TYPES = frozenset({"password", "key"})
 _DEFAULT_DISK_MOUNTS = ["/", "/data"]
+
+# Valid ranges for the v1.6 retention fields. These are enforced on save so a
+# bad value can never truncate all history or disable cleanup silently.
+_MONITORING_INT_RANGES = {
+    "host_metrics_max_points": (10, 10000),
+    "disk_health_retention_days": (1, 365),
+    "disk_health_max_batches": (1, 1000),
+    "host_daily_summary_retention_days": (7, 3650),
+    "alert_history_retention_days": (1, 3650),
+    "ssh_audit_retention_days": (1, 3650),
+}
 
 # --- Accepted field names per nested section --------------------------------
 
@@ -374,6 +386,12 @@ class SettingsService:
                 "disk_poll_interval_seconds": config.app.disk_poll_interval_seconds,
                 "concurrency": config.app.concurrency,
                 "retention_days": config.app.retention_days,
+                "host_metrics_max_points": config.app.host_metrics_max_points,
+                "disk_health_retention_days": config.app.disk_health_retention_days,
+                "disk_health_max_batches": config.app.disk_health_max_batches,
+                "host_daily_summary_retention_days": config.app.host_daily_summary_retention_days,
+                "alert_history_retention_days": config.app.alert_history_retention_days,
+                "ssh_audit_retention_days": config.app.ssh_audit_retention_days,
                 "auto_port_fallback": config.app.auto_port_fallback,
                 "tray_enabled": config.app.tray_enabled,
                 "open_browser_on_start": config.app.open_browser_on_start,
@@ -1191,7 +1209,9 @@ class SettingsService:
         self, config: AppConfig, section: str, payload: dict[str, Any]
     ) -> AppConfig:
         if section == SECTION_MONITORING:
-            return replace(config, app=_flat(config.app, payload))
+            app = _flat(config.app, payload)
+            self._validate_monitoring(app)
+            return replace(config, app=app)
         if section == SECTION_SSH:
             return replace(config, ssh=_flat(config.ssh, payload))
         if section == SECTION_SMTP:
@@ -1220,6 +1240,17 @@ class SettingsService:
                 disk_health=self._apply_disk_health(config.disk_health, payload),
             )
         raise SettingsError(f"unknown settings section: {section}")
+
+    def _validate_monitoring(self, app: AppRuntimeConfig) -> None:
+        """Reject retention values that would make history useless or unbounded."""
+        for field_name, (minimum, maximum) in _MONITORING_INT_RANGES.items():
+            value = getattr(app, field_name)
+            if not isinstance(value, int) or isinstance(value, bool):
+                raise SettingsError(f"{field_name} 必须是整数")
+            if value < minimum or value > maximum:
+                raise SettingsError(
+                    f"{field_name} 必须在 {minimum} 到 {maximum} 之间"
+                )
 
     def _apply_dashboard(
         self, dashboard: DashboardConfig, payload: dict[str, Any]

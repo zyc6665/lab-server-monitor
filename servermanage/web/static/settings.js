@@ -13,6 +13,57 @@
     window.location.reload();
   }
 
+  function watchHostCollection(names, done) {
+    var list = (names || []).filter(Boolean);
+    if (!list.length) { (done || reloadToHosts)(); return; }
+    var statusEl = qs("#host-collection-status");
+    var started = Date.now();
+    function tick() {
+      fetch("/api/settings/hosts/collection-status?names=" + encodeURIComponent(list.join(",")), {
+        credentials: "same-origin",
+      })
+        .then(function (response) {
+          if (response.status === 401) { window.location.href = "/login"; return null; }
+          return response.json().catch(function () { return {}; });
+        })
+        .then(function (payload) {
+          if (!payload) return;
+          var statuses = payload.statuses || {};
+          var doneCount = 0, failed = 0;
+          list.forEach(function (name) {
+            var state = (statuses[name] || {}).state || "unknown";
+            if (state === "done") doneCount += 1;
+            if (state === "error") failed += 1;
+          });
+          if (statusEl) {
+            status(
+              statusEl,
+              "正在采集主机数据 " + doneCount + "/" + list.length + "…",
+              false
+            );
+          }
+          if (doneCount + failed >= list.length || Date.now() - started > 60000) {
+            if (statusEl) {
+              status(
+                statusEl,
+                failed ? "采集完成，失败 " + failed + " 台" : "采集完成",
+                failed > 0
+              );
+            }
+            (done || reloadToHosts)();
+            return;
+          }
+          window.setTimeout(tick, 1000);
+        })
+        .catch(function () {
+          if (Date.now() - started > 60000) { (done || reloadToHosts)(); return; }
+          window.setTimeout(tick, 1000);
+        });
+    }
+    tick();
+  }
+  window.servermonitorWatchCollection = watchHostCollection;
+
   function qs(selector, parent) {
     return (parent || document).querySelector(selector);
   }
@@ -211,7 +262,7 @@
       var newName = window.prompt("复制为新的主机名称", name + "-copy");
       if (!newName) return;
       api("POST", "/api/settings/hosts/" + encodeURIComponent(name) + "/copy", { new_name: newName })
-        .then(function () { reloadToHosts(); })
+        .then(function () { watchHostCollection([newName]); })
         .catch(function (error) { window.alert(error.message); });
     });
   });
@@ -242,7 +293,7 @@
     var name = hostField("name").value.trim();
     if (!name) { status(hostStatus, "主机名称不能为空", true); return; }
     api("PUT", "/api/settings/hosts/" + encodeURIComponent(name), hostPayload())
-      .then(function () { reloadToHosts(); })
+      .then(function () { watchHostCollection([name]); })
       .catch(function (error) { status(hostStatus, error.message, true); });
   });
 
@@ -436,7 +487,7 @@
             (result.updated || []).length + " 台，跳过 " + (result.skipped || []).length +
             " 台，失败 " + (result.failed || []).length + " 台";
           status(importStatus, text, (result.failed || []).length > 0);
-          window.setTimeout(reloadToHosts, 250);
+          watchHostCollection((result.created || []).concat(result.updated || []));
         })
         .catch(function (error) { status(importStatus, error.message, true); });
     });

@@ -98,3 +98,31 @@ def test_configured_host_without_snapshot_opens_detail(tmp_path):
     detail = client.get("/host/new-host")
     assert detail.status_code == 200
     assert "等待首次采集" in detail.get_data(as_text=True)
+
+
+def test_v16_retention_fields_and_collection_status_ui(tmp_path):
+    client = _logged_in_client(tmp_path)
+    settings = client.get("/settings").get_data(as_text=True)
+    for field in (
+        "host_metrics_max_points",
+        "disk_health_retention_days",
+        "disk_health_max_batches",
+        "host_daily_summary_retention_days",
+        "alert_history_retention_days",
+        "ssh_audit_retention_days",
+    ):
+        assert f'data-field="{field}"' in settings
+    assert 'id="host-collection-status"' in settings
+
+    settings_js = client.get("/static/settings.js").get_data(as_text=True)
+    assert "servermonitorWatchCollection" in settings_js
+    assert "collection-status?names=" in settings_js
+
+    client.application.config["COLLECTION_STATUS_PROVIDER"] = (
+        lambda names=None: {"new-host": {"state": "done"}}
+    )
+    response = client.get("/api/settings/hosts/collection-status?names=new-host")
+    assert response.status_code == 200
+    assert response.get_json()["statuses"]["new-host"]["state"] == "done"
+
+
