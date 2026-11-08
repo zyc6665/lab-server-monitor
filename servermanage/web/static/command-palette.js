@@ -21,6 +21,8 @@
 
   var hosts = null;
   var hostsLoadedAt = 0;
+  var alerts = null;
+  var alertsLoadedAt = 0;
   var items = [];
   var activeIndex = 0;
   var currentQuery = '';
@@ -35,6 +37,20 @@
       Array.isArray(host.tags) ? host.tags.join(' ') : ''
     ].map(normalise).join(' ');
     return haystack.indexOf(query) !== -1;
+  }
+
+  function alertMatches(alert, query) {
+    var haystack = [
+      alert.host_name, alert.title, alert.message, alert.category, alert.severity
+    ].map(normalise).join(' ');
+    return haystack.indexOf(query) !== -1;
+  }
+
+  function severityLabel(severity) {
+    if (severity === 'critical') { return '严重'; }
+    if (severity === 'warning') { return '警告'; }
+    if (severity === 'info') { return '提示'; }
+    return '告警';
   }
 
   function buildItems(query) {
@@ -60,6 +76,22 @@
         online: host.online
       });
       added += 1;
+    });
+    var alertLimit = q ? 8 : 3;
+    var addedAlerts = 0;
+    (alerts || []).forEach(function (alert) {
+      if (addedAlerts >= alertLimit) { return; }
+      if (q && !alertMatches(alert, q)) { return; }
+      var label = severityLabel(alert.severity);
+      next.push({
+        type: 'alert',
+        label: alert.title || alert.message || '告警',
+        meta: [alert.host_name || '', label, alert.created_at || ''].filter(Boolean).join(' · '),
+        severity: alert.severity || 'info',
+        severityLabel: label,
+        href: '/alerts?q=' + encodeURIComponent(q || alert.host_name || '')
+      });
+      addedAlerts += 1;
     });
     return next;
   }
@@ -89,6 +121,11 @@
       badge.className = 'command-item-badge ' + (item.online === false ? 'is-offline' : 'is-online');
       badge.textContent = item.online === false ? '离线' : '在线';
       button.appendChild(badge);
+    } else if (item.type === 'alert') {
+      var severityBadge = document.createElement('span');
+      severityBadge.className = 'command-item-badge severity-' + item.severity;
+      severityBadge.textContent = item.severityLabel || '告警';
+      button.appendChild(severityBadge);
     } else {
       var kind = document.createElement('span');
       kind.className = 'command-item-kind';
@@ -120,7 +157,7 @@
     if (!items.length) {
       var empty = document.createElement('p');
       empty.className = 'command-empty';
-      empty.textContent = currentQuery ? '没有匹配的主机或页面' : '暂无可搜索内容';
+      empty.textContent = currentQuery ? '没有匹配的主机、告警或页面' : '暂无可搜索内容';
       results.appendChild(empty);
       return;
     }
@@ -154,6 +191,28 @@
     });
   }
 
+  function loadAlerts() {
+    var fresh = alerts && Date.now() - alertsLoadedAt < 60 * 1000;
+    if (fresh) { return Promise.resolve(); }
+    return fetch('/api/alerts?status=active', {
+      credentials: 'same-origin',
+      headers: { Accept: 'application/json' }
+    }).then(function (response) {
+      if (!response.ok) { return null; }
+      return response.json();
+    }).then(function (payload) {
+      alerts = (payload && payload.alerts) || [];
+      alertsLoadedAt = Date.now();
+      if (!overlay.hidden) { render(); }
+    }).catch(function () {
+      alerts = alerts || [];
+    });
+  }
+
+  function loadContext() {
+    return Promise.all([loadHosts(), loadAlerts()]);
+  }
+
   function openPalette() {
     currentQuery = '';
     input.value = '';
@@ -162,7 +221,7 @@
     document.body.classList.add('command-open');
     render();
     window.requestAnimationFrame(function () { input.focus(); });
-    loadHosts();
+    loadContext();
   }
 
   function closePalette() {

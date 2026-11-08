@@ -353,6 +353,9 @@ def test_global_command_palette_is_available(client):
     assert "function closePalette" in js
     assert "function buildItems" in js
     assert "/api/overview" in js
+    assert "/api/alerts?status=active" in js
+    assert "function alertMatches" in js
+    assert "/alerts?q=" in js
     assert "event.ctrlKey || event.metaKey" in js
     assert "ArrowDown" in js
     assert "Escape" in js
@@ -383,6 +386,15 @@ def test_alerts_page_has_status_filters_and_ack(client):
 
 
 # -- app.js / style ---------------------------------------------------------
+
+
+def test_alerts_page_supports_query_and_severity_deep_links(client):
+    html = _page(client, "/alerts?q=cpu&severity=critical")
+    assert 'value="cpu"' in html
+    assert 'value="critical" selected' in html
+    source = (STATIC / "app.js").read_text(encoding="utf-8")
+    assert "alertSearch.value" in source
+    assert "alertSeverityFilter.value" in source
 
 
 def test_app_js_keeps_terminal_and_filter_logic():

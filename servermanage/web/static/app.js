@@ -1272,6 +1272,13 @@
     var alertSearch = document.getElementById('alert-search');
     var alertSeverityFilter = document.getElementById('alert-severity-filter');
     var alertExport = document.getElementById('alert-export');
+    // 支持从命令面板/外部链接带 q、severity 参数进入告警页时直接带上筛选条件。
+    if (alertSearch && alertSearch.value) {
+      alertKeyword = alertSearch.value;
+    }
+    if (alertSeverityFilter && alertSeverityFilter.value) {
+      alertSeverity = alertSeverityFilter.value;
+    }
     if (alertSearch) {
       alertSearch.addEventListener('input', function () {
         alertKeyword = alertSearch.value || '';
