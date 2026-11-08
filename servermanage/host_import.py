@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import csv
 import io
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Iterable
 
@@ -28,6 +28,7 @@ class HostCandidate:
     name: str
     host: str
     port: int = 22
+    port_explicit: bool = True
     username: str = ""
     auth_type: str = "key"
     key_path: str | None = None
@@ -106,7 +107,7 @@ def _is_wildcard(pattern: str) -> bool:
 
 
 def _expand_identity(value: str, home: Path) -> str:
-    value = value.strip()
+    value = value.strip().replace("%d", str(home))
     if value == "~":
         return str(home)
     if value.startswith("~/"):
@@ -205,6 +206,7 @@ def parse_ssh_config(text: str | bytes, *, home: Path | None = None) -> ParseRes
                     name=alias,
                     host=host,
                     port=port,
+                    port_explicit=bool(raw_port),
                     username=username,
                     key_path=key_path,
                     warnings=tuple(candidate_warnings),
@@ -214,6 +216,138 @@ def parse_ssh_config(text: str | bytes, *, home: Path | None = None) -> ParseRes
             )
 
     return ParseResult(candidates=candidates, errors=errors, warnings=warnings)
+
+
+def _parse_star_defaults(text: str) -> dict[str, str]:
+    """Return option values from the last/first ``Host *`` block.
+
+    OpenSSH applies ``Host *`` as a defaults block.  A compact parser is enough
+    here: take the first value of each option in the first ``Host *`` block.
+    """
+
+    defaults: dict[str, str] = {}
+    in_star = False
+    for raw in text.splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        parts = line.split(None, 1)
+        keyword = parts[0].lower()
+        value = _unquote(parts[1]) if len(parts) > 1 else ""
+        if keyword == "host":
+            in_star = "*" in value.split()
+            continue
+        if keyword in ("match", "include"):
+            in_star = False
+            continue
+        if not in_star:
+            continue
+        if keyword not in defaults and value:
+            defaults[keyword] = value
+    return defaults
+
+
+def _replace_ssh_tokens(value: str, *, home: Path, host: str, username: str) -> str:
+    return (
+        value.replace("%d", str(home))
+        .replace("%h", host)
+        .replace("%u", username)
+    )
+
+
+def apply_import_defaults(
+    result: ParseResult,
+    text: str | bytes,
+    *,
+    home: Path | None = None,
+    default_username: str | None = None,
+) -> ParseResult:
+    """Fill OpenSSH defaults and local key fallbacks for import candidates.
+
+    This is intentionally separate from :func:`parse_ssh_config`: the generic
+    parser stays strict for CSV/YAML and the connection wizard, while the SSH
+    config import flow may create hosts that still need credentials.
+    """
+
+    text = _decode(text)
+    home_path = Path(home) if home is not None else Path.home()
+    defaults = _parse_star_defaults(text)
+    default_user = defaults.get("user") or (default_username or "")
+    default_identity = defaults.get("identityfile", "")
+
+    resolved: list[HostCandidate] = []
+    warnings = list(result.warnings)
+    unused_tokens_seen = False
+    for candidate in result.candidates:
+        host = _replace_ssh_tokens(
+            candidate.host,
+            home=home_path,
+            host=candidate.host,
+            username=candidate.username or default_user,
+        )
+        username = _replace_ssh_tokens(
+            candidate.username or default_user,
+            home=home_path,
+            host=host,
+            username=candidate.username or default_user,
+        )
+        port = candidate.port
+        if not candidate.port_explicit and defaults.get("port"):
+            default_port = _int_or_none(defaults["port"])
+            if default_port is not None and 0 < default_port < 65536:
+                port = default_port
+        key_path = candidate.key_path
+        if key_path:
+            key_path = _replace_ssh_tokens(
+                key_path, home=home_path, host=host, username=username
+            )
+        elif default_identity:
+            key_path = _expand_identity(
+                _replace_ssh_tokens(
+                    default_identity, home=home_path, host=host, username=username
+                ),
+                home_path,
+            )
+        elif not key_path:
+            for name in ("id_ed25519", "id_rsa"):
+                candidate_path = home_path / ".ssh" / name
+                if candidate_path.exists():
+                    key_path = str(candidate_path)
+                    break
+
+        candidate_warnings = list(candidate.warnings)
+        if not username:
+            candidate_warnings.append("未指定用户名，导入后需补用户名")
+        if candidate.auth_type == "key" and not key_path:
+            candidate_warnings.append("未指定 IdentityFile，导入后需补私钥或密码")
+        elif candidate.auth_type == "key" and key_path and not Path(key_path).exists():
+            candidate_warnings.append(f"私钥文件不存在: {key_path}")
+        if "%" in (key_path or "") or "%" in host:
+            unused_tokens_seen = True
+            candidate_warnings.append("包含未识别的 SSH 配置占位符，请检查")
+
+        valid_port = isinstance(port, int) and 0 < port < 65536
+        valid = bool(candidate.name and host and valid_port) and candidate.error is None
+        resolved.append(
+            replace(
+                candidate,
+                host=host,
+                port=port,
+                username=username,
+                key_path=key_path,
+                warnings=tuple(dict.fromkeys(candidate_warnings)),
+                valid=valid,
+            )
+        )
+        warnings.extend(candidate_warnings)
+
+    if unused_tokens_seen:
+        warnings.append("部分 SSH 配置包含未识别占位符，请确认导入后配置")
+    return ParseResult(
+        candidates=resolved,
+        errors=list(result.errors),
+        warnings=list(dict.fromkeys(warnings)),
+    )
 
 
 # ---------------------------------------------------------------------------

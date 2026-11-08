@@ -1,0 +1,82 @@
+name: release-windows
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version, e.g. 1.5.1"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Enable pnpm
+        run: corepack enable && corepack prepare pnpm@12.14.0 --activate
+        shell: pwsh
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[build]"
+        shell: pwsh
+
+      - name: Resolve version
+        id: version
+        run: |
+          if ("${{ github.event_name }}" -eq "workflow_dispatch") {
+            $version = "${{ inputs.version }}"
+          } else {
+            $version = "${{ github.ref_name }}".TrimStart("v")
+          }
+          if ([string]::IsNullOrWhiteSpace($version)) { throw "version is required" }
+          python tools/bump_version.py $version
+          "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+        shell: pwsh
+
+      - name: Build Python backend
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File packaging/build-backend.ps1
+        shell: pwsh
+
+      - name: Build portable package
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File desktop/scripts/build-portable.ps1
+        shell: pwsh
+
+      - name: Write checksum
+        run: |
+          $zip = Get-ChildItem -LiteralPath release -Filter "*.zip" | Select-Object -First 1
+          if (-not $zip) { throw "release zip not found" }
+          $hash = (Get-FileHash -LiteralPath $zip.FullName -Algorithm SHA256).Hash.ToLower()
+          "$hash  $($zip.Name)" | Out-File -LiteralPath "$($zip.FullName).sha256" -Encoding ascii
+        shell: pwsh
+
+      - name: Publish GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.version.outputs.version }}
+          name: v${{ steps.version.outputs.version }}
+          draft: false
+          prerelease: false
+          files: |
+            release/*.zip
+            release/*.zip.sha256

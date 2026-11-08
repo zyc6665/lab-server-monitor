@@ -41,8 +41,14 @@ function Resolve-ProjectRoot {
 
 $projectRoot = Resolve-ProjectRoot
 $desktopDir = Join-Path $projectRoot 'desktop'
+$packageJson = Get-Content -LiteralPath (Join-Path $desktopDir 'package.json') -Raw | ConvertFrom-Json
+$appVersion = [string]$packageJson.version
+if ([string]::IsNullOrWhiteSpace($appVersion)) {
+    throw 'desktop/package.json has no version'
+}
 Write-Host "Project root: $projectRoot" -ForegroundColor Cyan
 Write-Host "Desktop dir:  $desktopDir" -ForegroundColor Cyan
+Write-Host "App version:  $appVersion" -ForegroundColor Cyan
 
 # --- 1. Backend sidecar (build first if missing) ----------------------------
 $backendDir = Join-Path $projectRoot 'dist/backend/servermonitor-backend'
@@ -128,6 +134,13 @@ $backendTarget = Join-Path $stagingDir 'resources/backend'
 New-Item -ItemType Directory -Path $backendTarget -Force | Out-Null
 Copy-Item -Path (Join-Path $backendDir '*') -Destination $backendTarget -Recurse -Force
 
+# The updater launches this script in place after verifying the downloaded zip.
+$applyUpdate = Join-Path $desktopDir 'scripts/apply-update.ps1'
+if (-not (Test-Path $applyUpdate)) {
+    throw "apply-update.ps1 not found: $applyUpdate"
+}
+Copy-Item -LiteralPath $applyUpdate -Destination $stagingDir -Force
+
 # Seed config/config.yaml from the example only when staging has no config.
 # Existing configs (upgrade scenario) are preserved untouched.
 $stageConfigDir = Join-Path $stagingDir 'config'
@@ -162,7 +175,7 @@ foreach ($name in $launchers) {
 # --- 4. Compress into the release zip --------------------------------------
 $releaseDir = Join-Path $projectRoot 'release'
 New-Item -ItemType Directory -Path $releaseDir -Force | Out-Null
-$zipPath = Join-Path $releaseDir '服务器轮询监测工具-Windows-x64-v1.4.1.zip'
+$zipPath = Join-Path $releaseDir ("服务器轮询监测工具-Windows-x64-v{0}.zip" -f $appVersion)
 
 if (Test-Path $zipPath) {
     # Compress-Archive -Force overwrites the existing archive in place.

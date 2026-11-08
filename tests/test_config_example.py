@@ -77,5 +77,5 @@ def test_example_config_documents_root_and_data_mounts():
     assert "servers: []" in text
 
 
-def test_project_version_is_1_4_0():
-    assert 'version = "1.4.1"' in PYPROJECT.read_text(encoding="utf-8")
+def test_project_version_is_1_5_0():
+    assert 'version = "1.5.0"' in PYPROJECT.read_text(encoding="utf-8")

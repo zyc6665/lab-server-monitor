@@ -17,6 +17,7 @@ const {
 
 const { resolveAppDir, electronUserData, logsDir } = require('./paths.js');
 const { createBackendController } = require('./backend.js');
+const { createUpdater } = require('./updater.js');
 const {
   trayMenuTemplate,
   shouldHideOnClose,
@@ -39,6 +40,7 @@ app.setPath('userData', electronUserData(appDir));
 let mainWindow = null;
 let tray = null;
 let backend = null;
+let updater = null;
 let quitting = false;
 let cleanupDone = false;
 let currentRuntimeUrl = '';
@@ -236,6 +238,20 @@ async function bootstrap() {
   mainWindow = createWindow();
   createTray();
   registerIpc();
+
+  updater = createUpdater({
+    app,
+    appDir,
+    updatesDir: path.join(appDir, 'data', 'updates'),
+    ipcMain,
+    currentVersion: app.getVersion(),
+    getWindow: () => mainWindow,
+    requestQuit: quitApp,
+    logger: {
+      info: (message) => appendLog(String(message)),
+    },
+  });
+  updater.init();
 
   try {
     await startBackendAndLoad();

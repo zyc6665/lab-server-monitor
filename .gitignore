@@ -20,6 +20,8 @@ desktop/release-electron/
 desktop/build/portable/
 release/
 .tmp/
+.superpowers/
+samples/
 
 # Virtual environments
 .venv/
@@ -29,7 +31,8 @@ env/
 # Local runtime files
 logs/
 *.log
-data/*.db
+data/*
+!data/.gitkeep
 
 # Local configuration and secrets
 .env

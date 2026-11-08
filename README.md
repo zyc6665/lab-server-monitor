@@ -2,6 +2,8 @@
 
 这是一个给多台 Linux 服务器做日报巡检的 Docker 工具喵～
 
+> **1.5.0 新增**：设置页可一键读取本机 `~/.ssh/config`，勾选要监控的主机批量导入；客户端内置版本检查、下载、SHA256 校验与自动更新。GitHub 发布仓库 `zyc6665/lab-server-monitor`。
+>
 > **1.3.1 修复**：会话安全令牌过期时不再显示白屏「CSRF 校验失败」；退出登录不受令牌过期影响；示例配置默认不启用日报/周报，避免占位 SMTP 反复报错。会话 Cookie 按端口隔离，避免与旧版本实例互相覆盖。
 
 它会做这些事：
@@ -495,7 +497,7 @@ pwsh desktop/scripts/build-portable.ps1
 
 脚本会构建 Python 后端 sidecar、执行 `pnpm install` 与 `pnpm run build`（electron-builder），
 把产物组装到 `desktop/build/portable/servermonitor/`，并压缩为
-`release/服务器轮询监测工具-Windows-x64-v1.4.1.zip`。
+`release/服务器轮询监测工具-Windows-x64-v<版本号>.zip`。
 
 ### 二、解压后的目录结构
 
@@ -538,6 +540,19 @@ pwsh desktop/scripts/build-portable.ps1
 用当前 Windows 账户的 DPAPI 加密保存在 `data\servermonitor.db`，界面永不回显原文。
 
 ---
+
+## v1.5 更新（SSH 配置导入与自动更新）
+
+版本 **1.5.0** 增加了日常部署与升级最省事的两项能力：
+
+- **从 SSH 配置读取主机**：设置 →「主机与 SSH」→「从 SSH 配置读取」，自动解析本机
+  `%USERPROFILE%\.ssh\config`，列出候选主机（名称/地址/端口/用户/私钥），勾选后批量导入；
+  缺少私钥的主机会标记为待补凭据，不会伪造。
+- **应用内自动更新**：设置 →「看板与安全」→「软件更新」可检查 GitHub Releases 最新版本，
+  下载更新包并校验 SHA256，确认后自动替换程序并重启；`config/`、`data/`、`logs/` 不受影响。
+- GitHub 发布：标签 `v*` 或手动触发 `release-windows` 工作流，自动构建绿色包、生成
+  `.zip.sha256` 并发布到 `zyc6665/lab-server-monitor`。
+- 版本号用 `python tools/bump_version.py 1.5.0` 一键同步。
 
 ## v1.4 更新（桌面客户端）
 

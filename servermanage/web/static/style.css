@@ -667,3 +667,16 @@ a:hover { text-decoration: underline; }
 .settings-card .field select,
 .settings-card .field textarea { min-height: 36px; }
 .settings-empty { padding: 18px; text-align: center; color: var(--text-muted); }
+
+.update-notes {
+  margin: 0;
+  padding: 10px 12px;
+  max-height: 180px;
+  overflow: auto;
+  white-space: pre-wrap;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text-muted);
+  background: #f7f9fc;
+  border-radius: 8px;
+}

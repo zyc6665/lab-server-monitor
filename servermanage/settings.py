@@ -23,6 +23,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Union, get_args, get_origin, get_type_hints
 
+from servermanage import __version__ as APP_VERSION
 from servermanage import security, storage
 from servermanage.config import load_config
 from servermanage.models import (
@@ -364,6 +365,7 @@ class SettingsService:
         config = self.load()
         return {
             "writable": self.is_writable(),
+            "version": APP_VERSION,
             "desktop_mode": os.environ.get("SERVERMONITOR_DESKTOP") == "1",
             "setup_required": self.setup_required(),
             "monitoring": {
@@ -466,7 +468,13 @@ class SettingsService:
                 return host
         return None
 
-    def upsert_host(self, name: str, payload: dict[str, Any]) -> AppConfig:
+    def upsert_host(
+        self,
+        name: str,
+        payload: dict[str, Any],
+        *,
+        allow_missing_credentials: bool = False,
+    ) -> AppConfig:
         """Create or update host *name* and return the recomposed config.
 
         ``password`` / ``private_key`` / ``passphrase`` are write-only: they are moved into
@@ -500,15 +508,26 @@ class SettingsService:
         key_path = str(key_path_raw).strip() if key_path_raw not in (None, "") else None
 
         # Credentials first: a failed secret write must not mutate the inventory.
-        self._apply_host_secrets(
-            name,
-            auth_type,
-            password=_optional_text(payload.get("password")),
-            private_key=_optional_text(payload.get("private_key")),
-            passphrase=_optional_text(payload.get("passphrase")),
-            key_path=key_path,
-            clear_secrets=clear_secrets,
+        has_inline_secret = bool(
+            _optional_text(payload.get("private_key"))
+            or _optional_text(payload.get("password"))
+            or _optional_text(payload.get("passphrase"))
         )
+        if not (
+            allow_missing_credentials
+            and auth_type == "key"
+            and key_path is None
+            and not has_inline_secret
+        ):
+            self._apply_host_secrets(
+                name,
+                auth_type,
+                password=_optional_text(payload.get("password")),
+                private_key=_optional_text(payload.get("private_key")),
+                passphrase=_optional_text(payload.get("passphrase")),
+                key_path=key_path,
+                clear_secrets=clear_secrets,
+            )
 
         entry = {
             "name": name,
@@ -560,7 +579,9 @@ class SettingsService:
             groups.add(group)
         return sorted(groups)
 
-    def _validate_import_candidate(self, raw: Any) -> dict[str, Any]:
+    def _validate_import_candidate(
+        self, raw: Any, *, allow_missing_credentials: bool = False
+    ) -> dict[str, Any]:
         if not isinstance(raw, dict):
             raise SettingsError("主机条目必须是对象")
         if raw.get("valid") is False:
@@ -578,6 +599,10 @@ class SettingsService:
             raise SettingsError(f"不支持的认证方式: {auth_type}")
         payload["auth_type"] = auth_type
         payload["port"] = _coerce_port(raw.get("port", 22))
+        if allow_missing_credentials:
+            # SSH-config import may create a host that still needs credentials;
+            # the UI marks it as "待补凭据".  Never invent a secret here.
+            return payload
         # Mirror _apply_host_secrets(): fail before any write when the selected
         # auth method has no usable credential source.
         clear = set(_string_list(raw.get("clear_secrets")))
@@ -605,7 +630,11 @@ class SettingsService:
         return payload
 
     def import_hosts(
-        self, candidates: list[dict], *, overwrite: bool = False
+        self,
+        candidates: list[dict],
+        *,
+        overwrite: bool = False,
+        allow_missing_credentials: bool = False,
     ) -> dict[str, list]:
         """Validate every candidate before writing any of them, then upsert."""
         if not self.is_writable():
@@ -649,7 +678,9 @@ class SettingsService:
                 skipped.append(name)
                 continue
             try:
-                payload = self._validate_import_candidate(raw)
+                payload = self._validate_import_candidate(
+                    raw, allow_missing_credentials=allow_missing_credentials
+                )
             except SettingsError as exc:
                 failed.append({"name": name, "error": str(exc)})
                 continue
@@ -661,7 +692,11 @@ class SettingsService:
         for payload in validated:
             name = payload["name"]
             try:
-                self.upsert_host(name, payload)
+                self.upsert_host(
+                    name,
+                    payload,
+                    allow_missing_credentials=allow_missing_credentials,
+                )
             except SettingsError as exc:
                 failed.append({"name": name, "error": str(exc)})
                 continue

@@ -257,10 +257,10 @@ def test_import_hosts_captures_write_time_failure(tmp_path, monkeypatch):
     svc = _service(tmp_path)
     original = svc.upsert_host
 
-    def flaky(name, payload):
+    def flaky(name, payload, **kwargs):
         if name == "b":
             raise SettingsError("write boom")
-        return original(name, payload)
+        return original(name, payload, **kwargs)
 
     monkeypatch.setattr(svc, "upsert_host", flaky)
     result = svc.import_hosts(

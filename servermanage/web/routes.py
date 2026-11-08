@@ -16,6 +16,7 @@ HTML page routes.
 from __future__ import annotations
 
 import base64
+import getpass
 import hmac
 import logging
 import os
@@ -141,8 +142,12 @@ def _settings_snapshot(config: AppConfig) -> dict[str, Any]:
                 ),
             }
         )
+    from servermanage import __version__ as app_version
+
     return {
         "writable": False,
+        "version": app_version,
+        "desktop_mode": False,
         "setup_required": False,
         "monitoring": {
             "timezone": config.app.timezone,
@@ -290,6 +295,33 @@ def _parse_import_payload(payload: dict[str, Any]):
     if not isinstance(content, str):
         return None, (jsonify({"error": "invalid_payload"}), 400)
     return parser(content), None
+
+
+def _ssh_config_path() -> Path:
+    """Fixed location of the current user's OpenSSH client config."""
+    return Path.home() / ".ssh" / "config"
+
+
+def _read_ssh_config_candidates():
+    """Read and normalise the local SSH config.
+
+    Returns ``(path, exists, result)``.  The file is read as bytes so the parser
+    can try UTF-8-sig and fall back to GB18030; only the fixed user config path
+    is ever read, never a caller-supplied one.
+    """
+    path = _ssh_config_path()
+    if not path.is_file():
+        return path, False, host_import.ParseResult()
+    home = path.parent.parent
+    raw = path.read_bytes()
+    parsed = host_import.parse_ssh_config(raw, home=home)
+    result = host_import.apply_import_defaults(
+        parsed,
+        raw,
+        home=home,
+        default_username=getpass.getuser(),
+    )
+    return path, True, result
 
 
 def _truthy_arg(value: Any, default: bool = False) -> bool:
@@ -1369,6 +1401,75 @@ def register_routes(app: Flask) -> None:
                 "candidates": [asdict(candidate) for candidate in parsed.candidates],
                 "errors": parsed.errors,
                 "warnings": parsed.warnings,
+            }
+        )
+
+    @app.get("/api/settings/hosts/ssh-config")
+    def api_ssh_config_preview():
+        """Return hosts parsed from the local ``~/.ssh/config`` for confirmation."""
+        service, error = _settings_or_404(app)
+        if error is not None:
+            return error
+        path, exists, parsed = _read_ssh_config_candidates()
+        return jsonify(
+            {
+                "path": str(path),
+                "exists": exists,
+                "default_username": getpass.getuser(),
+                "candidates": [asdict(candidate) for candidate in parsed.candidates],
+                "errors": parsed.errors,
+                "warnings": parsed.warnings,
+            }
+        )
+
+    @app.post("/api/settings/hosts/ssh-config/import")
+    def api_ssh_config_import():
+        """Import selected hosts from ``~/.ssh/config``.
+
+        The file is re-read server-side; ``names`` only selects from the fresh
+        parse, so a browser cannot inject a made-up host or credential.
+        """
+        service, error = _settings_or_404(app)
+        if error is not None:
+            return error
+        rejection = _ensure_writable(service)
+        if rejection is not None:
+            return rejection
+        payload = request.get_json(silent=True)
+        if not isinstance(payload, dict):
+            return jsonify({"error": "invalid_payload"}), 400
+        names = payload.get("names")
+        if names is not None and (
+            not isinstance(names, list) or not all(isinstance(n, str) for n in names)
+        ):
+            return jsonify({"error": "invalid_payload"}), 400
+        _path, exists, parsed = _read_ssh_config_candidates()
+        selected = set(names) if names is not None else None
+        candidates = [
+            asdict(candidate)
+            for candidate in parsed.candidates
+            if selected is None or candidate.name in selected
+        ]
+        if selected is not None and not candidates:
+            return jsonify(
+                {"ok": False, "error": "no_matching_hosts", "candidates": []}
+            ), 400
+        try:
+            result = service.import_hosts(
+                candidates,
+                overwrite=_truthy_arg(payload.get("overwrite")),
+                allow_missing_credentials=True,
+            )
+        except SettingsError as exc:
+            return jsonify({"error": str(exc)}), 400
+        _refresh_config(app)
+        return jsonify(
+            {
+                "ok": True,
+                "exists": exists,
+                "parse_errors": parsed.errors,
+                "warnings": parsed.warnings,
+                **result,
             }
         )
 
