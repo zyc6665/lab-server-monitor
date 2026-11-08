@@ -754,3 +754,29 @@ def test_logs_download_returns_404_when_log_missing(client, monkeypatch):
 
     monkeypatch.setattr(routes, "_LOG_FILE", routes.Path("does-not-exist.log"))
     assert client.get("/api/logs/download").status_code == 404
+
+
+def test_system_restore_accepts_own_backup_and_keeps_safety_copy(client):
+    backup = client.get("/api/system/backup").data
+    response = client.post(
+        "/api/system/restore",
+        data={"file": (__import__("io").BytesIO(backup), "backup.db")},
+        content_type="multipart/form-data",
+    )
+    assert response.status_code == 200
+    body = response.get_json()
+    assert body["ok"] is True
+    assert body["restart_required"] is True
+    from pathlib import Path
+
+    assert Path(body["safety_backup"]).is_file()
+
+
+def test_system_restore_rejects_non_sqlite_file(client):
+    response = client.post(
+        "/api/system/restore",
+        data={"file": (__import__("io").BytesIO(b"not a database"), "bad.db")},
+        content_type="multipart/form-data",
+    )
+    assert response.status_code == 400
+    assert "SQLite" in response.get_json()["error"]

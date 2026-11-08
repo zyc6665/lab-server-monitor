@@ -1254,6 +1254,44 @@ def register_routes(app: Flask) -> None:
             },
         )
 
+    @app.post("/api/system/restore")
+    def api_system_restore():
+        """Restore the database from an uploaded backup (admin only)."""
+        if request.content_length and request.content_length > 100 * 1024 * 1024:
+            return jsonify({"error": "备份文件不能超过 100 MB"}), 413
+        upload = request.files.get("file")
+        if upload is None or not upload.filename:
+            return jsonify({"error": "请选择备份文件"}), 400
+
+        handle, temp_name = tempfile.mkstemp(prefix="servermonitor-restore-", suffix=".db")
+        os.close(handle)
+        incoming = Path(temp_name)
+        try:
+            upload.save(incoming)
+            try:
+                storage.validate_backup_database(incoming)
+            except ValueError as exc:
+                return jsonify({"error": str(exc)}), 400
+
+            db_path = _db_path(app)
+            safety_dir = db_path.parent / "backups"
+            safety_dir.mkdir(parents=True, exist_ok=True)
+            stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+            safety = safety_dir / f"pre-restore-{stamp}.db"
+            storage.backup_database(db_path, safety)
+            storage.restore_database(incoming, db_path)
+        finally:
+            incoming.unlink(missing_ok=True)
+
+        return jsonify(
+            {
+                "ok": True,
+                "restart_required": True,
+                "safety_backup": str(safety),
+                "message": "数据库已恢复，请关闭并重新打开工具使配置生效。",
+            }
+        )
+
     @app.get("/api/system/config-export")
     def api_system_config_export():
         """Download the non-secret configuration as a JSON document."""

@@ -909,3 +909,7 @@ html[data-theme="dark"] .badge-offline { background: #451a1a; color: #fca5a5; }
 
 .backup-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin: 14px 0 4px; }
 .backup-actions a.secondary-button { text-decoration: none; display: inline-flex; align-items: center; }
+
+.restore-box { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--border); }
+.restore-head { font-weight: 600; margin-bottom: 4px; }
+.restore-box input[type="file"] { font-size: 13px; max-width: 320px; }

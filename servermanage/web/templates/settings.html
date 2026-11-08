@@ -316,6 +316,15 @@
       <a class="secondary-button" href="/api/logs/download" download>下载日志</a>
       <span class="muted">配置导出不包含密码、SSH 口令等敏感信息。</span>
     </div>
+    <div class="restore-box">
+      <div class="restore-head">恢复数据库</div>
+      <p class="muted">选择本工具导出的 .db 备份文件。恢复会覆盖当前配置和历史数据，操作前会自动保存一份当前数据库。</p>
+      <div class="backup-actions">
+        <input type="file" id="restore-file" accept=".db,application/octet-stream">
+        <button type="button" class="secondary-button" id="restore-button">恢复数据库</button>
+        <span class="muted" id="restore-status"></span>
+      </div>
+    </div>
     <div class="table-wrap">
       <table class="data-table">
         <thead><tr><th>调度任务</th><th>最近运行</th><th>结果</th></tr></thead>

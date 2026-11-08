@@ -98,5 +98,58 @@
   if (button) { button.addEventListener('click', load); }
   var tab = document.querySelector('[data-settings-tab="health"]');
   if (tab) { tab.addEventListener('click', load); }
+
+  function setupRestore() {
+    var fileInput = document.getElementById('restore-file');
+    var restoreButton = document.getElementById('restore-button');
+    var status = document.getElementById('restore-status');
+    if (!fileInput || !restoreButton || !status) { return; }
+    restoreButton.addEventListener('click', function () {
+      if (!fileInput.files || !fileInput.files.length) {
+        status.textContent = '请先选择 .db 备份文件。';
+        return;
+      }
+      if (!window.confirm('恢复会覆盖当前配置和历史数据。当前数据库会先自动备份，确定继续吗？')) {
+        return;
+      }
+      var root = document.getElementById('settings-root');
+      var form = new FormData();
+      form.append('file', fileInput.files[0]);
+      restoreButton.disabled = true;
+      status.textContent = '正在恢复…';
+      fetch('/api/system/restore', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'X-CSRF-Token': root ? root.getAttribute('data-csrf') : '' },
+        body: form
+      }).then(function (response) {
+        return response.json().catch(function () { return null; }).then(function (body) {
+          if (!response.ok) {
+            throw new Error((body && body.error) || '恢复失败，请检查备份文件。');
+          }
+          return body;
+        });
+      }).then(function (payload) {
+        status.textContent = payload.message || '恢复完成。';
+        if (window.desktopBridge && window.desktopBridge.restartBackend) {
+          status.textContent = '恢复完成，正在重启服务…';
+          window.desktopBridge.restartBackend().then(function (result) {
+            if (!result || result.ok !== true) {
+              status.textContent = '数据库已恢复，但服务重启失败，请手动关闭并重新打开工具。';
+            }
+          }).catch(function () {
+            status.textContent = '数据库已恢复，但服务重启失败，请手动关闭并重新打开工具。';
+          });
+        } else {
+          window.alert('数据库已恢复，请关闭并重新打开工具使配置生效。');
+        }
+      }).catch(function (error) {
+        status.textContent = error.message || '恢复失败。';
+      }).then(function () {
+        restoreButton.disabled = false;
+      });
+    });
+  }
+  setupRestore();
   load();
 })();

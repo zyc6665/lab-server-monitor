@@ -2310,3 +2310,48 @@ def backup_database(db_path: Path, destination: Path) -> None:
     finally:
         target.close()
         source.close()
+
+
+def validate_backup_database(path: Path) -> None:
+    """Raise ``ValueError`` unless *path* is a healthy server-monitor SQLite DB."""
+    path = Path(path)
+    try:
+        with path.open("rb") as handle:
+            header = handle.read(16)
+    except OSError as exc:
+        raise ValueError("无法读取备份文件") from exc
+    if header != b"SQLite format 3\x00":
+        raise ValueError("不是有效的 SQLite 数据库文件")
+
+    try:
+        connection = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+        try:
+            check = connection.execute("PRAGMA integrity_check").fetchone()
+            if not check or check[0] != "ok":
+                raise ValueError("数据库完整性检查失败")
+            tables = {
+                row[0]
+                for row in connection.execute(
+                    "SELECT name FROM sqlite_master WHERE type = 'table'"
+                ).fetchall()
+            }
+        finally:
+            connection.close()
+    except sqlite3.DatabaseError as exc:
+        raise ValueError("无法打开数据库文件") from exc
+
+    if not {"app_settings", "app_secrets"} <= tables:
+        raise ValueError("备份文件不是本工具的数据库")
+
+
+def restore_database(source: Path, destination: Path) -> None:
+    """Replace *destination* with the contents of *source* using SQLite backup."""
+    source = Path(source)
+    destination = Path(destination)
+    source_connection = sqlite3.connect(f"file:{source}?mode=ro", uri=True)
+    target_connection = sqlite3.connect(destination, timeout=30)
+    try:
+        source_connection.backup(target_connection)
+    finally:
+        target_connection.close()
+        source_connection.close()
