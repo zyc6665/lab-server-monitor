@@ -14,21 +14,27 @@ INIT_PY = ROOT / "servermanage" / "__init__.py"
 
 
 def _replace_pyproject(text: str, version: str) -> str:
-    return re.sub(
+    updated, count = re.subn(
         r'(?m)^version\s*=\s*"[^"]+"',
         f'version = "{version}"',
         text,
         count=1,
     )
+    if count != 1:
+        raise SystemExit("pyproject.toml version not found")
+    return updated
 
 
 def _replace_init(text: str, version: str) -> str:
-    return re.sub(
+    updated, count = re.subn(
         r'(?m)^__version__\s*=\s*"[^"]+"',
         f'__version__ = "{version}"',
         text,
         count=1,
     )
+    if count != 1:
+        raise SystemExit("servermanage/__init__.py __version__ not found")
+    return updated
 
 
 def bump(version: str) -> None:
@@ -36,10 +42,9 @@ def bump(version: str) -> None:
         raise SystemExit(f"invalid version: {version}")
 
     pyproject = PYPROJECT.read_text(encoding="utf-8")
-    updated = _replace_pyproject(pyproject, version)
-    if updated == pyproject:
-        raise SystemExit("pyproject.toml version not found")
-    PYPROJECT.write_text(updated, encoding="utf-8", newline="\n")
+    PYPROJECT.write_text(
+        _replace_pyproject(pyproject, version), encoding="utf-8", newline="\n"
+    )
 
     package = json.loads(PACKAGE_JSON.read_text(encoding="utf-8"))
     package["version"] = version
@@ -50,10 +55,9 @@ def bump(version: str) -> None:
     )
 
     init_text = INIT_PY.read_text(encoding="utf-8")
-    updated_init = _replace_init(init_text, version)
-    if updated_init == init_text:
-        raise SystemExit("servermanage/__init__.py __version__ not found")
-    INIT_PY.write_text(updated_init, encoding="utf-8", newline="\n")
+    INIT_PY.write_text(
+        _replace_init(init_text, version), encoding="utf-8", newline="\n"
+    )
 
 
 def main() -> int:

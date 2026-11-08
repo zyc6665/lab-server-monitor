@@ -1,4 +1,4 @@
-﻿param(
+param(
     [Parameter(Mandatory = $true)][string]$ZipPath,
     [Parameter(Mandatory = $true)][string]$AppDir,
     [int]$WaitPid = 0
@@ -31,7 +31,7 @@ function Copy-WithRetry([string]$Source, [string]$Destination, [switch]$Recurse)
 }
 
 $Stage = Join-Path $env:TEMP ("servermonitor-update-" + [guid]::NewGuid().ToString("N"))
-$Backup = Join-Path $AppDir ("update-backup-" + (Get-Date).ToString("yyyyMMdd-HHmmss"))
+$Backup = Join-Path $env:TEMP ("servermonitor-backup-" + (Get-Date).ToString("yyyyMMdd-HHmmss"))
 $Started = $false
 
 try {
@@ -76,6 +76,7 @@ try {
 
     Write-Log "update files replaced"
     Remove-Item -LiteralPath $Stage -Recurse -Force -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath $Backup -Recurse -Force -ErrorAction SilentlyContinue
     $exe = Join-Path $AppDir "servermonitor.exe"
     if (Test-Path -LiteralPath $exe) {
         Start-Process -FilePath $exe -WorkingDirectory $AppDir
