@@ -81,18 +81,18 @@
     <table class="data-table" id="host-table"{% if not hosts %} hidden{% endif %}>
       <thead>
         <tr>
-          <th>名称</th>
-          <th>地址</th>
-          <th>分组</th>
-          <th>负责人</th>
-          <th>状态</th>
-          <th>CPU</th>
-          <th>内存</th>
-          <th>磁盘</th>
-          <th>GPU 显存</th>
-          <th>登录用户</th>
-          <th>磁盘健康</th>
-          <th>采集时间</th>
+          <th data-sort-key="name">名称</th>
+          <th data-sort-key="host">地址</th>
+          <th data-sort-key="group">分组</th>
+          <th data-sort-key="owner">负责人</th>
+          <th data-sort-key="status">状态</th>
+          <th data-sort-key="cpu">CPU</th>
+          <th data-sort-key="memory">内存</th>
+          <th data-sort-key="disk">磁盘</th>
+          <th data-sort-key="gpu">GPU 显存</th>
+          <th data-sort-key="users">登录用户</th>
+          <th data-sort-key="health">磁盘健康</th>
+          <th data-sort-key="collected">采集时间</th>
           <th>操作</th>
         </tr>
       </thead>

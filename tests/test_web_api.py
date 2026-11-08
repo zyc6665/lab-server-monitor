@@ -356,8 +356,8 @@ def test_overview_page_has_filter_controls(tmp_path):
     assert 'id="filter-group"' in html
     assert 'id="filter-status"' in html
     assert 'id="filter-keyword"' in html
-    assert "<th>分组</th>" in html
-    assert "<th>负责人</th>" in html
+    assert ">分组</th>" in html
+    assert ">负责人</th>" in html
 
 
 def test_logout_clears_session(env):

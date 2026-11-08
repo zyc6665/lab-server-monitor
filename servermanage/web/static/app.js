@@ -8,6 +8,11 @@
   var REFRESH_MS = 30000;
   // 告警页当前筛选：active（默认，仅活动告警）或 all（全部）。
   var alertStatus = 'active';
+  var lastHosts = [];
+  var hostsLoaded = false;
+  var hostSortKey = '';
+  var hostSortDir = 1;
+  var silenceTarget = null;
 
   function redirectToLogin() {
     if (window.location.pathname !== '/login') {
@@ -27,6 +32,13 @@
     var opts = options || {};
     var method = (opts.method || 'GET').toUpperCase();
     var headers = { 'Accept': 'application/json' };
+    if (opts.headers) {
+      for (var key in opts.headers) {
+        if (Object.prototype.hasOwnProperty.call(opts.headers, key)) {
+          headers[key] = opts.headers[key];
+        }
+      }
+    }
     if (method !== 'GET' && method !== 'HEAD') {
       var token = csrfToken();
       if (token) { headers['X-CSRF-Token'] = token; }
@@ -36,6 +48,7 @@
       headers: headers
     };
     if (opts.method) { base.method = opts.method; }
+    if (opts.body !== undefined) { base.body = opts.body; }
 
     return fetch(url, base).then(function (response) {
       if (response.status === 401) {
@@ -52,6 +65,28 @@
       return response.json();
     });
   }
+
+  // 轻量 toast：所有页面共用，不依赖任何第三方组件。
+  function showToast(message, kind) {
+    var container = document.getElementById('toast-container');
+    if (!container) {
+      container = document.createElement('div');
+      container.id = 'toast-container';
+      container.className = 'toast-container';
+      document.body.appendChild(container);
+    }
+    var toast = document.createElement('div');
+    toast.className = 'toast toast-' + (kind || 'info');
+    toast.textContent = String(message || '');
+    container.appendChild(toast);
+    window.setTimeout(function () {
+      toast.classList.add('toast-out');
+      window.setTimeout(function () {
+        if (toast.parentNode) { toast.parentNode.removeChild(toast); }
+      }, 220);
+    }, 2600);
+  }
+  window.servermonitorToast = showToast;
 
   function formatPercent(value) {
     if (value === null || value === undefined || value === '') { return '—'; }
@@ -205,23 +240,90 @@
     }
   }
 
-  function updateHosts(hosts) {
-    if (!Array.isArray(hosts)) { return; }
+  function hostSortValue(host, key) {
+    if (key === 'cpu') { return Number(host.cpu_percent); }
+    if (key === 'memory') { return Number(host.memory_percent); }
+    if (key === 'disk') { return Number(host.disk_percent); }
+    if (key === 'gpu') { return Number(host.gpu_memory_percent); }
+    if (key === 'users') { return Number(host.logged_in_user_count); }
+    if (key === 'status') { return host.online ? 1 : 0; }
+    if (key === 'health') {
+      var status = (host.disk_health || {}).status || '';
+      return status === 'critical' ? 3 : (status === 'warning' ? 2 : (status === 'ok' ? 1 : 0));
+    }
+    if (key === 'group') { return String(host.group || '未分组').toLowerCase(); }
+    if (key === 'collected') { return String(host.collected_at || ''); }
+    return String(host[key] || '').toLowerCase();
+  }
+
+  function sortedHosts() {
+    var rows = lastHosts.slice();
+    if (!hostSortKey) { return rows; }
+    rows.sort(function (a, b) {
+      var av = hostSortValue(a || {}, hostSortKey);
+      var bv = hostSortValue(b || {}, hostSortKey);
+      if (typeof av === 'number' && typeof bv === 'number') {
+        if (isNaN(av) && isNaN(bv)) { return 0; }
+        if (isNaN(av)) { return 1; }
+        if (isNaN(bv)) { return -1; }
+        return (av - bv) * hostSortDir;
+      }
+      if (av < bv) { return -hostSortDir; }
+      if (av > bv) { return hostSortDir; }
+      return 0;
+    });
+    return rows;
+  }
+
+  function updateSortIndicators() {
+    var heads = document.querySelectorAll('#host-table th[data-sort-key]');
+    for (var i = 0; i < heads.length; i += 1) {
+      var key = heads[i].getAttribute('data-sort-key');
+      heads[i].classList.toggle('sort-asc', key === hostSortKey && hostSortDir === 1);
+      heads[i].classList.toggle('sort-desc', key === hostSortKey && hostSortDir === -1);
+      if (key === hostSortKey) {
+        heads[i].setAttribute('aria-sort', hostSortDir === 1 ? 'ascending' : 'descending');
+      } else {
+        heads[i].removeAttribute('aria-sort');
+      }
+    }
+  }
+
+  function renderHosts() {
+    if (!hostsLoaded) { return; }
     var tbody = document.getElementById('host-table-body');
     var table = document.getElementById('host-table');
     var empty = document.getElementById('empty-state');
     if (!tbody || !table) { return; }
-
+    var rows = sortedHosts();
     while (tbody.firstChild) { tbody.removeChild(tbody.firstChild); }
-    for (var i = 0; i < hosts.length; i += 1) {
-      tbody.appendChild(buildHostRow(hosts[i] || {}));
+    for (var i = 0; i < rows.length; i += 1) {
+      tbody.appendChild(buildHostRow(rows[i] || {}));
     }
-
-    var hasData = hosts.length > 0;
+    var hasData = rows.length > 0;
     table.hidden = !hasData;
     if (empty) { empty.hidden = hasData; }
-    setText('host-count', '共 ' + hosts.length + ' 台');
+    setText('host-count', '共 ' + rows.length + ' 台');
+    updateSortIndicators();
     applyHostFilters();
+  }
+
+  function updateHosts(hosts) {
+    if (!Array.isArray(hosts)) { return; }
+    lastHosts = hosts.slice();
+    hostsLoaded = true;
+    renderHosts();
+  }
+
+  function setHostSort(key) {
+    if (!key) { return; }
+    if (hostSortKey === key) {
+      hostSortDir = hostSortDir === 1 ? -1 : 1;
+    } else {
+      hostSortKey = key;
+      hostSortDir = 1;
+    }
+    renderHosts();
   }
 
   function buildAlertRow(alert) {
@@ -252,6 +354,7 @@
     tr.appendChild(textCell(alert.status));
 
     var actionCell = document.createElement('td');
+    actionCell.className = 'alert-actions';
     if (alert.status === 'active') {
       var button = document.createElement('button');
       button.type = 'button';
@@ -259,6 +362,13 @@
       button.setAttribute('data-alert-id', alert.id);
       button.textContent = '确认';
       actionCell.appendChild(button);
+      var silenceButton = document.createElement('button');
+      silenceButton.type = 'button';
+      silenceButton.className = 'silence-btn';
+      silenceButton.setAttribute('data-alert-id', alert.id);
+      silenceButton.setAttribute('data-host-name', alert.host_name || '');
+      silenceButton.textContent = '静默';
+      actionCell.appendChild(silenceButton);
     } else {
       var dash = document.createElement('span');
       dash.className = 'muted';
@@ -342,11 +452,74 @@
     fetchJson('/api/alerts/' + encodeURIComponent(alertId) + '/ack', { method: 'POST' })
       .then(function (result) {
         if (result === null) { return; }
+        showToast('告警已确认', 'success');
         return refreshAlerts();
       })
       .catch(function () {
         button.disabled = false;
+        showToast('确认失败，请重试', 'error');
       });
+  }
+
+  function openSilenceDialog(button) {
+    var dialog = document.getElementById('silence-dialog');
+    if (!dialog) { return; }
+    silenceTarget = {
+      alertId: button.getAttribute('data-alert-id'),
+      host: button.getAttribute('data-host-name') || ''
+    };
+    var hostEl = document.getElementById('silence-host');
+    if (hostEl) { hostEl.textContent = silenceTarget.host || '全部主机'; }
+    var reason = document.getElementById('silence-reason');
+    if (reason) { reason.value = ''; }
+    var duration = document.getElementById('silence-duration');
+    if (duration) { duration.value = '3600'; }
+    if (typeof dialog.showModal === 'function') { dialog.showModal(); }
+    else { dialog.setAttribute('open', 'open'); }
+  }
+
+  function closeSilenceDialog() {
+    var dialog = document.getElementById('silence-dialog');
+    if (!dialog) { return; }
+    if (typeof dialog.close === 'function') { dialog.close(); }
+    else { dialog.removeAttribute('open'); }
+    silenceTarget = null;
+  }
+
+  function submitSilence() {
+    if (!silenceTarget) { return; }
+    var durationEl = document.getElementById('silence-duration');
+    var reasonEl = document.getElementById('silence-reason');
+    var seconds = durationEl ? Number(durationEl.value) : 3600;
+    if (!seconds || seconds < 60) { seconds = 3600; }
+    var start = new Date();
+    var end = new Date(start.getTime() + seconds * 1000);
+    var payload = {
+      scope_type: 'host',
+      scope: silenceTarget.host,
+      reason: reasonEl ? reasonEl.value : '',
+      starts_at: start.toISOString(),
+      ends_at: end.toISOString()
+    };
+    var confirmButton = document.getElementById('silence-confirm');
+    if (confirmButton) { confirmButton.disabled = true; }
+    fetchJson('/api/settings/silences', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+      body: JSON.stringify(payload)
+    }).then(function (result) {
+      if (confirmButton) { confirmButton.disabled = false; }
+      if (result === null) {
+        showToast('静默失败，请检查设置权限', 'error');
+        return;
+      }
+      showToast('已静默 ' + (silenceTarget ? silenceTarget.host : '') , 'success');
+      closeSilenceDialog();
+      return refreshAlerts();
+    }).catch(function () {
+      if (confirmButton) { confirmButton.disabled = false; }
+      showToast('静默失败，请重试', 'error');
+    });
   }
 
   function init() {
@@ -357,8 +530,22 @@
       var target = event.target;
       if (target && target.classList && target.classList.contains('ack-btn')) {
         ackAlert(target);
+        return;
+      }
+      if (target && target.classList && target.classList.contains('silence-btn')) {
+        openSilenceDialog(target);
+        return;
+      }
+      var sortHead = target && target.closest ? target.closest('th[data-sort-key]') : null;
+      if (sortHead) {
+        setHostSort(sortHead.getAttribute('data-sort-key'));
       }
     });
+
+    var silenceCancel = document.getElementById('silence-cancel');
+    var silenceConfirm = document.getElementById('silence-confirm');
+    if (silenceCancel) { silenceCancel.addEventListener('click', closeSilenceDialog); }
+    if (silenceConfirm) { silenceConfirm.addEventListener('click', submitSilence); }
 
     // 概览页筛选条：纯客户端过滤，事件绑定一次即可。
     var groupFilter = document.getElementById('filter-group');

@@ -723,3 +723,74 @@ a:hover { text-decoration: underline; }
 .health-value { display: block; margin-top: 4px; font-size: 20px; color: var(--text); }
 .health-hint { display: block; margin-top: 4px; font-size: 11px; color: var(--text-muted); word-break: break-all; }
 @media (max-width: 900px) { .health-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+/* -- sortable tables ---------------------------------------------------- */
+#host-table th[data-sort-key] {
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+#host-table th[data-sort-key]:hover { color: var(--accent); }
+#host-table th[data-sort-key]::after {
+  content: "↕";
+  margin-left: 5px;
+  color: #b6c1d0;
+  font-size: 11px;
+}
+#host-table th.sort-asc::after { content: "▲"; color: var(--accent); }
+#host-table th.sort-desc::after { content: "▼"; color: var(--accent); }
+
+/* -- alert actions + silence dialog ------------------------------------ */
+.alert-actions { white-space: nowrap; }
+.alert-actions .ack-btn,
+.alert-actions .silence-btn { margin-right: 6px; }
+.silence-btn {
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: #fff;
+  color: var(--text-muted);
+  padding: 4px 10px;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.silence-btn:hover { border-color: var(--warn); color: var(--warn); background: var(--warn-soft); }
+.silence-dialog { max-width: 440px; }
+.dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
+.btn-secondary,
+.btn-primary {
+  border-radius: 8px;
+  padding: 8px 16px;
+  font: inherit;
+  cursor: pointer;
+}
+.btn-secondary { border: 1px solid var(--border); background: #fff; color: var(--text-muted); }
+.btn-primary { border: 1px solid var(--accent); background: var(--accent); color: #fff; }
+.btn-primary:disabled, .btn-secondary:disabled { opacity: .55; cursor: wait; }
+
+/* -- toast --------------------------------------------------------------- */
+.toast-container {
+  position: fixed;
+  top: 58px;
+  right: 22px;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  pointer-events: none;
+}
+.toast {
+  min-width: 180px;
+  max-width: 380px;
+  padding: 10px 14px;
+  border-radius: 9px;
+  background: #1f2a37;
+  color: #fff;
+  font-size: 13px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, .18);
+  opacity: 1;
+  transition: opacity .2s ease, transform .2s ease;
+}
+.toast-success { background: #116b4b; }
+.toast-error { background: #a12a2a; }
+.toast-out { opacity: 0; transform: translateY(-4px); }

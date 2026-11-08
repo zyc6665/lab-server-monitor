@@ -211,7 +211,7 @@ def test_overview_has_four_statistic_cards(client):
 
 def test_overview_host_row_has_terminal_link(client):
     html = _page(client, "/")
-    assert "<th>操作</th>" in html
+    assert ">操作</th>" in html
     assert f"/terminal?host={HOST_NAME}" in html
     assert "终端" in html
 
@@ -223,7 +223,7 @@ def test_overview_keeps_filter_bar_and_host_columns(client):
     assert 'id="filter-status"' in html
     assert 'id="filter-keyword"' in html
     for column in ("名称", "地址", "分组", "负责人", "状态", "CPU", "内存", "磁盘"):
-        assert f"<th>{column}</th>" in html
+        assert f">{column}</th>" in html
 
 
 # -- host detail ------------------------------------------------------------

@@ -40,9 +40,10 @@
           <td class="alert-message">{{ alert.message }}</td>
           <td class="mono">{{ alert.created_at }}</td>
           <td><span class="status status-{{ alert.status }}">{{ alert.status }}</span></td>
-          <td>
+          <td class="alert-actions">
             {% if alert.status == 'active' %}
             <button type="button" class="ack-btn" data-alert-id="{{ alert.id }}">确认</button>
+            <button type="button" class="silence-btn" data-alert-id="{{ alert.id }}" data-host-name="{{ alert.host_name }}">静默</button>
             {% else %}
             <span class="muted">—</span>
             {% endif %}
@@ -53,4 +54,25 @@
     </table>
   </div>
 </section>
+
+<dialog class="settings-dialog silence-dialog" id="silence-dialog">
+  <h2>静默告警</h2>
+  <p class="muted">对主机 <strong id="silence-host">—</strong> 静默一段时间。静默期间不会发送桌面/邮件/Webhook 通知，页面仍会显示告警。</p>
+  <label class="field">
+    <span>静默时长</span>
+    <select id="silence-duration">
+      <option value="3600">1 小时</option>
+      <option value="86400" selected>1 天</option>
+      <option value="604800">7 天</option>
+    </select>
+  </label>
+  <label class="field">
+    <span>原因（可选）</span>
+    <input id="silence-reason" type="text" maxlength="200" placeholder="例如：维护窗口 / 已知问题">
+  </label>
+  <div class="dialog-actions">
+    <button type="button" class="btn-secondary" id="silence-cancel">取消</button>
+    <button type="button" class="btn-primary" id="silence-confirm">开始静默</button>
+  </div>
+</dialog>
 {% endblock %}
