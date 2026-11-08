@@ -28,6 +28,46 @@
   </div>
 </div>
 
+<section class="card" id="host-actions">
+  <div class="section-head">
+    <h2>诊断与操作</h2>
+    <span class="muted" id="host-action-status"></span>
+  </div>
+  <div class="host-action-row">
+    <button type="button" class="secondary-button" id="host-test-button">测试连接</button>
+    <button type="button" class="primary-button" id="host-collect-button">立即采集</button>
+  </div>
+  <div class="probe-result" id="host-probe-result" hidden></div>
+  {% if detail.errors %}
+  <div class="host-error-box">
+    <strong>最近一次采集异常</strong>
+    <ul>
+      {% for err in detail.errors %}
+      <li><span class="mono">{{ err.stage or 'unknown' }}</span>：{{ err.message or '—' }}</li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+</section>
+
+<section class="card" id="host-trend">
+  <div class="section-head">
+    <h2>历史趋势</h2>
+    <div class="range-tabs" role="group" aria-label="趋势时间范围">
+      <button type="button" class="range-tab active" data-history-range="24h">24 小时</button>
+      <button type="button" class="range-tab" data-history-range="7d">7 天</button>
+      <button type="button" class="range-tab" data-history-range="30d">30 天</button>
+    </div>
+  </div>
+  <div class="trend-grid">
+    <div class="trend-block"><h3>CPU <span class="trend-latest" data-trend-latest="cpu"></span></h3><svg viewBox="0 0 300 84" data-trend="cpu" role="img" aria-label="CPU 使用率趋势"></svg></div>
+    <div class="trend-block"><h3>内存 <span class="trend-latest" data-trend-latest="memory"></span></h3><svg viewBox="0 0 300 84" data-trend="memory" role="img" aria-label="内存使用率趋势"></svg></div>
+    <div class="trend-block"><h3>磁盘 <span class="trend-latest" data-trend-latest="disk"></span></h3><svg viewBox="0 0 300 84" data-trend="disk" role="img" aria-label="磁盘使用率趋势"></svg></div>
+    <div class="trend-block"><h3>GPU 显存 <span class="trend-latest" data-trend-latest="gpu_memory"></span></h3><svg viewBox="0 0 300 84" data-trend="gpu_memory" role="img" aria-label="GPU 显存趋势"></svg></div>
+  </div>
+  <p class="empty" id="trend-empty" hidden>暂无历史数据，等待采集后生成趋势。</p>
+</section>
+
 <section class="card">
   <div class="section-head">
     <h2>指标详情</h2>
@@ -238,4 +278,9 @@
   {% endif %}
 </section>
 {% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>window.__HOST_NAME__ = {{ name|tojson }};</script>
+<script src="{{ url_for('static', filename='host-detail.js') }}"></script>
 {% endblock %}

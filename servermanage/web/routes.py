@@ -830,6 +830,7 @@ def _build_host_detail(name: str, config, db_path) -> dict[str, Any] | None:
         "location": server.location if server is not None else "",
         "tags": list(server.tags) if server is not None else [],
         "metrics": (snapshot.get("metrics") or {}) if snapshot else {},
+        "errors": (snapshot.get("errors") or []) if snapshot else [],
         "disk": disk,
     }
 
@@ -1181,6 +1182,40 @@ def register_routes(app: Flask) -> None:
         if detail is None:
             return jsonify({"error": "not found"}), 404
         return jsonify(detail)
+
+    @app.get("/api/host/<name>/history")
+    def api_host_history(name: str):
+        range_key = request.args.get("range", "24h")
+        if range_key not in ("24h", "7d", "30d"):
+            return jsonify({"error": "invalid_range"}), 400
+        detail = _build_host_detail(name, _config(app), _db_path(app))
+        if detail is None:
+            return jsonify({"error": "not found"}), 404
+        config = _config(app)
+        points = storage.fetch_host_history(
+            _db_path(app),
+            name,
+            range_key=range_key,
+            tz=resolve_timezone(config.app.timezone),
+        )
+        return jsonify({"range": range_key, "points": points})
+
+    @app.get("/api/system/health")
+    def api_system_health():
+        from servermanage import __version__ as app_version
+
+        config = _config(app)
+        stats = storage.system_stats(_db_path(app))
+        runtime = read_runtime_state(_RUNTIME_FILE) or {}
+        return jsonify(
+            {
+                "version": app_version,
+                "runtime": runtime,
+                "tasks": storage.list_task_states(_db_path(app)),
+                "hosts_configured": len(config.servers),
+                **stats,
+            }
+        )
 
     @app.get("/api/alerts")
     def api_alerts():
@@ -1577,6 +1612,38 @@ def register_routes(app: Flask) -> None:
             except Exception as exc:  # noqa: BLE001 - text-only error surface
                 results.append({"name": name, "ok": False, "detail": str(exc)})
         return jsonify({"results": results})
+
+    @app.post("/api/settings/hosts/<name>/probe")
+    def api_probe_saved_host(name: str):
+        """Probe a saved host using its stored credentials.
+
+        This is the host-detail "test connection" button.  The probe is
+        read-only; no secret is ever returned to the browser.
+        """
+        config = _config(app)
+        host_config = next((h for h in config.servers if h.name == name), None)
+        if host_config is None:
+            return jsonify({"error": "not_found"}), 404
+        result = host_probe.probe_host(
+            host_config, timeout=config.ssh.connect_timeout
+        )
+        return jsonify(asdict(result))
+
+    @app.post("/api/settings/hosts/<name>/collect")
+    def api_collect_saved_host(name: str):
+        """Queue an immediate status + disk collection for one saved host."""
+        config = _config(app)
+        if not any(h.name == name for h in config.servers):
+            return jsonify({"error": "not_found"}), 404
+        callback = app.config.get("ON_HOSTS_IMPORTED")
+        if callback is None:
+            return jsonify({"error": "collection_unavailable"}), 409
+        try:
+            callback([name])
+        except Exception:  # noqa: BLE001 - surface a stable error
+            LOGGER.exception("immediate collection failed for %s", name)
+            return jsonify({"error": "collection_failed"}), 500
+        return jsonify({"ok": True})
 
     @app.post("/api/settings/hosts/<name>/copy")
     def api_copy_host(name: str):

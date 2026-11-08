@@ -22,6 +22,7 @@
     <button type="button" class="settings-tab" data-settings-tab="disk_health">磁盘健康</button>
     <button type="button" class="settings-tab" data-settings-tab="dashboard">看板与安全</button>
     <button type="button" class="settings-tab" data-settings-tab="logs">运行日志</button>
+    <button type="button" class="settings-tab" data-settings-tab="health">系统状态</button>
   </nav>
 
   <!-- 监控与存储 -->
@@ -300,6 +301,23 @@
     <pre class="logs-output" id="logs-output"></pre>
   </section>
 
+  <!-- 系统状态 -->
+  <section class="card settings-card" data-section="health">
+    <div class="section-head">
+      <h2>系统状态</h2>
+      <button type="button" class="secondary-button" id="health-refresh-button">刷新</button>
+    </div>
+    <div class="health-grid" id="health-summary">
+      <p class="empty">正在读取系统状态…</p>
+    </div>
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead><tr><th>调度任务</th><th>最近运行</th><th>结果</th></tr></thead>
+        <tbody id="health-tasks-body"></tbody>
+      </table>
+    </div>
+  </section>
+
   <!-- 邮件服务器 SMTP -->
   <section class="card settings-card" data-section="smtp">
     <div class="section-head">
@@ -485,4 +503,5 @@ window.__SETTINGS_SILENCES__ = {{ silences|tojson }};
 <script src="{{ url_for('static', filename='settings.js') }}"></script>
 <script src="{{ url_for('static', filename='settings-wizard.js') }}"></script>
 <script src="{{ url_for('static', filename='settings-update.js') }}"></script>
+<script src="{{ url_for('static', filename='settings-health.js') }}"></script>
 {% endblock %}

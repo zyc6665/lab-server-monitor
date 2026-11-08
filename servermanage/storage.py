@@ -682,6 +682,139 @@ def _gpu_memory_percent(row: sqlite3.Row) -> float | None:
     return None
 
 
+def fetch_host_history(
+    db_path: Path,
+    host_name: str,
+    *,
+    range_key: str = "24h",
+    tz: tzinfo = timezone.utc,
+    now: datetime | None = None,
+) -> list[dict[str, object]]:
+    """Return chart points for one host.
+
+    ``24h`` reads raw samples (the last 100 points kept by retention) so the
+    chart has detail.  ``7d``/``30d`` read the compact daily summary instead,
+    which survives raw-point pruning.
+    """
+    db_path = Path(db_path)
+    if not db_path.exists():
+        return []
+    if range_key not in ("24h", "7d", "30d"):
+        raise ValueError("range_key must be 24h, 7d or 30d")
+    current = now or datetime.now(timezone.utc)
+    if current.tzinfo is None:
+        current = current.replace(tzinfo=timezone.utc)
+
+    if range_key == "24h":
+        cutoff = (current - timedelta(hours=24)).astimezone(timezone.utc).isoformat()
+        with sqlite3.connect(db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            rows = conn.execute(
+                """
+                SELECT collected_at, cpu_usage_percent, memory_used_mb,
+                       memory_total_mb, disk_used_percent, gpu_utilization_percent,
+                       gpu_memory_used_mb, gpu_memory_total_mb, load_1
+                  FROM host_metrics_history
+                 WHERE host_name = ? AND success = 1 AND collected_at >= ?
+                 ORDER BY collected_at ASC
+                """,
+                (host_name, cutoff),
+            ).fetchall()
+        points: list[dict[str, object]] = []
+        for row in rows:
+            points.append(
+                {
+                    "t": _parse_collected_at(row["collected_at"]).astimezone(tz).isoformat(),
+                    "cpu": row["cpu_usage_percent"],
+                    "memory": _memory_percent(row),
+                    "disk": row["disk_used_percent"],
+                    "gpu_util": row["gpu_utilization_percent"],
+                    "gpu_memory": _gpu_memory_percent(row),
+                    "load_1": row["load_1"],
+                }
+            )
+        return points
+
+    days = 7 if range_key == "7d" else 30
+    start_day = (current.astimezone(tz).date() - timedelta(days=days - 1)).isoformat()
+    with sqlite3.connect(db_path) as conn:
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute(
+            """
+            SELECT day, sample_count, cpu_sum, memory_pct_sum, disk_pct_sum,
+                   gpu_util_sum, gpu_memory_pct_sum, load_sum
+              FROM host_daily_summary
+             WHERE host_name = ? AND tz = ? AND day >= ?
+             ORDER BY day ASC
+            """,
+            (host_name, _tz_key(tz), start_day),
+        ).fetchall()
+    points = []
+    for row in rows:
+        count = int(row["sample_count"] or 0)
+        if count <= 0:
+            continue
+        points.append(
+            {
+                "t": str(row["day"]),
+                "cpu": (float(row["cpu_sum"]) / count) if row["cpu_sum"] is not None else None,
+                "memory": (float(row["memory_pct_sum"]) / count) if row["memory_pct_sum"] is not None else None,
+                "disk": (float(row["disk_pct_sum"]) / count) if row["disk_pct_sum"] is not None else None,
+                "gpu_util": (float(row["gpu_util_sum"]) / count) if row["gpu_util_sum"] is not None else None,
+                "gpu_memory": (float(row["gpu_memory_pct_sum"]) / count) if row["gpu_memory_pct_sum"] is not None else None,
+                "load_1": (float(row["load_sum"]) / count) if row["load_sum"] is not None else None,
+            }
+        )
+    return points
+
+
+def list_task_states(db_path: Path) -> list[dict[str, object]]:
+    db_path = Path(db_path)
+    if not db_path.exists():
+        return []
+    with sqlite3.connect(db_path) as conn:
+        conn.row_factory = sqlite3.Row
+        try:
+            rows = conn.execute(
+                "SELECT task_name, last_run_at, last_result FROM task_state ORDER BY task_name"
+            ).fetchall()
+        except sqlite3.OperationalError:
+            return []
+    return [dict(row) for row in rows]
+
+
+def system_stats(db_path: Path) -> dict[str, object]:
+    """Small read-only aggregate used by the system-health panel."""
+    db_path = Path(db_path)
+    stats: dict[str, object] = {
+        "db_path": str(db_path),
+        "db_size_bytes": db_path.stat().st_size if db_path.exists() else 0,
+        "host_snapshots": 0,
+        "history_rows": 0,
+        "disk_batches": 0,
+        "alerts_active": 0,
+    }
+    if not db_path.exists():
+        return stats
+    with sqlite3.connect(db_path) as conn:
+        try:
+            stats["host_snapshots"] = int(conn.execute(
+                "SELECT COUNT(*) FROM host_latest_snapshot"
+            ).fetchone()[0])
+            stats["history_rows"] = int(conn.execute(
+                "SELECT COUNT(*) FROM host_metrics_history"
+            ).fetchone()[0])
+            stats["disk_batches"] = int(conn.execute(
+                "SELECT COUNT(*) FROM disk_health_snapshot"
+            ).fetchone()[0])
+            stats["alerts_active"] = int(conn.execute(
+                "SELECT COUNT(*) FROM alerts WHERE status = 'active'"
+            ).fetchone()[0])
+        except sqlite3.OperationalError:
+            pass
+    return stats
+
+
 def _local_week_utc_bounds(
     week_start: date, week_end: date, tz: tzinfo
 ) -> tuple[datetime, datetime]:

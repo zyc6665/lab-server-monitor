@@ -72,6 +72,9 @@ def test_hosts_and_disk_health_pages_are_wired(tmp_path):
     settings = client.get("/settings").get_data(as_text=True)
     assert "settings-tabs.js" in settings
     assert 'data-settings-tab="monitoring"' in settings
+    assert 'data-settings-tab="health"' in settings
+    assert "settings-health.js" in settings
+    assert 'id="health-summary"' in settings
 
 
 def test_configured_host_without_snapshot_opens_detail(tmp_path):
