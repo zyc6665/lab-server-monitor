@@ -19,7 +19,11 @@ from servermanage.models import (
     SSHRuntimeConfig,
 )
 from servermanage.disk_health import AlertEvent
-from servermanage.storage import insert_alert, persist_host_reports
+from servermanage.storage import (
+    insert_alert,
+    persist_host_reports,
+    save_host_snapshot,
+)
 from servermanage.web import create_app
 
 HOST_NAME = "gpu-01"
@@ -69,25 +73,25 @@ def _login(client) -> None:
 
 def _seed(db_path: Path) -> None:
     now = datetime.now(timezone.utc)
+    report = HostReport(
+        host_name=HOST_NAME,
+        host="10.0.0.1",
+        success=True,
+        metrics=HostMetrics(
+            collected_at=now,
+            cpu_usage_percent=12.5,
+            memory=_memory(),
+        ),
+    )
     persist_host_reports(
         DailyReport(
             generated_at=now,
             subject_prefix="[Test]",
-            reports=[
-                HostReport(
-                    host_name=HOST_NAME,
-                    host="10.0.0.1",
-                    success=True,
-                    metrics=HostMetrics(
-                        collected_at=now,
-                        cpu_usage_percent=12.5,
-                        memory=_memory(),
-                    ),
-                )
-            ],
+            reports=[report],
         ),
         db_path,
     )
+    save_host_snapshot(report, db_path)
 
 
 def _client(tmp_path: Path):
@@ -185,12 +189,64 @@ def test_system_health_payload(tmp_path: Path) -> None:
 
     assert response.status_code == 200
     payload = response.get_json()
-    assert payload["version"] == "0.1.10"
+    assert payload["version"] == "0.1.11"
     assert payload["hosts_configured"] == 1
     assert payload["db_path"] == str(db_path)
     assert payload["db_size_bytes"] > 0
     assert payload["history_rows"] >= 1
     assert isinstance(payload["tasks"], list)
+    diagnostics = payload["diagnostics"]
+    assert diagnostics["status"] == "ok"
+    assert [item["key"] for item in diagnostics["checks"]] == [
+        "database",
+        "hosts",
+        "disk",
+        "tasks",
+        "alerts",
+    ]
+    assert all(item["status"] == "ok" for item in diagnostics["checks"])
+
+
+def test_system_diagnostics_flags_critical_alert(tmp_path: Path) -> None:
+    client, _app, db_path = _client(tmp_path)
+    insert_alert(
+        AlertEvent(
+            host_name=HOST_NAME,
+            category="cpu",
+            severity="critical",
+            title="CPU 持续过高",
+            message="CPU 已连续 5 分钟超过 95%",
+            fingerprint="fp-critical",
+        ),
+        db_path,
+    )
+
+    payload = client.get("/api/system/health").get_json()
+
+    assert payload["diagnostics"]["status"] == "warning"
+    alerts_check = next(
+        item for item in payload["diagnostics"]["checks"] if item["key"] == "alerts"
+    )
+    assert alerts_check["status"] == "warning"
+    assert "1 条严重告警" in alerts_check["message"]
+
+
+def test_system_check_card_and_settings_diagnostics_are_rendered(tmp_path: Path) -> None:
+    client, _app, _db_path = _client(tmp_path)
+
+    overview = client.get("/").get_data(as_text=True)
+    assert 'id="system-check"' in overview
+    assert 'id="system-check-list"' in overview
+
+    settings = client.get("/settings").get_data(as_text=True)
+    assert 'id="health-diagnostics"' in settings
+
+    app_js = client.get("/static/app.js").get_data(as_text=True)
+    assert "refreshSystemChecks" in app_js
+    assert "renderSystemChecks" in app_js
+
+    health_js = client.get("/static/settings-health.js").get_data(as_text=True)
+    assert "renderDiagnostics" in health_js
 
 
 def test_saved_host_probe_returns_probe_payload(tmp_path: Path, monkeypatch) -> None:

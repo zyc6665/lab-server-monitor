@@ -42,7 +42,40 @@
     return div;
   }
 
+  function renderDiagnostics(payload) {
+    var container = document.getElementById('health-diagnostics');
+    if (!container) { return; }
+    container.textContent = '';
+    var diagnostics = payload && payload.diagnostics;
+    if (!diagnostics || !Array.isArray(diagnostics.checks)) {
+      var empty = document.createElement('p');
+      empty.className = 'empty';
+      empty.textContent = '检查不可用。';
+      container.appendChild(empty);
+      return;
+    }
+    diagnostics.checks.forEach(function (check) {
+      var row = document.createElement('div');
+      row.className = 'check-row';
+      var dot = document.createElement('span');
+      var state = check.status === 'error' ? 'error'
+        : (check.status === 'warning' ? 'warning' : 'ok');
+      dot.className = 'check-dot ' + state;
+      var label = document.createElement('span');
+      label.className = 'check-label';
+      label.textContent = check.label || check.key || '';
+      var message = document.createElement('span');
+      message.className = 'check-message';
+      message.textContent = check.message || '';
+      row.appendChild(dot);
+      row.appendChild(label);
+      row.appendChild(message);
+      container.appendChild(row);
+    });
+  }
+
   function render(payload) {
+    renderDiagnostics(payload);
     var summary = document.getElementById('health-summary');
     if (!summary) { return; }
     summary.textContent = '';

@@ -720,6 +720,54 @@
     });
   }
 
+  function renderSystemChecks(payload) {
+    var list = document.getElementById('system-check-list');
+    var summary = document.getElementById('system-check-summary');
+    if (!list || !summary) { return; }
+    list.textContent = '';
+    var diagnostics = payload && payload.diagnostics;
+    if (!diagnostics || !Array.isArray(diagnostics.checks)) {
+      summary.className = 'check-summary warning';
+      summary.textContent = '检查不可用';
+      var fallback = document.createElement('p');
+      fallback.className = 'empty';
+      fallback.textContent = '系统状态读取失败。';
+      list.appendChild(fallback);
+      return;
+    }
+    var overall = diagnostics.status === 'error' ? 'error'
+      : (diagnostics.status === 'warning' ? 'warning' : 'ok');
+    summary.className = 'check-summary ' + overall;
+    summary.textContent = overall === 'ok' ? '全部正常'
+      : (overall === 'error' ? '存在异常' : '有提醒');
+    diagnostics.checks.forEach(function (check) {
+      var row = document.createElement('div');
+      row.className = 'check-row';
+      var dot = document.createElement('span');
+      var state = check.status === 'error' ? 'error'
+        : (check.status === 'warning' ? 'warning' : 'ok');
+      dot.className = 'check-dot ' + state;
+      var label = document.createElement('span');
+      label.className = 'check-label';
+      label.textContent = check.label || check.key || '';
+      var message = document.createElement('span');
+      message.className = 'check-message';
+      message.textContent = check.message || '';
+      row.appendChild(dot);
+      row.appendChild(label);
+      row.appendChild(message);
+      list.appendChild(row);
+    });
+  }
+
+  function refreshSystemChecks() {
+    var list = document.getElementById('system-check-list');
+    if (!list) { return Promise.resolve(); }
+    return fetchJson('/api/system/health').then(renderSystemChecks).catch(function () {
+      renderSystemChecks(null);
+    });
+  }
+
   function setAlertFilter(status) {
     alertStatus = status === 'all' ? 'all' : 'active';
     var filters = document.querySelectorAll('.alert-filter');
@@ -736,9 +784,10 @@
   }
 
   function refreshAll() {
-    // 两个请求互相独立；各自吞掉错误，互不影响。
+    // 请求互相独立；各自吞掉错误，互不影响。
     refreshOverview().catch(function () {});
     refreshAlerts().catch(function () {});
+    refreshSystemChecks().catch(function () {});
   }
 
   function hasDashboard() {

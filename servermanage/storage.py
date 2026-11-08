@@ -970,6 +970,25 @@ def list_task_states(db_path: Path) -> list[dict[str, object]]:
     return [dict(row) for row in rows]
 
 
+def database_integrity(db_path: Path) -> tuple[bool, str]:
+    """Run SQLite's quick integrity check and return ``(ok, message)``."""
+    db_path = Path(db_path)
+    if not db_path.exists():
+        return False, "数据库文件不存在"
+    try:
+        conn = sqlite3.connect(db_path)
+        try:
+            rows = conn.execute("PRAGMA quick_check").fetchall()
+        finally:
+            conn.close()
+        problems = [str(row[0]) for row in rows if str(row[0]).lower() != "ok"]
+    except sqlite3.DatabaseError as exc:
+        return False, f"数据库无法读取：{exc}"
+    if problems:
+        return False, "完整性检查发现问题：" + "；".join(problems[:3])
+    return True, "完整性检查通过"
+
+
 def system_stats(db_path: Path) -> dict[str, object]:
     """Small read-only aggregate used by the system-health panel."""
     db_path = Path(db_path)

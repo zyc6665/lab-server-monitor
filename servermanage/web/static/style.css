@@ -731,6 +731,21 @@ html[data-theme="dark"] .alert-severity-filter { background: #141c2b; color: #e6
 .health-hint { display: block; margin-top: 4px; font-size: 11px; color: var(--text-muted); word-break: break-all; }
 @media (max-width: 900px) { .health-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 
+/* -- system self-check -------------------------------------------------- */
+.system-check-card { margin-bottom: 16px; }
+.check-summary { padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; }
+.check-summary.ok { color: #157347; background: rgba(25, 135, 84, 0.12); }
+.check-summary.warning { color: #9a6700; background: rgba(255, 193, 7, 0.16); }
+.check-summary.error { color: #b02a37; background: rgba(220, 53, 69, 0.12); }
+.system-check-list { display: grid; gap: 8px; }
+.check-row { display: flex; align-items: flex-start; gap: 9px; padding: 9px 12px; border: 1px solid var(--border); border-radius: 9px; background: #fbfcfe; }
+.check-dot { width: 9px; height: 9px; margin-top: 4px; border-radius: 50%; flex: 0 0 auto; }
+.check-dot.ok { background: #198754; }
+.check-dot.warning { background: #e0a800; }
+.check-dot.error { background: #dc3545; }
+.check-label { min-width: 72px; font-weight: 600; font-size: 13px; color: var(--text); }
+.check-message { flex: 1; font-size: 13px; color: var(--text-muted); word-break: break-word; }
+
 /* -- sortable tables ---------------------------------------------------- */
 #host-table th[data-sort-key] {
   cursor: pointer;

@@ -710,6 +710,138 @@ def _silence_applies(silence: dict[str, Any], host_name: str, group: str) -> boo
     return False
 
 
+def _system_diagnostics(config, db_path, *, now: datetime | None = None) -> dict[str, Any]:
+    """Build a small set of actionable checks for the system-health panel."""
+    now = now or datetime.now(timezone.utc)
+    checks: list[dict[str, str]] = []
+
+    ok, message = storage.database_integrity(db_path)
+    checks.append(
+        {
+            "key": "database",
+            "label": "数据库",
+            "status": "ok" if ok else "error",
+            "message": message,
+        }
+    )
+
+    snapshots = {
+        item["host_name"]: item for item in storage.get_all_host_snapshots(db_path)
+    }
+    poll_interval = max(int(getattr(config.app, "poll_interval_seconds", 600) or 600), 1)
+    offline: list[str] = []
+    stale: list[str] = []
+    missing: list[str] = []
+    for server in config.servers:
+        snapshot = snapshots.get(server.name)
+        if snapshot is None:
+            missing.append(server.name)
+        elif not snapshot.get("success"):
+            offline.append(server.name)
+        elif not _is_online(snapshot, poll_interval, now):
+            stale.append(server.name)
+    total = len(config.servers)
+    healthy = total - len(missing) - len(offline) - len(stale)
+    if not total:
+        host_status, host_message = "warning", "尚未配置监控主机"
+    elif healthy <= 0:
+        host_status = "error"
+        host_message = f"{total} 台主机均未成功采集"
+    elif missing or offline or stale:
+        host_status = "warning"
+        problems: list[str] = []
+        if offline:
+            problems.append("离线：" + "、".join(offline[:3]))
+        if stale:
+            problems.append("数据过期：" + "、".join(stale[:3]))
+        if missing:
+            problems.append("无数据：" + "、".join(missing[:3]))
+        host_message = f"{healthy}/{total} 台采集正常；" + "；".join(problems)
+    else:
+        host_status, host_message = "ok", f"{total}/{total} 台采集正常"
+    checks.append(
+        {
+            "key": "hosts",
+            "label": "主机采集",
+            "status": host_status,
+            "message": host_message,
+        }
+    )
+
+    disk_reports = storage.get_all_disk_health(db_path)
+    bad_disks = [
+        item
+        for item in disk_reports
+        if str(item.get("status") or "").lower() not in ("ok", "healthy")
+    ]
+    if not disk_reports:
+        disk_status, disk_message = "ok", "尚未采集磁盘健康"
+    elif bad_disks:
+        disk_status = "warning"
+        names = [str(item.get("host_name") or "未知") for item in bad_disks]
+        disk_message = "异常主机：" + "、".join(names[:3])
+    else:
+        disk_status, disk_message = "ok", f"{len(disk_reports)} 台磁盘阵列健康"
+    checks.append(
+        {
+            "key": "disk",
+            "label": "磁盘阵列",
+            "status": disk_status,
+            "message": disk_message,
+        }
+    )
+
+    tasks = storage.list_task_states(db_path)
+    failed_tasks = [
+        task
+        for task in tasks
+        if task.get("last_result") is not None and str(task.get("last_result")) != "ok"
+    ]
+    if failed_tasks:
+        names = [str(task.get("task_name") or "未知") for task in failed_tasks]
+        task_status, task_message = "warning", "最近失败：" + "、".join(names[:3])
+    else:
+        task_status, task_message = "ok", (
+            f"{len(tasks)} 个调度任务正常" if tasks else "暂无调度记录"
+        )
+    checks.append(
+        {
+            "key": "tasks",
+            "label": "调度任务",
+            "status": task_status,
+            "message": task_message,
+        }
+    )
+
+    active_alerts = storage.list_alerts(db_path, status="active", limit=100_000)
+    critical = [
+        alert
+        for alert in active_alerts
+        if str(alert.get("severity") or "").lower() == "critical"
+    ]
+    if critical:
+        alert_status = "warning"
+        alert_message = f"{len(critical)} 条严重告警待处理"
+    else:
+        alert_status, alert_message = "ok", "没有未处理的严重告警"
+    checks.append(
+        {
+            "key": "alerts",
+            "label": "严重告警",
+            "status": alert_status,
+            "message": alert_message,
+        }
+    )
+
+    if any(check["status"] == "error" for check in checks):
+        overall = "error"
+    elif any(check["status"] == "warning" for check in checks):
+        overall = "warning"
+    else:
+        overall = "ok"
+    return {"status": overall, "checks": checks}
+
+
 def _build_overview(config, db_path) -> dict[str, Any]:
     """Build the ``/api/overview`` payload shared by the JSON API and pages.
 
@@ -1242,6 +1374,7 @@ def register_routes(app: Flask) -> None:
                 "runtime": runtime,
                 "tasks": storage.list_task_states(_db_path(app)),
                 "hosts_configured": len(config.servers),
+                "diagnostics": _system_diagnostics(config, _db_path(app)),
                 **stats,
             }
         )
