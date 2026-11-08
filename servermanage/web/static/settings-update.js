@@ -69,8 +69,15 @@
         downloadButton.disabled = false;
         return;
       }
+      // Keep the downloaded path (and checksum metadata) with the pending
+      // update so "install and restart" can pass it back to the main process.
+      pending = { ...pending, ...response };
       installButton.disabled = false;
-      setStatus("更新包已下载并校验，可以安装");
+      setStatus(
+        response.path
+          ? `更新包已下载并校验：${response.path}`
+          : "更新包已下载并校验，可以安装"
+      );
     } catch (error) {
       setStatus(`下载失败：${error.message || error}`, true);
       downloadButton.disabled = false;
@@ -87,6 +94,9 @@
         setStatus(response.error || "安装失败", true);
         installButton.disabled = false;
       }
+    }).catch((error) => {
+      setStatus(`安装失败：${error.message || error}`, true);
+      installButton.disabled = false;
     });
   }
 

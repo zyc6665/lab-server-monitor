@@ -72,6 +72,63 @@ test('install rejects paths outside the updates directory', () => {
   assert.equal(result.ok, false);
 });
 
+test('install falls back to the downloaded path after download', async () => {
+  const crypto = require('node:crypto');
+  const updatesDir = tempDir();
+  const appDir = tempDir();
+  const content = Buffer.from('fake-zip');
+  const digest = crypto.createHash('sha256').update(content).digest('hex');
+  const fetchImpl = async (url, options = {}) => {
+    if (String(url).endsWith('/releases/latest')) {
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          tag_name: 'v1.5.1',
+          assets: [
+            {
+              name: 'package.zip',
+              url: 'https://api.github.com/repos/zyc6665/lab-server-monitor/releases/assets/1',
+              size: content.length,
+            },
+            {
+              name: 'package.zip.sha256',
+              url: 'https://api.github.com/repos/zyc6665/lab-server-monitor/releases/assets/2',
+            },
+          ],
+        }),
+      };
+    }
+    if (String(url).endsWith('/assets/2')) {
+      return { ok: true, status: 200, text: async () => `${digest}  package.zip\n` };
+    }
+    return { ok: true, status: 200, arrayBuffer: async () => content };
+  };
+  const calls = [];
+  const updater = createUpdater({
+    app: { isPackaged: false },
+    appDir,
+    updatesDir,
+    ipcMain: null,
+    currentVersion: '1.5.0',
+    platform: 'win32',
+    fetchImpl,
+    spawnImpl: (command, args, options) => {
+      calls.push({ command, args, options });
+      return { unref() {} };
+    },
+    requestQuit: () => {},
+  });
+  const update = await updater.check(true);
+  const downloaded = await updater.download(update);
+  assert.equal(downloaded.ok, true);
+  assert.ok(downloaded.path);
+  // Renderer may still pass the original update object (without path).
+  const result = updater.install(update);
+  assert.equal(result.ok, true);
+  assert.equal(calls.length, 1);
+});
+
 test('install launches apply-update.ps1 when the package path is valid', async () => {
   const updatesDir = tempDir();
   const appDir = tempDir();

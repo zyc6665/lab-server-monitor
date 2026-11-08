@@ -70,8 +70,13 @@ function createUpdater(options) {
   }
 
   function install(update) {
-    const payload = update || lastUpdate;
-    if (!payload || !payload.path) return { ok: false, error: '请先下载更新包' };
+    // The renderer normally passes the update object returned by
+    // ``checkForUpdate`` (which has no local path).  The download result,
+    // including ``path``, is kept in ``lastUpdate``.  Merge them so install
+    // still works after a successful download even when the caller does not
+    // echo the path back.
+    const payload = { ...(lastUpdate || {}), ...(update || {}) };
+    if (!payload.path) return { ok: false, error: '请先下载更新包' };
     const resolved = path.resolve(payload.path);
     const root = path.resolve(updatesDir) + path.sep;
     if (!resolved.startsWith(root)) {
