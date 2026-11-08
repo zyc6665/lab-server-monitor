@@ -138,7 +138,7 @@ def test_v19_theme_and_overview_focus_panel(tmp_path):
     assert 'id="overview-trend"' in overview
     assert 'data-overview-trend="cpu"' in overview
     assert "theme.js" in overview
-    assert "v0.1.4 桌面客户端" in overview
+    assert "v0.1.5 桌面客户端" in overview
 
     theme_js = client.get("/static/theme.js").get_data(as_text=True)
     assert "servermonitor-theme" in theme_js

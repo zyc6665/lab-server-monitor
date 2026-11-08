@@ -9,6 +9,9 @@
   // 告警页当前筛选：active（默认，仅活动告警）或 all（全部）。
   var alertStatus = 'active';
   var lastHosts = [];
+  var lastAlerts = [];
+  var alertSeverity = '';
+  var alertKeyword = '';
   var hostsLoaded = false;
   var hostSortKey = '';
   var hostSortDir = 1;
@@ -484,23 +487,69 @@
     if (empty) { empty.hidden = visible.length > 0; }
   }
 
-  function updateAlerts(alerts) {
-    if (!Array.isArray(alerts)) { return; }
-    updateFocusAlerts(alerts);
+  function filteredAlerts() {
+    var keyword = (alertKeyword || '').trim().toLowerCase();
+    return lastAlerts.filter(function (alert) {
+      if (alertSeverity && (alert.severity || '') !== alertSeverity) { return false; }
+      if (!keyword) { return true; }
+      return [alert.host_name, alert.title, alert.message, alert.category]
+        .filter(function (part) { return part; })
+        .join(' ').toLowerCase().indexOf(keyword) >= 0;
+    });
+  }
+
+  function renderAlertRows() {
     var body = document.getElementById('alerts-body');
     var table = document.getElementById('alerts-table');
     var empty = document.getElementById('alerts-empty');
     if (!body || !table) { return; }
-
+    var visible = filteredAlerts();
     while (body.firstChild) { body.removeChild(body.firstChild); }
-    for (var i = 0; i < alerts.length; i += 1) {
-      body.appendChild(buildAlertRow(alerts[i] || {}));
+    for (var i = 0; i < visible.length; i += 1) {
+      body.appendChild(buildAlertRow(visible[i] || {}));
     }
-
-    var hasData = alerts.length > 0;
+    var hasData = visible.length > 0;
     table.hidden = !hasData;
-    if (empty) { empty.hidden = hasData; }
-    setText('alert-count', '共 ' + alerts.length + ' 条');
+    if (empty) {
+      empty.hidden = hasData;
+      empty.textContent = lastAlerts.length ? '没有匹配的告警' : '暂无数据';
+    }
+    setText(
+      'alert-count',
+      '共 ' + lastAlerts.length + ' 条' + (visible.length !== lastAlerts.length ? '（显示 ' + visible.length + ' 条）' : '')
+    );
+  }
+
+  function updateAlerts(alerts) {
+    if (!Array.isArray(alerts)) { return; }
+    updateFocusAlerts(alerts);
+    lastAlerts = alerts;
+    renderAlertRows();
+  }
+
+  function exportAlertsCsv() {
+    var rows = filteredAlerts();
+    if (!rows.length) { showToast('没有可导出的告警', 'error'); return; }
+    var headers = ['级别', '类别', '主机', '标题', '内容', '时间', '状态'];
+    var lines = [headers.join(',')];
+    rows.forEach(function (alert) {
+      var cells = [alert.severity, alert.category, alert.host_name, alert.title,
+        alert.message, alert.created_at, alert.status].map(function (value) {
+        var text = value === null || value === undefined ? '' : String(value);
+        return '"' + text.replace(/"/g, '""') + '"';
+      });
+      lines.push(cells.join(','));
+    });
+    var blob = new Blob(['\ufeff' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
+    var url = URL.createObjectURL(blob);
+    var link = document.createElement('a');
+    link.href = url;
+    link.download = 'alerts-' + new Date().toISOString().slice(0, 10) + '.csv';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    showToast('已导出 ' + rows.length + ' 条告警', 'success');
   }
 
   function refreshOverview() {
@@ -672,6 +721,23 @@
         }
       });
     }
+
+    var alertSearch = document.getElementById('alert-search');
+    var alertSeverityFilter = document.getElementById('alert-severity-filter');
+    var alertExport = document.getElementById('alert-export');
+    if (alertSearch) {
+      alertSearch.addEventListener('input', function () {
+        alertKeyword = alertSearch.value || '';
+        renderAlertRows();
+      });
+    }
+    if (alertSeverityFilter) {
+      alertSeverityFilter.addEventListener('change', function () {
+        alertSeverity = alertSeverityFilter.value || '';
+        renderAlertRows();
+      });
+    }
+    if (alertExport) { alertExport.addEventListener('click', exportAlertsCsv); }
 
     bindOverviewRanges();
     refreshAll();

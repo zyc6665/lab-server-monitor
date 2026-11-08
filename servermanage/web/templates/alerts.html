@@ -14,6 +14,16 @@
       <button type="button" class="alert-filter" data-status="all" role="tab" aria-selected="false">全部</button>
     </div>
   </div>
+  <div class="alert-toolbar">
+    <input id="alert-search" type="search" class="alert-search" placeholder="搜索主机 / 标题 / 内容" aria-label="搜索告警">
+    <select id="alert-severity-filter" class="alert-severity-filter" aria-label="告警级别筛选">
+      <option value="">全部级别</option>
+      <option value="critical">严重</option>
+      <option value="warning">警告</option>
+      <option value="info">提示</option>
+    </select>
+    <button type="button" class="btn-secondary" id="alert-export">导出 CSV</button>
+  </div>
   <p class="muted" id="alert-count">共 {{ alerts|length }} 条</p>
   <p class="empty" id="alerts-empty"{% if alerts %} hidden{% endif %}>暂无数据</p>
   <div class="table-wrap">

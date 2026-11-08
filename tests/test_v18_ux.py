@@ -46,6 +46,20 @@ def test_host_tables_expose_sort_keys(tmp_path):
         assert 'data-sort-key="health"' in html
 
 
+def test_alert_search_severity_and_csv_export_are_wired(tmp_path):
+    client, _ = _client(tmp_path)
+    html = client.get("/alerts").get_data(as_text=True)
+    assert 'id="alert-search"' in html
+    assert 'id="alert-severity-filter"' in html
+    assert 'id="alert-export"' in html
+
+    js = client.get("/static/app.js").get_data(as_text=True)
+    assert "filteredAlerts" in js
+    assert "exportAlertsCsv" in js
+    assert "alertKeyword" in js
+    assert "alertSeverity" in js
+
+
 def test_alert_silence_dialog_and_js_are_wired(tmp_path):
     client, _ = _client(tmp_path)
     html = client.get("/alerts").get_data(as_text=True)
