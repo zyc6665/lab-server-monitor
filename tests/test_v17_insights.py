@@ -144,7 +144,7 @@ def test_system_health_payload(tmp_path: Path) -> None:
 
     assert response.status_code == 200
     payload = response.get_json()
-    assert payload["version"] == "0.1.6"
+    assert payload["version"] == "0.1.7"
     assert payload["hosts_configured"] == 1
     assert payload["db_path"] == str(db_path)
     assert payload["db_size_bytes"] > 0
@@ -208,6 +208,11 @@ def test_host_detail_renders_diagnostics_and_trend(tmp_path: Path) -> None:
     assert "历史趋势" in html
     assert "host-detail.js" in html
     assert 'data-trend="cpu"' in html
+    assert 'id="host-tabbar"' in html
+    assert 'data-host-tab="storage"' in html
+    assert 'data-host-panel="storage"' in html
+    js = client.get("/static/host-detail.js").get_data(as_text=True)
+    assert "bindHostTabs" in js
 
 
 def test_legacy_daily_summary_table_is_migrated_with_timezone(tmp_path: Path) -> None:

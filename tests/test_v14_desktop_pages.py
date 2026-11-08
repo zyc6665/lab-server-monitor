@@ -138,7 +138,7 @@ def test_v19_theme_and_overview_focus_panel(tmp_path):
     assert 'id="overview-trend"' in overview
     assert 'data-overview-trend="cpu"' in overview
     assert "theme.js" in overview
-    assert "v0.1.6 桌面客户端" in overview
+    assert "v0.1.7 桌面客户端" in overview
 
     theme_js = client.get("/static/theme.js").get_data(as_text=True)
     assert "servermonitor-theme" in theme_js
@@ -173,7 +173,8 @@ def test_v19_host_summary_cards_and_subnav(tmp_path):
 
     html = client.get("/host/new-host").get_data(as_text=True)
     assert 'class="stat-grid host-stat-grid"' in html
-    assert 'class="host-subnav"' in html
+    assert 'class="host-tabbar"' in html
+    assert 'data-host-tab="storage"' in html
     assert "采集状态" in html
     assert "CPU 使用率" in html
     assert "根目录磁盘" in html

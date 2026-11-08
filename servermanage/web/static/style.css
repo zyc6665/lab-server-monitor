@@ -849,6 +849,24 @@ html[data-theme="dark"] .theme-icon-sun { display: inline; }
 }
 .host-subnav a { padding: 7px 12px; border-radius: 8px; color: var(--text-muted); font-size: 13px; }
 .host-subnav a:hover { background: var(--accent-soft); color: var(--accent); text-decoration: none; }
+.host-tabbar {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  padding: 6px;
+  margin: -8px 0 20px;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  position: sticky;
+  top: 8px;
+  z-index: 5;
+  box-shadow: var(--shadow);
+}
+.host-tab { border: 0; background: transparent; color: var(--text-muted); font: inherit; font-size: 13px; padding: 8px 14px; border-radius: 8px; cursor: pointer; }
+.host-tab:hover { background: var(--accent-soft); color: var(--accent); }
+.host-tab.active { background: var(--accent); color: #fff; }
+[data-host-panel][hidden] { display: none !important; }
 
 .data-table thead th { position: sticky; top: 0; z-index: 1; }
 

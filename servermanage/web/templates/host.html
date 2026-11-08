@@ -36,7 +36,15 @@
 {% for gpu in metrics.gpu_summary or [] %}
   {% if loop.first %}{% set ns.gpu = gpu.utilization_percent %}{% endif %}
 {% endfor %}
-<section class="stat-grid host-stat-grid" aria-label="主机摘要">
+<nav class="host-tabbar" id="host-tabbar" aria-label="主机详情分区">
+  <button type="button" class="host-tab active" data-host-tab="overview">概览</button>
+  <button type="button" class="host-tab" data-host-tab="metrics">指标</button>
+  <button type="button" class="host-tab" data-host-tab="storage">存储与磁盘阵列</button>
+  <button type="button" class="host-tab" data-host-tab="gpu">GPU</button>
+  <button type="button" class="host-tab" data-host-tab="users">登录用户</button>
+</nav>
+
+<section class="stat-grid host-stat-grid" data-host-panel="overview" aria-label="主机摘要">
   <article class="card stat-card {% if detail.success %}stat-card-online{% elif detail.success is none %}stat-card-total{% else %}stat-card-offline{% endif %}">
     <div class="stat-body">
       <div class="stat-label">采集状态</div>
@@ -67,14 +75,7 @@
   </article>
 </section>
 
-<nav class="host-subnav" aria-label="主机页面导航">
-  <a href="#host-actions">诊断与操作</a>
-  <a href="#host-trend">历史趋势</a>
-  <a href="#logged-in-users">登录用户</a>
-  <a href="#disk-array">磁盘阵列</a>
-</nav>
-
-<section class="card" id="host-actions">
+<section class="card" id="host-actions" data-host-panel="overview">
   <div class="section-head">
     <h2>诊断与操作</h2>
     <span class="muted" id="host-action-status"></span>
@@ -96,7 +97,7 @@
   {% endif %}
 </section>
 
-<section class="card" id="host-trend">
+<section class="card" id="host-trend" data-host-panel="overview">
   <div class="section-head">
     <h2>历史趋势</h2>
     <div class="range-tabs" role="group" aria-label="趋势时间范围">
@@ -114,7 +115,7 @@
   <p class="empty" id="trend-empty" hidden>暂无历史数据，等待采集后生成趋势。</p>
 </section>
 
-<section class="card">
+<section class="card" data-host-panel="metrics">
   <div class="section-head">
     <h2>指标详情</h2>
     <span class="badge {% if detail.success %}badge-online{% elif detail.success is none %}badge-muted{% else %}badge-offline{% endif %}">
@@ -140,7 +141,7 @@
   </dl>
 </section>
 
-<section class="card" id="logged-in-users">
+<section class="card" id="logged-in-users" data-host-panel="users">
   <div class="section-head">
     <h2>当前登录用户</h2>
     <span class="muted">{{ metrics.logged_in_users|length if metrics.logged_in_users else 0 }} 个会话</span>
@@ -168,7 +169,7 @@
   {% endif %}
 </section>
 
-<section class="card">
+<section class="card" data-host-panel="storage">
   <h2>磁盘</h2>
   {% if metrics.disk_usage %}
   <div class="table-wrap">
@@ -195,7 +196,7 @@
   {% endif %}
 </section>
 
-<section class="card">
+<section class="card" data-host-panel="gpu">
   <h2>GPU</h2>
   {% if metrics.gpu_summary %}
   <div class="table-wrap">
@@ -221,7 +222,7 @@
   {% endif %}
 </section>
 
-<section class="card" id="disk-array">
+<section class="card" id="disk-array" data-host-panel="storage">
   <div class="section-head">
     <h2>磁盘阵列</h2>
     {% if detail.disk %}

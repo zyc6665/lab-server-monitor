@@ -220,6 +220,35 @@
     }
   }
 
+  function bindHostTabs() {
+    var tabs = document.querySelectorAll('[data-host-tab]');
+    var panels = document.querySelectorAll('[data-host-panel]');
+    if (!tabs.length || !panels.length) { return; }
+    function activate(key) {
+      Array.prototype.forEach.call(tabs, function (tab) {
+        var active = tab.getAttribute('data-host-tab') === key;
+        tab.classList.toggle('active', active);
+        tab.setAttribute('aria-selected', active ? 'true' : 'false');
+      });
+      Array.prototype.forEach.call(panels, function (panel) {
+        panel.hidden = panel.getAttribute('data-host-panel') !== key;
+      });
+    }
+    Array.prototype.forEach.call(tabs, function (tab) {
+      tab.addEventListener('click', function () {
+        var key = tab.getAttribute('data-host-tab') || 'overview';
+        activate(key);
+        if (window.history && window.history.replaceState) {
+          window.history.replaceState(null, '', '#tab-' + key);
+        }
+      });
+    });
+    var initial = (window.location.hash || '').replace('#tab-', '');
+    if (!initial) { initial = 'overview'; }
+    activate(initial);
+  }
+
+  bindHostTabs();
   bindRanges();
   bindActions();
   loadHistory('24h');
