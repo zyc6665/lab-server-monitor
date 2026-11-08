@@ -310,6 +310,12 @@
     <div class="health-grid" id="health-summary">
       <p class="empty">正在读取系统状态…</p>
     </div>
+    <div class="backup-actions">
+      <a class="secondary-button" href="/api/system/backup" download>下载数据库备份</a>
+      <a class="secondary-button" href="/api/system/config-export" download>导出配置</a>
+      <a class="secondary-button" href="/api/logs/download" download>下载日志</a>
+      <span class="muted">配置导出不包含密码、SSH 口令等敏感信息。</span>
+    </div>
     <div class="table-wrap">
       <table class="data-table">
         <thead><tr><th>调度任务</th><th>最近运行</th><th>结果</th></tr></thead>

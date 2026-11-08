@@ -18,10 +18,12 @@ from __future__ import annotations
 import base64
 import getpass
 import hmac
+import json
 import logging
 import os
 import secrets
 import smtplib
+import tempfile
 import time
 from collections import deque
 from dataclasses import asdict
@@ -36,6 +38,7 @@ from flask import (
     redirect,
     render_template,
     request,
+    send_file,
     session,
     url_for,
 )
@@ -1230,6 +1233,42 @@ def register_routes(app: Flask) -> None:
             }
         )
 
+    @app.get("/api/system/backup")
+    def api_system_backup():
+        """Download a consistent snapshot of the SQLite database."""
+        handle, temp_name = tempfile.mkstemp(prefix="servermonitor-backup-", suffix=".db")
+        os.close(handle)
+        temp_path = Path(temp_name)
+        try:
+            storage.backup_database(_db_path(app), temp_path)
+            data = temp_path.read_bytes()
+        finally:
+            temp_path.unlink(missing_ok=True)
+
+        stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+        return Response(
+            data,
+            mimetype="application/octet-stream",
+            headers={
+                "Content-Disposition": f'attachment; filename="servermonitor-backup-{stamp}.db"'
+            },
+        )
+
+    @app.get("/api/system/config-export")
+    def api_system_config_export():
+        """Download the non-secret configuration as a JSON document."""
+        service = app.config.get("SETTINGS_SERVICE")
+        if service is None:
+            return jsonify({"error": "settings service unavailable"}), 404
+        payload = json.dumps(service.public_settings(), ensure_ascii=False, indent=2)
+        return Response(
+            payload,
+            mimetype="application/json",
+            headers={
+                "Content-Disposition": "attachment; filename=servermonitor-config.json"
+            },
+        )
+
     @app.get("/api/alerts")
     def api_alerts():
         status = request.args.get("status") or None
@@ -1760,6 +1799,18 @@ def register_routes(app: Flask) -> None:
                 "text": text,
                 "line_count": len(tail),
             }
+        )
+
+    @app.get("/api/logs/download")
+    def api_logs_download():
+        """Download the complete dashboard log file."""
+        if not _LOG_FILE.is_file():
+            return jsonify({"error": "log file not found"}), 404
+        return send_file(
+            _LOG_FILE,
+            as_attachment=True,
+            download_name="servermonitor.log",
+            mimetype="text/plain",
         )
 
     @app.get("/api/runtime")

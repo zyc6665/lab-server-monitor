@@ -75,6 +75,9 @@ def test_hosts_and_disk_health_pages_are_wired(tmp_path):
     assert 'data-settings-tab="health"' in settings
     assert "settings-health.js" in settings
     assert 'id="health-summary"' in settings
+    assert 'href="/api/system/backup"' in settings
+    assert 'href="/api/system/config-export"' in settings
+    assert 'href="/api/logs/download"' in settings
 
 
 def test_configured_host_without_snapshot_opens_detail(tmp_path):
@@ -138,7 +141,7 @@ def test_v19_theme_and_overview_focus_panel(tmp_path):
     assert 'id="overview-trend"' in overview
     assert 'data-overview-trend="cpu"' in overview
     assert "theme.js" in overview
-    assert "v0.1.7 桌面客户端" in overview
+    assert "v0.1.8 桌面客户端" in overview
 
     theme_js = client.get("/static/theme.js").get_data(as_text=True)
     assert "servermonitor-theme" in theme_js

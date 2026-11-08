@@ -709,3 +709,48 @@ def test_host_import_preview_then_confirm_creates_grouped_hosts(client):
     hosts = {h["name"]: h for h in client.get("/api/settings").get_json()["hosts"]}
     assert hosts["imp-a"]["group"] == "GPU"
     assert hosts["imp-b"]["group"] == "机房"
+
+
+def test_system_backup_downloads_sqlite_snapshot(client, tmp_path):
+    import sqlite3
+
+    response = client.get("/api/system/backup")
+    assert response.status_code == 200
+    assert "attachment" in response.headers["Content-Disposition"]
+    assert response.headers["Content-Disposition"].endswith('.db"')
+    assert response.data.startswith(b"SQLite format 3")
+
+    snapshot = tmp_path / "snapshot.db"
+    snapshot.write_bytes(response.data)
+    with sqlite3.connect(snapshot) as conn:
+        assert conn.execute("SELECT COUNT(*) FROM sqlite_master").fetchone()[0] >= 1
+
+
+def test_system_config_export_omits_secrets(client):
+    seed = client.put(
+        "/api/settings/hosts/secret-host",
+        json={
+            "host": "10.0.0.9",
+            "port": 22,
+            "username": "u",
+            "auth_type": "password",
+            "password": "topsecret-pw",
+        },
+    )
+    assert seed.status_code == 200
+
+    response = client.get("/api/system/config-export")
+    assert response.status_code == 200
+    assert "attachment" in response.headers["Content-Disposition"]
+    text = response.get_data(as_text=True)
+    assert "topsecret-pw" not in text
+    payload = json.loads(text)
+    assert payload["hosts"][0]["name"] == "secret-host"
+    assert payload["hosts"][0]["password_configured"] is True
+
+
+def test_logs_download_returns_404_when_log_missing(client, monkeypatch):
+    from servermanage.web import routes
+
+    monkeypatch.setattr(routes, "_LOG_FILE", routes.Path("does-not-exist.log"))
+    assert client.get("/api/logs/download").status_code == 404

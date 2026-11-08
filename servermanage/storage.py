@@ -2294,3 +2294,19 @@ def list_secret_names(db_path: Path) -> list[str]:
         return []
 
     return [name for (name,) in rows]
+
+
+def backup_database(db_path: Path, destination: Path) -> None:
+    """Create a transactionally consistent copy of *db_path* at *destination*."""
+    db_path = Path(db_path)
+    destination = Path(destination)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    if destination.exists():
+        destination.unlink()
+    source = sqlite3.connect(db_path)
+    target = sqlite3.connect(destination)
+    try:
+        source.backup(target)
+    finally:
+        target.close()
+        source.close()
