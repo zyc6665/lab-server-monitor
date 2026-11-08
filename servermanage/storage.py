@@ -271,13 +271,53 @@ def _extract_gpu_utilization_percent(host_report: HostReport) -> float | None:
     return float(max(gpu.utilization_percent for gpu in host_report.metrics.gpu_summary))
 
 
-def init_storage(db_path: Path) -> None:
+def _migrate_host_daily_summary(conn: sqlite3.Connection, tz_key: str) -> None:
+    """Upgrade the pre-0.1.1 summary table that lacked the ``tz`` column.
+
+    v1.6.0/v1.6.1 shipped ``host_daily_summary`` with a ``(day, host_name)``
+    primary key.  The live schema now includes ``tz`` so two timezones cannot
+    overwrite each other.  SQLite cannot add a column to a primary key, so the
+    only safe migration is a rename-copy-drop rebuild.  Existing rows were
+    produced with the configured local timezone, therefore they are tagged with
+    the caller's timezone rather than blindly labelled UTC.
+    """
+    columns = [row[1] for row in conn.execute("PRAGMA table_info(host_daily_summary)")]
+    if not columns or "tz" in columns:
+        return
+    conn.execute("DROP INDEX IF EXISTS idx_host_daily_summary_day")
+    conn.execute("ALTER TABLE host_daily_summary RENAME TO host_daily_summary_legacy")
+    conn.executescript(_CREATE_EXTENDED_TABLES_SQL)
+    conn.execute(
+        """
+        INSERT INTO host_daily_summary (
+            day, host_name, tz, host, sample_count, success_count,
+            cpu_sum, cpu_max, cpu_min, memory_pct_sum, memory_pct_max,
+            disk_pct_sum, disk_pct_max, gpu_util_sum, gpu_util_max,
+            gpu_memory_pct_sum, gpu_memory_pct_max, load_sum, users_sum,
+            processes_sum, updated_at
+        )
+        SELECT
+            day, host_name, ?, host, sample_count, success_count,
+            cpu_sum, cpu_max, cpu_min, memory_pct_sum, memory_pct_max,
+            disk_pct_sum, disk_pct_max, gpu_util_sum, gpu_util_max,
+            gpu_memory_pct_sum, gpu_memory_pct_max, load_sum, users_sum,
+            processes_sum, updated_at
+        FROM host_daily_summary_legacy
+        """,
+        (tz_key,),
+    )
+    conn.execute("DROP TABLE host_daily_summary_legacy")
+
+
+def init_storage(db_path: Path, *, daily_summary_tz: str | None = "UTC") -> None:
     db_path = Path(db_path)
     db_path.parent.mkdir(parents=True, exist_ok=True)
     with sqlite3.connect(db_path) as conn:
         conn.executescript(_CREATE_TABLE_SQL)
         conn.executescript(_CREATE_INDEX_SQL)
         conn.executescript(_CREATE_EXTENDED_TABLES_SQL)
+        if daily_summary_tz is not None:
+            _migrate_host_daily_summary(conn, daily_summary_tz)
         conn.executescript(_CREATE_EXTENDED_INDEX_SQL)
         conn.executescript(_CREATE_SETTINGS_TABLES_SQL)
         conn.executescript(_CREATE_SILENCE_TABLES_SQL)

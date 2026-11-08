@@ -193,3 +193,42 @@ def test_host_detail_renders_diagnostics_and_trend(tmp_path: Path) -> None:
     assert "历史趋势" in html
     assert "host-detail.js" in html
     assert 'data-trend="cpu"' in html
+
+
+def test_legacy_daily_summary_table_is_migrated_with_timezone(tmp_path: Path) -> None:
+    import sqlite3
+
+    from servermanage.storage import init_storage
+
+    db_path = tmp_path / "legacy.db"
+    with sqlite3.connect(db_path) as conn:
+        conn.executescript(
+            """
+            CREATE TABLE host_daily_summary (
+                day TEXT NOT NULL,
+                host_name TEXT NOT NULL,
+                host TEXT NOT NULL,
+                sample_count INTEGER NOT NULL DEFAULT 0,
+                success_count INTEGER NOT NULL DEFAULT 0,
+                cpu_sum REAL, cpu_max REAL, cpu_min REAL,
+                memory_pct_sum REAL, memory_pct_max REAL,
+                disk_pct_sum REAL, disk_pct_max REAL,
+                gpu_util_sum REAL, gpu_util_max REAL,
+                gpu_memory_pct_sum REAL, gpu_memory_pct_max REAL,
+                load_sum REAL, users_sum REAL, processes_sum REAL,
+                updated_at TEXT NOT NULL,
+                PRIMARY KEY (day, host_name)
+            );
+            INSERT INTO host_daily_summary
+                (day, host_name, host, sample_count, success_count, cpu_sum, updated_at)
+            VALUES ('2026-11-07', 'gpu-01', '10.0.0.1', 2, 2, 40.0, '2026-11-07T00:00:00+00:00');
+            """
+        )
+
+    init_storage(db_path, daily_summary_tz="Asia/Shanghai")
+
+    with sqlite3.connect(db_path) as conn:
+        columns = [row[1] for row in conn.execute("PRAGMA table_info(host_daily_summary)")]
+        rows = list(conn.execute("SELECT day, host_name, tz, cpu_sum FROM host_daily_summary"))
+    assert "tz" in columns
+    assert rows == [("2026-11-07", "gpu-01", "Asia/Shanghai", 40.0)]

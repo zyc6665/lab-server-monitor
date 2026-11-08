@@ -207,7 +207,7 @@ def load_runtime(
 
     config = load_config(Path(config_path))
     db_path = Path(config.storage.db_path)
-    init_storage(db_path)
+    init_storage(db_path, daily_summary_tz=config.app.timezone)
     return config, db_path
 
 
@@ -234,11 +234,13 @@ def load_runtime_with_settings(
         allow_missing_secrets=True,
     )
     db_path = Path(base.storage.db_path)
-    init_storage(db_path)
+    init_storage(db_path, daily_summary_tz=None)
     settings = SettingsService(
         config_path=Path(config_path), db_path=db_path, base_config=base
     )
-    return settings.load(), db_path, settings
+    effective = settings.load()
+    init_storage(db_path, daily_summary_tz=effective.app.timezone)
+    return effective, db_path, settings
 
 
 # ---------------------------------------------------------------------------
@@ -725,7 +727,7 @@ class MonitorService:
         """Build the scheduler, register all jobs and start its thread."""
         self._tz = resolve_timezone(self.config.app.timezone)
         try:
-            init_storage(self.db_path)
+            init_storage(self.db_path, daily_summary_tz=self.config.app.timezone)
             backfilled = backfill_daily_summary(self.db_path, self._tz)
             if backfilled:
                 LOGGER.info("Backfilled %s daily summary rows", backfilled)
