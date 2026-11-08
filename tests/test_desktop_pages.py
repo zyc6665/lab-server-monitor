@@ -225,6 +225,8 @@ def test_host_rows_have_quick_collect_and_percent_meters(client):
         assert 'class="pct-value"' in html
         assert 'id="collect-abnormal-hosts"' in html
         assert 'id="collect-all-hosts"' in html
+        assert 'id="export-hosts"' in html
+        assert "导出 CSV" in html
 
 
 def test_overview_keeps_filter_bar_and_host_columns(client):
@@ -290,6 +292,10 @@ def test_app_js_keeps_terminal_and_filter_logic():
     assert "pollHostsCollection" in source
     assert "/api/settings/hosts/collect" in source
     assert "/api/settings/hosts/" in source
+    assert "function exportHostsCsv" in source
+    assert "'\\ufeff'" in source
+    assert "hosts-" in source
+    assert "没有可导出的主机" in source
 
 
 def test_app_js_renders_terminal_link_without_user_innerhtml():

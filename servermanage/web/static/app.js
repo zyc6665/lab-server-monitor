@@ -616,6 +616,46 @@
     });
   }
 
+  function exportHostsCsv() {
+    var table = document.getElementById('host-table');
+    var tbody = document.getElementById('host-table-body');
+    if (!table || !tbody) { return; }
+    var headerCells = table.querySelectorAll('thead th');
+    var headers = [];
+    for (var h = 0; h < headerCells.length - 1; h += 1) {
+      headers.push(headerCells[h].textContent.trim());
+    }
+    var lines = [headers.map(function (value) {
+      return '"' + String(value).replace(/"/g, '""') + '"';
+    }).join(',')];
+    var rows = tbody.querySelectorAll('tr');
+    for (var i = 0; i < rows.length; i += 1) {
+      if (rows[i].hidden) { continue; }
+      var cells = rows[i].querySelectorAll('td');
+      var values = [];
+      for (var c = 0; c < cells.length - 1; c += 1) {
+        values.push((cells[c].textContent || '').replace(/\s+/g, ' ').trim());
+      }
+      lines.push(values.map(function (value) {
+        return '"' + String(value).replace(/"/g, '""') + '"';
+      }).join(','));
+    }
+    if (lines.length <= 1) {
+      showToast('没有可导出的主机', 'error');
+      return;
+    }
+    var blob = new Blob(['\ufeff' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
+    var url = URL.createObjectURL(blob);
+    var link = document.createElement('a');
+    link.href = url;
+    link.download = 'hosts-' + new Date().toISOString().slice(0, 10) + '.csv';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    showToast('已导出 ' + (lines.length - 1) + ' 台主机', 'success');
+  }
+
   function pollHostsCollection(names, button, original) {
     var deadline = Date.now() + 90000;
     var url = '/api/settings/hosts/collection-status?names=' + encodeURIComponent(names.join(','));
@@ -1106,6 +1146,7 @@
 
     var collectAllButton = document.getElementById('collect-all-hosts');
     var collectAbnormalButton = document.getElementById('collect-abnormal-hosts');
+    var exportHostsButton = document.getElementById('export-hosts');
     if (collectAllButton) {
       collectAllButton.addEventListener('click', function () {
         collectAllHosts(collectAllButton);
@@ -1115,6 +1156,9 @@
       collectAbnormalButton.addEventListener('click', function () {
         collectAbnormalHosts(collectAbnormalButton);
       });
+    }
+    if (exportHostsButton) {
+      exportHostsButton.addEventListener('click', exportHostsCsv);
     }
 
     // 告警页状态筛选（活动 / 全部）：切换后按状态重新拉取。

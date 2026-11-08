@@ -48,6 +48,7 @@
       <span class="muted" id="host-count">共 {{ hosts|length }} 台</span>
       <button type="button" class="btn-link" id="collect-abnormal-hosts">采集异常</button>
       <button type="button" class="btn-link" id="collect-all-hosts">采集全部</button>
+      <button type="button" class="btn-link" id="export-hosts">导出 CSV</button>
     </div>
   </div>
   <p class="empty" id="empty-state"{% if hosts %} hidden{% endif %}>暂无数据</p>
