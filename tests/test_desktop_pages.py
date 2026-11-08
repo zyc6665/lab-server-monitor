@@ -216,6 +216,15 @@ def test_overview_host_row_has_terminal_link(client):
     assert "终端" in html
 
 
+def test_host_rows_have_quick_collect_and_percent_meters(client):
+    for path in ("/", "/hosts"):
+        html = _page(client, path)
+        assert f'class="btn-link host-collect" data-host-name="{HOST_NAME}"' in html
+        assert 'class="pct-meter"' in html
+        assert 'class="pct-meter-fill"' in html
+        assert 'class="pct-value"' in html
+
+
 def test_overview_keeps_filter_bar_and_host_columns(client):
     html = _page(client, "/")
     assert 'id="host-filter"' in html
@@ -270,6 +279,10 @@ def test_app_js_keeps_terminal_and_filter_logic():
     assert "filter-keyword" in source
     assert "ack-btn" in source
     assert "30000" in source or "REFRESH_MS" in source
+    assert "function percentCell" in source
+    assert "function collectHost" in source
+    assert "pollHostCollection" in source
+    assert "/api/settings/hosts/" in source
 
 
 def test_app_js_renders_terminal_link_without_user_innerhtml():

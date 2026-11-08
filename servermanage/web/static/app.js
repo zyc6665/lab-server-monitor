@@ -111,6 +111,34 @@
     return td;
   }
 
+  // 百分比单元格：迷你进度条 + 数字，比纯文本更容易扫视。
+  function percentCell(value) {
+    var td = document.createElement('td');
+    td.className = 'pct-cell';
+    if (value === null || value === undefined || value === '') {
+      td.textContent = '—';
+      return td;
+    }
+    var num = Number(value);
+    if (isNaN(num)) {
+      td.textContent = String(value);
+      return td;
+    }
+    var meter = document.createElement('span');
+    meter.className = 'pct-meter';
+    meter.setAttribute('aria-hidden', 'true');
+    var fill = document.createElement('span');
+    fill.className = 'pct-meter-fill';
+    fill.style.width = Math.max(0, Math.min(100, num)) + '%';
+    meter.appendChild(fill);
+    var label = document.createElement('span');
+    label.className = 'pct-value';
+    label.textContent = formatPercent(num);
+    td.appendChild(meter);
+    td.appendChild(label);
+    return td;
+  }
+
   function booleanBadge(online) {
     var badge = document.createElement('span');
     badge.className = 'badge ' + (online ? 'badge-online' : 'badge-offline');
@@ -311,10 +339,10 @@
     }
     tr.appendChild(statusCell);
 
-    tr.appendChild(textCell(formatPercent(host.cpu_percent)));
-    tr.appendChild(textCell(formatPercent(host.memory_percent)));
-    tr.appendChild(textCell(formatPercent(host.disk_percent)));
-    tr.appendChild(textCell(formatPercent(host.gpu_memory_percent)));
+    tr.appendChild(percentCell(host.cpu_percent));
+    tr.appendChild(percentCell(host.memory_percent));
+    tr.appendChild(percentCell(host.disk_percent));
+    tr.appendChild(percentCell(host.gpu_memory_percent));
     tr.appendChild(textCell(host.logged_in_user_count == null ? '—' : host.logged_in_user_count));
 
     var healthCell = document.createElement('td');
@@ -333,9 +361,15 @@
 
     tr.appendChild(textCell(host.collected_at, 'mono'));
 
-    // 操作列：终端入口。用 DOM API + textContent 构建，避免把主机名当 HTML。
+    // 操作列：快捷采集 + 终端入口。用 DOM API + textContent 构建，避免把主机名当 HTML。
     var actionCell = document.createElement('td');
     actionCell.className = 'host-actions';
+    var collectButton = document.createElement('button');
+    collectButton.type = 'button';
+    collectButton.className = 'btn-link host-collect';
+    collectButton.setAttribute('data-host-name', host.name || '');
+    collectButton.textContent = '采集';
+    actionCell.appendChild(collectButton);
     var terminalLink = document.createElement('a');
     terminalLink.className = 'btn-link terminal-link';
     terminalLink.href = '/terminal?host=' + encodeURIComponent(host.name || '');
@@ -465,6 +499,65 @@
     lastHosts = hosts.slice();
     hostsLoaded = true;
     renderHosts();
+  }
+
+  // 概览/主机列表的快捷采集：提交后轮询单台状态，完成时刷新表格。
+  function collectHost(name, button) {
+    if (!name || !button || button.disabled) { return; }
+    var original = button.textContent || '采集';
+    button.disabled = true;
+    button.textContent = '采集中…';
+    fetchJson('/api/settings/hosts/' + encodeURIComponent(name) + '/collect', { method: 'POST' })
+      .then(function (payload) {
+        if (!payload || !payload.ok) {
+          throw new Error('collect failed');
+        }
+        showToast('已提交采集：' + name, 'success');
+        pollHostCollection(name, button, original);
+      })
+      .catch(function () {
+        button.disabled = false;
+        button.textContent = original;
+        showToast('采集任务提交失败：' + name, 'error');
+      });
+  }
+
+  function pollHostCollection(name, button, original) {
+    var deadline = Date.now() + 60000;
+    var url = '/api/settings/hosts/collection-status?names=' + encodeURIComponent(name);
+    function restore() {
+      button.disabled = false;
+      button.textContent = original;
+    }
+    function tick() {
+      fetchJson(url).then(function (payload) {
+        var status = payload && payload.statuses && payload.statuses[name];
+        if (status && status.state === 'done') {
+          restore();
+          showToast('采集完成：' + name, 'success');
+          refreshOverview().catch(function () {});
+          return;
+        }
+        if (status && status.state === 'error') {
+          restore();
+          showToast('采集失败：' + (status.error || '未知错误'), 'error');
+          return;
+        }
+        if (Date.now() < deadline) {
+          window.setTimeout(tick, 1500);
+        } else {
+          restore();
+          showToast('采集仍在后台进行：' + name, 'info');
+        }
+      }).catch(function () {
+        if (Date.now() < deadline) {
+          window.setTimeout(tick, 2000);
+        } else {
+          restore();
+        }
+      });
+    }
+    tick();
   }
 
   function setHostSort(key) {
@@ -885,6 +978,10 @@
       }
       if (target && target.classList && target.classList.contains('silence-btn')) {
         openSilenceDialog(target);
+        return;
+      }
+      if (target && target.classList && target.classList.contains('host-collect')) {
+        collectHost(target.getAttribute('data-host-name'), target);
         return;
       }
       var sortHead = target && target.closest ? target.closest('th[data-sort-key]') : null;

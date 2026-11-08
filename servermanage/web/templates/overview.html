@@ -5,6 +5,10 @@
 {%- if value is undefined or value is none -%}—{%- elif value is string -%}{{ value }}{%- else -%}{{ '%.1f'|format(value) }}%{%- endif -%}
 {%- endmacro %}
 
+{% macro pctbar(value) -%}
+{%- if value is undefined or value is none -%}<span class="pct-value">—</span>{%- else -%}{%- set num = value|float -%}<span class="pct-meter" aria-hidden="true"><span class="pct-meter-fill" style="width: {{ 0 if num < 0 else (100 if num > 100 else num) }}%"></span></span><span class="pct-value">{{ '%.1f'|format(num) }}%</span>{%- endif -%}
+{%- endmacro %}
+
 {% block content %}
 <h1 class="page-title">概览</h1>
 
@@ -172,10 +176,10 @@
             <span class="badge badge-silenced" title="静默至 {{ host.silenced_until or '—' }}">静默</span>
             {% endif %}
           </td>
-          <td>{{ pct(host.cpu_percent) }}</td>
-          <td>{{ pct(host.memory_percent) }}</td>
-          <td>{{ pct(host.disk_percent) }}</td>
-          <td>{{ pct(host.gpu_memory_percent) }}</td>
+          <td class="pct-cell">{{ pctbar(host.cpu_percent) }}</td>
+          <td class="pct-cell">{{ pctbar(host.memory_percent) }}</td>
+          <td class="pct-cell">{{ pctbar(host.disk_percent) }}</td>
+          <td class="pct-cell">{{ pctbar(host.gpu_memory_percent) }}</td>
           <td>{{ host.logged_in_user_count }}</td>
           <td>
             <span class="health health-{{ host.disk_health.status }}">{{ host.disk_health.status }}</span>
@@ -183,6 +187,7 @@
           </td>
           <td class="mono">{{ host.collected_at or '—' }}</td>
           <td class="host-actions">
+            <button type="button" class="btn-link host-collect" data-host-name="{{ host.name }}">采集</button>
             <a class="btn-link terminal-link" href="/terminal?host={{ host.name|urlencode }}">终端</a>
           </td>
         </tr>

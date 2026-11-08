@@ -587,8 +587,13 @@ a:hover { text-decoration: underline; }
 }
 .button-link:hover { text-decoration: none; }
 
-/* Table row operation links (overview 终端 column). */
-.host-actions { white-space: nowrap; }
+/* Table row operation links (overview 终端/采集 column). */
+.host-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
 .btn-link {
   display: inline-flex;
   align-items: center;
@@ -597,10 +602,33 @@ a:hover { text-decoration: underline; }
   border-radius: 8px;
   background: #fff;
   color: var(--accent);
+  font-family: inherit;
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
 }
+.btn-link:disabled { opacity: .55; cursor: wait; }
+
+/* 百分比列：迷你进度条 + 数字 */
+.pct-cell { min-width: 96px; }
+.pct-meter {
+  display: inline-block;
+  width: 42px;
+  height: 6px;
+  margin-right: 6px;
+  border-radius: 999px;
+  background: #e2e8f0;
+  overflow: hidden;
+  vertical-align: middle;
+}
+.pct-meter-fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+  transition: width .2s ease;
+}
+.pct-value { font-variant-numeric: tabular-nums; }
 .btn-link:hover { background: var(--accent-soft); border-color: var(--accent); text-decoration: none; }
 
 /* Alerts status filter tabs. */
@@ -917,6 +945,8 @@ html[data-theme="dark"] textarea { background: #111c2e; color: var(--text); bord
 html[data-theme="dark"] .focus-item { background: #111c2e; }
 html[data-theme="dark"] .badge-online { background: #163a2c; color: #6ee7b7; }
 html[data-theme="dark"] .badge-offline { background: #451a1a; color: #fca5a5; }
+html[data-theme="dark"] .pct-meter { background: #2b3a52; }
+html[data-theme="dark"] .btn-link { background: #141c2b; border-color: #2b3a52; }
 
 @media (max-width: 980px) {
   .host-stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
