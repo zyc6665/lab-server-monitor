@@ -20,11 +20,25 @@ function createUpdater(options) {
     autoCheckDelayMs = 10000,
   } = options;
 
+  let defaultFetch = options.fetchImpl;
+  if (!defaultFetch && process.versions.electron) {
+    try {
+      // Electron's net.fetch uses Chromium's network stack, so it honours the
+      // Windows system proxy. Node's global fetch does not, and direct GitHub
+      // release downloads are blocked on many lab networks.
+      const { net } = require('electron');
+      defaultFetch = net.fetch.bind(net);
+    } catch (error) {
+      defaultFetch = globalThis.fetch;
+    }
+  }
+  if (!defaultFetch) defaultFetch = globalThis.fetch;
+
   const core = createUpdaterCore({
     repo: options.repo || 'zyc6665/lab-server-monitor',
     currentVersion,
     updatesDir,
-    fetchImpl: options.fetchImpl,
+    fetchImpl: defaultFetch,
   });
   let lastUpdate = null;
   let autoTimer = null;

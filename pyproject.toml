@@ -1,6 +1,6 @@
 [project]
 name = "servermanage"
-version = "1.5.1"
+version = "1.5.2"
 description = "Centralized Linux server daily monitor with HTML email reports."
 readme = "README.md"
 requires-python = ">=3.11"
