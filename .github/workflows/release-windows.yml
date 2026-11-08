@@ -62,6 +62,16 @@ jobs:
         run: powershell -NoProfile -ExecutionPolicy Bypass -File desktop/scripts/build-portable.ps1
         shell: pwsh
 
+      - name: Normalise release asset name
+        run: |
+          $zip = Get-ChildItem -LiteralPath release -Filter "*.zip" | Select-Object -First 1
+          if (-not $zip) { throw "release zip not found" }
+          $target = "lab-server-monitor-Windows-x64-v${{ steps.version.outputs.version }}.zip"
+          if ($zip.Name -ne $target) {
+            Rename-Item -LiteralPath $zip.FullName -NewName $target
+          }
+        shell: pwsh
+
       - name: Write checksum
         run: |
           $zip = Get-ChildItem -LiteralPath release -Filter "*.zip" | Select-Object -First 1
