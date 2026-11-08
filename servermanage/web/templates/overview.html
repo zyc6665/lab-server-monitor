@@ -70,6 +70,21 @@
   </div>
 </section>
 
+<section class="card resource-rank-card" id="resource-rank">
+  <div class="section-head">
+    <h2>资源占用排行</h2>
+    <div class="rank-tabs" role="group" aria-label="资源排行指标">
+      <button type="button" class="rank-tab active" data-rank-metric="cpu">CPU</button>
+      <button type="button" class="rank-tab" data-rank-metric="memory">内存</button>
+      <button type="button" class="rank-tab" data-rank-metric="disk">磁盘</button>
+      <button type="button" class="rank-tab" data-rank-metric="gpu">GPU 显存</button>
+    </div>
+  </div>
+  <div class="rank-list" id="resource-rank-list">
+    <p class="empty">正在读取主机数据…</p>
+  </div>
+</section>
+
 <section class="card" id="overview-trend">
   <div class="section-head">
     <h2>整体趋势</h2>

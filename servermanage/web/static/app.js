@@ -17,6 +17,7 @@
   var hostSortKey = '';
   var hostSortDir = 1;
   var silenceTarget = null;
+  var resourceRankMetric = 'cpu';
 
   function redirectToLogin() {
     if (window.location.pathname !== '/login') {
@@ -137,6 +138,101 @@
     td.appendChild(meter);
     td.appendChild(label);
     return td;
+  }
+
+  // 资源排行：从当前主机快照取数值，按所选指标降序显示前 5 台。
+  var resourceRankLabels = {
+    cpu: 'CPU',
+    memory: '内存',
+    disk: '磁盘',
+    gpu: 'GPU 显存'
+  };
+
+  function resourceRankValue(host, metric) {
+    if (!host) { return null; }
+    var value = null;
+    if (metric === 'cpu') { value = host.cpu_percent; }
+    else if (metric === 'memory') { value = host.memory_percent; }
+    else if (metric === 'disk') { value = host.disk_percent; }
+    else if (metric === 'gpu') { value = host.gpu_memory_percent; }
+    if (value === null || value === undefined || value === '') { return null; }
+    var num = Number(value);
+    return isNaN(num) ? null : num;
+  }
+
+  function renderResourceRanking() {
+    var list = document.getElementById('resource-rank-list');
+    if (!list) { return; }
+    while (list.firstChild) { list.removeChild(list.firstChild); }
+    var ranked = [];
+    for (var i = 0; i < lastHosts.length; i += 1) {
+      var value = resourceRankValue(lastHosts[i], resourceRankMetric);
+      if (value !== null) { ranked.push({ host: lastHosts[i], value: value }); }
+    }
+    ranked.sort(function (a, b) { return b.value - a.value; });
+    ranked = ranked.slice(0, 5);
+    if (!ranked.length) {
+      var empty = document.createElement('p');
+      empty.className = 'empty';
+      empty.textContent = '暂无可排序的' + (resourceRankLabels[resourceRankMetric] || '') + '数据';
+      list.appendChild(empty);
+      return;
+    }
+    for (var j = 0; j < ranked.length; j += 1) {
+      var item = ranked[j];
+      var row = document.createElement('a');
+      row.className = 'rank-row';
+      row.href = '/host/' + encodeURIComponent(item.host.name || '');
+      var name = document.createElement('span');
+      name.className = 'rank-name';
+      name.textContent = item.host.name || '未命名';
+      var group = document.createElement('span');
+      group.className = 'rank-group';
+      group.textContent = item.host.group || '未分组';
+      var meter = document.createElement('span');
+      meter.className = 'rank-meter';
+      var fill = document.createElement('span');
+      fill.className = 'rank-meter-fill';
+      if (item.value >= 90) { fill.className += ' is-hot'; }
+      else if (item.value >= 75) { fill.className += ' is-warn'; }
+      fill.style.width = Math.max(0, Math.min(100, item.value)) + '%';
+      meter.appendChild(fill);
+      var number = document.createElement('span');
+      number.className = 'rank-value';
+      number.textContent = formatPercent(item.value);
+      row.appendChild(name);
+      row.appendChild(group);
+      row.appendChild(meter);
+      row.appendChild(number);
+      if (item.host.online === false) {
+        var offline = document.createElement('span');
+        offline.className = 'rank-offline';
+        offline.textContent = '离线';
+        row.appendChild(offline);
+      }
+      list.appendChild(row);
+    }
+  }
+
+  function setResourceRankMetric(metric) {
+    if (!resourceRankLabels[metric]) { return; }
+    resourceRankMetric = metric;
+    var tabs = document.querySelectorAll('#resource-rank [data-rank-metric]');
+    for (var i = 0; i < tabs.length; i += 1) {
+      tabs[i].classList.toggle('active', tabs[i].getAttribute('data-rank-metric') === metric);
+      tabs[i].setAttribute('aria-pressed', tabs[i].getAttribute('data-rank-metric') === metric ? 'true' : 'false');
+    }
+    renderResourceRanking();
+  }
+
+  function bindResourceRankTabs() {
+    var tabs = document.querySelectorAll('#resource-rank [data-rank-metric]');
+    for (var i = 0; i < tabs.length; i += 1) {
+      tabs[i].addEventListener('click', function (event) {
+        var metric = event.currentTarget.getAttribute('data-rank-metric');
+        setResourceRankMetric(metric);
+      });
+    }
   }
 
   function booleanBadge(online) {
@@ -499,6 +595,7 @@
     lastHosts = hosts.slice();
     hostsLoaded = true;
     renderHosts();
+    renderResourceRanking();
   }
 
   // 概览/主机列表的快捷采集：提交后轮询单台状态，完成时刷新表格。
@@ -1202,6 +1299,7 @@
 
     bindOverviewRanges();
     bindAlertRanges();
+    bindResourceRankTabs();
     refreshAll();
     window.setInterval(refreshAll, REFRESH_MS);
 

@@ -975,3 +975,54 @@ html[data-theme="dark"] .btn-link { background: #141c2b; border-color: #2b3a52; 
 .legend-dot.warning { background: #f59e0b; }
 .legend-dot.info { background: #3b82f6; }
 .alert-trend-chart { width: 100%; height: auto; display: block; }
+
+/* 资源占用排行：Top 5 横向条形 */
+.rank-tabs {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 9px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+}
+.rank-tab {
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 7px;
+  cursor: pointer;
+}
+.rank-tab:hover { color: var(--text); }
+.rank-tab.active { background: var(--card-bg); color: var(--accent); box-shadow: var(--shadow); font-weight: 600; }
+.rank-list { display: flex; flex-direction: column; gap: 4px; }
+.rank-row {
+  display: grid;
+  grid-template-columns: minmax(90px, 150px) minmax(60px, 100px) minmax(80px, 1fr) 58px auto;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 9px;
+  border-radius: 8px;
+  color: var(--text);
+  text-decoration: none;
+}
+.rank-row:hover { background: var(--bg); text-decoration: none; }
+.rank-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rank-group { color: var(--text-muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rank-meter { height: 8px; border-radius: 999px; background: #e2e8f0; overflow: hidden; }
+.rank-meter-fill { display: block; height: 100%; border-radius: inherit; background: var(--accent); transition: width .2s ease; }
+.rank-meter-fill.is-warn { background: #f59e0b; }
+.rank-meter-fill.is-hot { background: #dc2626; }
+.rank-value { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
+.rank-offline { color: var(--danger); font-size: 12px; }
+html[data-theme="dark"] .rank-tabs { background: #111c2e; }
+html[data-theme="dark"] .rank-tab.active { background: #1b273d; }
+html[data-theme="dark"] .rank-row:hover { background: #111c2e; }
+html[data-theme="dark"] .rank-meter { background: #2b3a52; }
+
+@media (max-width: 760px) {
+  .rank-row { grid-template-columns: minmax(80px, 1fr) 52px; }
+  .rank-group, .rank-meter, .rank-offline { display: none; }
+}

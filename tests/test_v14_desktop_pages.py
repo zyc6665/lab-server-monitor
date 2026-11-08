@@ -144,12 +144,16 @@ def test_v19_theme_and_overview_focus_panel(tmp_path):
     assert 'data-overview-trend="cpu"' in overview
     assert 'id="alert-trend"' in overview
     assert 'data-alert-trend' in overview
+    assert 'id="resource-rank"' in overview
+    assert 'data-rank-metric="cpu"' in overview
     assert "theme.js" in overview
-    assert "v0.1.14 桌面客户端" in overview
+    assert "v0.1.15 桌面客户端" in overview
 
     app_js = client.get("/static/app.js").get_data(as_text=True)
     assert "bindAlertRanges" in app_js
     assert "/api/overview/alert-history" in app_js
+    assert "renderResourceRanking" in app_js
+    assert "bindResourceRankTabs" in app_js
 
     theme_js = client.get("/static/theme.js").get_data(as_text=True)
     assert "servermonitor-theme" in theme_js
@@ -161,6 +165,8 @@ def test_v19_theme_and_overview_focus_panel(tmp_path):
     assert ".pct-meter" in css
     assert ".host-actions" in css
     assert ".host-bulk-actions" in css
+    assert ".rank-row" in css
+    assert ".rank-meter-fill" in css
 
 
 def test_v19_host_summary_cards_and_subnav(tmp_path):

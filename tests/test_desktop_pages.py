@@ -229,6 +229,15 @@ def test_host_rows_have_quick_collect_and_percent_meters(client):
         assert "导出 CSV" in html
 
 
+def test_overview_has_resource_ranking_card(client):
+    html = _page(client, "/")
+    assert 'id="resource-rank"' in html
+    assert "资源占用排行" in html
+    assert 'id="resource-rank-list"' in html
+    for metric in ("cpu", "memory", "disk", "gpu"):
+        assert f'data-rank-metric="{metric}"' in html
+
+
 def test_overview_keeps_filter_bar_and_host_columns(client):
     html = _page(client, "/")
     assert 'id="host-filter"' in html
@@ -296,6 +305,11 @@ def test_app_js_keeps_terminal_and_filter_logic():
     assert "'\\ufeff'" in source
     assert "hosts-" in source
     assert "没有可导出的主机" in source
+    assert "function renderResourceRanking" in source
+    assert "function setResourceRankMetric" in source
+    assert "function bindResourceRankTabs" in source
+    assert "resource-rank-list" in source
+    assert "resourceRankValue" in source
 
 
 def test_app_js_renders_terminal_link_without_user_innerhtml():
