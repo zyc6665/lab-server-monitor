@@ -358,9 +358,21 @@ def test_global_command_palette_is_available(client):
     assert "'/alerts' +" in js
     assert "host=" in js
     assert "alertParams" in js
+    assert "var ACTIONS" in js
+    assert "function runAction" in js
+    assert "function actionAvailable" in js
+    assert "刷新当前页" in js
+    assert "切换深浅色主题" in js
+    assert "采集全部主机" in js
+    assert "采集异常主机" in js
+    assert "window.serverMonitorActions" in js
     assert "event.ctrlKey || event.metaKey" in js
     assert "ArrowDown" in js
     assert "Escape" in js
+    app_js = client.get("/static/app.js").get_data(as_text=True)
+    assert "window.serverMonitorActions" in app_js
+    assert "collectAll: function" in app_js
+    assert "collectAbnormal: function" in app_js
 
     css = client.get("/static/style.css").get_data(as_text=True)
     assert ".command-dialog" in css

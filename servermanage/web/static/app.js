@@ -1208,6 +1208,19 @@
   function init() {
     if (!hasDashboard()) { return; }
 
+    // 供全局命令面板调用当前页面的快捷操作。
+    window.serverMonitorActions = {
+      refresh: function () { refreshAll(); },
+      collectAll: function () {
+        var button = document.getElementById('collect-all-hosts');
+        if (button) { collectAllHosts(button); }
+      },
+      collectAbnormal: function () {
+        var button = document.getElementById('collect-abnormal-hosts');
+        if (button) { collectAbnormalHosts(button); }
+      }
+    };
+
     // 事件委托：兼容服务端渲染的按钮与轮询后重建的按钮。
     document.addEventListener('click', function (event) {
       var target = event.target;

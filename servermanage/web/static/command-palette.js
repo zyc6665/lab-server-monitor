@@ -15,7 +15,16 @@
     { label: '磁盘健康', meta: '页面', href: '/disk-health', keywords: 'disk 磁盘 阵列 storcli' },
     { label: '告警', meta: '页面', href: '/alerts', keywords: 'alerts 告警 通知' },
     { label: '终端', meta: '页面', href: '/terminal', keywords: 'terminal ssh 终端' },
-    { label: '设置', meta: '页面', href: '/settings', keywords: 'settings 配置 主机 导入' },
+    { label: '设置', meta: '页面', href: '/settings', keywords: 'settings 配置 主机 导入' }
+  ];
+
+  var ACTIONS = [
+    { label: '刷新当前页', meta: '操作 · 重新加载数据', keywords: 'refresh reload 刷新 重新加载', action: 'refresh' },
+    { label: '切换深浅色主题', meta: '操作 · 外观', keywords: 'theme dark light 主题 深色 浅色', action: 'theme' },
+    { label: '采集全部主机', meta: '操作 · 立即采集', keywords: 'collect 采集 全部 主机', action: 'collect-all' },
+    { label: '采集异常主机', meta: '操作 · 只采集异常', keywords: 'collect 采集 异常 离线 告警 主机', action: 'collect-abnormal' },
+    { label: '查看严重告警', meta: '操作 · 只看 critical', href: '/alerts?severity=critical', keywords: 'critical 严重 告警 alerts' },
+    { label: '打开系统状态', meta: '操作 · 设置页系统状态', href: '/settings#system', keywords: 'health 状态 系统 自检 diagnostics' },
     { label: '全网巡检报告', meta: '操作 · 下载文本报告', href: '/api/overview/report', keywords: 'report 巡检 报告 导出' }
   ];
 
@@ -53,6 +62,34 @@
     return '告警';
   }
 
+  // 某些操作只在概览/主机列表存在，打开面板时按页面能力过滤。
+  function actionAvailable(action) {
+    if (action === 'collect-all') { return !!document.getElementById('collect-all-hosts'); }
+    if (action === 'collect-abnormal') { return !!document.getElementById('collect-abnormal-hosts'); }
+    return true;
+  }
+
+  function runAction(action) {
+    var bridge = window.serverMonitorActions || {};
+    if (action === 'refresh') {
+      if (typeof bridge.refresh === 'function') { bridge.refresh(); }
+      else { window.location.reload(); }
+      return;
+    }
+    if (action === 'theme') {
+      var themeButton = document.getElementById('theme-toggle');
+      if (themeButton) { themeButton.click(); }
+      return;
+    }
+    if (action === 'collect-all' && typeof bridge.collectAll === 'function') {
+      bridge.collectAll();
+      return;
+    }
+    if (action === 'collect-abnormal' && typeof bridge.collectAbnormal === 'function') {
+      bridge.collectAbnormal();
+    }
+  }
+
   function buildItems(query) {
     var q = normalise(query).trim();
     var next = [];
@@ -60,6 +97,19 @@
       var haystack = normalise(page.label + ' ' + page.meta + ' ' + page.keywords);
       if (!q || haystack.indexOf(q) !== -1) {
         next.push({ type: 'page', label: page.label, meta: page.meta, href: page.href });
+      }
+    });
+    ACTIONS.forEach(function (entry) {
+      if (!actionAvailable(entry.action)) { return; }
+      var haystack = normalise(entry.label + ' ' + entry.meta + ' ' + entry.keywords);
+      if (!q || haystack.indexOf(q) !== -1) {
+        next.push({
+          type: 'action',
+          label: entry.label,
+          meta: entry.meta,
+          href: entry.href,
+          action: entry.action
+        });
       }
     });
     var hostLimit = q ? 12 : 6;
@@ -173,6 +223,7 @@
   function openItem(item) {
     if (!item) { return; }
     closePalette();
+    if (item.action) { runAction(item.action); return; }
     window.location.assign(item.href);
   }
 
