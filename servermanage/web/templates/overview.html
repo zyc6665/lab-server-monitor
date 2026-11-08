@@ -74,6 +74,24 @@
   <p class="empty" id="overview-trend-empty" hidden>暂无历史数据，等待采集后生成趋势。</p>
 </section>
 
+<section class="card" id="alert-trend">
+  <div class="section-head">
+    <h2>告警趋势</h2>
+    <div class="range-tabs" role="group" aria-label="告警趋势时间范围">
+      <button type="button" class="range-tab active" data-alert-range="24h">24 小时</button>
+      <button type="button" class="range-tab" data-alert-range="7d">7 天</button>
+      <button type="button" class="range-tab" data-alert-range="30d">30 天</button>
+    </div>
+  </div>
+  <div class="alert-trend-legend">
+    <span><i class="legend-dot critical"></i>严重</span>
+    <span><i class="legend-dot warning"></i>警告</span>
+    <span><i class="legend-dot info"></i>提示</span>
+  </div>
+  <svg class="alert-trend-chart" viewBox="0 0 720 150" data-alert-trend role="img" aria-label="告警数量趋势"></svg>
+  <p class="empty" id="alert-trend-empty" hidden>所选范围内暂无告警。</p>
+</section>
+
 <section class="card filter-bar" id="host-filter">
   <label class="filter-field">分组
     <select id="filter-group">

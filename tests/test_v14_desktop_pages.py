@@ -142,8 +142,14 @@ def test_v19_theme_and_overview_focus_panel(tmp_path):
     assert "重点关注" in overview
     assert 'id="overview-trend"' in overview
     assert 'data-overview-trend="cpu"' in overview
+    assert 'id="alert-trend"' in overview
+    assert 'data-alert-trend' in overview
     assert "theme.js" in overview
-    assert "v0.1.9 桌面客户端" in overview
+    assert "v0.1.10 桌面客户端" in overview
+
+    app_js = client.get("/static/app.js").get_data(as_text=True)
+    assert "bindAlertRanges" in app_js
+    assert "/api/overview/alert-history" in app_js
 
     theme_js = client.get("/static/theme.js").get_data(as_text=True)
     assert "servermonitor-theme" in theme_js

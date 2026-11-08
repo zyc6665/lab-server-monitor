@@ -913,3 +913,11 @@ html[data-theme="dark"] .badge-offline { background: #451a1a; color: #fca5a5; }
 .restore-box { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--border); }
 .restore-head { font-weight: 600; margin-bottom: 4px; }
 .restore-box input[type="file"] { font-size: 13px; max-width: 320px; }
+
+.alert-trend-legend { display: flex; gap: 16px; align-items: center; font-size: 12px; color: var(--text-muted); margin-bottom: 8px; }
+.alert-trend-legend span { display: inline-flex; align-items: center; gap: 5px; }
+.legend-dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+.legend-dot.critical { background: #dc2626; }
+.legend-dot.warning { background: #f59e0b; }
+.legend-dot.info { background: #3b82f6; }
+.alert-trend-chart { width: 100%; height: auto; display: block; }

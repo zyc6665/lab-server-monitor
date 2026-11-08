@@ -201,6 +201,79 @@
     loadOverviewHistory('24h');
   }
 
+  var ALERT_TREND_COLORS = { critical: '#dc2626', warning: '#f59e0b', info: '#3b82f6' };
+
+  function drawAlertTrend(buckets) {
+    var svg = document.querySelector('[data-alert-trend]');
+    if (!svg) { return; }
+    while (svg.firstChild) { svg.removeChild(svg.firstChild); }
+    var width = 720, height = 150, padX = 28, padY = 16, padBottom = 28;
+    var plotW = width - padX * 2, plotH = height - padY - padBottom;
+    var maxTotal = 1;
+    buckets.forEach(function (bucket) {
+      maxTotal = Math.max(maxTotal, Number(bucket.total || 0));
+    });
+    [0, 0.5, 1].forEach(function (fraction) {
+      var y = padY + plotH * (1 - fraction);
+      svg.appendChild(overviewSvgEl('line', {
+        x1: padX, x2: width - padX, y1: y, y2: y, stroke: '#e8edf5', 'stroke-width': '1'
+      }));
+      var label = overviewSvgEl('text', {
+        x: 2, y: y + 4, 'font-size': '9', fill: '#94a3b8'
+      });
+      label.textContent = Math.round(maxTotal * fraction);
+      svg.appendChild(label);
+    });
+    var slot = plotW / Math.max(1, buckets.length);
+    var barW = Math.max(2, Math.min(20, slot * 0.62));
+    buckets.forEach(function (bucket, index) {
+      var x = padX + slot * index + (slot - barW) / 2;
+      var bottom = padY + plotH;
+      ['critical', 'warning', 'info'].forEach(function (level) {
+        var count = Number(bucket[level] || 0);
+        if (!count) { return; }
+        var barH = plotH * (count / maxTotal);
+        bottom -= barH;
+        svg.appendChild(overviewSvgEl('rect', {
+          x: x, y: bottom, width: barW, height: Math.max(1, barH),
+          fill: ALERT_TREND_COLORS[level], rx: '1'
+        }));
+      });
+      if (index === 0 || index === buckets.length - 1 || index % Math.ceil(buckets.length / 6) === 0) {
+        var text = overviewSvgEl('text', {
+          x: x + barW / 2, y: height - 8, 'font-size': '9',
+          'text-anchor': 'middle', fill: '#94a3b8'
+        });
+        text.textContent = bucket.label;
+        svg.appendChild(text);
+      }
+    });
+  }
+
+  function loadAlertHistory(rangeKey) {
+    if (!document.getElementById('alert-trend')) { return; }
+    fetchJson('/api/overview/alert-history?range=' + encodeURIComponent(rangeKey)).then(function (payload) {
+      var buckets = (payload && payload.buckets) || [];
+      var empty = document.getElementById('alert-trend-empty');
+      var hasAlerts = buckets.some(function (bucket) { return Number(bucket.total || 0) > 0; });
+      if (empty) { empty.hidden = hasAlerts; }
+      drawAlertTrend(buckets);
+    }).catch(function () {});
+  }
+
+  function bindAlertRanges() {
+    var tabs = document.querySelectorAll('[data-alert-range]');
+    if (!tabs.length) { return; }
+    Array.prototype.forEach.call(tabs, function (tab) {
+      tab.addEventListener('click', function () {
+        Array.prototype.forEach.call(tabs, function (other) { other.classList.remove('active'); });
+        tab.classList.add('active');
+        loadAlertHistory(tab.getAttribute('data-alert-range'));
+      });
+    });
+    loadAlertHistory('24h');
+  }
+
   function buildHostRow(host) {
     var tr = document.createElement('tr');
     if (host.name) { tr.setAttribute('data-host', host.name); }
@@ -825,6 +898,7 @@
     if (alertExport) { alertExport.addEventListener('click', exportAlertsCsv); }
 
     bindOverviewRanges();
+    bindAlertRanges();
     refreshAll();
     window.setInterval(refreshAll, REFRESH_MS);
 

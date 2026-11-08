@@ -1192,6 +1192,19 @@ def register_routes(app: Flask) -> None:
         )
         return jsonify({"range": range_key, "points": points})
 
+    @app.get("/api/overview/alert-history")
+    def api_overview_alert_history():
+        range_key = request.args.get("range", "24h")
+        if range_key not in ("24h", "7d", "30d"):
+            return jsonify({"error": "invalid_range"}), 400
+        config = _config(app)
+        buckets = storage.fetch_alert_history(
+            _db_path(app),
+            range_key=range_key,
+            tz=resolve_timezone(config.app.timezone),
+        )
+        return jsonify({"range": range_key, "buckets": buckets})
+
     @app.get("/api/host/<name>")
     def api_host(name: str):
         detail = _build_host_detail(name, _config(app), _db_path(app))

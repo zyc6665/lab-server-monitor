@@ -881,6 +881,80 @@ def fetch_overview_history(
     return points
 
 
+def fetch_alert_history(
+    db_path: Path,
+    *,
+    range_key: str = "24h",
+    tz: tzinfo = timezone.utc,
+    now: datetime | None = None,
+) -> list[dict[str, object]]:
+    """Return per-bucket alert counts grouped by severity."""
+    db_path = Path(db_path)
+    if range_key not in ("24h", "7d", "30d"):
+        raise ValueError("range_key must be 24h, 7d or 30d")
+    if not db_path.exists():
+        return []
+    current = now or datetime.now(timezone.utc)
+    if current.tzinfo is None:
+        current = current.replace(tzinfo=timezone.utc)
+    local_now = current.astimezone(tz)
+
+    if range_key == "24h":
+        first = local_now.replace(minute=0, second=0, microsecond=0) - timedelta(hours=23)
+        keys = [first + timedelta(hours=i) for i in range(24)]
+        labels = [item.strftime("%H:%M") for item in keys]
+        key_of = lambda moment: moment.replace(minute=0, second=0, microsecond=0)
+    else:
+        days = 7 if range_key == "7d" else 30
+        first_day = local_now.date() - timedelta(days=days - 1)
+        keys = [first_day + timedelta(days=i) for i in range(days)]
+        labels = [item.strftime("%m-%d") for item in keys]
+        key_of = lambda moment: moment.date()
+
+    cutoff = keys[0]
+    if range_key == "24h":
+        cutoff = cutoff.astimezone(timezone.utc)
+    else:
+        cutoff = datetime.combine(cutoff, datetime.min.time(), tzinfo=tz).astimezone(timezone.utc)
+    cutoff_text = cutoff.isoformat()
+
+    with sqlite3.connect(db_path) as conn:
+        rows = conn.execute(
+            "SELECT created_at, severity FROM alerts WHERE created_at >= ? ORDER BY created_at ASC",
+            (cutoff_text,),
+        ).fetchall()
+
+    bucket_map = {key: {"critical": 0, "warning": 0, "info": 0} for key in keys}
+    for created_at, severity in rows:
+        try:
+            moment = _parse_collected_at(str(created_at)).astimezone(tz)
+        except (TypeError, ValueError):
+            continue
+        bucket = key_of(moment)
+        counts = bucket_map.get(bucket)
+        if counts is None:
+            continue
+        level = str(severity or "info").lower()
+        if level not in counts:
+            level = "info"
+        counts[level] += 1
+
+    result = []
+    for key, label in zip(keys, labels):
+        counts = bucket_map[key]
+        result.append(
+            {
+                "key": key.isoformat() if hasattr(key, "isoformat") else str(key),
+                "label": label,
+                "critical": counts["critical"],
+                "warning": counts["warning"],
+                "info": counts["info"],
+                "total": counts["critical"] + counts["warning"] + counts["info"],
+            }
+        )
+    return result
+
+
 def list_task_states(db_path: Path) -> list[dict[str, object]]:
     db_path = Path(db_path)
     if not db_path.exists():

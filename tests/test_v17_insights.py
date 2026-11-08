@@ -18,7 +18,8 @@ from servermanage.models import (
     ReportConfig,
     SSHRuntimeConfig,
 )
-from servermanage.storage import persist_host_reports
+from servermanage.disk_health import AlertEvent
+from servermanage.storage import insert_alert, persist_host_reports
 from servermanage.web import create_app
 
 HOST_NAME = "gpu-01"
@@ -129,6 +130,46 @@ def test_overview_history_returns_fleet_average(tmp_path: Path) -> None:
     assert client.get("/api/overview/history?range=99d").status_code == 400
 
 
+def test_overview_alert_history_counts_by_severity(tmp_path: Path) -> None:
+    client, _app, db_path = _client(tmp_path)
+    now = datetime.now(timezone.utc)
+    insert_alert(
+        AlertEvent(
+            host_name=HOST_NAME,
+            category="cpu",
+            severity="critical",
+            title="CPU 高",
+            message="CPU 持续高于阈值",
+            fingerprint="fp-cpu",
+        ),
+        db_path,
+        created_at=now - timedelta(hours=1),
+    )
+    insert_alert(
+        AlertEvent(
+            host_name=HOST_NAME,
+            category="memory",
+            severity="warning",
+            title="内存高",
+            message="内存持续高于阈值",
+            fingerprint="fp-memory",
+        ),
+        db_path,
+        created_at=now - timedelta(hours=2),
+    )
+
+    response = client.get("/api/overview/alert-history?range=24h")
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["range"] == "24h"
+    assert len(payload["buckets"]) == 24
+    assert sum(item["critical"] for item in payload["buckets"]) == 1
+    assert sum(item["warning"] for item in payload["buckets"]) == 1
+    assert sum(item["total"] for item in payload["buckets"]) == 2
+    assert client.get("/api/overview/alert-history?range=99d").status_code == 400
+
+
 def test_host_history_7d_and_invalid(tmp_path: Path) -> None:
     client, _app, _db_path = _client(tmp_path)
 
@@ -144,7 +185,7 @@ def test_system_health_payload(tmp_path: Path) -> None:
 
     assert response.status_code == 200
     payload = response.get_json()
-    assert payload["version"] == "0.1.9"
+    assert payload["version"] == "0.1.10"
     assert payload["hosts_configured"] == 1
     assert payload["db_path"] == str(db_path)
     assert payload["db_size_bytes"] > 0
