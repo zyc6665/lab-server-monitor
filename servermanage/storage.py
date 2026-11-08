@@ -1739,6 +1739,28 @@ def list_alerts(
     return [dict(row) for row in rows]
 
 
+def list_alerts_for_host(
+    host_name: str,
+    db_path: Path,
+    *,
+    limit: int = 20,
+) -> list[dict]:
+    """Return the most recent alerts for one host (newest first)."""
+    db_path = Path(db_path)
+    if not db_path.exists():
+        return []
+
+    with sqlite3.connect(db_path) as conn:
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute(
+            "SELECT * FROM alerts WHERE host_name = ?"
+            " ORDER BY created_at DESC, id DESC LIMIT ?",
+            (host_name, int(limit)),
+        ).fetchall()
+
+    return [dict(row) for row in rows]
+
+
 # ---------------------------------------------------------------------------
 # Alert silences (maintenance windows that suppress notifications)
 # ---------------------------------------------------------------------------

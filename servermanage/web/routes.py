@@ -953,6 +953,10 @@ def _build_host_detail(name: str, config, db_path) -> dict[str, Any] | None:
     if disk is not None:
         disk = dict(disk)
         disk["collected_at"] = _to_local_iso(disk.get("collected_at"), tz)
+    alerts = _localize_alerts(
+        storage.list_alerts_for_host(name, db_path, limit=20),
+        tz,
+    )
     return {
         "name": name,
         "host": addresses.get(name),
@@ -967,6 +971,7 @@ def _build_host_detail(name: str, config, db_path) -> dict[str, Any] | None:
         "metrics": (snapshot.get("metrics") or {}) if snapshot else {},
         "errors": (snapshot.get("errors") or []) if snapshot else [],
         "disk": disk,
+        "alerts": alerts,
     }
 
 
@@ -1115,6 +1120,21 @@ def _build_host_report(detail: dict[str, Any], generated_at: datetime) -> str:
     if errors:
         for err in errors:
             lines.append(f"  - {err.get('stage') or 'unknown'}：{err.get('message') or '—'}")
+    else:
+        lines.append("  （无）")
+    lines.append("")
+    lines.append("[最近告警]")
+    recent_alerts = detail.get("alerts") or []
+    if recent_alerts:
+        for alert in recent_alerts[:5]:
+            lines.append(
+                "  {} [{}] {}（{}）".format(
+                    alert.get("created_at") or "—",
+                    alert.get("severity") or "—",
+                    alert.get("title") or "—",
+                    alert.get("status") or "—",
+                )
+            )
     else:
         lines.append("  （无）")
     lines.append("")

@@ -171,6 +171,17 @@ def _seed_database(db_path: Path) -> None:
         ),
         db_path,
     )
+    insert_alert(
+        AlertEvent(
+            host_name="other-01",
+            category="disk",
+            severity="critical",
+            title="其他主机专用告警",
+            message="不应出现在 gpu-01 页面",
+            fingerprint="disk:other-01:root",
+        ),
+        db_path,
+    )
 
 
 @pytest.fixture()
@@ -274,6 +285,16 @@ def test_host_page_has_diagnostic_report_button(client):
     assert "导出诊断报告" in html
 
 
+def test_host_page_has_recent_alerts_tab(client):
+    html = _page(client, f"/host/{HOST_NAME}")
+    assert 'data-host-tab="alerts"' in html
+    assert 'id="host-alerts"' in html
+    assert "最近告警" in html
+    assert "CPU 使用率过高" in html
+    assert "其他主机专用告警" not in html
+    assert 'class="ack-btn" data-alert-id=' in html
+
+
 def test_host_report_download_contains_diagnostics(client):
     response = client.get(f"/api/host/{HOST_NAME}/report")
     assert response.status_code == 200
@@ -288,6 +309,8 @@ def test_host_report_download_contains_diagnostics(client):
     assert "CPU 使用率：42.5%" in text
     assert "1 drive needs attention" in text
     assert "磁盘阵列状态为 warning" in text
+    assert "[最近告警]" in text
+    assert "CPU 使用率过高" in text
 
 
 def test_static_assets_are_versioned(client):
@@ -339,6 +362,14 @@ def test_app_js_keeps_terminal_and_filter_logic():
     assert "function bindResourceRankTabs" in source
     assert "resource-rank-list" in source
     assert "resourceRankValue" in source
+
+
+def test_host_detail_js_binds_alert_ack():
+    source = (STATIC / "host-detail.js").read_text(encoding="utf-8")
+    assert "function bindAlertAcks" in source
+    assert "/api/alerts/" in source
+    assert "status-acknowledged" in source
+    assert "bindAlertAcks();" in source
 
 
 def test_app_js_renders_terminal_link_without_user_innerhtml():

@@ -309,9 +309,14 @@ def test_get_all_disk_health_returns_latest_per_host(tmp_path: Path):
 # ---------------------------------------------------------------------------
 
 
-def _alert(fingerprint: str = "system:gpu-01:cpu", title: str = "CPU 使用率过高") -> AlertEvent:
+def _alert(
+    fingerprint: str = "system:gpu-01:cpu",
+    title: str = "CPU 使用率过高",
+    *,
+    host_name: str = "gpu-01",
+) -> AlertEvent:
     return AlertEvent(
-        host_name="gpu-01",
+        host_name=host_name,
         category="system",
         severity="warning",
         title=title,
@@ -369,6 +374,24 @@ def test_list_alerts_filters_by_status_and_limit(tmp_path: Path):
 
     limited = list_alerts(db_path, limit=2)
     assert len(limited) == 2
+
+
+def test_list_alerts_for_host_filters_host_and_limit(tmp_path: Path):
+    db_path = tmp_path / "servermanage.db"
+    first = insert_alert(_alert("system:gpu-01:cpu", "CPU"), db_path)
+    latest = insert_alert(_alert("system:gpu-01:memory", "内存"), db_path)
+    insert_alert(
+        _alert("system:gpu-02:cpu", "别的机器", host_name="gpu-02"),
+        db_path,
+    )
+
+    rows = storage.list_alerts_for_host("gpu-01", db_path)
+    assert [row["id"] for row in rows] == [latest, first]
+    assert all(row["host_name"] == "gpu-01" for row in rows)
+
+    limited = storage.list_alerts_for_host("gpu-01", db_path, limit=1)
+    assert [row["id"] for row in limited] == [latest]
+    assert storage.list_alerts_for_host("missing", db_path) == []
 
 
 def test_find_latest_alert_picks_newest_for_fingerprint(tmp_path: Path):

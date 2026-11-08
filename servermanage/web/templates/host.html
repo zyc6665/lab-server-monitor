@@ -43,6 +43,7 @@
   <button type="button" class="host-tab" data-host-tab="storage">存储与磁盘阵列</button>
   <button type="button" class="host-tab" data-host-tab="gpu">GPU</button>
   <button type="button" class="host-tab" data-host-tab="users">登录用户</button>
+  <button type="button" class="host-tab" data-host-tab="alerts">最近告警{% if detail.alerts|selectattr('status', 'equalto', 'active')|list %} ({{ detail.alerts|selectattr('status', 'equalto', 'active')|list|length }}){% endif %}</button>
 </nav>
 
 <section class="stat-grid host-stat-grid" data-host-panel="overview" aria-label="主机摘要">
@@ -167,6 +168,43 @@
   </div>
   {% else %}
   <p class="empty">暂无登录用户</p>
+  {% endif %}
+</section>
+
+<section class="card" id="host-alerts" data-host-panel="alerts">
+  <div class="section-head">
+    <h2>最近告警</h2>
+    <span class="muted">{{ detail.alerts|length if detail.alerts else 0 }} 条</span>
+  </div>
+  {% if detail.alerts %}
+  <div class="table-wrap">
+    <table class="data-table">
+      <thead>
+        <tr><th>级别</th><th>类别</th><th>标题</th><th>内容</th><th>时间</th><th>状态</th><th>操作</th></tr>
+      </thead>
+      <tbody>
+        {% for alert in detail.alerts %}
+        <tr data-alert-row="{{ alert.id }}">
+          <td><span class="severity severity-{{ alert.severity }}">{% if alert.severity == 'critical' %}严重{% elif alert.severity == 'warning' %}警告{% elif alert.severity == 'info' %}提示{% else %}{{ alert.severity }}{% endif %}</span></td>
+          <td>{{ alert.category }}</td>
+          <td class="alert-title">{{ alert.title }}</td>
+          <td class="alert-message">{{ alert.message }}</td>
+          <td class="mono">{{ alert.created_at }}</td>
+          <td><span class="status status-{{ alert.status }} alert-status">{% if alert.status == 'active' %}活动{% elif alert.status == 'acknowledged' %}已确认{% elif alert.status == 'resolved' %}已恢复{% else %}{{ alert.status }}{% endif %}</span></td>
+          <td class="alert-actions">
+            {% if alert.status == 'active' %}
+            <button type="button" class="ack-btn" data-alert-id="{{ alert.id }}">确认</button>
+            {% else %}
+            <span class="muted">—</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="empty">暂无告警记录</p>
   {% endif %}
 </section>
 

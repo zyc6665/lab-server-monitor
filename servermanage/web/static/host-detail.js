@@ -220,6 +220,50 @@
     }
   }
 
+  function bindAlertAcks() {
+    var buttons = document.querySelectorAll('#host-alerts .ack-btn');
+    Array.prototype.forEach.call(buttons, function (button) {
+      button.addEventListener('click', function () {
+        var alertId = button.getAttribute('data-alert-id');
+        if (!alertId) { return; }
+        button.disabled = true;
+        fetchJson('/api/alerts/' + encodeURIComponent(alertId) + '/ack', { method: 'POST' })
+          .then(function (payload) {
+            if (!payload || !payload.ok) {
+              setStatus('告警确认失败');
+              button.disabled = false;
+              return;
+            }
+            var row = button.closest('tr');
+            if (row) {
+              var status = row.querySelector('.alert-status');
+              if (status) {
+                status.textContent = '已确认';
+                status.classList.remove('status-active');
+                status.classList.add('status-acknowledged');
+              }
+              var actions = row.querySelector('.alert-actions');
+              if (actions) {
+                while (actions.firstChild) { actions.removeChild(actions.firstChild); }
+                var placeholder = document.createElement('span');
+                placeholder.className = 'muted';
+                placeholder.textContent = '—';
+                actions.appendChild(placeholder);
+              }
+            }
+            var remaining = document.querySelectorAll('#host-alerts .status-active').length;
+            var tab = document.querySelector('[data-host-tab="alerts"]');
+            if (tab) { tab.textContent = '最近告警' + (remaining ? ' (' + remaining + ')' : ''); }
+            setStatus('告警已确认');
+          })
+          .catch(function () {
+            setStatus('告警确认失败');
+            button.disabled = false;
+          });
+      });
+    });
+  }
+
   function bindHostTabs() {
     var tabs = document.querySelectorAll('[data-host-tab]');
     var panels = document.querySelectorAll('[data-host-panel]');
@@ -249,6 +293,7 @@
   }
 
   bindHostTabs();
+  bindAlertAcks();
   bindRanges();
   bindActions();
   loadHistory('24h');
