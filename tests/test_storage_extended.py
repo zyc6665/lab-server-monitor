@@ -376,6 +376,30 @@ def test_list_alerts_filters_by_status_and_limit(tmp_path: Path):
     assert len(limited) == 2
 
 
+def test_list_alerts_filters_by_since_cutoff(tmp_path: Path):
+    db_path = tmp_path / "servermanage.db"
+    now = datetime(2026, 11, 8, 12, 0, tzinfo=timezone.utc)
+    old = insert_alert(
+        _alert("system:gpu-01:old", "旧告警"),
+        db_path,
+        created_at=now - timedelta(days=30),
+    )
+    recent = insert_alert(
+        _alert("system:gpu-01:recent", "新告警"),
+        db_path,
+        created_at=now - timedelta(hours=2),
+    )
+
+    last_day = list_alerts(db_path, since=now - timedelta(hours=24))
+    assert [row["id"] for row in last_day] == [recent]
+
+    last_week = list_alerts(db_path, since=now - timedelta(days=7))
+    assert [row["id"] for row in last_week] == [recent]
+
+    last_month = list_alerts(db_path, since=now - timedelta(days=31))
+    assert {row["id"] for row in last_month} == {old, recent}
+
+
 def test_list_alerts_for_host_filters_host_and_limit(tmp_path: Path):
     db_path = tmp_path / "servermanage.db"
     first = insert_alert(_alert("system:gpu-01:cpu", "CPU"), db_path)

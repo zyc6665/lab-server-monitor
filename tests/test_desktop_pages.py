@@ -394,7 +394,12 @@ def test_alerts_page_has_status_filters_and_ack(client):
     assert 'data-status="active"' in html
     assert 'data-status="all"' in html
     assert 'id="alert-host-filter"' in html
+    assert 'id="alert-range-filter"' in html
+    assert 'value="24h"' in html
+    assert 'value="7d"' in html
+    assert 'value="30d"' in html
     assert "全部主机" in html
+    assert "全部时间" in html
     assert "活动" in html
     assert "全部" in html
     assert "ack-btn" in html
@@ -405,14 +410,18 @@ def test_alerts_page_has_status_filters_and_ack(client):
 
 
 def test_alerts_page_supports_query_and_severity_deep_links(client):
-    html = _page(client, "/alerts?q=cpu&severity=critical&host=gpu-01")
+    html = _page(client, "/alerts?q=cpu&severity=critical&host=gpu-01&range=7d")
     assert 'value="cpu"' in html
     assert 'value="critical" selected' in html
     assert 'value="gpu-01" selected' in html
+    assert 'value="7d" selected' in html
     source = (STATIC / "app.js").read_text(encoding="utf-8")
     assert "alertSearch.value" in source
     assert "alertSeverityFilter.value" in source
     assert "alertHostFilter.value" in source
+    assert "alertRangeFilter.value" in source
+    assert "alertTimeRange" in source
+    assert "range=" in source
     assert "alertHost &&" in source
 
 

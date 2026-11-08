@@ -237,7 +237,7 @@ def test_login_and_overview(env):
 
 
 def test_host_detail_and_alerts(env):
-    client, _db_path, _alert_id = env
+    client, db_path, _alert_id = env
     _login(client)
 
     detail = client.get(f"/api/host/{HOST_NAME}")
@@ -256,6 +256,24 @@ def test_host_detail_and_alerts(env):
     alerts = client.get("/api/alerts?status=active")
     assert alerts.status_code == 200
     assert len(alerts.get_json()["alerts"]) == 1
+
+    old_alert = insert_alert(
+        AlertEvent(
+            host_name=HOST_NAME,
+            category="system",
+            severity="warning",
+            title="旧告警",
+            message="十天前的告警",
+            fingerprint=f"system:{HOST_NAME}:old",
+        ),
+        db_path,
+        created_at=datetime.now(timezone.utc) - timedelta(days=10),
+    )
+    recent_alerts = client.get("/api/alerts?range=24h").get_json()["alerts"]
+    assert all(row["id"] != old_alert for row in recent_alerts)
+    month_alerts = client.get("/api/alerts?range=30d").get_json()["alerts"]
+    assert any(row["id"] == old_alert for row in month_alerts)
+    assert client.get("/api/alerts?range=invalid").status_code == 400
 
 
 def test_ack_alert(env):

@@ -13,6 +13,7 @@
   var alertSeverity = '';
   var alertKeyword = '';
   var alertHost = '';
+  var alertTimeRange = '';
   var selectedAlertIds = {};
   var hostsLoaded = false;
   var hostSortKey = '';
@@ -1040,9 +1041,16 @@
   }
 
   function alertsUrl(status) {
-    if (!status || status === 'active') { return '/api/alerts?status=active'; }
-    if (status === 'all') { return '/api/alerts'; }
-    return '/api/alerts?status=' + encodeURIComponent(status);
+    var params = [];
+    if (!status || status === 'active') {
+      params.push('status=active');
+    } else if (status !== 'all') {
+      params.push('status=' + encodeURIComponent(status));
+    }
+    if (alertTimeRange) {
+      params.push('range=' + encodeURIComponent(alertTimeRange));
+    }
+    return '/api/alerts' + (params.length ? '?' + params.join('&') : '');
   }
 
   function refreshAlerts() {
@@ -1287,6 +1295,7 @@
     var alertSearch = document.getElementById('alert-search');
     var alertSeverityFilter = document.getElementById('alert-severity-filter');
     var alertHostFilter = document.getElementById('alert-host-filter');
+    var alertRangeFilter = document.getElementById('alert-range-filter');
     var alertExport = document.getElementById('alert-export');
     // 支持从命令面板/外部链接带 q、severity 参数进入告警页时直接带上筛选条件。
     if (alertSearch && alertSearch.value) {
@@ -1297,6 +1306,9 @@
     }
     if (alertHostFilter && alertHostFilter.value) {
       alertHost = alertHostFilter.value;
+    }
+    if (alertRangeFilter && alertRangeFilter.value) {
+      alertTimeRange = alertRangeFilter.value;
     }
     if (alertSearch) {
       alertSearch.addEventListener('input', function () {
@@ -1325,6 +1337,12 @@
       alertHostFilter.addEventListener('change', function () {
         alertHost = alertHostFilter.value || '';
         renderAlertRows();
+      });
+    }
+    if (alertRangeFilter) {
+      alertRangeFilter.addEventListener('change', function () {
+        alertTimeRange = alertRangeFilter.value || '';
+        refreshAlerts().catch(function () {});
       });
     }
     if (alertExport) { alertExport.addEventListener('click', exportAlertsCsv); }

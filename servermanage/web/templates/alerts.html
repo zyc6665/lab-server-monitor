@@ -28,6 +28,12 @@
       <option value="{{ host_name }}"{% if request.args.get('host') == host_name %} selected{% endif %}>{{ host_name }}</option>
       {% endfor %}
     </select>
+    <select id="alert-range-filter" class="alert-severity-filter" aria-label="告警时间范围">
+      <option value=""{% if not alert_range %} selected{% endif %}>全部时间</option>
+      <option value="24h"{% if alert_range == '24h' %} selected{% endif %}>最近 24 小时</option>
+      <option value="7d"{% if alert_range == '7d' %} selected{% endif %}>最近 7 天</option>
+      <option value="30d"{% if alert_range == '30d' %} selected{% endif %}>最近 30 天</option>
+    </select>
     <button type="button" class="btn-secondary" id="alert-export">导出 CSV</button>
     <button type="button" class="btn-secondary" id="alert-bulk-ack" disabled>批量确认</button>
   </div>

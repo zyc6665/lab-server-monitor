@@ -27,7 +27,7 @@ import tempfile
 import time
 from collections import deque
 from dataclasses import asdict
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -510,6 +510,20 @@ def _localize_alerts(rows: list[dict[str, Any]], tz) -> list[dict[str, Any]]:
         item["created_at"] = _to_local_iso(item.get("created_at"), tz)
         localized.append(item)
     return localized
+
+
+_ALERT_RANGE_HOURS = {"24h": 24, "7d": 24 * 7, "30d": 24 * 30}
+
+
+def _alert_range_since(range_key: str, *, now: datetime | None = None) -> datetime | None:
+    """Return the UTC cutoff for an alert-list range filter (None = all time)."""
+    hours = _ALERT_RANGE_HOURS.get((range_key or "").strip())
+    if hours is None:
+        return None
+    current = now or datetime.now(timezone.utc)
+    if current.tzinfo is None:
+        current = current.replace(tzinfo=timezone.utc)
+    return current - timedelta(hours=hours)
 
 
 def _as_float(value: Any) -> float | None:
@@ -1791,8 +1805,13 @@ def register_routes(app: Flask) -> None:
     @app.get("/api/alerts")
     def api_alerts():
         status = request.args.get("status") or None
+        range_key = (request.args.get("range") or "").strip()
+        if range_key and range_key not in _ALERT_RANGE_HOURS:
+            return jsonify({"error": "invalid range"}), 400
         config = _config(app)
-        rows = storage.list_alerts(_db_path(app), status=status)
+        rows = storage.list_alerts(
+            _db_path(app), status=status, since=_alert_range_since(range_key)
+        )
         return jsonify(
             {"alerts": _localize_alerts(rows, resolve_timezone(config.app.timezone))}
         )
@@ -2486,8 +2505,15 @@ def register_routes(app: Flask) -> None:
     @app.get("/alerts")
     def alerts_page():
         config = _config(app)
+        range_key = (request.args.get("range") or "").strip()
+        if range_key not in _ALERT_RANGE_HOURS:
+            range_key = ""
         alerts = _localize_alerts(
-            storage.list_alerts(_db_path(app), status="active"),
+            storage.list_alerts(
+                _db_path(app),
+                status="active",
+                since=_alert_range_since(range_key),
+            ),
             resolve_timezone(config.app.timezone),
         )
         return render_template(
@@ -2495,6 +2521,7 @@ def register_routes(app: Flask) -> None:
             active_page="alerts",
             alerts=alerts,
             hosts=[host.name for host in config.servers],
+            alert_range=range_key,
         )
 
     @app.get("/settings")

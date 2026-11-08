@@ -1717,18 +1717,35 @@ def list_alerts(
     db_path: Path,
     *,
     status: str | None = None,
+    since: datetime | str | None = None,
     limit: int = 200,
 ) -> list[dict]:
-    """Return alerts (newest first), optionally filtered by *status*."""
+    """Return alerts (newest first), optionally filtered by *status* and time.
+
+    ``since`` accepts an aware :class:`datetime` or an ISO-8601 string.  The
+    database stores ``created_at`` as UTC ISO-8601, so string comparison is
+    safe as long as the value is normalised to UTC first.
+    """
     db_path = Path(db_path)
     if not db_path.exists():
         return []
 
-    sql = "SELECT * FROM alerts"
+    clauses: list[str] = []
     params: list[object] = []
     if status is not None:
-        sql += " WHERE status = ?"
+        clauses.append("status = ?")
         params.append(status)
+    if since is not None:
+        if isinstance(since, datetime):
+            value = since
+            if value.tzinfo is None:
+                value = value.replace(tzinfo=timezone.utc)
+            since = value.astimezone(timezone.utc).isoformat()
+        clauses.append("created_at >= ?")
+        params.append(since)
+    sql = "SELECT * FROM alerts"
+    if clauses:
+        sql += " WHERE " + " AND ".join(clauses)
     sql += " ORDER BY created_at DESC, id DESC LIMIT ?"
     params.append(int(limit))
 
