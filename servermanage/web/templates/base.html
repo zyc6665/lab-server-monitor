@@ -77,6 +77,11 @@
           <span class="topbar-title">{{ page_titles.get(active_page, '概览') }}</span>
         </div>
         <div class="topbar-status">
+          <button type="button" class="command-trigger no-drag" id="command-trigger" title="全局搜索（Ctrl+K）" aria-label="全局搜索" aria-haspopup="dialog" aria-controls="command-palette">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+            <span class="command-trigger-label">搜索</span>
+            <kbd>Ctrl K</kbd>
+          </button>
           <button type="button" class="theme-toggle" id="theme-toggle" title="切换深色/浅色主题" aria-label="切换深色/浅色主题">
             <svg class="theme-icon theme-icon-moon" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
             <svg class="theme-icon theme-icon-sun" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
@@ -109,8 +114,27 @@
     </div>
   </div>
 
+  {% if is_app %}
+  <div class="command-overlay" id="command-palette" hidden>
+    <div class="command-dialog" role="dialog" aria-modal="true" aria-labelledby="command-title">
+      <h2 class="command-title" id="command-title">全局搜索</h2>
+      <label class="command-search">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+        <input type="search" id="command-input" placeholder="搜索主机、页面或操作…" autocomplete="off" spellcheck="false" aria-controls="command-results" aria-autocomplete="list">
+      </label>
+      <div class="command-results" id="command-results" role="listbox" aria-label="搜索结果"></div>
+      <div class="command-footer">
+        <span><kbd>↑</kbd><kbd>↓</kbd> 选择</span>
+        <span><kbd>Enter</kbd> 打开</span>
+        <span><kbd>Esc</kbd> 关闭</span>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
   <script src="{{ asset_url('titlebar.js') }}"></script>
   <script src="{{ asset_url('app.js') }}"></script>
+  {% if is_app %}<script src="{{ asset_url('command-palette.js') }}"></script>{% endif %}
   {% block scripts %}{% endblock %}
 </body>
 </html>

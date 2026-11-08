@@ -337,6 +337,31 @@ def test_fleet_report_download_contains_summary_and_hosts(client):
     assert "报告由服务器轮询监测工具自动生成" in text
 
 
+def test_global_command_palette_is_available(client):
+    page = client.get("/")
+    html = page.get_data(as_text=True)
+    assert 'id="command-trigger"' in html
+    assert 'id="command-palette"' in html
+    assert 'id="command-input"' in html
+    assert 'id="command-results"' in html
+    assert "command-palette.js?v=" in html
+
+    script = client.get("/static/command-palette.js")
+    assert script.status_code == 200
+    js = script.get_data(as_text=True)
+    assert "function openPalette" in js
+    assert "function closePalette" in js
+    assert "function buildItems" in js
+    assert "/api/overview" in js
+    assert "event.ctrlKey || event.metaKey" in js
+    assert "ArrowDown" in js
+    assert "Escape" in js
+
+    css = client.get("/static/style.css").get_data(as_text=True)
+    assert ".command-dialog" in css
+    assert ".command-item.active" in css
+
+
 def test_static_assets_are_versioned(client):
     html = _page(client, "/")
     assert "/static/style.css?v=" in html

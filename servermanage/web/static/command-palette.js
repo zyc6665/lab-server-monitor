@@ -1,0 +1,218 @@
+/* 全局命令面板：Ctrl/Cmd+K 打开，快速跳转页面、主机和常用操作。
+ * 纯原生 JS，无第三方依赖；所有文本使用 textContent，绝不拼接 HTML。 */
+(function () {
+  'use strict';
+
+  var overlay = document.getElementById('command-palette');
+  var input = document.getElementById('command-input');
+  var results = document.getElementById('command-results');
+  var trigger = document.getElementById('command-trigger');
+  if (!overlay || !input || !results || !trigger) { return; }
+
+  var PAGES = [
+    { label: '概览', meta: '页面', href: '/', keywords: 'overview 汇总 仪表盘' },
+    { label: '主机列表', meta: '页面', href: '/hosts', keywords: 'hosts 服务器 列表' },
+    { label: '磁盘健康', meta: '页面', href: '/disk-health', keywords: 'disk 磁盘 阵列 storcli' },
+    { label: '告警', meta: '页面', href: '/alerts', keywords: 'alerts 告警 通知' },
+    { label: '终端', meta: '页面', href: '/terminal', keywords: 'terminal ssh 终端' },
+    { label: '设置', meta: '页面', href: '/settings', keywords: 'settings 配置 主机 导入' },
+    { label: '全网巡检报告', meta: '操作 · 下载文本报告', href: '/api/overview/report', keywords: 'report 巡检 报告 导出' }
+  ];
+
+  var hosts = null;
+  var hostsLoadedAt = 0;
+  var items = [];
+  var activeIndex = 0;
+  var currentQuery = '';
+
+  function normalise(value) {
+    return String(value === null || value === undefined ? '' : value).toLowerCase();
+  }
+
+  function hostMatches(host, query) {
+    var haystack = [
+      host.name, host.host, host.group, host.owner, host.location,
+      Array.isArray(host.tags) ? host.tags.join(' ') : ''
+    ].map(normalise).join(' ');
+    return haystack.indexOf(query) !== -1;
+  }
+
+  function buildItems(query) {
+    var q = normalise(query).trim();
+    var next = [];
+    PAGES.forEach(function (page) {
+      var haystack = normalise(page.label + ' ' + page.meta + ' ' + page.keywords);
+      if (!q || haystack.indexOf(q) !== -1) {
+        next.push({ type: 'page', label: page.label, meta: page.meta, href: page.href });
+      }
+    });
+    var hostLimit = q ? 12 : 6;
+    var added = 0;
+    (hosts || []).forEach(function (host) {
+      if (added >= hostLimit) { return; }
+      if (q && !hostMatches(host, q)) { return; }
+      var meta = [host.host || '', host.group || '未分组', host.owner || ''].filter(Boolean).join(' · ');
+      next.push({
+        type: 'host',
+        label: host.name || '未命名主机',
+        meta: meta,
+        href: '/host/' + encodeURIComponent(host.name || ''),
+        online: host.online
+      });
+      added += 1;
+    });
+    return next;
+  }
+
+  function createItem(item, index) {
+    var button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'command-item' + (index === activeIndex ? ' active' : '');
+    button.setAttribute('role', 'option');
+    button.setAttribute('aria-selected', index === activeIndex ? 'true' : 'false');
+    button.setAttribute('data-command-index', String(index));
+
+    var text = document.createElement('span');
+    text.className = 'command-item-text';
+    var label = document.createElement('span');
+    label.className = 'command-item-label';
+    label.textContent = item.label;
+    text.appendChild(label);
+    var meta = document.createElement('span');
+    meta.className = 'command-item-meta';
+    meta.textContent = item.meta || '';
+    text.appendChild(meta);
+    button.appendChild(text);
+
+    if (item.type === 'host') {
+      var badge = document.createElement('span');
+      badge.className = 'command-item-badge ' + (item.online === false ? 'is-offline' : 'is-online');
+      badge.textContent = item.online === false ? '离线' : '在线';
+      button.appendChild(badge);
+    } else {
+      var kind = document.createElement('span');
+      kind.className = 'command-item-kind';
+      kind.textContent = item.type === 'page' ? '页面' : '操作';
+      button.appendChild(kind);
+    }
+
+    button.addEventListener('click', function () { openItem(item); });
+    button.addEventListener('mouseenter', function () { setActive(index); });
+    return button;
+  }
+
+  function setActive(index) {
+    if (!items.length) { activeIndex = 0; return; }
+    activeIndex = Math.max(0, Math.min(items.length - 1, index));
+    var nodes = results.querySelectorAll('.command-item');
+    for (var i = 0; i < nodes.length; i += 1) {
+      var active = i === activeIndex;
+      nodes[i].classList.toggle('active', active);
+      nodes[i].setAttribute('aria-selected', active ? 'true' : 'false');
+      if (active && nodes[i].scrollIntoView) { nodes[i].scrollIntoView({ block: 'nearest' }); }
+    }
+  }
+
+  function render() {
+    items = buildItems(currentQuery);
+    if (activeIndex >= items.length) { activeIndex = Math.max(0, items.length - 1); }
+    while (results.firstChild) { results.removeChild(results.firstChild); }
+    if (!items.length) {
+      var empty = document.createElement('p');
+      empty.className = 'command-empty';
+      empty.textContent = currentQuery ? '没有匹配的主机或页面' : '暂无可搜索内容';
+      results.appendChild(empty);
+      return;
+    }
+    items.forEach(function (item, index) {
+      results.appendChild(createItem(item, index));
+    });
+    setActive(activeIndex);
+  }
+
+  function openItem(item) {
+    if (!item) { return; }
+    closePalette();
+    window.location.assign(item.href);
+  }
+
+  function loadHosts() {
+    var fresh = hosts && Date.now() - hostsLoadedAt < 60 * 1000;
+    if (fresh) { return Promise.resolve(); }
+    return fetch('/api/overview', {
+      credentials: 'same-origin',
+      headers: { Accept: 'application/json' }
+    }).then(function (response) {
+      if (!response.ok) { return null; }
+      return response.json();
+    }).then(function (payload) {
+      hosts = (payload && payload.hosts) || [];
+      hostsLoadedAt = Date.now();
+      if (!overlay.hidden) { render(); }
+    }).catch(function () {
+      hosts = hosts || [];
+    });
+  }
+
+  function openPalette() {
+    currentQuery = '';
+    input.value = '';
+    activeIndex = 0;
+    overlay.hidden = false;
+    document.body.classList.add('command-open');
+    render();
+    window.requestAnimationFrame(function () { input.focus(); });
+    loadHosts();
+  }
+
+  function closePalette() {
+    overlay.hidden = true;
+    document.body.classList.remove('command-open');
+    if (document.activeElement === input) { input.blur(); }
+  }
+
+  function move(delta) {
+    if (!items.length) { return; }
+    setActive((activeIndex + delta + items.length) % items.length);
+  }
+
+  input.addEventListener('input', function () {
+    currentQuery = input.value || '';
+    activeIndex = 0;
+    render();
+  });
+
+  input.addEventListener('keydown', function (event) {
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      move(1);
+    } else if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      move(-1);
+    } else if (event.key === 'Enter') {
+      event.preventDefault();
+      openItem(items[activeIndex]);
+    } else if (event.key === 'Escape') {
+      event.preventDefault();
+      closePalette();
+    }
+  });
+
+  trigger.addEventListener('click', openPalette);
+  overlay.addEventListener('click', function (event) {
+    if (event.target === overlay) { closePalette(); }
+  });
+
+  document.addEventListener('keydown', function (event) {
+    var isShortcut = (event.ctrlKey || event.metaKey) && normalise(event.key) === 'k';
+    if (isShortcut) {
+      event.preventDefault();
+      if (overlay.hidden) { openPalette(); } else { closePalette(); }
+      return;
+    }
+    if (event.key === 'Escape' && !overlay.hidden) {
+      event.preventDefault();
+      closePalette();
+    }
+  });
+})();
