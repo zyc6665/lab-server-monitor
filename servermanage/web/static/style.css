@@ -1271,3 +1271,50 @@ html[data-theme="dark"] .capacity-risk-warning .capacity-trend { color: #fbbf24;
   .capacity-value { display: none; }
   .capacity-trend { grid-column: 1 / -1; text-align: left; }
 }
+
+/* -- server users page (Task 6) ------------------------------------------ */
+/* Six summary cards, fed by the /api/users summary payload. */
+.user-stats { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+.user-stats .stat-card { padding: 14px 16px; }
+
+/* Toolbar: host / keyword / status filters plus the manual refresh action. */
+.user-toolbar-card { margin-bottom: 16px; }
+.user-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 16px;
+  align-items: flex-end;
+}
+.user-toolbar .filter-field { font-size: 12px; }
+.user-toolbar .filter-field select { min-width: 140px; }
+.user-toolbar .filter-keyword input { min-width: 200px; }
+#user-refresh-status { font-size: 13px; padding-bottom: 7px; }
+#user-row-count { font-size: 13px; }
+
+/* Account state badges: 正常 / 异常 / 缺失, plus the yes/no docker & sudo chips. */
+.badge-ok { background: #e7f8f0; color: #047857; }
+.badge-warning { background: var(--warn-soft); color: var(--warn); }
+.badge-missing { background: var(--danger-soft); color: var(--danger); }
+.badge-muted { background: #eef2f7; color: var(--text-muted); }
+
+/* Baseline accounts that vanished from the latest snapshot. */
+.user-row-missing td { background: #fff5f5; }
+.user-row-missing:hover td { background: #ffecec; }
+.user-row-missing td:first-child { box-shadow: inset 3px 0 0 var(--danger); }
+
+@media (max-width: 1180px) {
+  .user-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 760px) {
+  .user-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .user-toolbar { align-items: stretch; }
+  .user-toolbar .filter-field { flex: 1 1 140px; }
+}
+
+html[data-theme="dark"] .badge-ok { background: #163a2c; color: #6ee7b7; }
+html[data-theme="dark"] .badge-warning { background: #3f2a12; color: #fdba74; }
+html[data-theme="dark"] .badge-missing { background: #451a1a; color: #fca5a5; }
+html[data-theme="dark"] .badge-muted { background: #223049; color: #cbd5e1; }
+html[data-theme="dark"] .user-row-missing td { background: #2a1a20; }
+html[data-theme="dark"] .user-row-missing:hover td { background: #331f28; }
+html[data-theme="dark"] .user-row-missing td:first-child { box-shadow: inset 3px 0 0 #f87171; }

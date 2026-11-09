@@ -5,6 +5,22 @@
 {%- if value is undefined or value is none -%}—{%- elif value is string -%}{{ value }}{%- else -%}{{ '%.1f'|format(value) }}%{%- endif -%}
 {%- endmacro %}
 
+{% macro bytes_label(value) -%}
+{%- if value is undefined or value is none -%}—{%- elif value >= 1073741824 -%}{{ '%.1f'|format(value / 1073741824) }} GB{%- elif value >= 1048576 -%}{{ '%.1f'|format(value / 1048576) }} MB{%- elif value >= 1024 -%}{{ '%.1f'|format(value / 1024) }} KB{%- else -%}{{ value }} B{%- endif -%}
+{%- endmacro %}
+
+{% macro dir_cell(state, exists, owner, group, mode, size) -%}
+{%- if state == 'missing' or not exists -%}缺失{%- else -%}<span class="mono">{{ owner or '—' }}:{{ group or '—' }}</span> · {{ mode or '—' }} · {{ bytes_label(size) }}{%- endif -%}
+{%- endmacro %}
+
+{% macro user_state_badge(row) -%}
+{%- if row.state == 'missing' -%}<span class="badge badge-missing">缺失</span>{%- elif row.issues -%}<span class="badge badge-warning">异常</span>{%- else -%}<span class="badge badge-ok">正常</span>{%- endif -%}
+{%- endmacro %}
+
+{% macro yes_no(value) -%}
+{%- if value -%}<span class="badge badge-ok">是</span>{%- else -%}<span class="badge badge-muted">否</span>{%- endif -%}
+{%- endmacro %}
+
 {% block content %}
 <nav class="breadcrumb"><a href="{{ url_for('hosts_page') }}">主机</a> / <span>{{ name }}</span></nav>
 
@@ -42,7 +58,8 @@
   <button type="button" class="host-tab" data-host-tab="metrics">指标</button>
   <button type="button" class="host-tab" data-host-tab="storage">存储与磁盘阵列</button>
   <button type="button" class="host-tab" data-host-tab="gpu">GPU</button>
-  <button type="button" class="host-tab" data-host-tab="users">登录用户</button>
+  <button type="button" class="host-tab" data-host-tab="sessions">登录用户</button>
+  <button type="button" class="host-tab" data-host-tab="users">服务器用户{% if detail.users %} ({{ detail.users|length }}){% endif %}</button>
   <button type="button" class="host-tab" data-host-tab="checks">服务可用性</button>
   <button type="button" class="host-tab" data-host-tab="alerts">最近告警{% if detail.alerts|selectattr('status', 'equalto', 'active')|list %} ({{ detail.alerts|selectattr('status', 'equalto', 'active')|list|length }}){% endif %}</button>
 </nav>
@@ -144,7 +161,7 @@
   </dl>
 </section>
 
-<section class="card" id="logged-in-users" data-host-panel="users">
+<section class="card" id="logged-in-users" data-host-panel="sessions">
   <div class="section-head">
     <h2>当前登录用户</h2>
     <span class="muted">{{ metrics.logged_in_users|length if metrics.logged_in_users else 0 }} 个会话</span>
@@ -170,6 +187,50 @@
   {% else %}
   <p class="empty">暂无登录用户</p>
   {% endif %}
+</section>
+
+<section class="card" id="host-users" data-host-panel="users">
+  <div class="section-head">
+    <h2>服务器用户</h2>
+    <span class="muted">{{ detail.users|length if detail.users else 0 }} 个账号</span>
+  </div>
+  <div class="table-wrap" id="host-users-wrap"{% if not detail.users %} hidden{% endif %}>
+    <table class="data-table" id="host-users-table">
+      <thead>
+        <tr>
+          <th>用户名</th>
+          <th>UID</th>
+          <th>主组</th>
+          <th>附加组</th>
+          <th>状态</th>
+          <th>Docker</th>
+          <th>sudo</th>
+          <th>家目录</th>
+          <th>数据目录</th>
+          <th>最近采集</th>
+          <th>操作</th>
+        </tr>
+      </thead>
+      <tbody id="host-users-body">
+        {% for user in detail.users or [] %}
+        <tr{% if user.state == 'missing' %} class="user-row-missing"{% endif %}>
+          <td>{{ user.username or '—' }}</td>
+          <td class="mono">{{ user.uid if user.uid is not none else '—' }}</td>
+          <td>{{ user.primary_group or '—' }}</td>
+          <td>{{ user.groups|join(', ') if user.groups else '—' }}</td>
+          <td>{{ user_state_badge(user) }}</td>
+          <td>{{ yes_no(user.in_docker) }}</td>
+          <td>{{ yes_no(user.in_sudo) }}</td>
+          <td>{{ dir_cell(user.state, user.home_exists, user.home_owner, user.home_group, user.home_mode, user.home_size_bytes) }}</td>
+          <td>{% if user.data_supported is sameas false %}不支持{% else %}{{ dir_cell(user.state, user.data_exists, user.data_owner, user.data_group, user.data_mode, user.data_size_bytes) }}{% endif %}</td>
+          <td class="mono">{{ user.collected_at or '—' }}</td>
+          <td>{% if user.state == 'missing' %}<a class="btn-link" href="/users?host={{ name|urlencode }}">前往用户页</a>{% else %}—{% endif %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <p class="empty" id="host-users-empty"{% if detail.users %} hidden{% endif %}>尚未采集服务器用户，或该主机没有普通账号。</p>
 </section>
 
 <section class="card" id="host-checks-panel" data-host-panel="checks">

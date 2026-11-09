@@ -1,13 +1,111 @@
 {% extends "base.html" %}
-{% block title %}服务器账号 - 服务器监控{% endblock %}
+{% block title %}服务器用户 - 服务器监控{% endblock %}
 
 {% block content %}
 <div class="page-head">
-  <h1 class="page-title">服务器账号</h1>
+  <div class="page-head-main">
+    <h1 class="page-title">服务器用户</h1>
+    <p class="page-subtitle muted">只读采集 /etc/passwd 中的普通账号（UID ≥ 1000），数据来自最近一次采集。</p>
+  </div>
 </div>
 
-{# Task 6 replaces this placeholder with the full user dashboard. #}
-<div id="user-dashboard"></div>
+<div id="user-dashboard">
+  <section class="stat-grid user-stats" id="user-stats" aria-label="服务器用户摘要">
+    <article class="card stat-card stat-card-total">
+      <div class="stat-body">
+        <div class="stat-label">账号总数</div>
+        <div class="stat-value" id="stat-user-total">—</div>
+        <div class="stat-foot">基线内账号（含缺失）</div>
+      </div>
+    </article>
+    <article class="card stat-card stat-card-online">
+      <div class="stat-body">
+        <div class="stat-label">当前在线</div>
+        <div class="stat-value" id="stat-user-present">—</div>
+        <div class="stat-foot">最新快照中存在</div>
+      </div>
+    </article>
+    <article class="card stat-card stat-card-alert">
+      <div class="stat-body">
+        <div class="stat-label">缺失</div>
+        <div class="stat-value" id="stat-user-missing">—</div>
+        <div class="stat-foot">基线中存在、快照中消失</div>
+      </div>
+    </article>
+    <article class="card stat-card stat-card-alert">
+      <div class="stat-body">
+        <div class="stat-label">docker 异常</div>
+        <div class="stat-value" id="stat-user-docker">—</div>
+        <div class="stat-foot">不在 docker 组</div>
+      </div>
+    </article>
+    <article class="card stat-card stat-card-alert">
+      <div class="stat-body">
+        <div class="stat-label">目录异常</div>
+        <div class="stat-value" id="stat-user-dirs">—</div>
+        <div class="stat-foot">家目录 / data 缺失或属主不符</div>
+      </div>
+    </article>
+    <article class="card stat-card stat-card-total">
+      <div class="stat-body">
+        <div class="stat-label">总占用</div>
+        <div class="stat-value" id="stat-user-bytes">—</div>
+        <div class="stat-foot" id="stat-user-bytes-foot">/home + /data</div>
+      </div>
+    </article>
+  </section>
+
+  <section class="card user-toolbar-card">
+    <div class="user-toolbar">
+      <label class="filter-field">主机
+        <select id="user-host-filter">
+          <option value="">全部主机</option>
+        </select>
+      </label>
+      <label class="filter-field filter-keyword">关键字
+        <input type="search" id="user-search" placeholder="用户名 / 组 / 主机" autocomplete="off" />
+      </label>
+      <label class="filter-field">状态
+        <select id="user-status-filter">
+          <option value="all">全部</option>
+          <option value="warning">有异常</option>
+          <option value="error">仅错误</option>
+        </select>
+      </label>
+      <button type="button" class="primary-button" id="user-refresh">立即刷新</button>
+      <span class="muted" id="user-refresh-status" role="status" aria-live="polite"></span>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="section-head">
+      <h2>账号清单</h2>
+      <span class="muted" id="user-row-count"></span>
+    </div>
+    <div class="table-wrap">
+      <table class="data-table" id="user-table">
+        <thead>
+          <tr>
+            <th>主机</th>
+            <th>用户名</th>
+            <th>UID</th>
+            <th>主组</th>
+            <th>附加组</th>
+            <th>状态</th>
+            <th>Docker</th>
+            <th>sudo</th>
+            <th>家目录</th>
+            <th>数据目录</th>
+            <th>最近采集</th>
+            <th>操作</th>
+          </tr>
+        </thead>
+        <tbody id="user-table-body"></tbody>
+      </table>
+    </div>
+    <p class="empty" id="user-empty" hidden>暂无普通账号数据：请等待首次采集，或点击“立即刷新”触发一次只读采集。</p>
+  </section>
+</div>
 {% endblock %}
 
 {% block scripts %}
