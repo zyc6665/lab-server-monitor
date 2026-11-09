@@ -34,9 +34,27 @@
       <option value="7d"{% if alert_range == '7d' %} selected{% endif %}>最近 7 天</option>
       <option value="30d"{% if alert_range == '30d' %} selected{% endif %}>最近 30 天</option>
     </select>
+    <select id="alert-sort" class="alert-severity-filter" aria-label="告警排序">
+      <option value="desc"{% if request.args.get('sort') != 'asc' %} selected{% endif %}>最新优先</option>
+      <option value="asc"{% if request.args.get('sort') == 'asc' %} selected{% endif %}>最早优先</option>
+    </select>
     <button type="button" class="btn-secondary" id="alert-export">导出 CSV</button>
     <button type="button" class="btn-secondary" id="alert-clear-filters">清除筛选</button>
     <button type="button" class="btn-secondary" id="alert-bulk-ack" disabled>批量确认</button>
+  </div>
+  <div class="alert-summary" id="alert-summary" aria-label="告警级别统计">
+    <button type="button" class="alert-stat{% if not request.args.get('severity') %} active{% endif %}" data-alert-stat="" aria-pressed="{% if not request.args.get('severity') %}true{% else %}false{% endif %}">
+      <span class="alert-stat-label">全部</span><span class="alert-stat-value" id="alert-stat-total">0</span>
+    </button>
+    <button type="button" class="alert-stat stat-critical{% if request.args.get('severity') == 'critical' %} active{% endif %}" data-alert-stat="critical" aria-pressed="{% if request.args.get('severity') == 'critical' %}true{% else %}false{% endif %}">
+      <span class="alert-stat-label">严重</span><span class="alert-stat-value" id="alert-stat-critical">0</span>
+    </button>
+    <button type="button" class="alert-stat stat-warning{% if request.args.get('severity') == 'warning' %} active{% endif %}" data-alert-stat="warning" aria-pressed="{% if request.args.get('severity') == 'warning' %}true{% else %}false{% endif %}">
+      <span class="alert-stat-label">警告</span><span class="alert-stat-value" id="alert-stat-warning">0</span>
+    </button>
+    <button type="button" class="alert-stat stat-info{% if request.args.get('severity') == 'info' %} active{% endif %}" data-alert-stat="info" aria-pressed="{% if request.args.get('severity') == 'info' %}true{% else %}false{% endif %}">
+      <span class="alert-stat-label">提示</span><span class="alert-stat-value" id="alert-stat-info">0</span>
+    </button>
   </div>
   <p class="muted" id="alert-count">共 {{ alerts|length }} 条</p>
   <p class="empty" id="alerts-empty"{% if alerts %} hidden{% endif %}>暂无数据</p>

@@ -395,12 +395,19 @@ def test_alerts_page_has_status_filters_and_ack(client):
     assert 'data-status="all"' in html
     assert 'id="alert-host-filter"' in html
     assert 'id="alert-range-filter"' in html
+    assert 'id="alert-sort"' in html
+    assert 'id="alert-summary"' in html
+    assert 'data-alert-stat="critical"' in html
+    assert 'data-alert-stat="warning"' in html
+    assert 'data-alert-stat="info"' in html
     assert 'id="alert-clear-filters"' in html
     assert "清除筛选" in html
     assert 'id="alert-count"' in html
     assert 'value="24h"' in html
     assert 'value="7d"' in html
     assert 'value="30d"' in html
+    assert "最新优先" in html
+    assert "最早优先" in html
     assert "全部主机" in html
     assert "全部时间" in html
     assert "活动" in html
@@ -413,21 +420,27 @@ def test_alerts_page_has_status_filters_and_ack(client):
 
 
 def test_alerts_page_supports_query_and_severity_deep_links(client):
-    html = _page(client, "/alerts?q=cpu&severity=critical&host=gpu-01&range=7d")
+    html = _page(client, "/alerts?q=cpu&severity=critical&host=gpu-01&range=7d&sort=asc")
     assert 'value="cpu"' in html
     assert 'value="critical" selected' in html
     assert 'value="gpu-01" selected' in html
     assert 'value="7d" selected' in html
+    assert 'value="asc" selected' in html
     source = (STATIC / "app.js").read_text(encoding="utf-8")
     assert "alertSearch.value" in source
     assert "alertSeverityFilter.value" in source
     assert "alertHostFilter.value" in source
     assert "alertRangeFilter.value" in source
+    assert "alertSort.value" in source
     assert "alertTimeRange" in source
     assert "range=" in source
+    assert "sort=asc" in source
     assert "alertHost &&" in source
     assert "function syncAlertUrl" in source
     assert "function clearAlertFilters" in source
+    assert "function renderAlertSummary" in source
+    assert "matchingAlerts(true)" in source
+    assert "data-alert-stat" in source
     assert "history.replaceState" in source
     assert "alert-clear-filters" in source
 
@@ -447,6 +460,9 @@ def test_app_js_keeps_terminal_and_filter_logic():
     assert "function collectHosts" in source
     assert "pollHostCollection" in source
     assert "pollHostsCollection" in source
+    assert "alertSortOrder" in source
+    assert "function filteredAlerts" in source
+    assert "alert-stat" in source
     assert "/api/settings/hosts/collect" in source
     assert "/api/settings/hosts/" in source
     assert "function exportHostsCsv" in source

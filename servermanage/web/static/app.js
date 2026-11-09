@@ -14,6 +14,7 @@
   var alertKeyword = '';
   var alertHost = '';
   var alertTimeRange = '';
+  var alertSortOrder = 'desc';
   var selectedAlertIds = {};
   var hostsLoaded = false;
   var hostSortKey = '';
@@ -905,15 +906,46 @@
     if (empty) { empty.hidden = visible.length > 0; }
   }
 
-  function filteredAlerts() {
+  function matchingAlerts(ignoreSeverity) {
     var keyword = (alertKeyword || '').trim().toLowerCase();
     return lastAlerts.filter(function (alert) {
-      if (alertSeverity && (alert.severity || '') !== alertSeverity) { return false; }
+      if (!ignoreSeverity && alertSeverity && (alert.severity || '') !== alertSeverity) { return false; }
       if (alertHost && (alert.host_name || '') !== alertHost) { return false; }
       if (!keyword) { return true; }
       return [alert.host_name, alert.title, alert.message, alert.category]
         .filter(function (part) { return part; })
         .join(' ').toLowerCase().indexOf(keyword) >= 0;
+    });
+  }
+
+  function filteredAlerts() {
+    var rows = matchingAlerts(false);
+    rows.sort(function (left, right) {
+      var a = String(left.created_at || '');
+      var b = String(right.created_at || '');
+      var order = a.localeCompare(b);
+      return alertSortOrder === 'asc' ? order : -order;
+    });
+    return rows;
+  }
+
+  function renderAlertSummary() {
+    var rows = matchingAlerts(true);
+    var counts = { critical: 0, warning: 0, info: 0 };
+    rows.forEach(function (alert) {
+      var severity = alert.severity || 'info';
+      if (counts[severity] !== undefined) { counts[severity] += 1; }
+    });
+    setText('alert-stat-total', rows.length);
+    setText('alert-stat-critical', counts.critical);
+    setText('alert-stat-warning', counts.warning);
+    setText('alert-stat-info', counts.info);
+    var buttons = document.querySelectorAll('#alert-summary .alert-stat');
+    Array.prototype.forEach.call(buttons, function (button) {
+      var value = button.getAttribute('data-alert-stat') || '';
+      var active = value === alertSeverity;
+      button.classList.toggle('active', active);
+      button.setAttribute('aria-pressed', active ? 'true' : 'false');
     });
   }
 
@@ -937,6 +969,7 @@
       'alert-count',
       '共 ' + lastAlerts.length + ' 条' + (visible.length !== lastAlerts.length ? '（显示 ' + visible.length + ' 条）' : '')
     );
+    renderAlertSummary();
     updateAlertSelectionSummary();
   }
 
@@ -1059,6 +1092,7 @@
     if (alertSeverity) { params.push('severity=' + encodeURIComponent(alertSeverity)); }
     if (alertHost) { params.push('host=' + encodeURIComponent(alertHost)); }
     if (alertTimeRange) { params.push('range=' + encodeURIComponent(alertTimeRange)); }
+    if (alertSortOrder === 'asc') { params.push('sort=asc'); }
     var url = '/alerts' + (params.length ? '?' + params.join('&') : '');
     if (window.history && window.history.replaceState) {
       window.history.replaceState(null, '', url);
@@ -1070,6 +1104,7 @@
     alertSeverity = '';
     alertHost = '';
     alertTimeRange = '';
+    alertSortOrder = 'desc';
     selectedAlertIds = {};
     var search = document.getElementById('alert-search');
     if (search) { search.value = ''; }
@@ -1079,6 +1114,8 @@
     if (host) { host.value = ''; }
     var range = document.getElementById('alert-range-filter');
     if (range) { range.value = ''; }
+    var sort = document.getElementById('alert-sort');
+    if (sort) { sort.value = 'desc'; }
     renderAlertRows();
     syncAlertUrl();
     refreshAlerts().catch(function () {});
@@ -1327,6 +1364,8 @@
     var alertSeverityFilter = document.getElementById('alert-severity-filter');
     var alertHostFilter = document.getElementById('alert-host-filter');
     var alertRangeFilter = document.getElementById('alert-range-filter');
+    var alertSort = document.getElementById('alert-sort');
+    var alertSummary = document.getElementById('alert-summary');
     var alertExport = document.getElementById('alert-export');
     var alertClearFilters = document.getElementById('alert-clear-filters');
     // 支持从命令面板/外部链接带 q、severity 参数进入告警页时直接带上筛选条件。
@@ -1341,6 +1380,9 @@
     }
     if (alertRangeFilter && alertRangeFilter.value) {
       alertTimeRange = alertRangeFilter.value;
+    }
+    if (alertSort && alertSort.value) {
+      alertSortOrder = alertSort.value;
     }
     if (alertSearch) {
       alertSearch.addEventListener('input', function () {
@@ -1379,6 +1421,23 @@
         alertTimeRange = alertRangeFilter.value || '';
         syncAlertUrl();
         refreshAlerts().catch(function () {});
+      });
+    }
+    if (alertSort) {
+      alertSort.addEventListener('change', function () {
+        alertSortOrder = alertSort.value || 'desc';
+        renderAlertRows();
+        syncAlertUrl();
+      });
+    }
+    if (alertSummary) {
+      alertSummary.addEventListener('click', function (event) {
+        var target = event.target && event.target.closest ? event.target.closest('.alert-stat') : null;
+        if (!target) { return; }
+        alertSeverity = target.getAttribute('data-alert-stat') || '';
+        if (alertSeverityFilter) { alertSeverityFilter.value = alertSeverity; }
+        renderAlertRows();
+        syncAlertUrl();
       });
     }
     if (alertClearFilters) { alertClearFilters.addEventListener('click', clearAlertFilters); }
