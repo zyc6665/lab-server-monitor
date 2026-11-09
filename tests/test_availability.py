@@ -161,6 +161,13 @@ def test_tcp_command_accepts_host_and_port():
     assert "/dev/tcp/10.0.0.5/2222" in cmd
 
 
+def test_tcp_command_wraps_ipv6_host_in_brackets():
+    cmd = build_check_command(
+        HostCheckConfig(name="ssh", type="tcp", target="[::1]:22")
+    )
+    assert "/dev/tcp/[::1]/22" in cmd
+
+
 def test_process_command_is_safe_and_exact():
     cmd = build_check_command(HostCheckConfig(name="p", type="process", target="nginx"))
     assert "pgrep -x --" in cmd

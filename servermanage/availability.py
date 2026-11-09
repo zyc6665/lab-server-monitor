@@ -179,7 +179,10 @@ def build_check_command(check: HostCheckConfig) -> str:
 
     if ctype == "tcp":
         host, port = _split_tcp_target(check.target)
-        inner = f"cat < /dev/null > /dev/tcp/{host}/{port}"
+        # Bash's /dev/tcp pseudo-device needs IPv6 literals wrapped in brackets
+        # because ':' is its host/port separator.
+        command_host = f"[{host}]" if ":" in host else host
+        inner = f"cat < /dev/null > /dev/tcp/{command_host}/{port}"
         return f"timeout {timeout} bash -c {shlex.quote(inner)}"
 
     if ctype == "http":
