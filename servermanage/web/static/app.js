@@ -15,6 +15,8 @@
   var alertHost = '';
   var alertTimeRange = '';
   var alertSortOrder = 'desc';
+  var alertPage = 1;
+  var alertPageSize = 25;
   var selectedAlertIds = {};
   var hostsLoaded = false;
   var hostSortKey = '';
@@ -949,12 +951,30 @@
     });
   }
 
+  function renderAlertPagination(total, pages, start, count) {
+    var info = document.getElementById('alert-page-info');
+    var prev = document.getElementById('alert-prev-page');
+    var next = document.getElementById('alert-next-page');
+    if (info) {
+      info.textContent = '第 ' + alertPage + ' / ' + pages + ' 页' +
+        (total ? '，显示 ' + (start + 1) + '-' + (start + count) + ' 条' : '');
+    }
+    if (prev) { prev.disabled = alertPage <= 1; }
+    if (next) { next.disabled = alertPage >= pages; }
+  }
+
   function renderAlertRows() {
     var body = document.getElementById('alerts-body');
     var table = document.getElementById('alerts-table');
     var empty = document.getElementById('alerts-empty');
     if (!body || !table) { return; }
-    var visible = filteredAlerts();
+    var matched = filteredAlerts();
+    var total = matched.length;
+    var pages = Math.max(1, Math.ceil(total / alertPageSize));
+    if (alertPage > pages) { alertPage = pages; }
+    if (alertPage < 1) { alertPage = 1; }
+    var start = (alertPage - 1) * alertPageSize;
+    var visible = matched.slice(start, start + alertPageSize);
     while (body.firstChild) { body.removeChild(body.firstChild); }
     for (var i = 0; i < visible.length; i += 1) {
       body.appendChild(buildAlertRow(visible[i] || {}));
@@ -965,11 +985,10 @@
       empty.hidden = hasData;
       empty.textContent = lastAlerts.length ? '没有匹配的告警' : '暂无数据';
     }
-    setText(
-      'alert-count',
-      '共 ' + lastAlerts.length + ' 条' + (visible.length !== lastAlerts.length ? '（显示 ' + visible.length + ' 条）' : '')
-    );
+    var suffix = total !== lastAlerts.length ? '（匹配 ' + total + ' 条）' : '';
+    setText('alert-count', '共 ' + lastAlerts.length + ' 条' + suffix);
     renderAlertSummary();
+    renderAlertPagination(total, pages, start, visible.length);
     updateAlertSelectionSummary();
   }
 
@@ -1105,6 +1124,7 @@
     alertHost = '';
     alertTimeRange = '';
     alertSortOrder = 'desc';
+    alertPage = 1;
     selectedAlertIds = {};
     var search = document.getElementById('alert-search');
     if (search) { search.value = ''; }
@@ -1178,6 +1198,7 @@
 
   function setAlertFilter(status) {
     alertStatus = status === 'all' ? 'all' : 'active';
+    alertPage = 1;
     var filters = document.querySelectorAll('.alert-filter');
     for (var i = 0; i < filters.length; i += 1) {
       var isActive = filters[i].getAttribute('data-status') === alertStatus;
@@ -1365,6 +1386,9 @@
     var alertHostFilter = document.getElementById('alert-host-filter');
     var alertRangeFilter = document.getElementById('alert-range-filter');
     var alertSort = document.getElementById('alert-sort');
+    var alertPageSizeSelect = document.getElementById('alert-page-size');
+    var alertPrevPage = document.getElementById('alert-prev-page');
+    var alertNextPage = document.getElementById('alert-next-page');
     var alertSummary = document.getElementById('alert-summary');
     var alertExport = document.getElementById('alert-export');
     var alertClearFilters = document.getElementById('alert-clear-filters');
@@ -1384,9 +1408,13 @@
     if (alertSort && alertSort.value) {
       alertSortOrder = alertSort.value;
     }
+    if (alertPageSizeSelect && alertPageSizeSelect.value) {
+      alertPageSize = Number(alertPageSizeSelect.value) || alertPageSize;
+    }
     if (alertSearch) {
       alertSearch.addEventListener('input', function () {
         alertKeyword = alertSearch.value || '';
+        alertPage = 1;
         renderAlertRows();
         syncAlertUrl();
       });
@@ -1405,6 +1433,7 @@
     if (alertSeverityFilter) {
       alertSeverityFilter.addEventListener('change', function () {
         alertSeverity = alertSeverityFilter.value || '';
+        alertPage = 1;
         renderAlertRows();
         syncAlertUrl();
       });
@@ -1412,6 +1441,7 @@
     if (alertHostFilter) {
       alertHostFilter.addEventListener('change', function () {
         alertHost = alertHostFilter.value || '';
+        alertPage = 1;
         renderAlertRows();
         syncAlertUrl();
       });
@@ -1419,6 +1449,7 @@
     if (alertRangeFilter) {
       alertRangeFilter.addEventListener('change', function () {
         alertTimeRange = alertRangeFilter.value || '';
+        alertPage = 1;
         syncAlertUrl();
         refreshAlerts().catch(function () {});
       });
@@ -1426,6 +1457,7 @@
     if (alertSort) {
       alertSort.addEventListener('change', function () {
         alertSortOrder = alertSort.value || 'desc';
+        alertPage = 1;
         renderAlertRows();
         syncAlertUrl();
       });
@@ -1436,8 +1468,28 @@
         if (!target) { return; }
         alertSeverity = target.getAttribute('data-alert-stat') || '';
         if (alertSeverityFilter) { alertSeverityFilter.value = alertSeverity; }
+        alertPage = 1;
         renderAlertRows();
         syncAlertUrl();
+      });
+    }
+    if (alertPageSizeSelect) {
+      alertPageSizeSelect.addEventListener('change', function () {
+        alertPageSize = Number(alertPageSizeSelect.value) || 25;
+        alertPage = 1;
+        renderAlertRows();
+      });
+    }
+    if (alertPrevPage) {
+      alertPrevPage.addEventListener('click', function () {
+        alertPage = Math.max(1, alertPage - 1);
+        renderAlertRows();
+      });
+    }
+    if (alertNextPage) {
+      alertNextPage.addEventListener('click', function () {
+        alertPage += 1;
+        renderAlertRows();
       });
     }
     if (alertClearFilters) { alertClearFilters.addEventListener('click', clearAlertFilters); }

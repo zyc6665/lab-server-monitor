@@ -57,12 +57,22 @@
     </button>
   </div>
   <p class="muted" id="alert-count">共 {{ alerts|length }} 条</p>
+  <div class="alert-pagination" id="alert-pagination">
+    <button type="button" class="btn-secondary" id="alert-prev-page">上一页</button>
+    <span class="muted" id="alert-page-info">第 1 / 1 页</span>
+    <button type="button" class="btn-secondary" id="alert-next-page">下一页</button>
+    <select id="alert-page-size" class="alert-severity-filter" aria-label="每页告警数量">
+      <option value="25" selected>每页 25 条</option>
+      <option value="50">每页 50 条</option>
+      <option value="100">每页 100 条</option>
+    </select>
+  </div>
   <p class="empty" id="alerts-empty"{% if alerts %} hidden{% endif %}>暂无数据</p>
   <div class="table-wrap">
     <table class="data-table" id="alerts-table"{% if not alerts %} hidden{% endif %}>
       <thead>
         <tr>
-          <th class="check-col"><input type="checkbox" id="alert-select-all" aria-label="全选活动告警"></th>
+          <th class="check-col"><input type="checkbox" id="alert-select-all" aria-label="全选当前页活动告警"></th>
           <th>级别</th>
           <th>类别</th>
           <th>主机</th>

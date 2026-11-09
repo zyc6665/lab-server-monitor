@@ -698,6 +698,20 @@ html[data-theme="dark"] .alert-severity-filter { background: #141c2b; color: #e6
 html[data-theme="dark"] .alert-stat { background: #141c2b; border-color: #2b3a52; }
 html[data-theme="dark"] .alert-stat.active { background: rgba(59, 130, 246, 0.16); }
 
+.alert-pagination {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin: 8px 0 4px;
+}
+.alert-pagination .btn-secondary:disabled {
+  opacity: .45;
+  cursor: not-allowed;
+}
+#alert-page-info { font-variant-numeric: tabular-nums; }
+html[data-theme="dark"] #alert-page-size { background: #141c2b; color: #e6edf7; border-color: #2b3a52; }
+
 @media (max-width: 900px) {
   .stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }

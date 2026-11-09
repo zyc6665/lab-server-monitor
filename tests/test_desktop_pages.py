@@ -403,6 +403,14 @@ def test_alerts_page_has_status_filters_and_ack(client):
     assert 'id="alert-clear-filters"' in html
     assert "清除筛选" in html
     assert 'id="alert-count"' in html
+    assert 'id="alert-pagination"' in html
+    assert 'id="alert-prev-page"' in html
+    assert 'id="alert-next-page"' in html
+    assert 'id="alert-page-size"' in html
+    assert 'id="alert-page-info"' in html
+    assert "每页 25 条" in html
+    assert "每页 50 条" in html
+    assert "每页 100 条" in html
     assert 'value="24h"' in html
     assert 'value="7d"' in html
     assert 'value="30d"' in html
@@ -443,6 +451,11 @@ def test_alerts_page_supports_query_and_severity_deep_links(client):
     assert "data-alert-stat" in source
     assert "history.replaceState" in source
     assert "alert-clear-filters" in source
+    assert "function renderAlertPagination" in source
+    assert "alertPageSize" in source
+    assert "alert-prev-page" in source
+    assert "alert-next-page" in source
+    assert "alert-page-info" in source
 
 
 def test_app_js_keeps_terminal_and_filter_logic():
