@@ -171,7 +171,10 @@ def _scan_host(
     previous_snapshot = storage.get_host_user_snapshot(host.name, db_path)
     previous_by_name = {row["username"]: row for row in previous_snapshot}
     baseline = storage.get_user_baseline(host.name, db_path)
-    first_scan = last_state is None and not baseline and not previous_snapshot
+    # A host that failed before ever storing a snapshot has a scan-state row but
+    # no baseline: the first *successful* scan must still seed silently instead
+    # of reporting every existing account as newly added.
+    first_scan = not baseline and not previous_snapshot
 
     stale = _usage_is_stale(now, last_usage, interval, usage_refreshed)
 

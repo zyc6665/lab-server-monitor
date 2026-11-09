@@ -236,6 +236,51 @@ def test_first_scan_seeds_baseline_snapshot_and_emits_no_alerts(tmp_path):
     assert runners[0][2].closed is True
 
 
+def test_first_successful_scan_after_failure_seeds_silently(tmp_path):
+    """A host that failed before ever storing data must not report every account
+    as newly added on its first successful scan."""
+    db = tmp_path / "monitor.db"
+    engine, notifier = make_engine(db)
+    healthy = make_account()
+
+    def handler(host, index):
+        if index == 0:
+            raise RuntimeError("ssh down")
+        return ([healthy], True, True)
+
+    scan = FakeScan(handler)
+    config = make_config()
+
+    run_user_scan(
+        config,
+        db,
+        engine,
+        build_runner=recording_builder()[0],
+        scan=scan,
+        now=BASE,
+    )
+    assert storage.get_user_scan_state("gpu-01", db)["last_error"] == "ssh down"
+    assert storage.get_user_baseline("gpu-01", db) == []
+
+    run_user_scan(
+        config,
+        db,
+        engine,
+        build_runner=recording_builder()[0],
+        scan=scan,
+        now=BASE + timedelta(hours=1),
+    )
+
+    assert [row["username"] for row in storage.get_user_baseline("gpu-01", db)] == [
+        "alice"
+    ]
+    assert [row["username"] for row in storage.get_host_user_snapshot(
+        "gpu-01", db
+    )] == ["alice"]
+    assert storage.list_alerts(db) == []
+    assert notifier.events == []
+
+
 def test_same_account_on_second_scan_generates_no_alert(tmp_path):
     db = tmp_path / "monitor.db"
     engine, _ = make_engine(db)

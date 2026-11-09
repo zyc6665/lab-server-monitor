@@ -1153,6 +1153,7 @@ def _build_server(*, config, db_path, settings, service, host: str, port: int):
         session_cookie_suffix=str(port),
         on_hosts_imported=getattr(service, "schedule_host_collection", None),
         collection_status_provider=getattr(service, "collection_status", None),
+        monitor_service=service,
     )
     from servermanage.web.routes import get_ssh_terminal_manager
 
