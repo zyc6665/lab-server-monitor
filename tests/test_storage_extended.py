@@ -16,6 +16,7 @@ from servermanage import storage
 from servermanage.models import HostMetrics, HostReport, MemorySummary
 from servermanage.serialization import dump_json, to_jsonable
 from servermanage.storage import (
+    count_alerts_by_status,
     delete_silence,
     find_latest_alert,
     get_all_disk_health,
@@ -374,6 +375,40 @@ def test_list_alerts_filters_by_status_and_limit(tmp_path: Path):
 
     limited = list_alerts(db_path, limit=2)
     assert len(limited) == 2
+
+
+def test_count_alerts_by_status_respects_since(tmp_path: Path):
+    db_path = tmp_path / "servermanage.db"
+    now = datetime(2026, 11, 8, 12, 0, tzinfo=timezone.utc)
+    recent_at = now - timedelta(hours=2)
+    active = insert_alert(
+        _alert("system:gpu-01:active", "活动"), db_path, created_at=recent_at
+    )
+    acknowledged = insert_alert(
+        _alert("system:gpu-01:ack", "已确认"), db_path, created_at=recent_at
+    )
+    resolved = insert_alert(
+        _alert("system:gpu-01:resolved", "已解决"), db_path, created_at=recent_at
+    )
+    old = insert_alert(
+        _alert("system:gpu-01:old", "旧告警"),
+        db_path,
+        created_at=now - timedelta(days=30),
+    )
+    update_alert(acknowledged, db_path, status="acknowledged")
+    update_alert(resolved, db_path, status="resolved")
+
+    assert count_alerts_by_status(db_path) == {
+        "active": 2,
+        "acknowledged": 1,
+        "resolved": 1,
+        "total": 4,
+    }
+    recent = count_alerts_by_status(db_path, since=now - timedelta(days=1))
+    assert recent == {"active": 1, "acknowledged": 1, "resolved": 1, "total": 3}
+    old_only = count_alerts_by_status(db_path, since=now - timedelta(days=31))
+    assert old_only == {"active": 2, "acknowledged": 1, "resolved": 1, "total": 4}
+    assert active > 0 and old > 0
 
 
 def test_list_alerts_filters_by_since_cutoff(tmp_path: Path):

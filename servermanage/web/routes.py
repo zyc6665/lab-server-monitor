@@ -513,6 +513,13 @@ def _localize_alerts(rows: list[dict[str, Any]], tz) -> list[dict[str, Any]]:
 
 
 _ALERT_RANGE_HOURS = {"24h": 24, "7d": 24 * 7, "30d": 24 * 30}
+_ALERT_STATUS_FILTERS = ("active", "acknowledged", "resolved", "all")
+
+
+def _alert_status_filter(value: str | None) -> str:
+    """Return a valid alert status filter; unknown/empty values fall back to active."""
+    status = (value or "").strip()
+    return status if status in _ALERT_STATUS_FILTERS else "active"
 
 
 def _alert_range_since(range_key: str, *, now: datetime | None = None) -> datetime | None:
@@ -1804,16 +1811,22 @@ def register_routes(app: Flask) -> None:
 
     @app.get("/api/alerts")
     def api_alerts():
-        status = request.args.get("status") or None
+        status_filter = _alert_status_filter(request.args.get("status"))
+        status = None if status_filter == "all" else status_filter
         range_key = (request.args.get("range") or "").strip()
         if range_key and range_key not in _ALERT_RANGE_HOURS:
             return jsonify({"error": "invalid range"}), 400
         config = _config(app)
-        rows = storage.list_alerts(
-            _db_path(app), status=status, since=_alert_range_since(range_key)
-        )
+        since = _alert_range_since(range_key)
+        db_path = _db_path(app)
+        rows = storage.list_alerts(db_path, status=status, since=since)
         return jsonify(
-            {"alerts": _localize_alerts(rows, resolve_timezone(config.app.timezone))}
+            {
+                "alerts": _localize_alerts(
+                    rows, resolve_timezone(config.app.timezone)
+                ),
+                "counts": storage.count_alerts_by_status(db_path, since=since),
+            }
         )
 
     @app.post("/api/alerts/<int:alert_id>/ack")
@@ -2508,11 +2521,14 @@ def register_routes(app: Flask) -> None:
         range_key = (request.args.get("range") or "").strip()
         if range_key not in _ALERT_RANGE_HOURS:
             range_key = ""
+        alert_status = _alert_status_filter(request.args.get("status"))
+        since = _alert_range_since(range_key)
+        db_path = _db_path(app)
         alerts = _localize_alerts(
             storage.list_alerts(
-                _db_path(app),
-                status="active",
-                since=_alert_range_since(range_key),
+                db_path,
+                status=None if alert_status == "all" else alert_status,
+                since=since,
             ),
             resolve_timezone(config.app.timezone),
         )
@@ -2522,6 +2538,8 @@ def register_routes(app: Flask) -> None:
             alerts=alerts,
             hosts=[host.name for host in config.servers],
             alert_range=range_key,
+            alert_status=alert_status,
+            alert_counts=storage.count_alerts_by_status(db_path, since=since),
         )
 
     @app.get("/settings")

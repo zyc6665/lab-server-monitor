@@ -1756,6 +1756,45 @@ def list_alerts(
     return [dict(row) for row in rows]
 
 
+def count_alerts_by_status(
+    db_path: Path,
+    *,
+    since: datetime | str | None = None,
+) -> dict[str, int]:
+    """Count alerts grouped by status, optionally restricted to a time window.
+
+    Always returns keys for ``active``, ``acknowledged`` and ``resolved`` (zero
+    when absent), plus ``total``.  ``since`` follows the same normalisation as
+    :func:`list_alerts`.
+    """
+    db_path = Path(db_path)
+    counts = {"active": 0, "acknowledged": 0, "resolved": 0, "total": 0}
+    if not db_path.exists():
+        return counts
+
+    params: list[object] = []
+    clause = ""
+    if since is not None:
+        if isinstance(since, datetime):
+            value = since
+            if value.tzinfo is None:
+                value = value.replace(tzinfo=timezone.utc)
+            since = value.astimezone(timezone.utc).isoformat()
+        clause = " WHERE created_at >= ?"
+        params.append(since)
+
+    with sqlite3.connect(db_path) as conn:
+        rows = conn.execute(
+            f"SELECT status, COUNT(*) AS count FROM alerts{clause} GROUP BY status",
+            params,
+        ).fetchall()
+    for status, count in rows:
+        if status in counts:
+            counts[status] = int(count)
+        counts["total"] += int(count)
+    return counts
+
+
 def list_alerts_for_host(
     host_name: str,
     db_path: Path,

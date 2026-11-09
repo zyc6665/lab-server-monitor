@@ -255,7 +255,14 @@ def test_host_detail_and_alerts(env):
 
     alerts = client.get("/api/alerts?status=active")
     assert alerts.status_code == 200
-    assert len(alerts.get_json()["alerts"]) == 1
+    alert_payload = alerts.get_json()
+    assert len(alert_payload["alerts"]) == 1
+    assert alert_payload["counts"] == {
+        "active": 1,
+        "acknowledged": 0,
+        "resolved": 0,
+        "total": 1,
+    }
 
     old_alert = insert_alert(
         AlertEvent(

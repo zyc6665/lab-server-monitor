@@ -392,7 +392,13 @@ def test_alerts_page_has_status_filters_and_ack(client):
     html = _page(client, "/alerts")
     assert 'id="alert-status-filter"' in html
     assert 'data-status="active"' in html
+    assert 'data-status="acknowledged"' in html
+    assert 'data-status="resolved"' in html
     assert 'data-status="all"' in html
+    assert 'id="alert-status-count-active"' in html
+    assert 'id="alert-status-count-acknowledged"' in html
+    assert 'id="alert-status-count-resolved"' in html
+    assert 'id="alert-status-count-total"' in html
     assert 'id="alert-host-filter"' in html
     assert 'id="alert-range-filter"' in html
     assert 'id="alert-sort"' in html
@@ -456,6 +462,17 @@ def test_alerts_page_supports_query_and_severity_deep_links(client):
     assert "alert-prev-page" in source
     assert "alert-next-page" in source
     assert "alert-page-info" in source
+
+
+def test_alerts_page_status_filter_deep_link_and_counts(client):
+    html = _page(client, "/alerts?status=acknowledged")
+    assert 'data-status="acknowledged" role="tab" aria-selected="true"' in html
+    assert 'id="alert-status-count-acknowledged"' in html
+    source = (STATIC / "app.js").read_text(encoding="utf-8")
+    assert "function renderAlertStatusCounts" in source
+    assert "data.counts" in source
+    assert "ALERT_STATUS_FILTERS" in source
+    assert "alertStatus !== 'active'" in source
 
 
 def test_app_js_keeps_terminal_and_filter_logic():

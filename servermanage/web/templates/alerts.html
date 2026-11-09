@@ -10,8 +10,10 @@
   <div class="section-head">
     <h2>告警列表</h2>
     <div class="alert-filters" id="alert-status-filter" role="tablist" aria-label="告警状态筛选">
-      <button type="button" class="alert-filter active" data-status="active" role="tab" aria-selected="true">活动</button>
-      <button type="button" class="alert-filter" data-status="all" role="tab" aria-selected="false">全部</button>
+      <button type="button" class="alert-filter{% if alert_status == 'active' %} active{% endif %}" data-status="active" role="tab" aria-selected="{% if alert_status == 'active' %}true{% else %}false{% endif %}">活动 <span class="alert-filter-count" id="alert-status-count-active">{{ alert_counts.active }}</span></button>
+      <button type="button" class="alert-filter{% if alert_status == 'acknowledged' %} active{% endif %}" data-status="acknowledged" role="tab" aria-selected="{% if alert_status == 'acknowledged' %}true{% else %}false{% endif %}">已确认 <span class="alert-filter-count" id="alert-status-count-acknowledged">{{ alert_counts.acknowledged }}</span></button>
+      <button type="button" class="alert-filter{% if alert_status == 'resolved' %} active{% endif %}" data-status="resolved" role="tab" aria-selected="{% if alert_status == 'resolved' %}true{% else %}false{% endif %}">已解决 <span class="alert-filter-count" id="alert-status-count-resolved">{{ alert_counts.resolved }}</span></button>
+      <button type="button" class="alert-filter{% if alert_status == 'all' %} active{% endif %}" data-status="all" role="tab" aria-selected="{% if alert_status == 'all' %}true{% else %}false{% endif %}">全部 <span class="alert-filter-count" id="alert-status-count-total">{{ alert_counts.total }}</span></button>
     </div>
   </div>
   <div class="alert-toolbar">

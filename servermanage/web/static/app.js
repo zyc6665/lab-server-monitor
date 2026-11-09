@@ -6,8 +6,9 @@
   'use strict';
 
   var REFRESH_MS = 30000;
-  // 告警页当前筛选：active（默认，仅活动告警）或 all（全部）。
+  // 告警页当前状态筛选：active / acknowledged / resolved / all。
   var alertStatus = 'active';
+  var ALERT_STATUS_FILTERS = ['active', 'acknowledged', 'resolved', 'all'];
   var lastHosts = [];
   var lastAlerts = [];
   var alertSeverity = '';
@@ -931,6 +932,14 @@
     return rows;
   }
 
+  function renderAlertStatusCounts(counts) {
+    var data = counts || {};
+    setText('alert-status-count-active', data.active == null ? 0 : data.active);
+    setText('alert-status-count-acknowledged', data.acknowledged == null ? 0 : data.acknowledged);
+    setText('alert-status-count-resolved', data.resolved == null ? 0 : data.resolved);
+    setText('alert-status-count-total', data.total == null ? 0 : data.total);
+  }
+
   function renderAlertSummary() {
     var rows = matchingAlerts(true);
     var counts = { critical: 0, warning: 0, info: 0 };
@@ -992,10 +1001,11 @@
     updateAlertSelectionSummary();
   }
 
-  function updateAlerts(alerts) {
+  function updateAlerts(alerts, counts) {
     if (!Array.isArray(alerts)) { return; }
     updateFocusAlerts(alerts);
     lastAlerts = alerts;
+    renderAlertStatusCounts(counts);
     var activeIds = {};
     alerts.forEach(function (alert) {
       if (alert && alert.status === 'active' && alert.id != null) { activeIds[alert.id] = true; }
@@ -1107,6 +1117,7 @@
 
   function syncAlertUrl() {
     var params = [];
+    if (alertStatus !== 'active') { params.push('status=' + encodeURIComponent(alertStatus)); }
     if (alertKeyword.trim()) { params.push('q=' + encodeURIComponent(alertKeyword.trim())); }
     if (alertSeverity) { params.push('severity=' + encodeURIComponent(alertSeverity)); }
     if (alertHost) { params.push('host=' + encodeURIComponent(alertHost)); }
@@ -1119,6 +1130,7 @@
   }
 
   function clearAlertFilters() {
+    alertStatus = 'active';
     alertKeyword = '';
     alertSeverity = '';
     alertHost = '';
@@ -1136,6 +1148,7 @@
     if (range) { range.value = ''; }
     var sort = document.getElementById('alert-sort');
     if (sort) { sort.value = 'desc'; }
+    renderAlertStatusTabs();
     renderAlertRows();
     syncAlertUrl();
     refreshAlerts().catch(function () {});
@@ -1144,7 +1157,7 @@
   function refreshAlerts() {
     return fetchJson(alertsUrl(alertStatus)).then(function (data) {
       if (!data) { return; }
-      updateAlerts(data.alerts);
+      updateAlerts(data.alerts, data.counts);
     });
   }
 
@@ -1196,9 +1209,7 @@
     });
   }
 
-  function setAlertFilter(status) {
-    alertStatus = status === 'all' ? 'all' : 'active';
-    alertPage = 1;
+  function renderAlertStatusTabs() {
     var filters = document.querySelectorAll('.alert-filter');
     for (var i = 0; i < filters.length; i += 1) {
       var isActive = filters[i].getAttribute('data-status') === alertStatus;
@@ -1209,6 +1220,14 @@
       }
       filters[i].setAttribute('aria-selected', isActive ? 'true' : 'false');
     }
+  }
+
+  function setAlertFilter(status) {
+    alertStatus = ALERT_STATUS_FILTERS.indexOf(status) >= 0 ? status : 'active';
+    alertPage = 1;
+    selectedAlertIds = {};
+    renderAlertStatusTabs();
+    syncAlertUrl();
     refreshAlerts().catch(function () {});
   }
 
@@ -1370,9 +1389,13 @@
       exportHostsButton.addEventListener('click', exportHostsCsv);
     }
 
-    // 告警页状态筛选（活动 / 全部）：切换后按状态重新拉取。
+    // 告警页状态筛选（活动 / 已确认 / 已解决 / 全部）：切换后按状态重新拉取。
     var alertFilterBar = document.getElementById('alert-status-filter');
     if (alertFilterBar) {
+      var initialStatusTab = alertFilterBar.querySelector('.alert-filter.active');
+      if (initialStatusTab) {
+        alertStatus = initialStatusTab.getAttribute('data-status') || 'active';
+      }
       alertFilterBar.addEventListener('click', function (event) {
         var target = event.target;
         if (target && target.classList && target.classList.contains('alert-filter')) {
