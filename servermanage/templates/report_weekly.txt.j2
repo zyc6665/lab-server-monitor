@@ -46,4 +46,5 @@
   平均在线用户: {{ "%.1f"|format(host.users_avg) if host.users_avg is not none else "N/A" }}
   平均进程数: {{ "%.0f"|format(host.processes_avg) if host.processes_avg is not none else "N/A" }}
   有效样本: {{ host.sample_count }}
+  服务检查: {% if host.check_total %}{{ host.check_ok }}/{{ host.check_total }}{% else %}未配置服务检查{% endif %}
 {% endfor %}

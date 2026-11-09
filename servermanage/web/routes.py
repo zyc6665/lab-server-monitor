@@ -689,6 +689,21 @@ def _logged_in_counts(metrics: dict[str, Any]) -> tuple[int, int]:
     return len(usernames), sessions
 
 
+def _summarize_checks(results: list[dict[str, Any]]) -> dict[str, int]:
+    """Collapse stored check results into a total/ok/failed/unknown summary.
+
+    Both ``failed`` (definitive failure) and ``error`` (check could not be
+    evaluated) count as failed so a broken check is never mistaken for an
+    unchecked one. ``unknown`` only covers results with no recognisable
+    status (e.g. no result / host offline).
+    """
+    total = len(results)
+    ok = sum(1 for row in results if str(row.get("status")) == "ok")
+    failed = sum(1 for row in results if str(row.get("status")) in ("failed", "error"))
+    unknown = total - ok - failed
+    return {"total": total, "ok": ok, "failed": failed, "unknown": unknown}
+
+
 def _host_row(
     *,
     name: str,
@@ -706,7 +721,10 @@ def _host_row(
     silenced: bool = False,
     silenced_until: str | None = None,
     active_alert_count: int = 0,
+    checks: dict[str, int] | None = None,
 ) -> dict[str, Any]:
+    if checks is None:
+        checks = {"total": 0, "ok": 0, "failed": 0, "unknown": 0}
     meta = {
         "group": group or "未分组",
         "owner": owner or "",
@@ -729,6 +747,7 @@ def _host_row(
             "logged_in_user_count": 0,
             "logged_in_sessions": 0,
             "disk_health": _disk_health_summary(disk_health),
+            "checks": checks,
             **meta,
         }
     metrics = snapshot.get("metrics") or {}
@@ -742,6 +761,7 @@ def _host_row(
         "logged_in_user_count": user_count,
         "logged_in_sessions": session_count,
         "disk_health": _disk_health_summary(disk_health),
+        "checks": checks,
         **meta,
     }
 
@@ -960,6 +980,9 @@ def _build_overview(config, db_path) -> dict[str, Any]:
                 silenced=bool(matched),
                 silenced_until=silenced_until,
                 active_alert_count=alert_counts.get(host_name, 0),
+                checks=_summarize_checks(
+                    storage.get_host_check_results(host_name, db_path)
+                ),
             )
         )
 
@@ -1016,6 +1039,7 @@ def _build_host_detail(name: str, config, db_path) -> dict[str, Any] | None:
         "errors": (snapshot.get("errors") or []) if snapshot else [],
         "disk": disk,
         "alerts": alerts,
+        "checks": storage.get_host_check_results(name, db_path),
     }
 
 
@@ -1164,6 +1188,24 @@ def _build_host_report(
         lines.append(f"  采集时间：{disk.get('collected_at') or '—'}")
     else:
         lines.append("  （暂无磁盘阵列数据）")
+    lines.append("")
+    lines.append("[服务可用性]")
+    checks = detail.get("checks") or []
+    if checks:
+        for check in checks:
+            check_name = check.get("check_name") or "—"
+            check_type = check.get("check_type") or "—"
+            check_target = check.get("target") or "—"
+            check_status = check.get("status") or "—"
+            check_message = check.get("message") or "—"
+            latency = _report_number(check.get("latency_ms"))
+            latency_text = f" {latency:.0f}ms" if latency is not None else ""
+            lines.append(
+                f"  {check_name}（{check_type} {check_target}）："
+                f"{check_status} {check_message}{latency_text}"
+            )
+    else:
+        lines.append("  未配置服务检查")
     lines.append("")
     lines.append("[最近采集异常]")
     errors = detail.get("errors") or []

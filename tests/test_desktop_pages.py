@@ -30,6 +30,7 @@ from servermanage.models import (
     DashboardConfig,
     DiskUsageRow,
     GPUSummaryRow,
+    HostCheckResult,
     HostConfig,
     HostMetrics,
     HostReport,
@@ -41,6 +42,7 @@ from servermanage.models import (
 from servermanage.storage import (
     insert_alert,
     save_disk_health,
+    save_host_check_results,
     save_host_snapshot,
 )
 from servermanage.disk_health import AlertEvent
@@ -160,6 +162,36 @@ def _seed_database(db_path: Path) -> None:
         ),
         db_path,
     )
+    save_host_check_results(
+        HOST_NAME,
+        [
+            HostCheckResult(
+                name="Web 服务",
+                type="http",
+                target="http://10.0.0.1:8080/health",
+                status="ok",
+                message="HTTP 200",
+                latency_ms=12.0,
+            ),
+            HostCheckResult(
+                name="数据库",
+                type="tcp",
+                target="10.0.0.1:5432",
+                status="failed",
+                message="连接超时",
+                latency_ms=None,
+            ),
+            HostCheckResult(
+                name="缓存",
+                type="tcp",
+                target="10.0.0.1:6379",
+                status="error",
+                message="无法连接",
+                latency_ms=None,
+            ),
+        ],
+        db_path,
+    )
     insert_alert(
         AlertEvent(
             host_name=HOST_NAME,
@@ -261,6 +293,22 @@ def test_overview_keeps_filter_bar_and_host_columns(client):
         assert f">{column}</th>" in html
 
 
+def test_overview_host_checks_summary(client):
+    payload = client.get("/api/overview").get_json()
+    checks = payload["hosts"][0]["checks"]
+    assert set(checks) >= {"total", "ok", "failed", "unknown"}
+    # seeded: Web 服务=ok, 数据库=failed, 缓存=error (error counts as failed, not unknown)
+    assert checks["total"] == 3
+    assert checks["ok"] == 1
+    assert checks["failed"] == 2
+    assert checks["unknown"] == 0
+
+
+def test_overview_row_has_checks_column(client):
+    html = _page(client, "/")
+    assert ">检查</th>" in html
+
+
 # -- host detail ------------------------------------------------------------
 
 
@@ -297,6 +345,20 @@ def test_host_page_has_recent_alerts_tab(client):
     assert 'class="ack-btn" data-alert-id=' in html
 
 
+def test_host_page_has_service_checks_tab(client):
+    html = _page(client, f"/host/{HOST_NAME}")
+    assert 'data-host-tab="checks"' in html
+    assert 'id="host-checks-panel"' in html
+    assert "服务可用性" in html
+
+
+def test_host_page_renders_check_results(client):
+    html = _page(client, f"/host/{HOST_NAME}")
+    assert "Web 服务" in html
+    assert "数据库" in html
+    assert "连接超时" in html
+
+
 def test_host_report_download_contains_diagnostics(client):
     response = client.get(f"/api/host/{HOST_NAME}/report")
     assert response.status_code == 200
@@ -313,6 +375,16 @@ def test_host_report_download_contains_diagnostics(client):
     assert "磁盘阵列状态为 warning" in text
     assert "[最近告警]" in text
     assert "CPU 使用率过高" in text
+
+
+def test_host_report_contains_service_availability(client):
+    response = client.get(f"/api/host/{HOST_NAME}/report")
+    assert response.status_code == 200
+    text = response.get_data(as_text=True)
+    assert "[服务可用性]" in text
+    assert "Web 服务" in text
+    assert "数据库" in text
+    assert "连接超时" in text
 
 
 def test_fleet_report_download_contains_summary_and_hosts(client):

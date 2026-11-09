@@ -447,6 +447,23 @@
     tr.appendChild(percentCell(host.gpu_memory_percent));
     tr.appendChild(textCell(host.logged_in_user_count == null ? '—' : host.logged_in_user_count));
 
+    var checks = host.checks || {};
+    var checkCell = document.createElement('td');
+    checkCell.className = 'check-cell';
+    var checkBadge = document.createElement('span');
+    if (checks.total) {
+      var checkClass = 'check-summary';
+      if (checks.failed) { checkClass += ' check-failed'; }
+      else if (checks.unknown) { checkClass += ' check-unknown'; }
+      checkBadge.className = checkClass;
+      checkBadge.textContent = (checks.ok || 0) + '/' + checks.total;
+    } else {
+      checkBadge.className = 'check-summary check-empty';
+      checkBadge.textContent = '—';
+    }
+    checkCell.appendChild(checkBadge);
+    tr.appendChild(checkCell);
+
     var healthCell = document.createElement('td');
     var dh = host.disk_health || {};
     var health = document.createElement('span');

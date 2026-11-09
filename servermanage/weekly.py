@@ -6,7 +6,11 @@ from datetime import date, datetime, timedelta, timezone, tzinfo
 from pathlib import Path
 
 from servermanage.models import WeeklyHostSummary, WeeklyReport, WeeklyReportConfig
-from servermanage.storage import fetch_daily_points_for_week, fetch_weekly_metrics
+from servermanage.storage import (
+    fetch_daily_points_for_week,
+    fetch_weekly_metrics,
+    get_host_check_results,
+)
 
 LOGGER = logging.getLogger(__name__)
 
@@ -109,9 +113,13 @@ def generate_weekly_report(
         summary = _build_summary(row)
         key = (summary.host_name, summary.host)
         points = daily_points_by_host.get(key, [])
-        summaries.append(
-            summary if not points else replace(summary, daily_points=points)
-        )
+        # Service checks are point-in-time: always read the current snapshot,
+        # never the historical weekly samples.
+        checks = get_host_check_results(summary.host_name, db_path)
+        summary = replace(summary, checks=checks)
+        if points:
+            summary = replace(summary, daily_points=points)
+        summaries.append(summary)
 
     busy: list[WeeklyHostSummary] = []
     idle: list[WeeklyHostSummary] = []

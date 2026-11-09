@@ -18,6 +18,17 @@ Failed Hosts
 Host: {{ host.host_name }} ({{ host.host }})
 ========================================================================
 Overview     : {{ host.overview }}
+{% if host.check_total %}
+Checks       : {{ host.check_ok }}/{{ host.check_total }}
+{% if host.failed_checks %}
+Failed Checks
+{% for check in host.failed_checks %}
+- {{ check.name }}（{{ check.type }} {{ check.target }}）：{{ check.status }} {{ check.message }}
+{% endfor %}
+{% endif %}
+{% else %}
+Checks       : 未配置服务检查
+{% endif %}
 System       : {{ host.metrics.os_pretty_name or 'Unknown OS' }} | {{ host.metrics.kernel_version or 'Unknown Kernel' }} | Uptime {{ host.metrics.uptime or 'N/A' }}
 {% if host.has_partial_errors %}
 Collection Errors

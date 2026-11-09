@@ -264,6 +264,59 @@
     });
   }
 
+  function fmtLatency(value) {
+    if (value === null || value === undefined || value === '') { return '—'; }
+    var num = Number(value);
+    return isNaN(num) ? '—' : num.toFixed(0) + ' ms';
+  }
+
+  function checkText(value) {
+    return (value === null || value === undefined || value === '') ? '—' : String(value);
+  }
+
+  function appendCheckCell(tr, text, extraClass) {
+    var td = document.createElement('td');
+    if (extraClass) { td.className = extraClass; }
+    td.textContent = text;
+    tr.appendChild(td);
+    return td;
+  }
+
+  function renderChecksTable(checks) {
+    var body = document.getElementById('host-checks-body');
+    if (!body) { return; }
+    var list = checks || [];
+    while (body.firstChild) { body.removeChild(body.firstChild); }
+    var empty = document.getElementById('host-checks-empty');
+    var wrap = document.getElementById('host-checks-wrap');
+    if (wrap) { wrap.hidden = list.length === 0; }
+    if (empty) { empty.hidden = list.length > 0; }
+    list.forEach(function (check) {
+      var tr = document.createElement('tr');
+      appendCheckCell(tr, checkText(check.check_name));
+      appendCheckCell(tr, checkText(check.check_type));
+      appendCheckCell(tr, checkText(check.target), 'mono');
+      var statusCell = document.createElement('td');
+      var status = document.createElement('span');
+      status.className = 'status status-' + (check.status || 'unknown');
+      status.textContent = checkText(check.status);
+      statusCell.appendChild(status);
+      tr.appendChild(statusCell);
+      appendCheckCell(tr, fmtLatency(check.latency_ms));
+      appendCheckCell(tr, checkText(check.checked_at), 'mono');
+      appendCheckCell(tr, checkText(check.message));
+      body.appendChild(tr);
+    });
+  }
+
+  function loadChecks() {
+    fetchJson('/api/host/' + encodeURIComponent(HOST_NAME)).then(function (payload) {
+      if (payload && payload.checks) {
+        renderChecksTable(payload.checks);
+      }
+    }).catch(function () {});
+  }
+
   function bindHostTabs() {
     var tabs = document.querySelectorAll('[data-host-tab]');
     var panels = document.querySelectorAll('[data-host-panel]');
@@ -297,4 +350,5 @@
   bindRanges();
   bindActions();
   loadHistory('24h');
+  loadChecks();
 })();

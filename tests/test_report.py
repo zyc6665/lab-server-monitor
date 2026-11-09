@@ -5,6 +5,7 @@ from servermanage.models import (
     DiskUsageRow,
     GPUSummaryRow,
     HostCollectionError,
+    HostCheckResult,
     HostMetrics,
     HostReport,
     MemorySummary,
@@ -344,3 +345,44 @@ def test_render_executive_report_shows_concise_error_messages_in_risk_summary():
 
     assert "8-a100：采集异常：nvidia-smi missing；dcgm unavailable" in rendered.text_body
     assert "存在 2 项采集异常" not in rendered.text_body
+
+
+def test_render_daily_report_includes_service_checks():
+    report = DailyReport(
+        generated_at=datetime(2026, 3, 26, 9, 0, tzinfo=timezone.utc),
+        subject_prefix="[Daily]",
+        reports=[
+            HostReport(
+                host_name="gpu-01",
+                host="10.0.0.1",
+                success=True,
+                metrics=HostMetrics(),
+                checks=[
+                    HostCheckResult(
+                        name="Web 服务",
+                        type="http",
+                        target="http://10.0.0.1:8080/health",
+                        status="ok",
+                        message="HTTP 200",
+                        latency_ms=12.0,
+                    ),
+                    HostCheckResult(
+                        name="数据库",
+                        type="tcp",
+                        target="10.0.0.1:5432",
+                        status="failed",
+                        message="连接超时",
+                        latency_ms=None,
+                    ),
+                ],
+            )
+        ],
+    )
+
+    rendered = render_report(report)
+
+    assert "1/2" in rendered.text_body
+    assert "数据库" in rendered.text_body
+    assert "连接超时" in rendered.text_body
+    assert "服务检查" in rendered.html_body
+    assert "数据库" in rendered.html_body

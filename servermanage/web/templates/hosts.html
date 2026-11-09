@@ -9,6 +9,14 @@
 {%- if value is undefined or value is none -%}<span class="pct-value">—</span>{%- else -%}{%- set num = value|float -%}<span class="pct-meter" aria-hidden="true"><span class="pct-meter-fill" style="width: {{ 0 if num < 0 else (100 if num > 100 else num) }}%"></span></span><span class="pct-value">{{ '%.1f'|format(num) }}%</span>{%- endif -%}
 {%- endmacro %}
 
+{% macro checkbadge(checks) -%}
+{%- if checks and checks.total -%}
+<span class="check-summary{% if checks.failed %} check-failed{% elif checks.unknown %} check-unknown{% endif %}">{{ checks.ok }}/{{ checks.total }}</span>
+{%- else -%}
+<span class="check-summary check-empty">—</span>
+{%- endif -%}
+{%- endmacro %}
+
 {% block content %}
 <div class="page-head">
   <div class="page-head-main">
@@ -59,7 +67,7 @@
         <tr>
           <th data-sort-key="name">名称</th><th data-sort-key="host">地址</th><th data-sort-key="group">分组</th><th data-sort-key="owner">负责人</th><th data-sort-key="status">状态</th>
           <th data-sort-key="cpu">CPU</th><th data-sort-key="memory">内存</th><th data-sort-key="disk">磁盘</th><th data-sort-key="gpu">GPU 显存</th><th data-sort-key="users">登录用户</th>
-          <th data-sort-key="health">磁盘健康</th><th data-sort-key="collected">采集时间</th><th>操作</th>
+          <th data-sort-key="checks">检查</th><th data-sort-key="health">磁盘健康</th><th data-sort-key="collected">采集时间</th><th>操作</th>
         </tr>
       </thead>
       <tbody id="host-table-body">
@@ -84,6 +92,7 @@
           <td class="pct-cell">{{ pctbar(host.disk_percent) }}</td>
           <td class="pct-cell">{{ pctbar(host.gpu_memory_percent) }}</td>
           <td>{{ host.logged_in_user_count }}</td>
+          <td class="check-cell">{{ checkbadge(host.checks) }}</td>
           <td>
             <span class="health health-{{ host.disk_health.status }}">{{ host.disk_health.status }}</span>
             <span class="health-counts">健康 {{ host.disk_health.healthy }} · 告警 {{ host.disk_health.warning }} · 严重 {{ host.disk_health.critical }}</span>

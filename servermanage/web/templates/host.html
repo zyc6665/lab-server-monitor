@@ -43,6 +43,7 @@
   <button type="button" class="host-tab" data-host-tab="storage">存储与磁盘阵列</button>
   <button type="button" class="host-tab" data-host-tab="gpu">GPU</button>
   <button type="button" class="host-tab" data-host-tab="users">登录用户</button>
+  <button type="button" class="host-tab" data-host-tab="checks">服务可用性</button>
   <button type="button" class="host-tab" data-host-tab="alerts">最近告警{% if detail.alerts|selectattr('status', 'equalto', 'active')|list %} ({{ detail.alerts|selectattr('status', 'equalto', 'active')|list|length }}){% endif %}</button>
 </nav>
 
@@ -169,6 +170,34 @@
   {% else %}
   <p class="empty">暂无登录用户</p>
   {% endif %}
+</section>
+
+<section class="card" id="host-checks-panel" data-host-panel="checks">
+  <div class="section-head">
+    <h2>服务可用性</h2>
+    <span class="muted">{{ detail.checks|length if detail.checks else 0 }} 项检查</span>
+  </div>
+  <div class="table-wrap" id="host-checks-wrap"{% if not detail.checks %} hidden{% endif %}>
+    <table class="data-table" id="host-checks-table">
+      <thead>
+        <tr><th>名称</th><th>类型</th><th>目标</th><th>状态</th><th>耗时</th><th>最近检查</th><th>消息</th></tr>
+      </thead>
+      <tbody id="host-checks-body">
+        {% for check in detail.checks %}
+        <tr>
+          <td>{{ check.check_name or '—' }}</td>
+          <td>{{ check.check_type or '—' }}</td>
+          <td class="mono">{{ check.target or '—' }}</td>
+          <td><span class="status status-{{ check.status }}">{{ check.status or '—' }}</span></td>
+          <td>{% if check.latency_ms is not none %}{{ '%.0f'|format(check.latency_ms) }} ms{% else %}—{% endif %}</td>
+          <td class="mono">{{ check.checked_at or '—' }}</td>
+          <td>{{ check.message or '—' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <p class="empty" id="host-checks-empty"{% if detail.checks %} hidden{% endif %}>未配置服务检查</p>
 </section>
 
 <section class="card" id="host-alerts" data-host-panel="alerts">

@@ -44,6 +44,24 @@ def _make_weekly_report() -> WeeklyReport:
             {"day": "2026-07-07", "cpu_avg": 60.0, "memory_percent": 45.0, "gpu_util": 80.0},
             {"day": "2026-07-08", "cpu_avg": 70.0, "memory_percent": 45.0, "gpu_util": 80.0},
         ],
+        checks=[
+            {
+                "check_name": "Web 服务",
+                "check_type": "http",
+                "target": "http://10.0.0.1:8080/health",
+                "status": "ok",
+                "message": "HTTP 200",
+                "latency_ms": 12.0,
+            },
+            {
+                "check_name": "数据库",
+                "check_type": "tcp",
+                "target": "10.0.0.1:5432",
+                "status": "failed",
+                "message": "连接超时",
+                "latency_ms": None,
+            },
+        ],
     )
     return WeeklyReport(
         generated_at=datetime.now(timezone.utc),
@@ -63,6 +81,9 @@ def test_render_weekly_report():
     assert "2026-07-06 ~ 2026-07-12" in rendered.subject
     assert "host-a" in rendered.text_body
     assert "高频算力服务器" in rendered.text_body
+    assert "服务检查" in rendered.text_body
+    assert "1/2" in rendered.text_body
     assert rendered.html_body != ""
     assert "<svg" in rendered.html_body
     assert "host-a" in rendered.html_body
+    assert "服务检查" in rendered.html_body

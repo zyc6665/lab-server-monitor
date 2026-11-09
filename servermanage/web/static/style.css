@@ -289,6 +289,10 @@ a:hover { text-decoration: underline; }
 .status-active { color: var(--warn); font-weight: 600; }
 .status-acknowledged { color: var(--accent); }
 .status-resolved { color: var(--text-muted); }
+.status-ok { color: #157347; font-weight: 600; }
+.status-failed { color: var(--danger); font-weight: 600; }
+.status-error { color: var(--danger); font-weight: 600; }
+.status-unknown { color: var(--text-muted); }
 
 .ack-btn {
   background: var(--accent);
@@ -837,6 +841,9 @@ html[data-theme="dark"] #alert-page-size { background: #141c2b; color: #e6edf7; 
 .check-summary.ok { color: #157347; background: rgba(25, 135, 84, 0.12); }
 .check-summary.warning { color: #9a6700; background: rgba(255, 193, 7, 0.16); }
 .check-summary.error { color: #b02a37; background: rgba(220, 53, 69, 0.12); }
+.check-summary.check-failed { color: #b02a37; background: rgba(220, 53, 69, 0.12); }
+.check-summary.check-unknown { color: #9a6700; background: rgba(255, 193, 7, 0.16); }
+.check-summary.check-empty { color: var(--text-muted); background: rgba(148, 163, 184, 0.16); }
 .system-check-list { display: grid; gap: 8px; }
 .check-row { display: flex; align-items: flex-start; gap: 9px; padding: 9px 12px; border: 1px solid var(--border); border-radius: 9px; background: #fbfcfe; }
 .check-dot { width: 9px; height: 9px; margin-top: 4px; border-radius: 50%; flex: 0 0 auto; }

@@ -96,6 +96,7 @@
             内存 日均/峰值：{{ "%.1f%%"|format(host.memory_avg_percent) if host.memory_avg_percent is not none else "N/A" }} / {{ "%.1f%%"|format(host.memory_max_percent) if host.memory_max_percent is not none else "N/A" }} |
             磁盘 日均/峰值：{{ "%.1f%%"|format(host.disk_avg_percent) if host.disk_avg_percent is not none else "N/A" }} / {{ "%.1f%%"|format(host.disk_max_percent) if host.disk_max_percent is not none else "N/A" }} |
             样本数：{{ host.sample_count }}
+            <br>服务检查：{% if host.check_total %}{{ host.check_ok }}/{{ host.check_total }}{% else %}未配置服务检查{% endif %}
           </div>
           <div style="display:flex;gap:16px;flex-wrap:wrap;">
             <div style="background:#f8fafc;border-radius:10px;padding:8px;">{{ host.cpu_chart|safe }}</div>

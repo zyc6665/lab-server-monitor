@@ -69,7 +69,11 @@ def _overview_text(host_report: HostReport) -> str:
         disk_text = "N/A"
 
     gpu_text = "N/A" if not metrics.gpu_summary else f"GPU {len(metrics.gpu_summary)} active"
-    return f"CPU {cpu_text} | MEM {memory_text} | DISK {disk_text} | {gpu_text}"
+    checks = host_report.checks or []
+    check_total = len(checks)
+    check_ok = sum(1 for check in checks if getattr(check, "status", "") == "ok")
+    check_suffix = f" | 检查 {check_ok}/{check_total}" if check_total else ""
+    return f"CPU {cpu_text} | MEM {memory_text} | DISK {disk_text} | {gpu_text}{check_suffix}"
 
 
 def _percent(used: int | None, total: int | None) -> float | None:
@@ -300,6 +304,20 @@ def _host_context(host_report: HostReport) -> dict[str, object]:
     metrics_dict = asdict(metrics)
     metrics_dict["top_cpu_processes"] = _process_row_context(metrics.top_cpu_processes)
     metrics_dict["top_memory_processes"] = _process_row_context(metrics.top_memory_processes)
+    checks = [
+        {
+            "name": check.name,
+            "type": check.type,
+            "target": check.target,
+            "status": check.status,
+            "message": check.message,
+            "latency_ms": check.latency_ms,
+        }
+        for check in (host_report.checks or [])
+    ]
+    check_total = len(checks)
+    check_ok = sum(1 for check in checks if str(check["status"]) == "ok")
+    failed_checks = [check for check in checks if str(check["status"]) != "ok"]
     return {
         "host_name": host_report.host_name,
         "host": host_report.host,
@@ -316,6 +334,10 @@ def _host_context(host_report: HostReport) -> dict[str, object]:
         or "None",
         "errors": [asdict(error) for error in host_report.errors],
         "has_partial_errors": bool(host_report.errors),
+        "checks": checks,
+        "check_total": check_total,
+        "check_ok": check_ok,
+        "failed_checks": failed_checks,
     }
 
 
@@ -430,8 +452,13 @@ def render_svg_line_chart(
 
 
 def _weekly_host_context(host: WeeklyHostSummary) -> dict[str, object]:
+    checks = host.checks or []
+    check_total = len(checks)
+    check_ok = sum(1 for check in checks if str(check.get("status")) == "ok")
     return {
         **asdict(host),
+        "check_total": check_total,
+        "check_ok": check_ok,
         "cpu_chart": render_svg_line_chart(
             [(str(point["day"]), point["cpu_avg"]) for point in host.daily_points],
             title="CPU 使用率 (%)",

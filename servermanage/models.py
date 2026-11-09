@@ -390,6 +390,7 @@ class WeeklyHostSummary:
     users_avg: float | None
     processes_avg: float | None
     daily_points: list[dict[str, object]] = field(default_factory=list)
+    checks: list[dict] = field(default_factory=list)
 
 
 @dataclass(frozen=True)

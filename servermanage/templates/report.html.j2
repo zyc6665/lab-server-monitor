@@ -54,6 +54,17 @@
 
         <div style="background:#f8fbff;border-radius:12px;padding:14px 16px;margin-bottom:16px;font-size:14px;font-weight:600;">{{ host.overview }}</div>
 
+        {% if host.check_total %}
+        <div style="background:#f8fbff;border-radius:12px;padding:14px 16px;margin-bottom:16px;font-size:13px;">
+          服务检查：<strong>{{ host.check_ok }}/{{ host.check_total }}</strong> 正常
+          {% if host.failed_checks %}
+          <div style="color:#c2410c;margin-top:6px;">失败：{% for check in host.failed_checks %}{{ check.name }}（{{ check.type }} {{ check.target }}）：{{ check.status }} {{ check.message }}{% if not loop.last %}；{% endif %}{% endfor %}</div>
+          {% endif %}
+        </div>
+        {% else %}
+        <div style="background:#f8fbff;border-radius:12px;padding:14px 16px;margin-bottom:16px;font-size:13px;color:#64748b;">服务检查：未配置服务检查</div>
+        {% endif %}
+
         {% if host.has_partial_errors %}
         <div style="background:#fff7ed;border:1px solid #fdba74;border-radius:12px;padding:12px 14px;margin-bottom:16px;">
           <div style="font-size:14px;font-weight:700;color:#9a3412;margin-bottom:8px;">采集异常</div>
