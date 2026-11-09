@@ -151,6 +151,54 @@
     });
   }
 
+  function clockLabel() {
+    var now = new Date();
+    function pad(value) { return value < 10 ? "0" + value : String(value); }
+    return pad(now.getHours()) + ":" + pad(now.getMinutes()) + ":" + pad(now.getSeconds());
+  }
+
+  function saveHint(button) {
+    if (!button) return null;
+    var hint = button.parentElement.querySelector(".save-hint");
+    if (!hint) {
+      hint = document.createElement("span");
+      hint.className = "save-hint";
+      button.insertAdjacentElement("afterend", hint);
+    }
+    return hint;
+  }
+
+  function markDirty(sectionName) {
+    var button = qs('[data-save="' + sectionName + '"]');
+    if (!button) return;
+    button.classList.add("is-dirty");
+    var hint = saveHint(button);
+    if (hint) {
+      hint.textContent = "有未保存修改";
+      hint.className = "save-hint save-hint-dirty";
+    }
+  }
+
+  function markSaved(sectionName, message) {
+    var button = qs('[data-save="' + sectionName + '"]');
+    if (!button) return;
+    button.classList.remove("is-dirty");
+    var hint = saveHint(button);
+    if (!hint) return;
+    hint.textContent = message;
+    hint.className = "save-hint save-hint-ok";
+    window.setTimeout(function () {
+      if (hint.textContent === message) { hint.textContent = ""; }
+    }, 8000);
+  }
+
+  qsa("[data-section]").forEach(function (section) {
+    var sectionName = section.getAttribute("data-section");
+    if (!sectionName) return;
+    section.addEventListener("input", function () { markDirty(sectionName); });
+    section.addEventListener("change", function () { markDirty(sectionName); });
+  });
+
   function saveSection(sectionName) {
     var button = qs('[data-save="' + sectionName + '"]');
     var payload = collectSection(sectionName);
@@ -167,11 +215,13 @@
           return window.desktopBridge.restartBackend().then(function (restartResult) {
             var ok = !!(restartResult && restartResult.ok);
             status(formStatus, ok ? "已重启" : "重启失败", !ok);
+            markSaved(sectionName, ok ? "已保存并重启 " + clockLabel() : "");
           });
         }
         var message = "已保存";
         if (result && result.restart_required) message = "已保存，重启程序后生效";
         status(formStatus, message);
+        markSaved(sectionName, message + " " + clockLabel());
         if (!button) return;
         var note = document.createElement("p");
         note.className = "form-status form-status-ok";
@@ -182,6 +232,7 @@
       })
       .catch(function (error) {
         status(button ? button.parentElement.querySelector(".form-status") : null, error.message, true);
+        markDirty(sectionName);
       })
       .finally(function () {
         if (button) button.disabled = !writable;

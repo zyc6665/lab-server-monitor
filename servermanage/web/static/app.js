@@ -1076,7 +1076,13 @@
     var visible = matched.slice(start, start + alertPageSize);
     while (body.firstChild) { body.removeChild(body.firstChild); }
     for (var i = 0; i < visible.length; i += 1) {
-      body.appendChild(buildAlertRow(visible[i] || {}));
+      var row = buildAlertRow(visible[i] || {});
+      if (row && row.getAttribute('data-alert-row')) {
+        row.classList.add('alert-row');
+        row.tabIndex = 0;
+        row.setAttribute('aria-expanded', 'false');
+      }
+      body.appendChild(row);
     }
     var hasData = visible.length > 0;
     table.hidden = !hasData;
@@ -1089,6 +1095,139 @@
     renderAlertSummary();
     renderAlertPagination(total, pages, start, visible.length);
     updateAlertSelectionSummary();
+  }
+
+  // -- 概览卡片折叠（记住上次状态） ---------------------------------------
+
+  var COLLAPSIBLE_CARDS = ['focus-card', 'system-check', 'resource-rank', 'capacity-forecast', 'overview-trend', 'alert-trend'];
+  var COLLAPSE_STORAGE_KEY = 'overview:collapsed:';
+
+  function setCardCollapsed(section, collapsed) {
+    if (!section) { return; }
+    section.classList.toggle('is-collapsed', collapsed);
+    var button = section.querySelector('.card-toggle');
+    if (button) {
+      button.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+      button.title = collapsed ? '展开卡片' : '收起卡片';
+      button.textContent = collapsed ? '展开' : '收起';
+    }
+  }
+
+  function setupCardCollapse() {
+    for (var i = 0; i < COLLAPSIBLE_CARDS.length; i += 1) {
+      var section = document.getElementById(COLLAPSIBLE_CARDS[i]);
+      if (!section) { continue; }
+      var head = section.querySelector('.section-head');
+      if (!head || head.querySelector('.card-toggle')) { continue; }
+      var stored = null;
+      try { stored = window.localStorage.getItem(COLLAPSE_STORAGE_KEY + section.id); } catch (error) { stored = null; }
+      var button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'card-toggle';
+      button.setAttribute('aria-expanded', stored === '1' ? 'false' : 'true');
+      button.addEventListener('click', function (event) {
+        event.preventDefault();
+        var card = event.currentTarget.closest('section.card');
+        if (!card) { return; }
+        var collapsed = !card.classList.contains('is-collapsed');
+        setCardCollapsed(card, collapsed);
+        try { window.localStorage.setItem(COLLAPSE_STORAGE_KEY + card.id, collapsed ? '1' : '0'); } catch (error) { /* 隐私模式下忽略 */ }
+      });
+      setCardCollapsed(section, stored === '1');
+      head.appendChild(button);
+    }
+  }
+
+  // -- 告警行内展开详情 ---------------------------------------------------
+
+  function alertById(id) {
+    for (var i = 0; i < lastAlerts.length; i += 1) {
+      if (String(lastAlerts[i].id) === String(id)) { return lastAlerts[i]; }
+    }
+    return null;
+  }
+
+  function buildAlertDetailRow(alert) {
+    var tr = document.createElement('tr');
+    tr.className = 'alert-detail-row';
+    var cell = document.createElement('td');
+    cell.colSpan = 9;
+    cell.className = 'alert-detail-cell';
+    var wrap = document.createElement('div');
+    wrap.className = 'alert-detail';
+
+    var message = document.createElement('p');
+    message.className = 'alert-detail-message';
+    message.textContent = alert.message || '没有更多详细信息';
+    wrap.appendChild(message);
+
+    var meta = document.createElement('dl');
+    meta.className = 'alert-detail-meta';
+    var rows = [
+      ['主机', alert.host_name || '—'],
+      ['类别', alert.category || '—'],
+      ['首次出现', alert.created_at || '—'],
+      ['当前状态', alert.status || '—']
+    ];
+    for (var i = 0; i < rows.length; i += 1) {
+      var dt = document.createElement('dt');
+      dt.textContent = rows[i][0];
+      var dd = document.createElement('dd');
+      dd.textContent = rows[i][1];
+      meta.appendChild(dt);
+      meta.appendChild(dd);
+    }
+    wrap.appendChild(meta);
+
+    if (alert.host_name) {
+      var link = document.createElement('a');
+      link.className = 'alert-detail-link';
+      link.href = '/host/' + encodeURIComponent(alert.host_name);
+      link.textContent = '查看主机详情 →';
+      wrap.appendChild(link);
+    }
+
+    cell.appendChild(wrap);
+    tr.appendChild(cell);
+    return tr;
+  }
+
+  function toggleAlertDetail(row) {
+    var next = row.nextElementSibling;
+    if (next && next.classList && next.classList.contains('alert-detail-row')) {
+      row.parentNode.removeChild(next);
+      row.classList.remove('is-expanded');
+      row.setAttribute('aria-expanded', 'false');
+      return;
+    }
+    var alert = alertById(row.getAttribute('data-alert-row'));
+    if (!alert) { return; }
+    row.parentNode.insertBefore(buildAlertDetailRow(alert), row.nextSibling);
+    row.classList.add('is-expanded');
+    row.setAttribute('aria-expanded', 'true');
+  }
+
+  function setupAlertRowExpansion() {
+    var body = document.getElementById('alerts-body');
+    if (!body || body.getAttribute('data-expand-bound') === '1') { return; }
+    body.setAttribute('data-expand-bound', '1');
+    body.addEventListener('click', function (event) {
+      var target = event.target;
+      if (!target || !target.closest) { return; }
+      if (target.closest('button, a, input, label')) { return; }
+      var row = target.closest('tr[data-alert-row]');
+      if (!row) { return; }
+      toggleAlertDetail(row);
+    });
+    body.addEventListener('keydown', function (event) {
+      if (event.key !== 'Enter' && event.key !== ' ') { return; }
+      var target = event.target;
+      if (!target || !target.closest) { return; }
+      var row = target.closest('tr[data-alert-row]');
+      if (!row) { return; }
+      event.preventDefault();
+      toggleAlertDetail(row);
+    });
   }
 
   function updateAlerts(alerts, counts) {
@@ -1414,6 +1553,9 @@
 
   function init() {
     if (!hasDashboard()) { return; }
+
+    setupCardCollapse();
+    setupAlertRowExpansion();
 
     // 供全局命令面板调用当前页面的快捷操作。
     window.serverMonitorActions = {
