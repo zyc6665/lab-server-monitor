@@ -1289,7 +1289,7 @@ html[data-theme="dark"] .capacity-risk-warning .capacity-trend { color: #fbbf24;
 .user-toolbar .filter-field select { min-width: 140px; }
 .user-toolbar .filter-keyword input { min-width: 200px; }
 #user-refresh-status { font-size: 13px; padding-bottom: 7px; }
-#user-row-count { font-size: 13px; }
+#user-host-count { font-size: 13px; }
 
 /* Account state badges: 正常 / 异常 / 缺失, plus the yes/no docker & sudo chips. */
 .badge-ok { background: #e7f8f0; color: #047857; }
@@ -1302,6 +1302,120 @@ html[data-theme="dark"] .capacity-risk-warning .capacity-trend { color: #fbbf24;
 .user-row-missing:hover td { background: #ffecec; }
 .user-row-missing td:first-child { box-shadow: inset 3px 0 0 var(--danger); }
 
+/* Host summary cards: one card per host, click to open its account list. */
+.user-host-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
+}
+.user-host-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 16px;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  background: var(--card-bg, #fff);
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: border-color .15s ease, box-shadow .15s ease, transform .15s ease;
+}
+.user-host-card:hover,
+.user-host-card:focus-visible {
+  border-color: var(--accent, #2563eb);
+  box-shadow: 0 6px 18px rgba(15, 23, 42, .08);
+  transform: translateY(-1px);
+  outline: none;
+}
+.user-host-card.has-issues { box-shadow: inset 3px 0 0 var(--warn); }
+.user-host-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.user-host-name { font-weight: 600; font-size: 15px; }
+.user-host-address { font-size: 12px; color: var(--text-muted); }
+.user-host-counts { display: flex; flex-wrap: wrap; gap: 10px 14px; }
+.user-host-metric { display: flex; flex-direction: column; line-height: 1.2; }
+.user-host-metric strong { font-size: 15px; }
+.user-host-metric .muted { font-size: 11px; }
+.user-host-metric.is-warn strong { color: var(--warn); }
+.user-host-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+  border-top: 1px dashed var(--border, #e2e8f0);
+  padding-top: 8px;
+}
+.user-host-error { font-size: 12px; color: var(--danger); }
+
+/* Single-host detail view. */
+.user-detail { margin-top: 4px; }
+.user-detail-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border, #e2e8f0);
+}
+.user-detail-title { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.user-detail-title h2 { margin: 0; font-size: 18px; }
+.user-detail-back { font-size: 13px; }
+.user-detail-head a { margin-left: auto; font-size: 13px; }
+.user-detail-tabs { display: flex; gap: 8px; padding: 12px 0; flex-wrap: wrap; }
+.user-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  font-size: 13px;
+  font-family: inherit;
+  color: var(--text-muted);
+  background: transparent;
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: 999px;
+  cursor: pointer;
+}
+.user-chip.active {
+  color: var(--accent-contrast, #fff);
+  background: var(--accent, #2563eb);
+  border-color: var(--accent, #2563eb);
+}
+
+/* Account rows: compact cards, no horizontal scrolling. */
+.user-acct-list { display: flex; flex-direction: column; gap: 8px; }
+.user-acct {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: 10px;
+  background: var(--panel-bg, #fbfdff);
+}
+.user-acct.has-issues { border-color: #fbd38d; box-shadow: inset 3px 0 0 var(--warn); }
+.user-acct.user-row-missing { border-color: #feb2b2; box-shadow: inset 3px 0 0 var(--danger); background: #fff5f5; }
+.user-acct-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.user-acct-name { font-weight: 600; font-size: 15px; }
+.user-acct-badges { display: flex; gap: 10px; margin-left: auto; flex-wrap: wrap; }
+.user-acct-tag { font-size: 12px; color: var(--text-muted); display: inline-flex; align-items: center; gap: 4px; }
+.user-acct-meta { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 12px; }
+.user-acct-meta-item { display: inline-flex; gap: 6px; }
+.user-acct-dirs { display: flex; flex-direction: column; gap: 4px; font-size: 12px; }
+.user-acct-dir { display: flex; gap: 8px; align-items: baseline; }
+.user-acct-dir-label { color: var(--text-muted); min-width: 56px; }
+.user-acct-dir.is-warn .mono { color: var(--warn); }
+.user-acct-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+  border-top: 1px dashed var(--border, #e2e8f0);
+  padding-top: 6px;
+}
+
 @media (max-width: 1180px) {
   .user-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
@@ -1309,6 +1423,9 @@ html[data-theme="dark"] .capacity-risk-warning .capacity-trend { color: #fbbf24;
   .user-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .user-toolbar { align-items: stretch; }
   .user-toolbar .filter-field { flex: 1 1 140px; }
+  .user-host-grid { grid-template-columns: 1fr; }
+  .user-acct-badges { margin-left: 0; }
+  .user-detail-head a { margin-left: 0; }
 }
 
 html[data-theme="dark"] .badge-ok { background: #163a2c; color: #6ee7b7; }
@@ -1318,3 +1435,11 @@ html[data-theme="dark"] .badge-muted { background: #223049; color: #cbd5e1; }
 html[data-theme="dark"] .user-row-missing td { background: #2a1a20; }
 html[data-theme="dark"] .user-row-missing:hover td { background: #331f28; }
 html[data-theme="dark"] .user-row-missing td:first-child { box-shadow: inset 3px 0 0 #f87171; }
+html[data-theme="dark"] .user-host-card { background: var(--card-bg, #111c2e); border-color: #223049; }
+html[data-theme="dark"] .user-host-card:hover,
+html[data-theme="dark"] .user-host-card:focus-visible { box-shadow: 0 6px 18px rgba(0, 0, 0, .45); }
+html[data-theme="dark"] .user-acct { background: #0f1a2b; border-color: #223049; }
+html[data-theme="dark"] .user-acct.user-row-missing { background: #2a1a20; border-color: #7f1d1d; }
+html[data-theme="dark"] .user-acct.has-issues { border-color: #7c4a12; }
+html[data-theme="dark"] .user-chip { border-color: #223049; }
+html[data-theme="dark"] .user-chip.active { background: #2563eb; border-color: #2563eb; color: #fff; }

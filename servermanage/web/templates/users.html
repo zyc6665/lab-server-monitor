@@ -5,7 +5,7 @@
 <div class="page-head">
   <div class="page-head-main">
     <h1 class="page-title">服务器用户</h1>
-    <p class="page-subtitle muted">只读采集 /etc/passwd 中的普通账号（UID ≥ 1000），数据来自最近一次采集。</p>
+    <p class="page-subtitle muted">只读采集 /etc/passwd 中的普通账号（UID ≥ 1000），按主机分组查看。</p>
   </div>
 </div>
 
@@ -57,13 +57,8 @@
 
   <section class="card user-toolbar-card">
     <div class="user-toolbar">
-      <label class="filter-field">主机
-        <select id="user-host-filter">
-          <option value="">全部主机</option>
-        </select>
-      </label>
       <label class="filter-field filter-keyword">关键字
-        <input type="search" id="user-search" placeholder="用户名 / 组 / 主机" autocomplete="off" />
+        <input type="search" id="user-search" placeholder="用户名 / 组" autocomplete="off" />
       </label>
       <label class="filter-field">状态
         <select id="user-status-filter">
@@ -78,34 +73,33 @@
     </div>
   </section>
 
-  <section class="card">
+  <!-- 主机汇总：默认视图，点卡片进入单台主机明细。 -->
+  <section id="user-hosts" aria-label="按主机汇总">
     <div class="section-head">
-      <h2>账号清单</h2>
-      <span class="muted" id="user-row-count"></span>
+      <h2>主机</h2>
+      <span class="muted" id="user-host-count"></span>
     </div>
-    <div class="table-wrap">
-      <table class="data-table" id="user-table">
-        <thead>
-          <tr>
-            <th>主机</th>
-            <th>用户名</th>
-            <th>UID</th>
-            <th>GID</th>
-            <th>主组</th>
-            <th>附加组</th>
-            <th>状态</th>
-            <th>Docker</th>
-            <th>sudo</th>
-            <th>家目录</th>
-            <th>数据目录</th>
-            <th>最近采集</th>
-            <th>操作</th>
-          </tr>
-        </thead>
-        <tbody id="user-table-body"></tbody>
-      </table>
+    <div class="user-host-grid" id="user-host-grid"></div>
+    <p class="empty" id="user-hosts-empty" hidden>还没有可用的主机：请先在设置页添加主机并完成一次采集。</p>
+  </section>
+
+  <!-- 单台主机明细：选中主机后替换上方汇总显示，返回按钮回到汇总。 -->
+  <section class="card user-detail" id="user-detail" hidden aria-label="主机账号明细">
+    <div class="user-detail-head">
+      <button type="button" class="btn-link user-detail-back" id="user-detail-back">← 返回主机列表</button>
+      <div class="user-detail-title">
+        <h2 id="user-detail-title">—</h2>
+        <span class="muted" id="user-detail-meta"></span>
+      </div>
+      <a class="btn-link" id="user-detail-host-link" href="#">主机详情</a>
     </div>
-    <p class="empty" id="user-empty" hidden>暂无普通账号数据：请等待首次采集，或点击“立即刷新”触发一次只读采集。</p>
+    <div class="user-detail-tabs" role="tablist" aria-label="账号筛选">
+      <button type="button" class="user-chip active" data-user-state="all" aria-pressed="true">全部 <span id="chip-count-all">0</span></button>
+      <button type="button" class="user-chip" data-user-state="issue" aria-pressed="false">异常 <span id="chip-count-issue">0</span></button>
+      <button type="button" class="user-chip" data-user-state="missing" aria-pressed="false">缺失 <span id="chip-count-missing">0</span></button>
+    </div>
+    <div class="user-acct-list" id="user-acct-list"></div>
+    <p class="empty" id="user-detail-empty" hidden>这台主机上没有符合条件的账号。</p>
   </section>
 </div>
 {% endblock %}

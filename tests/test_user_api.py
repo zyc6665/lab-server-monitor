@@ -342,6 +342,30 @@ def test_api_users_hosts_block(client):
     assert hosts[OTHER_HOST]["last_scan_at"] is None
 
 
+def test_api_users_hosts_block_carries_per_host_rollup(client):
+    """The host cards need their own counts, not just the global summary."""
+    test_client, _db_path = client
+
+    hosts = {row["name"]: row for row in test_client.get("/api/users").get_json()["hosts"]}
+    gpu = hosts[HOST]
+
+    assert gpu["address"] == "10.0.0.1"
+    assert gpu["present"] == 3
+    assert gpu["missing"] == 1
+    assert gpu["docker_issues"] == 1
+    assert gpu["directory_issues"] == 2
+    assert gpu["bytes"] == 1024 + 2048 + 300 + 400
+    assert gpu["home_bytes"] == 1024 + 300
+    assert gpu["data_bytes"] == 2048 + 400
+    assert gpu["usage_readable"] is False  # bob/erin have no measurements
+
+    other = hosts[OTHER_HOST]
+    assert other["present"] == 1  # erin, measured without sizes (no du permission)
+    assert other["missing"] == 0
+    assert other["bytes"] == 0
+    assert other["usage_readable"] is False
+
+
 # ---------------------------------------------------------------------------
 # Host status
 # ---------------------------------------------------------------------------

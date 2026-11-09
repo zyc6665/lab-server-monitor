@@ -192,45 +192,41 @@
 <section class="card" id="host-users" data-host-panel="users">
   <div class="section-head">
     <h2>服务器用户</h2>
-    <span class="muted">{{ detail.users|length if detail.users else 0 }} 个账号</span>
+    <span class="muted">{{ detail.users|length if detail.users else 0 }} 个账号 · <a class="btn-link" href="/users?host={{ name|urlencode }}">在用户页查看</a></span>
   </div>
-  <div class="table-wrap" id="host-users-wrap"{% if not detail.users %} hidden{% endif %}>
-    <table class="data-table" id="host-users-table">
-      <thead>
-        <tr>
-          <th>用户名</th>
-          <th>UID</th>
-          <th>GID</th>
-          <th>主组</th>
-          <th>附加组</th>
-          <th>状态</th>
-          <th>Docker</th>
-          <th>sudo</th>
-          <th>家目录</th>
-          <th>数据目录</th>
-          <th>最近采集</th>
-          <th>操作</th>
-        </tr>
-      </thead>
-      <tbody id="host-users-body">
-        {% for user in detail.users or [] %}
-        <tr{% if user.state == 'missing' %} class="user-row-missing"{% endif %}>
-          <td>{{ user.username or '—' }}</td>
-          <td class="mono">{{ user.uid if user.uid is not none else '—' }}</td>
-          <td class="mono">{{ user.gid if user.gid is not none else '—' }}</td>
-          <td>{{ user.primary_group or '—' }}</td>
-          <td>{{ user.groups|join(', ') if user.groups else '—' }}</td>
-          <td>{{ user_state_badge(user) }}</td>
-          <td>{{ yes_no(user.in_docker) }}</td>
-          <td>{{ yes_no(user.in_sudo) }}</td>
-          <td>{{ dir_cell(user.state, user.home_exists, user.home_owner, user.home_group, user.home_mode, user.home_size_bytes) }}</td>
-          <td>{% if user.data_supported is sameas false %}不支持{% else %}{{ dir_cell(user.state, user.data_exists, user.data_owner, user.data_group, user.data_mode, user.data_size_bytes) }}{% endif %}</td>
-          <td class="mono">{{ user.collected_at or '—' }}</td>
-          <td>{% if user.state == 'missing' %}<a class="btn-link" href="/users?host={{ name|urlencode }}">前往用户页</a>{% else %}—{% endif %}</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+  <div class="user-acct-list" id="host-users-wrap"{% if not detail.users %} hidden{% endif %}>
+    {% for user in detail.users or [] %}
+    <article class="user-acct{% if user.state == 'missing' %} user-row-missing{% elif user.issues %} has-issues{% endif %}">
+      <div class="user-acct-head">
+        <span class="user-acct-name">{{ user.username or '—' }}</span>
+        {{ user_state_badge(user) }}
+        <span class="user-acct-badges">
+          <span class="user-acct-tag">docker {{ yes_no(user.in_docker) }}</span>
+          <span class="user-acct-tag">sudo {{ yes_no(user.in_sudo) }}</span>
+        </span>
+      </div>
+      <div class="user-acct-meta">
+        <span class="user-acct-meta-item"><span class="muted">UID</span><span class="mono">{{ user.uid if user.uid is not none else '—' }}</span></span>
+        <span class="user-acct-meta-item"><span class="muted">GID</span><span class="mono">{{ user.gid if user.gid is not none else '—' }}</span></span>
+        <span class="user-acct-meta-item"><span class="muted">主组</span><span>{{ user.primary_group or '—' }}</span></span>
+        <span class="user-acct-meta-item"><span class="muted">附加组</span><span>{{ user.groups|join(', ') if user.groups else '—' }}</span></span>
+      </div>
+      <div class="user-acct-dirs">
+        <div class="user-acct-dir{% if user.state != 'missing' and not user.home_exists %} is-warn{% endif %}">
+          <span class="user-acct-dir-label">家目录</span>
+          <span class="mono">{{ dir_cell(user.state, user.home_exists, user.home_owner, user.home_group, user.home_mode, user.home_size_bytes) }}</span>
+        </div>
+        <div class="user-acct-dir{% if user.state != 'missing' and user.data_supported is not sameas false and not user.data_exists %} is-warn{% endif %}">
+          <span class="user-acct-dir-label">数据目录</span>
+          <span class="mono">{% if user.data_supported is sameas false %}不支持{% else %}{{ dir_cell(user.state, user.data_exists, user.data_owner, user.data_group, user.data_mode, user.data_size_bytes) }}{% endif %}</span>
+        </div>
+      </div>
+      <div class="user-acct-foot">
+        <span class="muted mono">{{ '采集 ' ~ user.collected_at if user.collected_at else '尚未采集' }}</span>
+        {% if user.state == 'missing' %}<a class="btn-link" href="/users?host={{ name|urlencode }}">从基线移除</a>{% endif %}
+      </div>
+    </article>
+    {% endfor %}
   </div>
   <p class="empty" id="host-users-empty"{% if detail.users %} hidden{% endif %}>尚未采集服务器用户，或该主机没有普通账号。</p>
 </section>

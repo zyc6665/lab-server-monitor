@@ -1214,6 +1214,42 @@ def _build_user_rows(
     return rows
 
 
+def _host_user_counts(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    """Per-host roll-up used by the host cards on ``/users``.
+
+    ``bytes`` is the sum of what could be measured; ``usage_readable`` is False
+    when at least one account's size could not be read, so the card can mark the
+    total as partial instead of pretending it is exact.
+    """
+    present = [row for row in rows if row.get("state") == "present"]
+    missing = [row for row in rows if row.get("state") == "missing"]
+    return {
+        "present": len(present),
+        "missing": len(missing),
+        "docker_issues": sum(1 for row in rows if "docker" in row.get("issues", [])),
+        "directory_issues": sum(
+            1 for row in rows if _USER_DIRECTORY_ISSUES.intersection(row.get("issues", []))
+        ),
+        "home_bytes": sum(
+            row.get("home_size_bytes") or 0
+            for row in rows
+            if row.get("home_size_bytes") is not None
+        ),
+        "data_bytes": sum(
+            row.get("data_size_bytes") or 0
+            for row in rows
+            if row.get("data_size_bytes") is not None
+        ),
+        "bytes": sum(
+            (row.get("home_size_bytes") or 0) + (row.get("data_size_bytes") or 0)
+            for row in rows
+        ),
+        "usage_readable": not any(
+            row.get("usage_readable") is False for row in present
+        ),
+    }
+
+
 def _build_users_payload(
     config,
     db_path,
@@ -1241,17 +1277,20 @@ def _build_users_payload(
     host_blocks: list[dict[str, Any]] = []
     all_rows: list[dict[str, Any]] = []
     statuses: dict[str, str] = {}
+    addresses = {server.name: server.host for server in config.servers}
     for name in all_names:
         if not enabled[name]:
             statuses[name] = "disabled"
             host_blocks.append(
                 {
                     "name": name,
+                    "address": addresses.get(name),
                     "status": "disabled",
                     "monitored": False,
                     "last_scan_at": None,
                     "last_error": None,
                     "accounts": 0,
+                    **_host_user_counts([]),
                 }
             )
             continue
@@ -1263,11 +1302,13 @@ def _build_users_payload(
         host_blocks.append(
             {
                 "name": name,
+                "address": addresses.get(name),
                 "status": host_status,
                 "monitored": True,
                 "last_scan_at": _to_local_iso((state or {}).get("last_scan_at"), tz),
                 "last_error": (state or {}).get("last_error") or None,
                 "accounts": len(rows),
+                **_host_user_counts(rows),
             }
         )
 
