@@ -876,6 +876,22 @@ def test_invalid_check_returns_400(client):
     assert resp.status_code == 400
 
 
+def test_invalid_check_target_returns_400(client):
+    resp = client.put(
+        "/api/settings/hosts/bad-target",
+        json=_host_payload(
+            checks=[
+                {
+                    "name": "HTTP",
+                    "type": "http",
+                    "target": "http://user:pass@example.com/health",
+                }
+            ]
+        ),
+    )
+    assert resp.status_code == 400
+
+
 def test_saved_host_checks_test_unknown_returns_404(client):
     resp = client.post(
         "/api/settings/hosts/ghost/checks/test",

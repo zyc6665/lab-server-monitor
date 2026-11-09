@@ -26,6 +26,7 @@ from typing import Any, Union, get_args, get_origin, get_type_hints
 
 from servermanage import __version__ as APP_VERSION
 from servermanage import security, storage
+from servermanage.availability import validate_check_target
 from servermanage.config import load_config
 from servermanage.models import (
     AlertsConfig,
@@ -1827,6 +1828,10 @@ def _sanitize_host_checks(value: Any) -> list[dict[str, Any]]:
             raise SettingsError(f"checks[{index}].target 不能为空")
         if len(target) > 256:
             raise SettingsError(f"checks[{index}].target 最多 256 个字符")
+        try:
+            validate_check_target(check_type, target)
+        except ValueError as exc:
+            raise SettingsError(f"checks[{index}].target 非法: {exc}") from None
         timeout_raw = item.get("timeout_seconds", 5)
         if isinstance(timeout_raw, bool) or not isinstance(timeout_raw, int):
             raise SettingsError(f"checks[{index}].timeout_seconds 必须是整数")
