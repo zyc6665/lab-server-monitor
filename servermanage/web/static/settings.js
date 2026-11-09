@@ -365,6 +365,10 @@
     var check = checkRowPayload(row);
     var error = validateCheck(check);
     if (error) { status(checksStatus, error, true); return; }
+    if (!check.enabled) {
+      status(checksStatus, "该检查已禁用，请先勾选启用后再测试", true);
+      return;
+    }
     if (!originalHostName) {
       status(checksStatus, "请先保存主机再测试", true);
       return;
@@ -376,6 +380,14 @@
       check
     )
       .then(function (result) {
+        if (!result || result.ok === false) {
+          status(
+            checksStatus,
+            (result && result.error) || "检查未执行",
+            true
+          );
+          return;
+        }
         var items = (result && result.results) || [];
         if (!items.length) { status(checksStatus, "检查未执行", true); return; }
         var item = items[0];

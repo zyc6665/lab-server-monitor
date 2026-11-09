@@ -271,6 +271,8 @@ def test_settings_js_submits_checks_and_rules(client):
     assert "checks" in source
     assert "/checks/test" in source
     assert "请先保存主机再测试" in source
+    assert "该检查已禁用" in source
+    assert "result.ok === false" in source
 
 
 def test_alert_form_exposes_global_consecutive_periods(client):
