@@ -694,6 +694,107 @@ def test_public_settings_includes_alerts_consecutive_periods(tmp_path):
     assert svc.load().alerts.consecutive_periods == 4
 
 
+@pytest.mark.parametrize("bad_value", [0, 11, True, "4"])
+def test_save_alerts_rejects_invalid_consecutive_periods(tmp_path, bad_value):
+    svc = _service(tmp_path)
+    with pytest.raises(SettingsError):
+        svc.save_section("alerts", {"consecutive_periods": bad_value})
+    assert svc.load().alerts.consecutive_periods == 2
+
+
+def test_yaml_sudo_password_is_migrated_and_survives_restart(tmp_path, monkeypatch):
+    monkeypatch.setenv("GPU01_PASSWORD", "pw")
+    cfg = tmp_path / "config.yaml"
+    cfg.write_text(
+        """servers:
+  - name: "gpu"
+    host: "10.0.0.1"
+    username: "u"
+    auth: {type: "password", password_env: "GPU01_PASSWORD"}
+    sudo_password: "yaml-sudo"
+""",
+        encoding="utf-8",
+    )
+    db = tmp_path / "monitor.db"
+    svc = SettingsService(config_path=cfg, db_path=db)
+    assert svc.load().servers[0].sudo_password == "yaml-sudo"
+    assert storage.get_secret("host:gpu:sudo_password", db) is not None
+
+    svc2 = SettingsService(config_path=cfg, db_path=db)
+    assert svc2.load().servers[0].sudo_password == "yaml-sudo"
+    assert svc2.get_host("gpu")["sudo_configured"] is True
+
+
+def test_yaml_sudo_password_env_survives_restart_after_legacy_migration(
+    tmp_path, monkeypatch
+):
+    monkeypatch.setenv("GPU01_PASSWORD", "pw")
+    cfg = tmp_path / "config.yaml"
+    # First start with no hosts marks the legacy-secret migration complete.
+    cfg.write_text("servers: []\n", encoding="utf-8")
+    db = tmp_path / "monitor.db"
+    old = SettingsService(config_path=cfg, db_path=db)
+    # Simulate a database created by a pre-sudo release: its host inventory and
+    # old migration marker exist, but the new sudo migration marker does not.
+    storage.save_app_settings(
+        "hosts",
+        {
+            "hosts": [
+                {
+                    "name": "gpu",
+                    "host": "10.0.0.1",
+                    "port": 22,
+                    "username": "u",
+                    "auth_type": "password",
+                    "key_path": None,
+                    "disk_mounts": ["/"],
+                    "tags": [],
+                }
+            ]
+        },
+        db,
+    )
+    security = storage.load_app_settings(db)["security"]
+    security.pop("sudo_migrated_at", None)
+    storage.save_app_settings("security", security, db)
+
+    monkeypatch.setenv("GPU01_SUDO_PASSWORD", "env-sudo")
+    cfg.write_text(
+        """servers:
+  - name: "gpu"
+    host: "10.0.0.1"
+    username: "u"
+    auth: {type: "password", password_env: "GPU01_PASSWORD"}
+    sudo_password_env: "GPU01_SUDO_PASSWORD"
+""",
+        encoding="utf-8",
+    )
+    svc = SettingsService(config_path=cfg, db_path=db)
+    assert svc.load().servers[0].sudo_password == "env-sudo"
+
+    svc2 = SettingsService(config_path=cfg, db_path=db)
+    assert svc2.load().servers[0].sudo_password == "env-sudo"
+
+
+def test_read_only_public_hosts_reports_yaml_sudo_configured(tmp_path, monkeypatch):
+    monkeypatch.setenv("GPU01_PASSWORD", "pw")
+    cfg = tmp_path / "config.yaml"
+    cfg.write_text(
+        """servers:
+  - name: "gpu"
+    host: "10.0.0.1"
+    username: "u"
+    auth: {type: "password", password_env: "GPU01_PASSWORD"}
+    sudo_password: "yaml-sudo"
+""",
+        encoding="utf-8",
+    )
+    svc = SettingsService(config_path=cfg, db_path=tmp_path / "monitor.db")
+    storage.delete_secret("host:gpu:sudo_password", svc.db_path)
+    monkeypatch.setattr(svc, "is_writable", lambda: False)
+    assert svc._public_hosts()[0]["sudo_configured"] is True
+
+
 def test_old_host_entries_without_new_fields_still_load(tmp_path):
     svc = _service(tmp_path)
     svc.upsert_host("legacy", _password_host("legacy"))

@@ -543,6 +543,9 @@ class SettingsService:
         else:
             alert_rules = (existing_entry or {}).get("alert_rules")
 
+        # Validate every secret before the first write so a bad sudo value cannot
+        # leave a partially written SSH credential behind.
+        self._validated_sudo_password(payload)
         # Credentials first: a failed secret write must not mutate the inventory.
         has_inline_secret = bool(
             _optional_text(payload.get("private_key"))
@@ -904,6 +907,21 @@ class SettingsService:
         # Only switch over once the key credential is in place.
         storage.delete_secret(password_secret, self.db_path)
 
+    @staticmethod
+    def _validated_sudo_password(payload: dict[str, Any]) -> str | None:
+        """Return a validated sudo password without persisting it."""
+        raw = payload.get("sudo_password")
+        if raw is None:
+            return None
+        text = str(raw)
+        if text == "":
+            return None
+        if "\n" in text or "\r" in text:
+            raise SettingsError("sudo 密码不能包含换行符")
+        if len(text.encode("utf-8")) > 256:
+            raise SettingsError("sudo 密码最多 256 字节")
+        return text
+
     def _apply_host_sudo_password(
         self,
         name: str,
@@ -914,16 +932,9 @@ class SettingsService:
         secret_name = _HOST_SECRET_SUDO_PASSWORD.format(name=name)
         if "sudo_password" in set(clear_secrets):
             storage.delete_secret(secret_name, self.db_path)
-        raw = payload.get("sudo_password")
-        if raw is None:
+        text = self._validated_sudo_password(payload)
+        if text is None:
             return
-        text = str(raw)
-        if text == "":
-            return
-        if "\n" in text or "\r" in text:
-            raise SettingsError("sudo 密码不能包含换行符")
-        if len(text.encode("utf-8")) > 256:
-            raise SettingsError("sudo 密码最多 256 字节")
         self._store_secret(secret_name, text)
 
     def _host_entries_for_update(self) -> list[dict]:
@@ -954,9 +965,15 @@ class SettingsService:
         entries = self._read_host_entries()
         if entries is None:
             entries = [_host_entry_from_config(host) for host in self.base_config.servers]
-        return [self._public_host_entry(entry) for entry in entries]
+        base_by_name = {host.name: host for host in self.base_config.servers}
+        return [
+            self._public_host_entry(entry, base_host=base_by_name.get(str(entry.get("name") or "")))
+            for entry in entries
+        ]
 
-    def _public_host_entry(self, entry: dict[str, Any]) -> dict[str, Any]:
+    def _public_host_entry(
+        self, entry: dict[str, Any], *, base_host: HostConfig | None = None
+    ) -> dict[str, Any]:
         name = str(entry.get("name") or "")
         key_path = entry.get("key_path")
         return {
@@ -993,6 +1010,10 @@ class SettingsService:
                     _HOST_SECRET_SUDO_PASSWORD.format(name=name), self.db_path
                 )
                 is not None
+                or (
+                    not self.is_writable()
+                    and bool(base_host and base_host.sudo_password)
+                )
             ),
         }
 
@@ -1208,11 +1229,23 @@ class SettingsService:
         sections = storage.load_app_settings(self.db_path)
         section = sections.get("security")
         payload = dict(section) if isinstance(section, dict) else {}
-        if payload.get("migrated_at"):
-            return
         if payload.get("force_setup"):
             # A machine change just wiped the secrets; re-importing plaintext
             # from the config would defeat the reset.
+            return
+        # Sudo support shipped after the original legacy migration.  Run its
+        # own idempotent pass even when ``migrated_at`` already exists, so
+        # upgrading a database created by an older release keeps working.
+        if not payload.get("sudo_migrated_at"):
+            try:
+                self._migrate_legacy_sudo_passwords()
+            except Exception as exc:  # noqa: BLE001 - migration must never block startup
+                payload["sudo_migration_error"] = f"{type(exc).__name__}: {exc}"
+            else:
+                payload["sudo_migrated_at"] = datetime.now(timezone.utc).isoformat()
+                payload.pop("sudo_migration_error", None)
+            storage.save_app_settings("security", payload, self.db_path)
+        if payload.get("migrated_at"):
             return
         try:
             self._migrate_legacy_sources()
@@ -1223,6 +1256,15 @@ class SettingsService:
         payload["migrated_at"] = datetime.now(timezone.utc).isoformat()
         payload.pop("migration_error", None)
         storage.save_app_settings("security", payload, self.db_path)
+
+    def _migrate_legacy_sudo_passwords(self) -> None:
+        """Import plaintext YAML/env sudo passwords into ``app_secrets``."""
+        for host in self.base_config.servers:
+            if not host.sudo_password:
+                continue
+            secret_name = _HOST_SECRET_SUDO_PASSWORD.format(name=host.name)
+            if storage.get_secret(secret_name, self.db_path) is None:
+                self._store_secret(secret_name, host.sudo_password)
 
     def _migrate_legacy_sources(self) -> None:
         base = self.base_config
@@ -1341,6 +1383,8 @@ class SettingsService:
         return dashboard
 
     def _apply_alerts(self, alerts: AlertsConfig, payload: dict[str, Any]) -> AlertsConfig:
+        if "consecutive_periods" in payload:
+            _validate_consecutive_periods(payload.get("consecutive_periods"))
         webhook_payload = payload.get("webhook")
         if isinstance(webhook_payload, dict):
             webhook = _flat(
@@ -1424,7 +1468,11 @@ class SettingsService:
         return sanitized
 
     def _sanitize_alerts(self, payload: dict[str, Any]) -> dict[str, Any]:
-        """Move a client-provided webhook URL into ``app_secrets`` (+ flag)."""
+        """Validate alert fields and move a provided webhook URL to secrets."""
+        if "consecutive_periods" in payload:
+            payload["consecutive_periods"] = _validate_consecutive_periods(
+                payload.get("consecutive_periods")
+            )
         webhook = payload.get("webhook")
         if isinstance(webhook, dict):
             url = webhook.pop("url", None)
@@ -1703,6 +1751,15 @@ _ALERT_RULE_RANGES = {
     "gpu_memory_percent": (1, 100),
     "disk_temperature_c": (1, 120),
 }
+
+
+def _validate_consecutive_periods(value: Any) -> int:
+    """Validate the global consecutive-period threshold."""
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise SettingsError("alerts.consecutive_periods 必须是整数")
+    if not 1 <= value <= 10:
+        raise SettingsError("alerts.consecutive_periods 必须在 1 到 10 之间")
+    return value
 
 
 def _validate_alert_rules(value: Any) -> dict[str, Any] | None:

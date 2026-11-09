@@ -289,9 +289,15 @@ def _load_host_checks(data: Any) -> list[HostCheckConfig]:
         check_type = _require_string(mapping, "type", label)
         target = _require_string(mapping, "target", label)
         timeout_raw = mapping.get("timeout_seconds", 5)
-        if isinstance(timeout_raw, bool) or not isinstance(timeout_raw, int):
+        if isinstance(timeout_raw, bool):
             raise ConfigError(f"{label}.timeout_seconds must be an integer")
-        if not 1 <= timeout_raw <= 30:
+        try:
+            timeout_seconds = int(timeout_raw)
+        except (TypeError, ValueError) as exc:
+            raise ConfigError(
+                f"{label}.timeout_seconds must be an integer"
+            ) from exc
+        if not 1 <= timeout_seconds <= 30:
             raise ConfigError(f"{label}.timeout_seconds must be between 1 and 30")
         expected_raw = mapping.get("expected")
         expected: str | None = None
@@ -306,7 +312,7 @@ def _load_host_checks(data: Any) -> list[HostCheckConfig]:
                 name=name,
                 type=check_type,
                 target=target,
-                timeout_seconds=timeout_raw,
+                timeout_seconds=timeout_seconds,
                 expected=expected,
                 enabled=bool(mapping.get("enabled", True)),
             )

@@ -158,6 +158,12 @@ def test_invalid_yaml_checks_raise_config_error(checks):
         load_config_from_mapping({"servers": [_base_server(checks=checks)]})
 
 
+def test_yaml_check_timeout_accepts_numeric_string():
+    checks = [{"name": "a", "type": "tcp", "target": "22", "timeout_seconds": "5"}]
+    cfg = load_config_from_mapping({"servers": [_base_server(checks=checks)]})
+    assert cfg.servers[0].checks[0].timeout_seconds == 5
+
+
 def test_invalid_alert_rules_raise_config_error():
     with pytest.raises(ConfigError):
         load_config_from_mapping(
