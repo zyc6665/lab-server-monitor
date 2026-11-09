@@ -44,6 +44,7 @@ from flask import (
 )
 
 from servermanage import capacity, disk_capacity, host_import, host_probe, maintenance, storage
+from servermanage.alerts import fingerprint_for
 from servermanage.availability import run_host_checks
 from servermanage.disk_health import AlertEvent
 from servermanage.models import AuthConfig, HostConfig, WebhookConfig
@@ -109,6 +110,22 @@ def _terminal_request_allowed() -> bool:
 def _settings_service(app: Flask):
     """The optional :class:`SettingsService` injected by ``create_app``."""
     return app.config.get("SETTINGS_SERVICE")
+
+
+def _monitor_service(app: Flask):
+    """The background poller/service used by the user API, when available.
+
+    Task 4 owns ``MonitorService.refresh_users()`` / ``user_scan_status()``;
+    until that lands the routes resolve whatever object is wired in and treat a
+    missing method as "feature unavailable" instead of importing the service
+    (which would create a circular import through ``servermanage.app``).
+    """
+    service = app.config.get("MONITOR_SERVICE")
+    if service is None:
+        service = app.extensions.get("monitor_service")
+    if service is None:
+        service = _settings_service(app)
+    return service
 
 
 # Editable settings sections accepted by ``PUT /api/settings/<section>``.  The
@@ -1008,6 +1025,280 @@ def _build_overview(config, db_path) -> dict[str, Any]:
     }
 
 
+# ---------------------------------------------------------------------------
+# Server-user rows (Task 5)
+# ---------------------------------------------------------------------------
+
+# Issues surfaced to the UI.  They mirror ``alerts.evaluate_user_alerts`` so the
+# dashboard can highlight a row without re-deriving the alert rules client-side;
+# the alert notes themselves (``user-added`` / ``user-present``) are deliberately
+# not listed here: "added" is informational and "missing" is expressed by the
+# row ``state`` instead.
+_USER_DIRECTORY_ISSUES = frozenset({"home", "data", "owner"})
+
+
+def _user_row_issues(row: dict[str, Any]) -> list[str]:
+    """Return the UI issue keys for a *present* snapshot row.
+
+    Same rules as :func:`servermanage.alerts.evaluate_user_alerts`:
+    ``docker`` when the account is not in the docker group, ``home`` when
+    ``/home/<name>`` is gone, ``data`` when ``/data/<name>`` is gone on a host
+    that supports it, and ``owner`` when a directory is not owned by the
+    account.  Missing rows never reach this function (``issues == ["missing"]``).
+    """
+    username = str(row.get("username") or "")
+    issues: list[str] = []
+    if not row.get("in_docker"):
+        issues.append("docker")
+    if not row.get("home_exists"):
+        issues.append("home")
+    if row.get("data_supported") and not row.get("data_exists"):
+        issues.append("data")
+    owner_mismatch = bool(
+        row.get("home_exists")
+        and row.get("home_owner")
+        and row.get("home_owner") != username
+    ) or bool(
+        row.get("data_supported")
+        and row.get("data_exists")
+        and row.get("data_owner")
+        and row.get("data_owner") != username
+    )
+    if owner_mismatch:
+        issues.append("owner")
+    return issues
+
+
+def _user_usage_readable(row: dict[str, Any]) -> bool | None:
+    """Whether a snapshot row carries live directory sizes.
+
+    There is no ``usage_readable`` column in the schema: the collector records
+    ``usage_stale`` plus the per-directory sizes, so the API derives the flag.
+    ``None`` means "not applicable / unknown" (stale usage counters), ``False``
+    means the account exists but its directories could not be measured.  A host
+    whose rows are ``False`` is *not* an error host.
+    """
+    if row.get("home_size_bytes") is not None or row.get("data_size_bytes") is not None:
+        return True
+    if row.get("usage_stale"):
+        return None
+    return False
+
+
+def _present_user_row(host_name: str, row: dict[str, Any]) -> dict[str, Any]:
+    """Build an API row for a user that exists in the latest snapshot."""
+    item = dict(row)
+    item["host_name"] = host_name
+    item["state"] = "present"
+    item.setdefault("first_seen_at", None)
+    item.setdefault("last_seen_at", None)
+    item["usage_readable"] = _user_usage_readable(item)
+    item["issues"] = _user_row_issues(item)
+    return item
+
+
+def _missing_user_row(host_name: str, row: dict[str, Any]) -> dict[str, Any]:
+    """Build an API row for a baseline-only (disappeared) account.
+
+    Only attributes frozen in ``host_user_baseline`` are available, so every
+    live observation is ``None``: a missing account must never imply that its
+    home/data directory still exists or that its size is zero.
+    """
+    return {
+        "host_name": host_name,
+        "username": row.get("username"),
+        "state": "missing",
+        "uid": row.get("uid"),
+        "gid": row.get("gid"),
+        "primary_group": row.get("primary_group"),
+        "gecos": "",
+        "home": row.get("home"),
+        "shell": row.get("shell"),
+        "groups": list(row.get("groups") or []),
+        "in_docker": row.get("in_docker"),
+        "in_sudo": row.get("in_sudo"),
+        "home_exists": None,
+        "home_owner": None,
+        "home_group": None,
+        "home_mode": None,
+        "home_size_bytes": None,
+        "data_exists": None,
+        "data_owner": None,
+        "data_group": None,
+        "data_mode": None,
+        "data_size_bytes": None,
+        "data_supported": None,
+        "usage_stale": None,
+        "usage_readable": None,
+        "usage_collected_at": None,
+        "collected_at": None,
+        "first_seen_at": row.get("first_seen_at"),
+        "last_seen_at": row.get("last_seen_at"),
+        "issues": ["missing"],
+    }
+
+
+def _merge_user_rows(
+    host_name: str,
+    snapshot_rows: list[dict[str, Any]],
+    baseline_rows: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Merge one host's snapshot (present) and baseline (missing) rows."""
+    rows: list[dict[str, Any]] = []
+    present: set[str] = set()
+    for row in snapshot_rows:
+        username = row.get("username")
+        if not username:
+            continue
+        present.add(str(username))
+        rows.append(_present_user_row(host_name, row))
+    for row in baseline_rows:
+        username = row.get("username")
+        if not username or str(username) in present:
+            continue
+        rows.append(_missing_user_row(host_name, row))
+    rows.sort(key=lambda item: str(item.get("username") or ""))
+    return rows
+
+
+def _user_host_status(scan_state: dict[str, Any] | None) -> str:
+    """Return ``ok`` / ``unknown`` (never scanned) / ``error`` for a host.
+
+    ``usage_readable=False`` rows or a host without ``/data`` are not errors:
+    only an explicit collector error recorded in ``host_user_scan_state`` is.
+    """
+    state = scan_state or {}
+    if str(state.get("last_error") or "").strip():
+        return "error"
+    if state.get("last_scan_at"):
+        return "ok"
+    return "unknown"
+
+
+def _build_user_rows(
+    host_name: str,
+    db_path,
+    tz=None,
+) -> list[dict[str, Any]]:
+    """Return the merged present/missing rows for one host."""
+    rows = _merge_user_rows(
+        host_name,
+        storage.get_host_user_snapshot(host_name, db_path),
+        storage.get_user_baseline(host_name, db_path),
+    )
+    if tz is not None:
+        for row in rows:
+            for key in ("collected_at", "usage_collected_at", "last_seen_at"):
+                row[key] = _to_local_iso(row.get(key), tz)
+    return rows
+
+
+def _build_users_payload(
+    config,
+    db_path,
+    *,
+    host: str = "",
+    query: str = "",
+    status: str = "all",
+    tz=None,
+) -> dict[str, Any]:
+    """Build the ``GET /api/users`` payload for every configured host."""
+    host_filter = (host or "").strip()
+    needle = (query or "").strip().casefold()
+    status_filter = status if status in ("all", "warning", "error") else "all"
+
+    host_names: list[str] = []
+    for server in config.servers:
+        if server.name not in host_names:
+            host_names.append(server.name)
+    if host_filter:
+        host_names = [name for name in host_names if name == host_filter]
+
+    host_blocks: list[dict[str, Any]] = []
+    all_rows: list[dict[str, Any]] = []
+    rows_by_host: dict[str, list[dict[str, Any]]] = {}
+    statuses: dict[str, str] = {}
+    for name in host_names:
+        rows = _build_user_rows(name, db_path, tz)
+        state = storage.get_user_scan_state(name, db_path)
+        host_status = _user_host_status(state)
+        statuses[name] = host_status
+        rows_by_host[name] = rows
+        all_rows.extend(rows)
+        host_blocks.append(
+            {
+                "name": name,
+                "status": host_status,
+                "last_scan_at": _to_local_iso((state or {}).get("last_scan_at"), tz),
+                "last_error": (state or {}).get("last_error") or None,
+                "accounts": len(rows),
+            }
+        )
+
+    filtered: list[dict[str, Any]] = []
+    for row in all_rows:
+        if status_filter == "warning" and not (row["issues"] or row["state"] == "missing"):
+            continue
+        if status_filter == "error" and statuses.get(row["host_name"]) != "error":
+            continue
+        if needle:
+            haystack = " ".join(
+                [
+                    str(row.get("username") or ""),
+                    str(row.get("host_name") or ""),
+                    str(row.get("primary_group") or ""),
+                    " ".join(str(group) for group in row.get("groups") or []),
+                ]
+            ).casefold()
+            if needle not in haystack:
+                continue
+        filtered.append(row)
+
+    summary = {
+        "total": len(all_rows),
+        "present": sum(1 for row in all_rows if row["state"] == "present"),
+        "missing": sum(1 for row in all_rows if row["state"] == "missing"),
+        "docker_issues": sum(1 for row in all_rows if "docker" in row["issues"]),
+        "directory_issues": sum(
+            1 for row in all_rows if _USER_DIRECTORY_ISSUES.intersection(row["issues"])
+        ),
+        "home_bytes": sum(
+            row["home_size_bytes"]
+            for row in all_rows
+            if row.get("home_size_bytes") is not None
+        ),
+        "data_bytes": sum(
+            row["data_size_bytes"]
+            for row in all_rows
+            if row.get("data_size_bytes") is not None
+        ),
+    }
+    return {
+        "accounts": filtered,
+        "hosts": host_blocks,
+        "summary": summary,
+        "filters": {
+            "host": host_filter,
+            "q": (query or "").strip(),
+            "status": status_filter,
+        },
+    }
+
+
+def _resolve_user_present_alert(host_name: str, username: str, db_path) -> None:
+    """Mark open ``user-present`` alerts resolved (no recovery notification).
+
+    The baseline was removed deliberately from the dashboard, so there is no
+    "account came back" state to announce; using :meth:`AlertEngine.resolve_missing`
+    would send a recovery notification for something the admin asked to forget.
+    """
+    fingerprint = fingerprint_for("user-present", host_name, username)
+    for alert in storage.list_alerts(db_path, status="active", limit=1000):
+        if alert.get("fingerprint") != fingerprint:
+            continue
+        storage.update_alert(int(alert["id"]), db_path, status="resolved")
+
+
 def _build_host_detail(name: str, config, db_path) -> dict[str, Any] | None:
     """Build the ``/api/host/<name>`` payload, or ``None`` when unknown.
 
@@ -1047,6 +1338,7 @@ def _build_host_detail(name: str, config, db_path) -> dict[str, Any] | None:
         "disk": disk,
         "alerts": alerts,
         "checks": storage.get_host_check_results(name, db_path),
+        "users": _build_user_rows(name, db_path, tz),
     }
 
 
@@ -1767,6 +2059,73 @@ def register_routes(app: Flask) -> None:
         if detail is None:
             return jsonify({"error": "not found"}), 404
         return jsonify(detail)
+
+    @app.get("/api/users")
+    def api_users():
+        config = _config(app)
+        payload = _build_users_payload(
+            config,
+            _db_path(app),
+            host=request.args.get("host") or "",
+            query=request.args.get("q") or "",
+            status=(request.args.get("status") or "all").strip().lower(),
+            tz=resolve_timezone(config.app.timezone),
+        )
+        return jsonify(payload)
+
+    @app.post("/api/users/refresh")
+    def api_users_refresh():
+        """Trigger a background user scan (Task 4 owns the worker)."""
+        service = _monitor_service(app)
+        refresh = getattr(service, "refresh_users", None)
+        if not callable(refresh):
+            return jsonify({"error": "unavailable"}), 503
+        try:
+            result = refresh()
+        except Exception:  # pragma: no cover - defensive, the caller sees JSON
+            LOGGER.exception("refresh_users() failed")
+            return jsonify({"error": "refresh_failed"}), 500
+        if not isinstance(result, dict):
+            result = {"ok": True}
+        return jsonify(result), 200
+
+    @app.get("/api/users/refresh-status")
+    def api_users_refresh_status():
+        """Poll the background user scan without ever failing the page."""
+        service = _monitor_service(app)
+        status = getattr(service, "user_scan_status", None)
+        if not callable(status):
+            return jsonify({"running": False, "error": "unavailable"})
+        try:
+            payload = status()
+        except Exception:  # pragma: no cover - status must always be JSON
+            LOGGER.exception("user_scan_status() failed")
+            return jsonify({"running": False, "error": "unavailable"})
+        if not isinstance(payload, dict):
+            return jsonify({"running": False, "error": "unavailable"})
+        return jsonify(payload)
+
+    @app.post("/api/users/baseline/remove")
+    def api_users_baseline_remove():
+        """Forget a local baseline account (and resolve its open alert)."""
+        payload = request.get_json(silent=True)
+        if not isinstance(payload, dict):
+            return jsonify({"error": "invalid_payload"}), 400
+        host_name = payload.get("host")
+        username = payload.get("username")
+        if not isinstance(host_name, str) or not isinstance(username, str):
+            return jsonify({"error": "invalid_payload"}), 400
+        host_name = host_name.strip()
+        username = username.strip()
+        if not host_name or not username:
+            return jsonify({"error": "invalid_payload"}), 400
+        if host_name not in {server.name for server in _config(app).servers}:
+            return jsonify({"error": "unknown_host"}), 400
+        db_path = _db_path(app)
+        if not storage.delete_user_baseline(host_name, username, db_path):
+            return jsonify({"error": "not_found"}), 404
+        _resolve_user_present_alert(host_name, username, db_path)
+        return jsonify({"ok": True, "removed": 1})
 
     @app.get("/api/host/<name>/report")
     def api_host_report(name: str):
@@ -2615,6 +2974,10 @@ def register_routes(app: Flask) -> None:
             meta=data["meta"],
             hosts=data["hosts"],
         )
+
+    @app.get("/users")
+    def users_page():
+        return render_template("users.html", active_page="users")
 
     @app.get("/host/<name>")
     def host_page(name: str):

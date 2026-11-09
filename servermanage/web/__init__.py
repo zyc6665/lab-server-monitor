@@ -34,6 +34,7 @@ def create_app(
     session_cookie_suffix: str | None = None,
     on_hosts_imported: Callable[[list[str]], None] | None = None,
     collection_status_provider: Callable[[list[str] | None], dict] | None = None,
+    monitor_service=None,
 ) -> Flask:
     """Build the dashboard Flask app.
 
@@ -48,6 +49,12 @@ def create_app(
     protection.  ``on_config_changed`` is invoked with the freshly composed
     :class:`AppConfig` whenever a route persists settings, so the running poller
     can pick them up without a restart.
+
+    ``monitor_service`` (Task 5) is the running :class:`MonitorService`, exposed
+    so the user API can delegate ``refresh_users()`` / ``user_scan_status()``.
+    It is optional and looked up defensively by the routes: builds without a
+    background scanner (tests, read-only dashboards) simply report the feature
+    as unavailable instead of failing at import time.
     """
     app = Flask(__name__, template_folder="templates", static_folder="static")
     # Static assets change with releases (``app.js`` now sends X-CSRF-Token).
@@ -91,6 +98,7 @@ def create_app(
     app.config["ON_CONFIG_CHANGED"] = on_config_changed
     app.config["ON_HOSTS_IMPORTED"] = on_hosts_imported
     app.config["COLLECTION_STATUS_PROVIDER"] = collection_status_provider
+    app.config["MONITOR_SERVICE"] = monitor_service
 
     @app.context_processor
     def _inject_app_meta():
