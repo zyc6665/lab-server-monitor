@@ -22,11 +22,13 @@ from servermanage.alerts import SilenceRegistry
 from servermanage.app import MonitorService, load_runtime, load_runtime_with_settings
 from servermanage.disk_health import DiskHealthReport, PhysicalDriveInfo
 from servermanage.models import (
+    AlertsConfig,
     AppConfig,
     AppRuntimeConfig,
     AuthConfig,
     DiskHealthConfig,
     DiskUsageRow,
+    HostAlertRules,
     HostCheckConfig,
     HostCheckResult,
     HostConfig,
@@ -99,6 +101,10 @@ def _make_config(
     return AppConfig(
         smtp=smtp,
         ssh=SSHRuntimeConfig(connect_timeout=10, command_timeout=20),
+        # The pre-Task-6 suite asserted alerts fire on the first bad cycle.
+        # Consecutive-period behaviour is exercised explicitly by the Task 6
+        # tests, which override this back to 2 (the production default).
+        alerts=AlertsConfig(consecutive_periods=1),
         report=ReportConfig(
             subject_prefix="[Test Daily]",
             daily_enabled=daily_enabled,
@@ -472,7 +478,11 @@ def test_run_status_once_resolves_for_successful_host(tmp_path: Path):
 
     assert result == {"hosts": 1, "alerts": 0}
     # Every host must be reconciled each cycle, even when it has no active alert.
-    assert resolve_calls == [("gpu-01", set(), "system")]
+    # Task 6 reconciles both system and availability categories.
+    assert resolve_calls == [
+        ("gpu-01", set(), "system"),
+        ("gpu-01", set(), "availability"),
+    ]
 
 
 def test_run_disk_once_generates_disk_alert_and_resolves(tmp_path: Path):
@@ -1133,3 +1143,247 @@ def test_successful_host_system_recovery_is_notified_and_counted(tmp_path: Path)
     ]
     assert _statuses(db_path)["system:gpu-01:disk:/"] == "resolved"
     assert _statuses(db_path)["recovery:gpu-01:system"] == "active"
+
+
+# ---------------------------------------------------------------------------
+# Task 6: per-host thresholds + consecutive periods
+# ---------------------------------------------------------------------------
+
+
+def _config_with_periods(
+    periods: int,
+    *,
+    rules: HostAlertRules | None = None,
+    checks=None,
+) -> AppConfig:
+    """Build a single-host config with an explicit consecutive-period count."""
+    config = _make_config()
+    config = replace(
+        config, alerts=replace(config.alerts, consecutive_periods=periods)
+    )
+    host = replace(
+        config.servers[0], alert_rules=rules, checks=list(checks or [])
+    )
+    return replace(config, servers=[host])
+
+
+def _cpu_report(value: float, name: str = "gpu-01") -> HostReport:
+    return HostReport(
+        host_name=name,
+        host="10.0.0.1",
+        success=True,
+        metrics=HostMetrics(
+            collected_at=datetime.now(timezone.utc),
+            cpu_usage_percent=value,
+        ),
+    )
+
+
+def _check_report(status: str, name: str = "gpu-01") -> HostReport:
+    return HostReport(
+        host_name=name,
+        host="10.0.0.1",
+        success=True,
+        metrics=HostMetrics(
+            collected_at=datetime.now(timezone.utc), cpu_usage_percent=5.0
+        ),
+        checks=[
+            HostCheckResult(
+                name="API",
+                type="tcp",
+                target="8000",
+                status=status,
+                message="ok" if status == "ok" else "连接超时",
+                checked_at=datetime.now(timezone.utc),
+            )
+        ],
+    )
+
+
+def test_status_alert_requires_consecutive_periods(tmp_path: Path):
+    db_path = tmp_path / "monitor.db"
+    notifier = FakeNotifier()
+    service = MonitorService(
+        _config_with_periods(2),
+        db_path=db_path,
+        collect_status=lambda config: [_disk_report("95%")],
+        notifier=notifier,
+    )
+
+    first = service.run_status_once()
+    assert first == {"hosts": 1, "alerts": 0}
+    assert list_alerts(db_path) == []
+
+    second = service.run_status_once()
+    assert second == {"hosts": 1, "alerts": 1}
+    assert [row["fingerprint"] for row in list_alerts(db_path)] == [
+        "system:gpu-01:disk:/"
+    ]
+
+
+def test_bad_good_bad_restarts_the_streak(tmp_path: Path):
+    db_path = tmp_path / "monitor.db"
+    notifier = FakeNotifier()
+    reports = iter(
+        [
+            [_disk_report("95%")],
+            [_disk_report("50%")],
+            [_disk_report("95%")],
+            [_disk_report("95%")],
+        ]
+    )
+    service = MonitorService(
+        _config_with_periods(2),
+        db_path=db_path,
+        collect_status=lambda config: next(reports),
+        notifier=notifier,
+    )
+
+    results = [service.run_status_once() for _ in range(4)]
+
+    # bad (1) -> good (reset) -> bad (1) -> bad (2, fires)
+    assert [result["alerts"] for result in results] == [0, 0, 0, 1]
+    assert [row["fingerprint"] for row in list_alerts(db_path)] == [
+        "system:gpu-01:disk:/"
+    ]
+
+
+def test_alert_resolves_only_after_consecutive_recovery_periods(tmp_path: Path):
+    db_path = tmp_path / "monitor.db"
+    notifier = FakeNotifier()
+    reports = iter(
+        [
+            [_disk_report("95%")],
+            [_disk_report("95%")],
+            [_disk_report("50%")],
+            [_disk_report("50%")],
+        ]
+    )
+    service = MonitorService(
+        _config_with_periods(2),
+        db_path=db_path,
+        collect_status=lambda config: next(reports),
+        notifier=notifier,
+    )
+
+    results = [service.run_status_once() for _ in range(4)]
+
+    # Open after 2 bad cycles; one good cycle keeps it open; the second closes it.
+    assert [result["alerts"] for result in results] == [0, 1, 0, 1]
+    assert [event.fingerprint for event in notifier.events] == [
+        "system:gpu-01:disk:/",
+        "recovery:gpu-01:system",
+    ]
+    statuses = _statuses(db_path)
+    assert statuses["system:gpu-01:disk:/"] == "resolved"
+    assert statuses["recovery:gpu-01:system"] == "active"
+
+
+def test_availability_alert_opens_and_resolves_after_periods(tmp_path: Path):
+    db_path = tmp_path / "monitor.db"
+    notifier = FakeNotifier()
+    reports = iter(
+        [
+            [_check_report("failed")],
+            [_check_report("failed")],
+            [_check_report("ok")],
+            [_check_report("ok")],
+        ]
+    )
+    service = MonitorService(
+        _config_with_periods(
+            2, checks=[HostCheckConfig(name="API", type="tcp", target="8000")]
+        ),
+        db_path=db_path,
+        collect_status=lambda config: next(reports),
+        notifier=notifier,
+    )
+
+    results = [service.run_status_once() for _ in range(4)]
+
+    assert [result["alerts"] for result in results] == [0, 1, 0, 1]
+    assert [event.fingerprint for event in notifier.events] == [
+        "availability:gpu-01:api",
+        "recovery:gpu-01:availability",
+    ]
+    assert notifier.events[0].category == "availability"
+    assert notifier.events[0].severity == "critical"
+    statuses = _statuses(db_path)
+    assert statuses["availability:gpu-01:api"] == "resolved"
+    assert statuses["recovery:gpu-01:availability"] == "active"
+
+
+def test_offline_host_does_not_resolve_availability_alert(tmp_path: Path):
+    db_path = tmp_path / "monitor.db"
+    notifier = FakeNotifier()
+    reports = iter(
+        [
+            [_check_report("failed")],
+            [_check_report("failed")],
+            [_failure_report()],
+        ]
+    )
+    service = MonitorService(
+        _config_with_periods(
+            2, checks=[HostCheckConfig(name="API", type="tcp", target="8000")]
+        ),
+        db_path=db_path,
+        collect_status=lambda config: next(reports),
+        notifier=notifier,
+    )
+
+    results = [service.run_status_once() for _ in range(3)]
+
+    assert [result["alerts"] for result in results] == [0, 1, 0]
+    # The host went dark with no fresh check data: its availability alert must
+    # stay open and no bogus "availability recovered" notice may be emitted.
+    assert _statuses(db_path)["availability:gpu-01:api"] == "active"
+    assert all(
+        event.fingerprint != "recovery:gpu-01:availability"
+        for event in notifier.events
+    )
+
+
+def test_host_threshold_override_suppresses_system_alert(tmp_path: Path):
+    # 95% CPU clears the global 90% threshold...
+    default_service = MonitorService(
+        _config_with_periods(1),
+        db_path=tmp_path / "default.db",
+        collect_status=lambda config: [_cpu_report(95.0)],
+        notifier=FakeNotifier(),
+    )
+    assert default_service.run_status_once() == {"hosts": 1, "alerts": 1}
+
+    # ...but a per-host override of 99% keeps it quiet.
+    override_service = MonitorService(
+        _config_with_periods(
+            1, rules=HostAlertRules(cpu_percent=99.0)
+        ),
+        db_path=tmp_path / "override.db",
+        collect_status=lambda config: [_cpu_report(95.0)],
+        notifier=FakeNotifier(),
+    )
+    assert override_service.run_status_once() == {"hosts": 1, "alerts": 0}
+
+
+def test_run_disk_once_honours_host_temperature_override(tmp_path: Path):
+    db_path = tmp_path / "monitor.db"
+    seen = {}
+
+    def collect(host, runner, **kwargs):
+        seen.update(kwargs)
+        return _warning_disk_report(host.name)
+
+    service = MonitorService(
+        _config_with_periods(
+            1, rules=HostAlertRules(disk_temperature_c=65)
+        ),
+        db_path=db_path,
+        collect_status=lambda config: [],
+        collect_disk=collect,
+        notifier=FakeNotifier(),
+    )
+
+    service.run_disk_once()
+
+    assert seen["temperature_threshold_c"] == 65.0

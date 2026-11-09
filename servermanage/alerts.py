@@ -19,6 +19,7 @@ from __future__ import annotations
 import logging
 import sqlite3
 from collections.abc import Iterable, Mapping
+from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 from html import escape as _html_escape
 from pathlib import Path
@@ -35,6 +36,8 @@ from servermanage.mailer import send_report
 from servermanage.models import (
     AlertsConfig,
     AlertThresholds,
+    HostAlertRules,
+    HostCheckResult,
     HostMetrics,
     RenderedReport,
     SMTPConfig,
@@ -48,7 +51,9 @@ LOGGER = logging.getLogger(__name__)
 __all__ = [
     "fingerprint_for",
     "evaluate_system_alerts",
+    "evaluate_availability_alerts",
     "evaluate_disk_alerts",
+    "effective_thresholds",
     "offline_alert",
     "recovery_event",
     "SilenceRegistry",
@@ -203,6 +208,91 @@ def evaluate_system_alerts(
             )
         )
 
+    return events
+
+
+def effective_thresholds(
+    global_t: AlertThresholds | float | int = 90,
+    host_rules: HostAlertRules | None = None,
+) -> AlertThresholds:
+    """Resolve a host's effective alert thresholds.
+
+    *global_t* may be an :class:`AlertThresholds` instance (the configured
+    global thresholds) or a single scalar used for every field.  Any non-``None``
+    field on *host_rules* overrides the matching global value; ``None`` means
+    "inherit".
+    """
+    if isinstance(global_t, AlertThresholds):
+        base = global_t
+    else:
+        value = float(global_t)
+        base = AlertThresholds(
+            cpu_percent=value,
+            memory_percent=value,
+            disk_percent=value,
+            gpu_memory_percent=value,
+            disk_temperature_c=value,
+        )
+
+    if host_rules is None:
+        return base
+
+    overrides: dict[str, float] = {}
+    for field_name in (
+        "cpu_percent",
+        "memory_percent",
+        "disk_percent",
+        "gpu_memory_percent",
+        "disk_temperature_c",
+    ):
+        value = getattr(host_rules, field_name, None)
+        if value is not None:
+            overrides[field_name] = value
+    if not overrides:
+        return base
+    return replace(base, **overrides)
+
+
+# ---------------------------------------------------------------------------
+# Availability (service check) rules
+# ---------------------------------------------------------------------------
+
+# Statuses that mean a configured service check could not be satisfied.
+_AVAILABILITY_FAILURE_STATUSES = frozenset({"failed", "error"})
+
+
+def evaluate_availability_alerts(
+    host_name: str,
+    results: list[HostCheckResult] | tuple[HostCheckResult, ...],
+) -> list[AlertEvent]:
+    """Build ``critical`` events for failed service checks.
+
+    Only explicit ``failed`` / ``error`` results alert.  ``ok`` and ``unknown``
+    are healthy/indeterminate: ``unknown`` is what a host that dropped offline
+    gets, and an unreachable host must not masquerade as a service failure.
+    """
+    events: list[AlertEvent] = []
+    for result in results:
+        status = str(getattr(result, "status", "") or "").strip().lower()
+        if status not in _AVAILABILITY_FAILURE_STATUSES:
+            continue
+        name = str(getattr(result, "name", "") or "")
+        check_type = str(getattr(result, "type", "") or "")
+        target = str(getattr(result, "target", "") or "")
+        message = str(getattr(result, "message", "") or "")
+        events.append(
+            AlertEvent(
+                host_name=host_name,
+                category="availability",
+                severity="critical",
+                title=f"服务检查失败：{name}",
+                message=(
+                    f"主机 {host_name} 服务检查 {name}（类型 {check_type}，"
+                    f"目标 {target}）失败：{message}"
+                ),
+                fingerprint=fingerprint_for("availability", host_name, name),
+            )
+        )
     return events
 
 
@@ -890,6 +980,34 @@ class AlertEngine:
             [(host_name, row_category) for row_category in closed_categories],
             notify,
         )
+
+    def open_alert_fingerprints(
+        self, host_name: str, *, category: str | None = None
+    ) -> set[str]:
+        """Return fingerprints of the host's currently open alerts.
+
+        Both ``active`` and ``acknowledged`` rows count as open.  Pass
+        *category* to restrict the result to one alert type.  Database failures
+        are logged and yield an empty set rather than aborting the cycle.
+        """
+        try:
+            rows = self._open_alerts()
+        except sqlite3.Error:
+            LOGGER.exception(
+                "Failed to load open alert fingerprints for %s", host_name
+            )
+            return set()
+
+        fingerprints: set[str] = set()
+        for row in rows:
+            if row.get("host_name") != host_name:
+                continue
+            if category is not None and row.get("category") != category:
+                continue
+            fingerprint = row.get("fingerprint")
+            if fingerprint:
+                fingerprints.add(str(fingerprint))
+        return fingerprints
 
     def _emit_recovery(
         self, keys: list[tuple[str, str]], notify: bool | object

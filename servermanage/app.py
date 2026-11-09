@@ -26,6 +26,8 @@ from servermanage.alerts import (
     AlertEngine,
     Notifier,
     SilenceRegistry,
+    effective_thresholds,
+    evaluate_availability_alerts,
     evaluate_disk_alerts,
     evaluate_system_alerts,
     offline_alert,
@@ -328,6 +330,13 @@ class MonitorService:
         self._tz = resolve_timezone(config.app.timezone)
         # Consecutive failed status collections per host (for the offline message).
         self._failure_counts: dict[str, int] = {}
+        # Consecutive periods a condition has been present / absent, keyed by
+        # ``(host_name, fingerprint)``.  A system/availability alert only opens
+        # after the condition holds for the host's effective period count, and
+        # only closes after it has been absent for the same number of cycles.
+        self._alert_streaks: dict[tuple[str, str], int] = {}
+        self._clear_streaks: dict[tuple[str, str], int] = {}
+        self._streak_lock = threading.Lock()
         self._collection_states: dict[str, dict] = {}
         self._collection_lock = threading.Lock()
         self._running = False
@@ -368,6 +377,29 @@ class MonitorService:
         selected = [host for host in self.config.servers if host.name in host_names]
         return replace(self.config, servers=selected)
 
+    def _effective_periods(self, host_name: str) -> int:
+        """Return the consecutive-period count that applies to *host_name*.
+
+        A per-host ``HostAlertRules.consecutive_periods`` override wins over the
+        global ``config.alerts.consecutive_periods``.  Clamped to ``1..10`` so a
+        bad configuration can never stall or spin the state machine.
+        """
+        host = next(
+            (item for item in self.config.servers if item.name == host_name),
+            None,
+        )
+        rules = host.alert_rules if host is not None else None
+        value = (
+            rules.consecutive_periods
+            if rules is not None and rules.consecutive_periods is not None
+            else getattr(self.config.alerts, "consecutive_periods", 2)
+        )
+        try:
+            periods = int(value)
+        except (TypeError, ValueError):
+            periods = getattr(self.config.alerts, "consecutive_periods", 2)
+        return max(1, min(10, periods))
+
     def _save_check_results(
         self, host_name: str, results: list[HostCheckResult]
     ) -> None:
@@ -404,28 +436,31 @@ class MonitorService:
         reports = list(self.collect_status(config))
         storage_enabled = bool(getattr(config.storage, "enabled", True))
         offline_threshold = max(1, int(config.alerts.offline_failures))
-        events: list = []
         recovery_count = 0
         notifications_on = bool(config.alerts.enabled) and bool(
             getattr(config.alerts, "notify_on_recovery", True)
         )
         # Only hosts that produced a successful report this cycle may have stale
-        # system alerts resolved from them (see the reconciliation loop below).
+        # system/availability alerts resolved from them (see the reconciliation
+        # loop below).
         successful_hosts: set[str] = set()
-        # Track every configured host so a host that drops out of this round's
-        # reports is still known here. Reconciliation is limited to hosts that
-        # reported successfully (see successful_hosts), so a host going dark
-        # never closes its own system alerts.
-        active: dict[str, set[str]] = {
-            host.name: set() for host in config.servers
+        # Every candidate event for a host this cycle (system + availability),
+        # keyed by fingerprint, BEFORE the consecutive-period filter is applied.
+        # A candidate that is present keeps its alert open even while its streak
+        # is still below the effective period count.
+        present_by_host: dict[str, dict[str, object]] = {
+            host.name: {} for host in config.servers
         }
+        # Offline/unreported hosts must not generate system/availability events;
+        # they only feed the separate offline debounce counter.
+        offline_events: list = []
         success_reports = []
         host_mounts = {host.name: host.disk_mounts for host in config.servers}
         hosts_by_name = {host.name: host for host in config.servers}
 
         for report in reports:
             host_name = report.host_name
-            active.setdefault(host_name, set())
+            present_by_host.setdefault(host_name, {})
             if report.success:
                 self._failure_counts[host_name] = 0
                 if storage_enabled:
@@ -445,15 +480,23 @@ class MonitorService:
                     else None
                 )
                 disk_percent = _extract_disk_used_percent(report, mounts)
+                host = hosts_by_name.get(host_name)
+                thresholds = effective_thresholds(
+                    config.alerts.thresholds,
+                    host.alert_rules if host is not None else None,
+                )
                 for event in evaluate_system_alerts(
                     host_name,
                     report.metrics,
-                    config.alerts.thresholds,
+                    thresholds,
                     disk_percent=disk_percent,
                     disk_mounts=disk_statuses,
                 ):
-                    events.append(event)
-                    active[host_name].add(event.fingerprint)
+                    present_by_host[host_name][event.fingerprint] = event
+                for event in evaluate_availability_alerts(
+                    host_name, report.checks
+                ):
+                    present_by_host[host_name][event.fingerprint] = event
             else:
                 failures = self._failure_counts.get(host_name, 0) + 1
                 self._failure_counts[host_name] = failures
@@ -468,9 +511,7 @@ class MonitorService:
                 # Debounce: only declare the host offline after the configured
                 # number of consecutive failed collections.
                 if failures >= offline_threshold:
-                    event = offline_alert(host_name, failures)
-                    events.append(event)
-                    active[host_name].add(event.fingerprint)
+                    offline_events.append(offline_alert(host_name, failures))
 
         # Hosts that dropped out of this round's reports entirely are offline
         # too; blank their check snapshot to unknown for the same reason.
@@ -499,20 +540,86 @@ class MonitorService:
             except Exception:  # pragma: no cover - pruning must not break polling
                 LOGGER.exception("Failed to prune host metrics history")
 
-        notified = self.engine.process(events)
+        # --- consecutive-period state machine (design §7.2) -----------------
+        ready_events: list = []
+        periods_by_host: dict[str, int] = {}
+        for host_name in successful_hosts:
+            present = present_by_host.get(host_name, {})
+            periods = self._effective_periods(host_name)
+            periods_by_host[host_name] = periods
+            with self._streak_lock:
+                previous_open_fps = self.engine.open_alert_fingerprints(host_name)
+                # Every key ever seen for this host, including fingerprints that
+                # were never opened, so bad -> good -> bad restarts at 1 instead
+                # of resuming an earlier streak.
+                seen_keys = {
+                    key for key in self._alert_streaks if key[0] == host_name
+                }
+                seen_keys |= {(host_name, fp) for fp in previous_open_fps}
+                present_keys = {(host_name, fp) for fp in present}
+                absent_keys = seen_keys - present_keys
+                for key in present_keys:
+                    self._alert_streaks[key] = (
+                        self._alert_streaks.get(key, 0) + 1
+                    )
+                    self._clear_streaks.pop(key, None)
+                for key in absent_keys:
+                    self._alert_streaks[key] = 0
+                    self._clear_streaks[key] = (
+                        self._clear_streaks.get(key, 0) + 1
+                    )
+                for fingerprint, event in present.items():
+                    if (
+                        self._alert_streaks.get(
+                            (host_name, fingerprint), 0
+                        )
+                        >= periods
+                    ):
+                        ready_events.append(event)
 
-        for host_name, fingerprints in active.items():
+        notified = self.engine.process(ready_events + offline_events)
+
+        for host_name in successful_hosts:
             # A failed or missing host has no fresh metrics this cycle, so its
-            # open CPU/memory/disk alerts must stay open; closing them would
-            # dispatch a bogus "system recovered" notice exactly when the host
-            # went dark (and possibly before the offline threshold fires).
-            if host_name not in successful_hosts:
-                continue
-            recovered_system = self.engine.resolve_missing(
-                host_name, fingerprints, category="system", notify=True
+            # open system/availability alerts must stay open; closing them would
+            # dispatch a bogus "recovered" notice exactly when the host went dark
+            # (and possibly before the offline threshold fires).
+            present = present_by_host.get(host_name, {})
+            periods = periods_by_host.get(
+                host_name, self._effective_periods(host_name)
             )
-            if recovered_system and notifications_on:
-                recovery_count += len(recovered_system)
+            for category in ("system", "availability"):
+                open_fps = self.engine.open_alert_fingerprints(
+                    host_name, category=category
+                )
+                remaining = {
+                    fingerprint
+                    for fingerprint in open_fps
+                    if fingerprint in present
+                    or self._clear_streaks.get(
+                        (host_name, fingerprint), 0
+                    )
+                    < periods
+                }
+                recovered = self.engine.resolve_missing(
+                    host_name, remaining, category=category, notify=True
+                )
+                if recovered and notifications_on:
+                    recovery_count += len(recovered)
+
+            # Only forget streak state once the alert is closed AND it has been
+            # absent long enough; doing this inside the category loops would
+            # erase the clear streak before the second category reconciles.
+            still_open = self.engine.open_alert_fingerprints(host_name)
+            with self._streak_lock:
+                for key in list(self._alert_streaks):
+                    if (
+                        key[0] == host_name
+                        and key[1] not in still_open
+                        and self._clear_streaks.get(key, 0) >= periods
+                    ):
+                        self._alert_streaks.pop(key, None)
+                        self._clear_streaks.pop(key, None)
 
         return {"hosts": len(reports), "alerts": len(notified) + recovery_count}
 
@@ -528,9 +635,6 @@ class MonitorService:
             return {"disk_reports": 0, "alerts": 0}
 
         storage_enabled = bool(getattr(config.storage, "enabled", True))
-        temperature_threshold_c = float(
-            config.alerts.thresholds.disk_temperature_c
-        )
         notifications_on = bool(config.alerts.enabled) and bool(
             getattr(config.alerts, "notify_on_recovery", True)
         )
@@ -555,6 +659,11 @@ class MonitorService:
                 if storage_enabled
                 else None
             )
+
+            # Per-host disk-temperature override (design §7.1).
+            temperature_threshold_c = effective_thresholds(
+                config.alerts.thresholds, host.alert_rules
+            ).disk_temperature_c
 
             runner = SSHClientWrapper(
                 host=host, connect_timeout=config.ssh.connect_timeout

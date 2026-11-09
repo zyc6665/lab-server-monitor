@@ -10,6 +10,8 @@ from datetime import datetime, timezone
 import pytest
 
 from servermanage.alerts import (
+    effective_thresholds,
+    evaluate_availability_alerts,
     evaluate_disk_alerts,
     evaluate_system_alerts,
     fingerprint_for,
@@ -24,6 +26,8 @@ from servermanage.disk_health import (
 from servermanage.models import (
     AlertThresholds,
     GPUSummaryRow,
+    HostAlertRules,
+    HostCheckResult,
     HostMetrics,
     MemorySummary,
 )
@@ -315,3 +319,114 @@ def test_fingerprints_stable_across_runs():
     first = evaluate_system_alerts("gpu-01", metrics, AlertThresholds())
     second = evaluate_system_alerts("gpu-01", metrics, AlertThresholds())
     assert [e.fingerprint for e in first] == [e.fingerprint for e in second]
+
+
+# ---------------------------------------------------------------------------
+# effective_thresholds (Task 6)
+# ---------------------------------------------------------------------------
+
+def test_effective_thresholds_applies_host_overrides():
+    thresholds = effective_thresholds(
+        global_t=90,
+        host_rules=HostAlertRules(
+            cpu_percent=95, disk_temperature_c=60
+        ),
+    )
+
+    assert thresholds.cpu_percent == 95
+    assert thresholds.disk_temperature_c == 60
+    # Un-overridden fields keep the global default.
+    assert thresholds.memory_percent == 90
+    assert thresholds.disk_percent == 90
+    assert thresholds.gpu_memory_percent == 90
+
+
+def test_effective_thresholds_without_rules_uses_global():
+    thresholds = effective_thresholds(AlertThresholds(cpu_percent=88))
+
+    assert thresholds.cpu_percent == 88
+    assert thresholds.memory_percent == 90
+
+
+def test_effective_thresholds_scalar_global_defaults_every_field():
+    thresholds = effective_thresholds(global_t=70)
+
+    assert (
+        thresholds.cpu_percent,
+        thresholds.memory_percent,
+        thresholds.disk_percent,
+        thresholds.gpu_memory_percent,
+        thresholds.disk_temperature_c,
+    ) == (70, 70, 70, 70, 70)
+
+
+# ---------------------------------------------------------------------------
+# evaluate_availability_alerts (Task 6)
+# ---------------------------------------------------------------------------
+
+def _check(
+    name: str = "API",
+    *,
+    status: str = "failed",
+    check_type: str = "tcp",
+    target: str = "8000",
+    message: str = "连接超时",
+) -> HostCheckResult:
+    return HostCheckResult(
+        name=name,
+        type=check_type,
+        target=target,
+        status=status,
+        message=message,
+        checked_at=NOW,
+    )
+
+
+def test_availability_failed_check_produces_critical_alert():
+    events = evaluate_availability_alerts("gpu-01", [_check("API")])
+
+    assert len(events) == 1
+    event = events[0]
+    assert event.host_name == "gpu-01"
+    assert event.category == "availability"
+    assert event.severity == "critical"
+    assert event.fingerprint == fingerprint_for(
+        "availability", "gpu-01", "API"
+    )
+    assert "API" in event.title
+    assert "tcp" in event.message
+    assert "8000" in event.message
+    assert "连接超时" in event.message
+
+
+def test_availability_error_check_produces_alert():
+    events = evaluate_availability_alerts(
+        "gpu-01", [_check("API", status="error")]
+    )
+
+    assert len(events) == 1
+    assert events[0].category == "availability"
+    assert events[0].severity == "critical"
+
+
+def test_availability_ok_and_unknown_checks_produce_no_alert():
+    results = [
+        _check("API", status="ok"),
+        _check("DB", status="unknown"),
+    ]
+
+    assert evaluate_availability_alerts("gpu-01", results) == []
+
+
+def test_availability_fingerprint_is_stable_and_distinct_per_check():
+    first = evaluate_availability_alerts(
+        "gpu-01", [_check("API"), _check("DB", check_type="http")]
+    )
+    second = evaluate_availability_alerts(
+        "gpu-01", [_check("API"), _check("DB", check_type="http")]
+    )
+
+    assert [event.fingerprint for event in first] == [
+        event.fingerprint for event in second
+    ]
+    assert len({event.fingerprint for event in first}) == 2
