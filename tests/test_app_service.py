@@ -670,6 +670,7 @@ def test_start_registers_expected_tasks(tmp_path: Path):
         "daily_report",
         "weekly_report",
         "retention_cleanup",
+        "user_scan",
     ]
     by_name = {task.name: task for task in scheduler.tasks}
     assert by_name["status_poll"].interval_seconds == 600
@@ -706,7 +707,12 @@ def test_start_skips_disabled_report_tasks(tmp_path: Path):
     service.start()
 
     names = [task.name for task in created["scheduler"].tasks]
-    assert names == ["status_poll", "disk_poll", "retention_cleanup"]
+    assert names == [
+        "status_poll",
+        "disk_poll",
+        "retention_cleanup",
+        "user_scan",
+    ]
 
 
 # ---------------------------------------------------------------------------

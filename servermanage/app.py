@@ -52,6 +52,11 @@ from servermanage.scheduler import (
 from servermanage.ssh_client import SSHClientWrapper
 from servermanage.log_cleanup import prune_log_files
 from servermanage.maintenance import cleanup_logs
+from servermanage.user_collection import (
+    is_user_monitoring_enabled,
+    run_user_scan,
+)
+from servermanage.user_scan import collect_host_users
 from servermanage.storage import (
     _extract_disk_used_percent,
     backfill_daily_summary,
@@ -301,6 +306,7 @@ class MonitorService:
         db_path: Path,
         collect_status: Callable[[AppConfig], list] = collect_all_hosts,
         collect_disk: Callable[..., object] = collect_disk_health,
+        collect_users: Callable[..., object] | None = None,
         notifier: object | None = None,
         clock: Callable[[], datetime] | None = None,
         render_report: Callable[..., object] | None = None,
@@ -312,6 +318,7 @@ class MonitorService:
         self.db_path = Path(db_path)
         self.collect_status = collect_status
         self.collect_disk = collect_disk
+        self.collect_users = collect_users or collect_host_users
         self.render_report = render_report or _render_report
         self.send_report = send_report or _send_report
         self.generate_weekly_report = generate_weekly_report or _generate_weekly_report
@@ -339,6 +346,20 @@ class MonitorService:
         self._streak_lock = threading.Lock()
         self._collection_states: dict[str, dict] = {}
         self._collection_lock = threading.Lock()
+        # User scans run one at a time on a daemon thread; the lock is held for
+        # the whole round and released by the worker in ``finally``.
+        self._user_scan_lock = threading.Lock()
+        self._user_scan_status_lock = threading.Lock()
+        self._user_scan_status: dict = {
+            "running": False,
+            "started_at": None,
+            "finished_at": None,
+            "error": None,
+            "hosts_done": 0,
+            "hosts_total": 0,
+            "accounts": 0,
+            "errors": {},
+        }
         self._running = False
 
     def apply_config(self, new_config: AppConfig) -> None:
@@ -867,6 +888,94 @@ class MonitorService:
                 }
             return {name: dict(state) for name, state in self._collection_states.items()}
 
+    # -- user scanning -----------------------------------------------------
+
+    def refresh_users(self, *, force_usage: bool = False) -> dict:
+        """Start one user scan on a daemon thread.
+
+        Returns immediately; the scheduler callback must never block on SSH.
+        Only one scan may run at a time, so a second request while the lock is
+        held reports ``already_running`` instead of queueing.
+        """
+        if not self._user_scan_lock.acquire(blocking=False):
+            return {"ok": True, "started": False, "reason": "already_running"}
+
+        hosts_total = sum(
+            1
+            for host in self.config.servers
+            if is_user_monitoring_enabled(host, self.config)
+        )
+        with self._user_scan_status_lock:
+            self._user_scan_status = {
+                "running": True,
+                "started_at": datetime.now(timezone.utc).isoformat(),
+                "finished_at": None,
+                "error": None,
+                "hosts_done": 0,
+                "hosts_total": hosts_total,
+                "accounts": 0,
+                "errors": {},
+            }
+
+        def worker() -> None:
+            try:
+                summary = run_user_scan(
+                    self.config,
+                    self.db_path,
+                    self.engine,
+                    scan=self.collect_users,
+                    force_usage=force_usage,
+                )
+                status = dict(summary)
+                status["running"] = False
+                status["error"] = None
+                status["finished_at"] = (
+                    summary.get("finished_at")
+                    or datetime.now(timezone.utc).isoformat()
+                )
+                with self._user_scan_status_lock:
+                    self._user_scan_status = status
+            except Exception as exc:  # pragma: no cover - worker isolation
+                LOGGER.exception("Manual user scan failed")
+                with self._user_scan_status_lock:
+                    status = dict(self._user_scan_status)
+                    status.update(
+                        {
+                            "running": False,
+                            "error": str(exc),
+                            "finished_at": datetime.now(timezone.utc).isoformat(),
+                        }
+                    )
+                    self._user_scan_status = status
+            finally:
+                self._user_scan_lock.release()
+
+        try:
+            threading.Thread(
+                target=worker, name="user-scan", daemon=True
+            ).start()
+        except Exception as exc:  # pragma: no cover - thread start failure
+            LOGGER.exception("Failed to start user-scan worker")
+            with self._user_scan_status_lock:
+                status = dict(self._user_scan_status)
+                status.update(
+                    {
+                        "running": False,
+                        "error": str(exc),
+                        "finished_at": datetime.now(timezone.utc).isoformat(),
+                    }
+                )
+                self._user_scan_status = status
+            self._user_scan_lock.release()
+            return {"ok": False, "started": False, "reason": "error"}
+        return {"ok": True, "started": True}
+
+    def user_scan_status(self) -> dict:
+        with self._user_scan_status_lock:
+            status = dict(self._user_scan_status)
+        status["errors"] = dict(status.get("errors") or {})
+        return status
+
     # -- lifecycle ---------------------------------------------------------
 
     def _build_tasks(self) -> list[ScheduledTask]:
@@ -909,6 +1018,14 @@ class MonitorService:
         tasks.append(
             ScheduledTask("retention_cleanup", 3600, self.run_retention_cleanup)
         )
+        if self.config.user_monitoring.enabled:
+            tasks.append(
+                ScheduledTask(
+                    "user_scan",
+                    self.config.user_monitoring.scan_interval_seconds,
+                    self.refresh_users,
+                )
+            )
         return tasks
 
     def start(self) -> None:
