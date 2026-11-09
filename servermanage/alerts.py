@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import logging
 import sqlite3
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 from html import escape as _html_escape
@@ -39,6 +39,7 @@ from servermanage.models import (
     HostAlertRules,
     HostCheckResult,
     HostMetrics,
+    HostUserAccount,
     RenderedReport,
     SMTPConfig,
     WebhookConfig,
@@ -53,6 +54,7 @@ __all__ = [
     "evaluate_system_alerts",
     "evaluate_availability_alerts",
     "evaluate_disk_alerts",
+    "evaluate_user_alerts",
     "effective_thresholds",
     "offline_alert",
     "recovery_event",
@@ -293,6 +295,131 @@ def evaluate_availability_alerts(
                 fingerprint=fingerprint_for("availability", host_name, name),
             )
         )
+    return events
+
+
+# ---------------------------------------------------------------------------
+# User account rules
+# ---------------------------------------------------------------------------
+
+def evaluate_user_alerts(
+    account: HostUserAccount,
+    *,
+    in_baseline: bool,
+    missing: bool,
+) -> list[AlertEvent]:
+    """Build ``warning`` events for a lab account on one host.
+
+    Two kinds of event are produced, both ``category="user"`` and
+    ``severity="warning"``:
+
+    * **Transition** — ``user-added`` fires only when an account is seen for the
+      first time (``not in_baseline``) and is not a still-firing condition, so
+      callers must exclude it from automatic resolution.
+    * **State** — ``user-docker`` / ``user-home`` / ``user-data`` /
+      ``user-config`` fire while the condition holds and disappear once it is
+      fixed, so their fingerprints belong in each round's active set.
+
+    ``missing`` means the account is still in the baseline but absent from the
+    current snapshot.  Directory and group data is then frozen at its last
+    known values, so only ``user-present`` is emitted; judging stale data would
+    produce false docker/directory alarms.  Directory-owner checks only run for
+    directories that exist, and ``/data`` checks are skipped entirely when the
+    host has no ``/data`` (``data_supported=False``).
+
+    Fingerprints are stable across rounds: ``"<kind>", host_name, username``.
+    """
+    host_name = account.host_name
+    username = account.username
+
+    def event(kind: str, title: str, message: str) -> AlertEvent:
+        return AlertEvent(
+            host_name=host_name,
+            category="user",
+            severity="warning",
+            title=title,
+            message=message,
+            fingerprint=fingerprint_for(kind, host_name, username),
+        )
+
+    if missing:
+        return [
+            event(
+                "user-present",
+                "账号缺失",
+                f"主机 {host_name} 的账号 {username} 已从当前快照中消失，"
+                "但仍在监控基线中",
+            )
+        ]
+
+    events: list[AlertEvent] = []
+
+    if not in_baseline:
+        events.append(
+            event(
+                "user-added",
+                "发现新账号",
+                f"主机 {host_name} 发现新账号 {username}，已加入监控基线",
+            )
+        )
+
+    if not account.in_docker:
+        events.append(
+            event(
+                "user-docker",
+                "未加入 docker 组",
+                f"主机 {host_name} 的账号 {username} 未加入 docker 组",
+            )
+        )
+
+    home_path = account.home or f"/home/{username}"
+    if not account.home_exists:
+        events.append(
+            event(
+                "user-home",
+                "家目录缺失",
+                f"主机 {host_name} 的账号 {username} 家目录 {home_path} 不存在",
+            )
+        )
+
+    data_path = f"/data/{username}"
+    if account.data_supported and not account.data_exists:
+        events.append(
+            event(
+                "user-data",
+                "数据目录缺失",
+                f"主机 {host_name} 的账号 {username} 数据目录 {data_path} 不存在",
+            )
+        )
+
+    home_owner_bad = (
+        account.home_exists and account.home_owner != account.username
+    )
+    data_owner_bad = (
+        account.data_supported
+        and account.data_exists
+        and account.data_owner != account.username
+    )
+    if home_owner_bad or data_owner_bad:
+        details: list[str] = []
+        if home_owner_bad:
+            details.append(
+                f"家目录 {home_path} 所有者为 {account.home_owner or '未知'}"
+            )
+        if data_owner_bad:
+            details.append(
+                f"数据目录 {data_path} 所有者为 {account.data_owner or '未知'}"
+            )
+        events.append(
+            event(
+                "user-config",
+                "目录所有者异常",
+                f"主机 {host_name} 的账号 {username} "
+                + "；".join(details)
+                + f"，应为 {username}",
+            )
+        )
+
     return events
 
 
@@ -925,6 +1052,7 @@ class AlertEngine:
         active_fingerprints: set[str] | list[str] | tuple[str, ...],
         *,
         category: str | None = None,
+        skip_prefixes: Sequence[str] = (),
         notify: bool | object = _NOTIFY_DEFAULT,
     ) -> list[AlertEvent]:
         """Resolve a host's open alerts whose condition no longer fires.
@@ -936,11 +1064,21 @@ class AlertEngine:
         (e.g. only ``"system"``) when a caller did not evaluate every rule for
         the host.
 
+        *skip_prefixes* names fingerprints that must never be auto-resolved.
+        Any open row whose fingerprint starts with one of these prefixes is
+        left untouched: it is not marked ``resolved`` and it does not count
+        toward ``closed_categories``, so it cannot produce a recovery notice.
+        This keeps transition-type events (e.g. ``"user-added"``) visible until
+        an operator acknowledges them.  The prefix match is case-sensitive on
+        the stored fingerprint, i.e. on the lower-cased ``fingerprint_for``
+        output.
+
         One recovery event is produced per ``(host, category)`` that actually
         had rows closed.  With *notify* (and ``notify_on_recovery``) they are
         processed through the normal aggregation/dispatch pipeline.
         """
         remaining = set(active_fingerprints)
+        skip = tuple(skip_prefixes)
         try:
             rows = self._open_alerts()
         except sqlite3.Error:
@@ -955,9 +1093,12 @@ class AlertEngine:
                 continue
             if category is not None and row.get("category") != category:
                 continue
+            fingerprint = str(row.get("fingerprint") or "")
+            if skip and fingerprint.startswith(skip):
+                continue
             if row.get("fingerprint") in remaining:
                 continue
-            is_recovery = str(row.get("fingerprint") or "").startswith("recovery:")
+            is_recovery = fingerprint.startswith("recovery:")
             try:
                 storage.update_alert(row["id"], self._db_path, status="resolved")
             except sqlite3.Error:
