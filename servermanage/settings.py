@@ -613,6 +613,7 @@ class SettingsService:
         ]
         self._save_host_entries(entries)
         storage.delete_host_check_results(name, self.db_path)
+        storage.delete_host_user_data(name, self.db_path)
         return self.load()
 
     def host_groups(self) -> list[str]:
