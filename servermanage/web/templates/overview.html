@@ -74,7 +74,7 @@
     <span class="check-summary" id="system-check-summary">正在检查…</span>
   </div>
   <div class="system-check-list" id="system-check-list">
-    <p class="empty">正在读取系统状态…</p>
+    <p class="empty">{% if hosts %}正在读取系统状态…{% else %}添加主机后显示自检结果{% endif %}</p>
   </div>
 </section>
 
@@ -89,7 +89,7 @@
     </div>
   </div>
   <div class="rank-list" id="resource-rank-list">
-    <p class="empty">正在读取主机数据…</p>
+    <p class="empty">{% if hosts %}正在读取主机数据…{% else %}添加主机后显示占用排行{% endif %}</p>
   </div>
 </section>
 
@@ -99,7 +99,7 @@
     <span class="check-summary" id="capacity-summary">最近 30 天趋势</span>
   </div>
   <div class="capacity-list" id="capacity-list">
-    <p class="empty">正在计算容量趋势…</p>
+    <p class="empty">{% if hosts %}正在计算容量趋势…{% else %}添加主机后开始计算容量趋势{% endif %}</p>
   </div>
 </section>
 
@@ -174,7 +174,21 @@
       <button type="button" class="btn-link" id="export-hosts">导出 CSV</button>
     </div>
   </div>
-  <p class="empty" id="empty-state"{% if hosts %} hidden{% endif %}>暂无数据</p>
+  <div class="onboard" id="onboard-card"{% if hosts %} hidden{% endif %}>
+    <h3 class="onboard-title">还没有添加服务器</h3>
+    <p class="onboard-text">添加主机后，工具会通过 SSH 采集 CPU、内存、磁盘、GPU、磁盘阵列健康和服务可用性。</p>
+    <ol class="onboard-steps">
+      <li>在“设置 → 主机”里新增主机，填写地址与登录账号。</li>
+      <li>已经有 <code>~/.ssh/config</code>？在同一个页面点“导入 SSH 配置”，勾选后一次导入。</li>
+      <li>导入完成后会立即在后台采集，稍等片刻即可看到数据。</li>
+    </ol>
+    <div class="onboard-actions">
+      <a class="primary-button button-link" id="onboard-add-host" href="{{ url_for('settings_page') }}#hosts">添加主机</a>
+      <a class="secondary-button button-link" id="onboard-import-ssh" href="{{ url_for('settings_page') }}#hosts">从 SSH 配置导入</a>
+      <a class="btn-link button-link" id="onboard-open-users" href="{{ url_for('users_page') }}">查看服务器用户</a>
+    </div>
+  </div>
+  <p class="empty" id="empty-state" hidden></p>
   <div class="table-wrap">
     <table class="data-table" id="host-table"{% if not hosts %} hidden{% endif %}>
       <thead>

@@ -1484,3 +1484,77 @@ html[data-theme="dark"] .my-issues { color: #fbbf24; }
   .my-host-list { grid-template-columns: 1fr; }
   .my-usages { grid-template-columns: 1fr; }
 }
+
+/* ---- 0.4.1 onboarding + focus visibility ---- */
+.onboard {
+  border: 1px dashed var(--border, #d8dee9);
+  border-radius: 12px;
+  padding: 20px 22px;
+  margin-bottom: 16px;
+  background: var(--surface-muted, #fafbfc);
+}
+
+.onboard-title {
+  margin: 0 0 6px;
+  font-size: 17px;
+}
+
+.onboard-text {
+  margin: 0 0 10px;
+  color: var(--text-muted, #5b6472);
+}
+
+.onboard-steps {
+  margin: 0 0 14px 20px;
+  padding: 0;
+  color: var(--text-muted, #5b6472);
+  line-height: 1.7;
+}
+
+.onboard-steps code {
+  background: rgba(0, 0, 0, .06);
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-size: 12px;
+}
+
+.onboard-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+.my-updated {
+  color: var(--text-muted, #5b6472);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+a:focus-visible,
+button:focus-visible,
+select:focus-visible,
+input:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid var(--accent, #2563eb);
+  outline-offset: 2px;
+}
+
+html[data-theme="dark"] .onboard {
+  background: #161b22;
+  border-color: #30363d;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: .01ms !important;
+    transition-duration: .01ms !important;
+  }
+}
+
+@media (max-width: 760px) {
+  .onboard-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}

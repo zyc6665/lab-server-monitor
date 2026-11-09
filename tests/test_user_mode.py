@@ -36,6 +36,8 @@ from servermanage.web import create_app
 
 from datetime import datetime, timezone
 
+STATIC = Path(__file__).resolve().parents[1] / "servermanage" / "web" / "static"
+
 HOST = "gpu-01"
 OTHER_HOST = "lab-02"
 ADMIN_PASSWORD = "pw"
@@ -376,10 +378,17 @@ def test_my_page_renders_member_and_hides_admin_navigation(user_client):
     assert "我的服务器" in page
     assert "alice" in page
     assert 'id="my-host-list"' in page
+    assert 'id="my-updated"' in page
+    assert 'id="my-retry"' in page
     # Admin-only navigation and widgets must not be rendered at all.
     for needle in ('href="/alerts"', 'href="/users"', 'href="/terminal"',
                    'id="command-palette"', 'id="command-trigger"'):
         assert needle not in page, needle
+
+    js = (STATIC / "my.js").read_text(encoding="utf-8")
+    assert "function stamp" in js
+    assert "最近刷新" in js
+    assert "my-retry" in js
 
 
 def test_settings_page_switches_to_the_user_shell(user_client):

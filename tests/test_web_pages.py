@@ -276,7 +276,12 @@ def test_overview_empty_state(tmp_path):
     response = client.get("/")
 
     assert response.status_code == 200
-    assert "暂无数据" in response.get_data(as_text=True)
+    html = response.get_data(as_text=True)
+    assert "还没有添加服务器" in html
+    assert 'id="onboard-card"' in html
+    assert 'id="onboard-add-host"' in html
+    # With no hosts the onboarding block must not be hidden by the shell.
+    assert 'id="onboard-card" hidden' not in html
 
 
 def test_alerts_page_lists_alert_and_ack_button(env):

@@ -321,28 +321,61 @@
     var tabs = document.querySelectorAll('[data-host-tab]');
     var panels = document.querySelectorAll('[data-host-panel]');
     if (!tabs.length || !panels.length) { return; }
-    function activate(key) {
-      Array.prototype.forEach.call(tabs, function (tab) {
+    var list = Array.prototype.slice.call(tabs);
+    function activate(key, focus) {
+      var index = 0;
+      list.forEach(function (tab, position) {
         var active = tab.getAttribute('data-host-tab') === key;
         tab.classList.toggle('active', active);
         tab.setAttribute('aria-selected', active ? 'true' : 'false');
+        tab.setAttribute('tabindex', active ? '0' : '-1');
+        if (active) { index = position; }
       });
       Array.prototype.forEach.call(panels, function (panel) {
         panel.hidden = panel.getAttribute('data-host-panel') !== key;
       });
+      if (focus && list[index]) { list[index].focus(); }
     }
-    Array.prototype.forEach.call(tabs, function (tab) {
+    function currentKey() {
+      for (var i = 0; i < list.length; i += 1) {
+        if (list[i].classList.contains('active')) { return list[i].getAttribute('data-host-tab'); }
+      }
+      return 'overview';
+    }
+    function step(delta) {
+      var key = currentKey();
+      var index = 0;
+      list.forEach(function (tab, position) {
+        if (tab.getAttribute('data-host-tab') === key) { index = position; }
+      });
+      var next = (index + delta + list.length) % list.length;
+      var target = list[next].getAttribute('data-host-tab') || 'overview';
+      activate(target, true);
+      if (window.history && window.history.replaceState) {
+        window.history.replaceState(null, '', '#tab-' + target);
+      }
+    }
+    list.forEach(function (tab) {
       tab.addEventListener('click', function () {
         var key = tab.getAttribute('data-host-tab') || 'overview';
-        activate(key);
+        activate(key, false);
         if (window.history && window.history.replaceState) {
           window.history.replaceState(null, '', '#tab-' + key);
         }
       });
+      tab.addEventListener('keydown', function (event) {
+        if (event.key === 'ArrowRight') { event.preventDefault(); step(1); }
+        else if (event.key === 'ArrowLeft') { event.preventDefault(); step(-1); }
+        else if (event.key === 'Home') { event.preventDefault(); activate(list[0].getAttribute('data-host-tab') || 'overview', true); }
+        else if (event.key === 'End') { event.preventDefault(); activate(list[list.length - 1].getAttribute('data-host-tab') || 'overview', true); }
+      });
     });
-    var initial = (window.location.hash || '').replace('#tab-', '');
-    if (!initial) { initial = 'overview'; }
-    activate(initial);
+    function fromHash() {
+      var key = (window.location.hash || '').replace('#tab-', '');
+      activate(key || 'overview', false);
+    }
+    window.addEventListener('hashchange', fromHash);
+    fromHash();
   }
 
   bindHostTabs();

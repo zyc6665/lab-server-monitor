@@ -21,6 +21,8 @@
   var emptyEl = document.getElementById("my-empty");
   var countEl = document.getElementById("my-host-count");
   var refreshButton = document.getElementById("my-refresh");
+  var updatedEl = document.getElementById("my-updated");
+  var retryButton = document.getElementById("my-retry");
 
   function formatBytes(value) {
     if (value === null || value === undefined || isNaN(value)) {
@@ -195,16 +197,30 @@
       emptyEl.hidden = hosts.length > 0;
       if (!hosts.length) {
         emptyEl.textContent = payload.member
-          ? "在已配置的服务器上没有找到账号“" + payload.member + "”。请确认设置里的账号名是否写错，或等待下一次用户采集完成。"
+          ? "在已配置的服务器上没有找到账号“" + payload.member + "”。请确认设置里的账号名是否写错；如果服务器是刚添加的，等一轮用户采集完成后再刷新。"
           : "还没有填写你的服务器账号名，请到设置里填写。";
       }
     }
+  }
+
+  function stamp() {
+    if (!updatedEl) {
+      return;
+    }
+    var now = new Date();
+    var pad = function (value) {
+      return value < 10 ? "0" + value : String(value);
+    };
+    updatedEl.textContent = "最近刷新 " + pad(now.getHours()) + ":" + pad(now.getMinutes()) + ":" + pad(now.getSeconds());
   }
 
   function load() {
     if (refreshButton) {
       refreshButton.disabled = true;
       refreshButton.textContent = "刷新中…";
+    }
+    if (retryButton) {
+      retryButton.hidden = true;
     }
     return fetch("/api/my/summary", { headers: { Accept: "application/json" } })
       .then(function (response) {
@@ -215,10 +231,14 @@
       })
       .then(function (payload) {
         render(payload);
+        stamp();
       })
       .catch(function (error) {
         if (hintEl) {
-          hintEl.textContent = "读取失败：" + error.message;
+          hintEl.textContent = "读取失败：" + error.message + "，稍后会自动重试。";
+        }
+        if (retryButton) {
+          retryButton.hidden = false;
         }
       })
       .then(function () {
@@ -231,6 +251,9 @@
 
   if (refreshButton) {
     refreshButton.addEventListener("click", load);
+  }
+  if (retryButton) {
+    retryButton.addEventListener("click", load);
   }
   load();
   window.setInterval(function () {

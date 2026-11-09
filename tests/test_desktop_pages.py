@@ -300,6 +300,23 @@ def test_overview_has_capacity_forecast_card(client):
     assert ".capacity-risk-critical" in css
 
 
+def test_overview_has_onboarding_for_empty_install(client):
+    html = _page(client, "/")
+    assert 'id="onboard-card"' in html
+    assert "还没有添加服务器" in html
+    assert 'id="onboard-add-host"' in html
+    assert 'id="onboard-import-ssh"' in html
+    assert 'href="/settings#hosts"' in html
+
+    js = (STATIC / "app.js").read_text(encoding="utf-8")
+    assert "onboard-card" in js
+    assert "onboard.hidden = hasData" in js
+
+    css = (STATIC / "style.css").read_text(encoding="utf-8")
+    assert ".onboard" in css
+    assert "prefers-reduced-motion" in css
+
+
 def test_overview_keeps_filter_bar_and_host_columns(client):
     html = _page(client, "/")
     assert 'id="host-filter"' in html
@@ -601,6 +618,16 @@ def test_host_detail_js_binds_alert_ack():
     assert "/api/alerts/" in source
     assert "status-acknowledged" in source
     assert "bindAlertAcks();" in source
+
+
+def test_host_detail_tabs_support_keyboard_navigation():
+    source = (STATIC / "host-detail.js").read_text(encoding="utf-8")
+    assert "function bindHostTabs" in source
+    assert "ArrowRight" in source
+    assert "ArrowLeft" in source
+    assert "'tabindex'" in source
+    assert "hashchange" in source
+    assert "aria-selected" in source
 
 
 def test_app_js_renders_terminal_link_without_user_innerhtml():

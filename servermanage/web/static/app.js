@@ -675,7 +675,12 @@
     }
     var hasData = rows.length > 0;
     table.hidden = !hasData;
-    if (empty) { empty.hidden = hasData; }
+    if (empty) {
+      empty.hidden = hasData;
+      if (hasData) { empty.textContent = ''; }
+    }
+    var onboard = document.getElementById('onboard-card');
+    if (onboard) { onboard.hidden = hasData; }
     setText('host-count', '共 ' + rows.length + ' 台');
     updateSortIndicators();
     applyHostFilters();
