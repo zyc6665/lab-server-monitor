@@ -4,10 +4,12 @@ from dataclasses import replace
 from datetime import datetime, timezone
 from typing import Callable
 
+from servermanage.availability import run_host_checks
 from servermanage.models import (
     AppConfig,
     CommandResult,
     HostCollectionError,
+    HostCheckResult,
     HostConfig,
     HostMetrics,
     HostReport,
@@ -67,12 +69,23 @@ def collect_host_report(
     if metrics.collected_at is None:
         metrics = replace(metrics, collected_at=datetime.now(timezone.utc))
 
+    # Availability checks reuse the same runner / SSH connection as the metric
+    # collection, so they add no extra connections.  A check failure must never
+    # fail the host report: ``run_host_checks`` already isolates per-check
+    # errors, and anything it still raises is swallowed here.
+    checks: list[HostCheckResult] = []
+    try:
+        checks = run_host_checks(host, ssh_runner, host.checks, command_timeout)
+    except Exception as exc:  # noqa: BLE001 - checks must not abort collection
+        _record_error(errors, "checks", str(exc))
+
     return HostReport(
         host_name=host.name,
         host=host.host,
         success=not any(error.stage == "ssh" for error in errors),
         metrics=metrics,
         errors=errors,
+        checks=checks,
     )
 
 

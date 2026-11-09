@@ -27,6 +27,8 @@ from servermanage.models import (
     AuthConfig,
     DiskHealthConfig,
     DiskUsageRow,
+    HostCheckConfig,
+    HostCheckResult,
     HostConfig,
     HostDiskHealthOverride,
     HostMetrics,
@@ -41,6 +43,7 @@ from servermanage.models import (
 )
 from servermanage.storage import (
     get_disk_health,
+    get_host_check_results,
     get_host_snapshot,
     init_storage,
     list_alerts,
@@ -212,6 +215,110 @@ def _disk_report(
             ],
         ),
     )
+
+
+def _config_with_checks(checks) -> AppConfig:
+    config = _make_config()
+    host = replace(config.servers[0], checks=list(checks))
+    return replace(config, servers=[host])
+
+
+def test_run_status_once_persists_successful_check_results(tmp_path: Path):
+    db_path = tmp_path / "monitor.db"
+    check = HostCheckConfig(
+        name="API", type="http", target="http://127.0.0.1:8000/health"
+    )
+    result = HostCheckResult(
+        name="API",
+        type="http",
+        target=check.target,
+        status="ok",
+        message="HTTP 200",
+        latency_ms=12.0,
+        checked_at=datetime.now(timezone.utc),
+    )
+    service = MonitorService(
+        _config_with_checks([check]),
+        db_path=db_path,
+        collect_status=lambda config: [
+            HostReport(
+                host_name="gpu-01",
+                host="10.0.0.1",
+                success=True,
+                metrics=HostMetrics(collected_at=datetime.now(timezone.utc)),
+                checks=[result],
+            )
+        ],
+        notifier=FakeNotifier(),
+    )
+
+    service.run_status_once()
+
+    rows = get_host_check_results("gpu-01", db_path)
+    assert [row["check_name"] for row in rows] == ["API"]
+    assert rows[0]["status"] == "ok"
+
+
+def test_run_status_once_marks_failed_host_checks_unknown(tmp_path: Path):
+    db_path = tmp_path / "monitor.db"
+    check = HostCheckConfig(name="API", type="tcp", target="8000")
+    ok_result = HostCheckResult(
+        name="API",
+        type="tcp",
+        target="8000",
+        status="ok",
+        message="端口可连接",
+        checked_at=datetime.now(timezone.utc),
+    )
+    reports = iter(
+        [
+            HostReport(
+                host_name="gpu-01",
+                host="10.0.0.1",
+                success=True,
+                metrics=HostMetrics(collected_at=datetime.now(timezone.utc)),
+                checks=[ok_result],
+            ),
+            HostReport(host_name="gpu-01", host="10.0.0.1", success=False),
+        ]
+    )
+    service = MonitorService(
+        _config_with_checks([check]),
+        db_path=db_path,
+        collect_status=lambda config: [next(reports)],
+        notifier=FakeNotifier(),
+    )
+
+    service.run_status_once()
+    assert get_host_check_results("gpu-01", db_path)[0]["status"] == "ok"
+
+    service.run_status_once()
+    rows = get_host_check_results("gpu-01", db_path)
+    # Old "ok" row is replaced (not duplicated) so a stale healthy status cannot
+    # survive a failed collection cycle.
+    assert len(rows) == 1
+    assert rows[0]["status"] == "unknown"
+
+
+def test_run_status_once_survives_check_result_save_failure(tmp_path: Path, monkeypatch):
+    db_path = tmp_path / "monitor.db"
+
+    def boom(*_args, **_kwargs):
+        raise RuntimeError("database is locked")
+
+    monkeypatch.setattr("servermanage.app.save_host_check_results", boom)
+    service = MonitorService(
+        _config_with_checks(
+            [HostCheckConfig(name="API", type="tcp", target="8000")]
+        ),
+        db_path=db_path,
+        collect_status=lambda config: [_success_report()],
+        notifier=FakeNotifier(),
+    )
+
+    result = service.run_status_once()
+
+    assert result == {"hosts": 1, "alerts": 0}
 
 
 def test_run_status_once_debounces_offline_alert_until_threshold(tmp_path: Path):

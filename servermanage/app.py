@@ -39,7 +39,7 @@ from servermanage.disk_health import (
     disk_report_from_snapshot,
 )
 from servermanage.mailer import send_report as _send_report
-from servermanage.models import AppConfig, DailyReport
+from servermanage.models import AppConfig, DailyReport, HostCheckResult, HostConfig
 from servermanage.report import render_report as _render_report
 from servermanage.scheduler import (
     ScheduledTask,
@@ -66,6 +66,7 @@ from servermanage.storage import (
     prune_ssh_audit,
     purge_old_data,
     save_disk_health,
+    save_host_check_results,
     save_host_snapshot,
 )
 from servermanage.timeutil import resolve_timezone
@@ -89,6 +90,30 @@ _CONFIGURED_LOG_DIR: Path | None = None
 # and a relocated working directory behave predictably.
 _LOCK_PATH = Path("data") / "servermonitor.lock"
 _RUNTIME_STATE_PATH = Path("data") / "runtime.json"
+
+
+def _unknown_check_results(host: HostConfig) -> list[HostCheckResult]:
+    """Build ``unknown`` results for every enabled check of an unreachable host.
+
+    This replaces a stale "ok" snapshot when a host cannot be collected, so the
+    dashboard never keeps showing a healthy service that was not actually
+    verified this cycle.  Offline hosts must not raise availability alerts; the
+    existing offline alert covers that case.
+    """
+    checked_at = datetime.now(timezone.utc)
+    return [
+        HostCheckResult(
+            name=check.name,
+            type=check.type,
+            target=check.target,
+            status="unknown",
+            message="主机采集失败，检查结果未知",
+            latency_ms=None,
+            checked_at=checked_at,
+        )
+        for check in getattr(host, "checks", [])
+        if getattr(check, "enabled", True)
+    ]
 
 
 def _previous_disk_report(host_name: str, db_path: Path) -> DiskHealthReport | None:
@@ -343,6 +368,21 @@ class MonitorService:
         selected = [host for host in self.config.servers if host.name in host_names]
         return replace(self.config, servers=selected)
 
+    def _save_check_results(
+        self, host_name: str, results: list[HostCheckResult]
+    ) -> None:
+        """Persist one host's check snapshot without aborting the polling round.
+
+        A locked/corrupt database must surface in the log, never crash every
+        host's collection for this cycle.
+        """
+        try:
+            save_host_check_results(host_name, results, self.db_path)
+        except Exception:  # noqa: BLE001 - persistence must not break polling
+            LOGGER.exception(
+                "Failed to save host check results for %s", host_name
+            )
+
     def run_once(self) -> dict:
         """Run one status cycle immediately followed by one disk cycle."""
         status_result = self.run_status_once()
@@ -381,6 +421,7 @@ class MonitorService:
         }
         success_reports = []
         host_mounts = {host.name: host.disk_mounts for host in config.servers}
+        hosts_by_name = {host.name: host for host in config.servers}
 
         for report in reports:
             host_name = report.host_name
@@ -389,6 +430,7 @@ class MonitorService:
                 self._failure_counts[host_name] = 0
                 if storage_enabled:
                     save_host_snapshot(report, self.db_path)
+                    self._save_check_results(host_name, report.checks)
                 success_reports.append(report)
                 successful_hosts.add(host_name)
                 # A recovered host should clear any stale offline alert and, when
@@ -415,12 +457,29 @@ class MonitorService:
             else:
                 failures = self._failure_counts.get(host_name, 0) + 1
                 self._failure_counts[host_name] = failures
+                # An unreachable host cannot verify its services: mark every
+                # configured check unknown so a stale "ok" never survives.
+                if storage_enabled:
+                    host = hosts_by_name.get(host_name)
+                    if host is not None:
+                        self._save_check_results(
+                            host_name, _unknown_check_results(host)
+                        )
                 # Debounce: only declare the host offline after the configured
                 # number of consecutive failed collections.
                 if failures >= offline_threshold:
                     event = offline_alert(host_name, failures)
                     events.append(event)
                     active[host_name].add(event.fingerprint)
+
+        # Hosts that dropped out of this round's reports entirely are offline
+        # too; blank their check snapshot to unknown for the same reason.
+        if storage_enabled:
+            reported_names = {report.host_name for report in reports}
+            for host in config.servers:
+                if host.name in reported_names:
+                    continue
+                self._save_check_results(host.name, _unknown_check_results(host))
 
         if storage_enabled and success_reports:
             persist_host_reports(

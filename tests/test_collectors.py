@@ -1,5 +1,6 @@
 from datetime import datetime, timezone
 
+from servermanage.availability import build_check_command
 from servermanage.collectors import collect_all_hosts, collect_host_report
 from servermanage.commands import (
     DOCKER_CONTAINERS_STAGE,
@@ -12,6 +13,7 @@ from servermanage.models import (
     AppConfig,
     AuthConfig,
     CommandResult,
+    HostCheckConfig,
     HostConfig,
     HostMetrics,
     ReportConfig,
@@ -290,6 +292,106 @@ def test_collect_all_hosts_default_pipeline_parses_command_outputs():
     assert metrics.top_cpu_processes[0].container_name == "zhangz-train"
     assert metrics.gpu_summary[0].name == "NVIDIA RTX 4090"
     assert metrics.gpu_processes[0].username == "root"
+
+
+def _host_with_checks(name: str, checks: list[HostCheckConfig]) -> HostConfig:
+    return HostConfig(
+        name=name,
+        host="10.0.0.9",
+        port=22,
+        username="root",
+        auth=AuthConfig(type="password", password="secret"),
+        checks=checks,
+    )
+
+
+def _parse_hostname(results, _host) -> HostMetrics:
+    return HostMetrics(
+        hostname=results["host"].stdout.strip(),
+        collected_at=datetime.now(timezone.utc),
+    )
+
+
+def test_collect_host_report_includes_check_results():
+    check = HostCheckConfig(name="API", type="tcp", target="8000", timeout_seconds=3)
+    host = _host_with_checks("gpu-05", [check])
+    runner = FakeSSH(
+        results={
+            "hostname": CommandResult(stdout="gpu-05", stderr="", exit_status=0),
+            build_check_command(check): CommandResult(stdout="", stderr="", exit_status=0),
+        }
+    )
+
+    report = collect_host_report(
+        host,
+        runner,
+        connect_timeout=10,
+        command_timeout=20,
+        build_command_map=lambda: {"host": "hostname"},
+        parse_results=_parse_hostname,
+    )
+
+    assert report.success is True
+    assert [item.name for item in report.checks] == ["API"]
+    assert report.checks[0].type == "tcp"
+    assert report.checks[0].status == "ok"
+
+
+def test_check_failure_does_not_fail_host_report():
+    check = HostCheckConfig(name="API", type="tcp", target="8000", timeout_seconds=3)
+    host = _host_with_checks("gpu-06", [check])
+    check_command = build_check_command(check)
+
+    class RaiseOnCheckSSH(FakeSSH):
+        def run(self, command, timeout):
+            self.commands.append((command, timeout))
+            if command == check_command:
+                raise RuntimeError("ssh channel broke during check")
+            return self.results[command]
+
+    runner = RaiseOnCheckSSH(
+        results={"hostname": CommandResult(stdout="gpu-06", stderr="", exit_status=0)}
+    )
+
+    report = collect_host_report(
+        host,
+        runner,
+        connect_timeout=10,
+        command_timeout=20,
+        build_command_map=lambda: {"host": "hostname"},
+        parse_results=_parse_hostname,
+    )
+
+    assert report.success is True
+    assert report.metrics.hostname == "gpu-06"
+    assert report.checks[0].status == "error"
+
+
+def test_check_runner_crash_does_not_fail_host_report(monkeypatch):
+    host = _host_with_checks(
+        "gpu-07", [HostCheckConfig(name="API", type="tcp", target="8000")]
+    )
+
+    def boom(*_args, **_kwargs):
+        raise RuntimeError("checks exploded")
+
+    monkeypatch.setattr("servermanage.collectors.run_host_checks", boom)
+    runner = FakeSSH(
+        results={"hostname": CommandResult(stdout="gpu-07", stderr="", exit_status=0)}
+    )
+
+    report = collect_host_report(
+        host,
+        runner,
+        connect_timeout=10,
+        command_timeout=20,
+        build_command_map=lambda: {"host": "hostname"},
+        parse_results=_parse_hostname,
+    )
+
+    assert report.success is True
+    assert report.metrics.hostname == "gpu-07"
+    assert report.checks == []
 
 
 def test_build_command_map_includes_docker_container_stages():
