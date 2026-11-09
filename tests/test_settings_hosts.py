@@ -831,3 +831,73 @@ def test_delete_host_removes_check_snapshot_rows(tmp_path):
     svc.delete_host("gpu-01")
 
     assert storage.get_host_check_results("gpu-01", svc.db_path) == []
+
+
+def test_user_monitoring_override_survives_reload(tmp_path):
+    """``user_monitoring`` must round-trip like the other per-host overrides."""
+    svc = _service(tmp_path)
+    svc.upsert_host("gpu-01", _password_host("gpu-01", user_monitoring=False))
+    svc.upsert_host("gpu-02", _password_host("gpu-02", user_monitoring=True))
+    svc.upsert_host("gpu-03", _password_host("gpu-03"))
+
+    reloaded = SettingsService(config_path=svc.config_path, db_path=svc.db_path)
+    servers = {host.name: host for host in reloaded.load().servers}
+
+    assert servers["gpu-01"].user_monitoring is False
+    assert servers["gpu-02"].user_monitoring is True
+    assert servers["gpu-03"].user_monitoring is None
+
+
+def test_upsert_without_user_monitoring_keeps_previous_override(tmp_path):
+    """Editing only the notes must not silently reset the monitoring flag."""
+    svc = _service(tmp_path)
+    svc.upsert_host("gpu-01", _password_host("gpu-01", user_monitoring=False))
+
+    svc.upsert_host("gpu-01", _password_host("gpu-01", notes="仅改备注"))
+
+    [host] = svc.load().servers
+    assert host.user_monitoring is False
+    assert host.notes == "仅改备注"
+
+
+def test_upsert_rejects_invalid_user_monitoring(tmp_path):
+    svc = _service(tmp_path)
+    with pytest.raises(SettingsError):
+        svc.upsert_host("gpu-01", _password_host("gpu-01", user_monitoring="maybe"))
+
+
+def test_delete_host_resolves_open_user_alerts(tmp_path):
+    """A deleted host must not leave "account disappeared" alerts firing forever."""
+    svc = _service(tmp_path)
+    svc.upsert_host("gpu-01", _password_host("gpu-01"))
+    alert_id = storage.insert_alert(
+        AlertEvent(
+            host_name="gpu-01",
+            category="user",
+            severity="warning",
+            title="账号已从服务器消失：alice",
+            message="",
+            fingerprint="user-present:gpu-01:alice",
+        ),
+        svc.db_path,
+    )
+
+    svc.delete_host("gpu-01")
+
+    [alert] = [
+        row for row in storage.list_alerts(svc.db_path) if row["id"] == alert_id
+    ]
+    assert alert["status"] == "resolved"
+
+
+def test_delete_host_leaves_other_categories_open(tmp_path):
+    svc = _service(tmp_path)
+    svc.upsert_host("gpu-01", _password_host("gpu-01"))
+    alert_id = _insert_alert(svc.db_path, "gpu-01")
+
+    svc.delete_host("gpu-01")
+
+    [alert] = [
+        row for row in storage.list_alerts(svc.db_path) if row["id"] == alert_id
+    ]
+    assert alert["status"] == "active"

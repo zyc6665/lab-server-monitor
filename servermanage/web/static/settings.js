@@ -439,6 +439,9 @@
     hostField("owner").value = host ? (host.owner || "") : "";
     hostField("location").value = host ? (host.location || "") : "";
     hostField("notes").value = host ? (host.notes || "") : "";
+    var userMonitoring = host ? host.user_monitoring : null;
+    hostField("user_monitoring").value =
+      userMonitoring === true ? "true" : (userMonitoring === false ? "false" : "");
     hostField("sudo_password").value = "";
     hostField("clear_sudo_password").checked = false;
     var sudoState = qs("#host-sudo-state");
@@ -513,6 +516,9 @@
     if (hostField("password").value) payload.password = hostField("password").value;
     payload.checks = collectChecks();
     payload.alert_rules = collectAlertRules();
+    // 空字符串表示"继承全局"，不能用 true/false 表达，所以这里显式传 null。
+    var monitoring = hostField("user_monitoring").value;
+    payload.user_monitoring = monitoring === "" ? null : monitoring === "true";
     if (hostField("clear_sudo_password").checked) {
       payload.clear_secrets = ["sudo_password"];
     } else if (hostField("sudo_password").value) {

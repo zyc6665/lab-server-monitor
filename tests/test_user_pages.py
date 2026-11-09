@@ -32,6 +32,7 @@ COLUMNS = [
     "主机",
     "用户名",
     "UID",
+    "GID",
     "主组",
     "附加组",
     "状态",
@@ -119,12 +120,13 @@ def test_users_page_host_filter_has_all_hosts_default(users_page):
     assert '<option value="all">全部</option>' in users_page
     assert '<option value="warning">有异常</option>' in users_page
     assert '<option value="error">仅错误</option>' in users_page
+    assert '<option value="ok">仅正常</option>' in users_page
 
 
-def test_users_page_table_has_twelve_columns(users_page):
+def test_users_page_table_has_every_column(users_page):
     table = users_page.split('id="user-table"', 1)[1].split("</thead>", 1)[0]
     headers = [f"<th>{column}</th>" for column in COLUMNS]
-    assert len(headers) == 12
+    assert len(headers) == 13
     for header in headers:
         assert header in table, header
 
@@ -180,6 +182,21 @@ def test_users_js_sends_csrf_header_and_polls():
     assert "badge-missing" in source
     assert "badge-warning" in source
     assert "badge-ok" in source
+
+
+def test_users_js_renders_gid_and_tri_state_badges():
+    source = (STATIC / "users.js").read_text(encoding="utf-8")
+    assert "row.gid" in source
+    assert "function triBadgeCell" in source
+    # 未知（null）必须显示破折号，不能显示成"否"。
+    assert "value === null || value === undefined" in source
+
+
+def test_users_js_reports_partial_failures():
+    source = (STATIC / "users.js").read_text(encoding="utf-8")
+    assert "hosts_failed" in source
+    assert "payload.errors" in source
+    assert "台主机采集失败" in source
 
 
 # ---------------------------------------------------------------------------

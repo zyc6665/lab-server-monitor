@@ -47,6 +47,7 @@ SNAPSHOT_COLUMNS = {
     "data_size_bytes",
     "data_supported",
     "usage_stale",
+    "usage_readable",
     "usage_collected_at",
     "collected_at",
 }

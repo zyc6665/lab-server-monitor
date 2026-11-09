@@ -75,10 +75,20 @@ def _usage_is_stale(
     last_usage: datetime | None,
     interval_seconds: int,
     usage_refreshed: bool,
+    *,
+    usage_due: bool = False,
 ) -> bool:
+    """Return True when the displayed usage numbers are not trustworthy.
+
+    A ``du`` that was due but failed (no sudo, timeout) marks the row stale even
+    though older numbers are still shown; numbers older than 1.5 intervals are
+    stale regardless.
+    """
     if usage_refreshed:
         return False
     if last_usage is None:
+        return True
+    if usage_due:
         return True
     return (now - last_usage).total_seconds() > interval_seconds * 1.5
 
@@ -113,24 +123,14 @@ def _account_from_baseline(
     )
 
 
-def _persist_success(
-    host: HostConfig,
-    db_path: Path,
-    accounts: list[HostUserAccount],
-    now: datetime,
-    *,
-    usage_refreshed: bool,
-) -> None:
-    storage.save_host_user_snapshot(
-        host.name, [asdict(account) for account in accounts], db_path
-    )
-    storage.save_user_scan_state(
-        host.name,
-        db_path=db_path,
-        last_scan_at=now,
-        last_usage_at=now if usage_refreshed else None,
-        last_error="",
-    )
+def _persist_failure(host_name: str, db_path: Path, message: str) -> None:
+    """Record a failed scan without touching the stored snapshot or baseline."""
+    try:
+        storage.save_user_scan_state(
+            host_name, db_path=db_path, last_error=message
+        )
+    except Exception:  # noqa: BLE001 - error reporting must not mask the error
+        LOGGER.exception("Failed to record user-scan error for %s", host_name)
 
 
 def _scan_host(
@@ -171,12 +171,16 @@ def _scan_host(
     previous_snapshot = storage.get_host_user_snapshot(host.name, db_path)
     previous_by_name = {row["username"]: row for row in previous_snapshot}
     baseline = storage.get_user_baseline(host.name, db_path)
-    # A host that failed before ever storing a snapshot has a scan-state row but
-    # no baseline: the first *successful* scan must still seed silently instead
-    # of reporting every existing account as newly added.
-    first_scan = not baseline and not previous_snapshot
+    # The first *successful* scan seeds the baseline silently.  The stored scan
+    # state is the marker: a host that failed earlier has a state row without
+    # ``last_scan_at``, and a host whose first scan found zero accounts must not
+    # be treated as "first scan" again on the next round.
+    first_scan = last_state is None or not last_state.get("last_scan_at")
 
-    stale = _usage_is_stale(now, last_usage, interval, usage_refreshed)
+    stale = _usage_is_stale(
+        now, last_usage, interval, usage_refreshed, usage_due=usage_due
+    )
+
 
     normalized: list[HostUserAccount] = []
     for account in accounts:
@@ -200,27 +204,34 @@ def _scan_host(
 
     if first_scan:
         # Establish the baseline silently: pre-existing accounts are not "new".
-        for account in normalized:
-            storage.upsert_user_baseline(
-                host.name, asdict(account), db_path, now=now
-            )
-        _persist_success(
-            host,
+        storage.save_host_user_scan_result(
+            host.name,
+            [asdict(account) for account in normalized],
             db_path,
-            normalized,
-            now,
+            now=now,
             usage_refreshed=usage_refreshed,
+            seed_only=True,
         )
         return normalized
 
+    # Snapshot + baseline + scan state commit atomically; the returned list is
+    # the authoritative "newly discovered account" set for this round.
+    inserted = storage.save_host_user_scan_result(
+        host.name,
+        [asdict(account) for account in normalized],
+        db_path,
+        now=now,
+        usage_refreshed=usage_refreshed,
+    )
+    inserted_names = set(inserted)
+
     events = []
     for account in normalized:
-        is_new = storage.upsert_user_baseline(
-            host.name, asdict(account), db_path, now=now
-        )
         events.extend(
             evaluate_user_alerts(
-                account, in_baseline=not is_new, missing=False
+                account,
+                in_baseline=account.username not in inserted_names,
+                missing=False,
             )
         )
 
@@ -244,13 +255,6 @@ def _scan_host(
         if not event.fingerprint.startswith(_USER_ADDED_PREFIX)
     }
 
-    _persist_success(
-        host,
-        db_path,
-        normalized,
-        now,
-        usage_refreshed=usage_refreshed,
-    )
     engine.process(events)
     engine.resolve_missing(
         host.name,
@@ -270,6 +274,7 @@ def run_user_scan(
     scan: Callable[..., tuple] = collect_host_users,
     now: datetime | None = None,
     force_usage: bool = False,
+    progress: Callable[[dict], None] | None = None,
 ) -> dict:
     """Scan every user-monitored host once and return a summary.
 
@@ -315,20 +320,27 @@ def run_user_scan(
             LOGGER.exception("User scan failed for host %s", host.name)
             hosts_failed += 1
             errors[host.name] = str(exc)
-            try:
-                storage.save_user_scan_state(
-                    host.name, db_path=db_path, last_error=str(exc)
-                )
-            except Exception:  # noqa: BLE001 - never abort the round
-                LOGGER.exception(
-                    "Failed to record user-scan error for host %s", host.name
-                )
+            _persist_failure(host.name, db_path, str(exc))
         else:
             hosts_done += 1
             accounts_total += len(scanned)
         finally:
             if runner is not None:
                 _close_runner(runner)
+            # 每台主机结束后回传一次进度，前端才能看到 1/N … N/N 而不是一直 0/N。
+            if progress is not None:
+                try:
+                    progress(
+                        {
+                            "hosts_total": len(hosts),
+                            "hosts_done": hosts_done,
+                            "hosts_failed": hosts_failed,
+                            "accounts": accounts_total,
+                            "errors": dict(errors),
+                        }
+                    )
+                except Exception:  # noqa: BLE001 - 进度上报不能影响采集
+                    LOGGER.exception("User scan progress callback failed")
 
     finished_at = datetime.now(timezone.utc)
 

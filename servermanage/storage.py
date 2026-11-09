@@ -291,6 +291,7 @@ CREATE TABLE IF NOT EXISTS host_user_snapshot (
     data_size_bytes INTEGER,
     data_supported INTEGER NOT NULL DEFAULT 1,
     usage_stale INTEGER NOT NULL DEFAULT 0,
+    usage_readable INTEGER NOT NULL DEFAULT 1,
     usage_collected_at TEXT,
     collected_at TEXT NOT NULL,
     PRIMARY KEY (host_name, username)
@@ -322,6 +323,18 @@ _CREATE_USER_INDEX_SQL = """
 CREATE INDEX IF NOT EXISTS idx_host_user_snapshot_host
     ON host_user_snapshot(host_name);
 """
+
+
+def _ensure_user_snapshot_columns(conn: sqlite3.Connection) -> None:
+    """Add columns introduced after the first 0.3.0 build to existing databases."""
+    columns = {
+        row[1] for row in conn.execute("PRAGMA table_info(host_user_snapshot)")
+    }
+    if "usage_readable" not in columns:
+        conn.execute(
+            "ALTER TABLE host_user_snapshot"
+            " ADD COLUMN usage_readable INTEGER NOT NULL DEFAULT 1"
+        )
 
 
 def _disk_percent_value(percent: str) -> int:
@@ -417,6 +430,7 @@ def init_storage(db_path: Path, *, daily_summary_tz: str | None = "UTC") -> None
         conn.executescript(_CREATE_HOST_CHECK_TABLES_SQL)
         conn.executescript(_CREATE_HOST_CHECK_INDEX_SQL)
         conn.executescript(_CREATE_USER_TABLES_SQL)
+        _ensure_user_snapshot_columns(conn)
         conn.executescript(_CREATE_USER_INDEX_SQL)
 
 
@@ -1989,6 +2003,38 @@ def update_alert(
         conn.commit()
 
 
+def close_alerts_for_host(
+    host_name: str,
+    db_path: Path,
+    *,
+    category: str,
+    status: str = "resolved",
+    now: datetime | str | None = None,
+) -> int:
+    """Mark every non-terminal alert of one host/category as *status*.
+
+    Used when a host is removed: its rows are gone, so leaving ``active`` alerts
+    behind would keep alerting about a machine that is no longer monitored.
+    Returns the number of rows updated.
+    """
+    db_path = Path(db_path)
+    if not db_path.exists():
+        return 0
+    conn = sqlite3.connect(db_path)
+    try:
+        cursor = conn.execute(
+            "UPDATE alerts SET status = ?"
+            " WHERE host_name = ? AND category = ?"
+            " AND status IN ('active', 'acknowledged')",
+            (status, host_name, category),
+        )
+        updated = cursor.rowcount or 0
+        conn.commit()
+    finally:
+        conn.close()
+    return updated
+
+
 def list_alerts(
     db_path: Path,
     *,
@@ -2854,6 +2900,7 @@ def _decode_user_row(row: sqlite3.Row) -> dict:
         "data_exists",
         "data_supported",
         "usage_stale",
+        "usage_readable",
     ):
         if key in data and data[key] is not None:
             data[key] = bool(data[key])
@@ -2889,6 +2936,13 @@ def _snapshot_row(
         account.get("data_size_bytes"),
         _flag(account.get("data_supported"), default=True),
         _flag(account.get("usage_stale")),
+        _flag(
+            account.get("usage_readable"),
+            default=(
+                account.get("home_size_bytes") is not None
+                or account.get("data_size_bytes") is not None
+            ),
+        ),
         _optional_iso(account.get("usage_collected_at")),
         _optional_iso(account.get("collected_at")) or collected_at,
     )
@@ -2916,32 +2970,167 @@ def save_host_user_snapshot(
     conn = sqlite3.connect(db_path)
     try:
         conn.execute("BEGIN IMMEDIATE")
-        conn.execute(
-            "DELETE FROM host_user_snapshot WHERE host_name = ?", (host_name,)
-        )
-        if rows:
-            conn.executemany(
-                """
-                INSERT INTO host_user_snapshot (
-                    host_name, username, uid, gid, primary_group, gecos, home,
-                    shell, groups_json, in_docker, in_sudo, home_exists,
-                    home_owner, home_group, home_mode, home_size_bytes,
-                    data_exists, data_owner, data_group, data_mode,
-                    data_size_bytes, data_supported, usage_stale,
-                    usage_collected_at, collected_at
-                ) VALUES (
-                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                    ?, ?, ?, ?, ?, ?
-                )
-                """,
-                rows,
-            )
+        _replace_snapshot_rows(conn, host_name, rows)
         conn.commit()
     except BaseException:
         conn.rollback()
         raise
     finally:
         conn.close()
+
+
+_SNAPSHOT_INSERT_SQL = """
+INSERT INTO host_user_snapshot (
+    host_name, username, uid, gid, primary_group, gecos, home,
+    shell, groups_json, in_docker, in_sudo, home_exists,
+    home_owner, home_group, home_mode, home_size_bytes,
+    data_exists, data_owner, data_group, data_mode,
+    data_size_bytes, data_supported, usage_stale, usage_readable,
+    usage_collected_at, collected_at
+) VALUES (
+    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+    ?, ?, ?, ?, ?, ?, ?
+)
+"""
+
+
+def _replace_snapshot_rows(
+    conn: sqlite3.Connection, host_name: str, rows: list[tuple]
+) -> None:
+    conn.execute(
+        "DELETE FROM host_user_snapshot WHERE host_name = ?", (host_name,)
+    )
+    if rows:
+        conn.executemany(_SNAPSHOT_INSERT_SQL, rows)
+
+
+def _write_baseline(
+    conn: sqlite3.Connection, host_name: str, account: dict, seen_at: str
+) -> bool:
+    """Insert or refresh one baseline row; return True when it was inserted."""
+    username = str(account["username"])
+    values = (
+        account.get("uid"),
+        account.get("gid"),
+        account.get("primary_group"),
+        account.get("shell"),
+        account.get("home"),
+        json.dumps(_account_groups(account), ensure_ascii=False),
+        _flag(account.get("in_docker")),
+        _flag(account.get("in_sudo")),
+    )
+    existing = conn.execute(
+        "SELECT 1 FROM host_user_baseline"
+        " WHERE host_name = ? AND username = ?",
+        (host_name, username),
+    ).fetchone()
+    if existing is None:
+        conn.execute(
+            """
+            INSERT INTO host_user_baseline (
+                host_name, username, uid, gid, primary_group, shell, home,
+                groups_json, in_docker, in_sudo, first_seen_at, last_seen_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (host_name, username, *values, seen_at, seen_at),
+        )
+        return True
+    conn.execute(
+        """
+        UPDATE host_user_baseline SET
+            uid = ?, gid = ?, primary_group = ?, shell = ?, home = ?,
+            groups_json = ?, in_docker = ?, in_sudo = ?,
+            last_seen_at = ?
+        WHERE host_name = ? AND username = ?
+        """,
+        (*values, seen_at, host_name, username),
+    )
+    return False
+
+
+def _write_scan_state(
+    conn: sqlite3.Connection,
+    host_name: str,
+    *,
+    last_scan_at: datetime | str | None = None,
+    last_usage_at: datetime | str | None = None,
+    last_error: str | None = None,
+) -> None:
+    updates: dict[str, object] = {}
+    if last_scan_at is not None:
+        updates["last_scan_at"] = _to_iso_utc(last_scan_at)
+    if last_usage_at is not None:
+        updates["last_usage_at"] = _to_iso_utc(last_usage_at)
+    if last_error is not None:
+        updates["last_error"] = str(last_error)
+    conn.execute(
+        "INSERT INTO host_user_scan_state (host_name) VALUES (?)"
+        " ON CONFLICT(host_name) DO NOTHING",
+        (host_name,),
+    )
+    if updates:
+        assignments = ", ".join(f"{column} = ?" for column in updates)
+        conn.execute(
+            f"UPDATE host_user_scan_state SET {assignments}"
+            " WHERE host_name = ?",
+            (*updates.values(), host_name),
+        )
+
+
+def save_host_user_scan_result(
+    host_name: str,
+    accounts: list[dict],
+    db_path: Path,
+    *,
+    now: datetime | str | None = None,
+    usage_refreshed: bool = False,
+    seed_only: bool = False,
+) -> list[str]:
+    """Persist one successful scan atomically.
+
+    The snapshot, the baseline rows and the scan state are written in a single
+    ``BEGIN IMMEDIATE`` transaction, so a failure can never leave the baseline
+    ahead of the snapshot (which would silently swallow a later ``user-added``
+    alert).  Returns the usernames that were inserted into the baseline
+    (``seed_only`` returns an empty list: the first scan is silent).
+    """
+    db_path = Path(db_path)
+    init_storage(db_path)
+
+    moment = (
+        _to_iso_utc(now)
+        if now is not None
+        else datetime.now(timezone.utc).isoformat()
+    )
+    rows = [_snapshot_row(host_name, account, moment) for account in accounts]
+
+    conn = sqlite3.connect(db_path)
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        _replace_snapshot_rows(conn, host_name, rows)
+        inserted: list[str] = []
+        if not seed_only:
+            for account in accounts:
+                if _write_baseline(conn, host_name, account, moment):
+                    inserted.append(str(account["username"]))
+        else:
+            for account in accounts:
+                _write_baseline(conn, host_name, account, moment)
+        _write_scan_state(
+            conn,
+            host_name,
+            last_scan_at=moment,
+            last_usage_at=moment if usage_refreshed else None,
+            last_error="",
+        )
+        conn.commit()
+    except BaseException:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+    return inserted
 
 
 def get_host_user_snapshot(host_name: str, db_path: Path) -> list[dict]:
@@ -3001,17 +3190,6 @@ def upsert_user_baseline(
     db_path = Path(db_path)
     init_storage(db_path)
 
-    username = str(account["username"])
-    values = (
-        account.get("uid"),
-        account.get("gid"),
-        account.get("primary_group"),
-        account.get("shell"),
-        account.get("home"),
-        json.dumps(_account_groups(account), ensure_ascii=False),
-        _flag(account.get("in_docker")),
-        _flag(account.get("in_sudo")),
-    )
     seen_at = (
         _to_iso_utc(now)
         if now is not None
@@ -3021,34 +3199,7 @@ def upsert_user_baseline(
     conn = sqlite3.connect(db_path)
     try:
         conn.execute("BEGIN IMMEDIATE")
-        existing = conn.execute(
-            "SELECT 1 FROM host_user_baseline"
-            " WHERE host_name = ? AND username = ?",
-            (host_name, username),
-        ).fetchone()
-        if existing is None:
-            conn.execute(
-                """
-                INSERT INTO host_user_baseline (
-                    host_name, username, uid, gid, primary_group, shell, home,
-                    groups_json, in_docker, in_sudo, first_seen_at, last_seen_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (host_name, username, *values, seen_at, seen_at),
-            )
-            inserted = True
-        else:
-            conn.execute(
-                """
-                UPDATE host_user_baseline SET
-                    uid = ?, gid = ?, primary_group = ?, shell = ?, home = ?,
-                    groups_json = ?, in_docker = ?, in_sudo = ?,
-                    last_seen_at = ?
-                WHERE host_name = ? AND username = ?
-                """,
-                (*values, seen_at, host_name, username),
-            )
-            inserted = False
+        inserted = _write_baseline(conn, host_name, account, seen_at)
         conn.commit()
     except BaseException:
         conn.rollback()
@@ -3141,29 +3292,16 @@ def save_user_scan_state(
     db_path = Path(db_path)
     init_storage(db_path)
 
-    updates: dict[str, object] = {}
-    if last_scan_at is not None:
-        updates["last_scan_at"] = _to_iso_utc(last_scan_at)
-    if last_usage_at is not None:
-        updates["last_usage_at"] = _to_iso_utc(last_usage_at)
-    if last_error is not None:
-        updates["last_error"] = str(last_error)
-
     conn = sqlite3.connect(db_path)
     try:
         conn.execute("BEGIN IMMEDIATE")
-        conn.execute(
-            "INSERT INTO host_user_scan_state (host_name) VALUES (?)"
-            " ON CONFLICT(host_name) DO NOTHING",
-            (host_name,),
+        _write_scan_state(
+            conn,
+            host_name,
+            last_scan_at=last_scan_at,
+            last_usage_at=last_usage_at,
+            last_error=last_error,
         )
-        if updates:
-            assignments = ", ".join(f"{column} = ?" for column in updates)
-            conn.execute(
-                f"UPDATE host_user_scan_state SET {assignments}"
-                " WHERE host_name = ?",
-                (*updates.values(), host_name),
-            )
         conn.commit()
     except BaseException:
         conn.rollback()

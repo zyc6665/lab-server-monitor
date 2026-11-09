@@ -13,6 +13,7 @@ and usage paths are derived from validated usernames and remote passwd data.
 
 from __future__ import annotations
 
+import posixpath
 import re
 import shlex
 from datetime import datetime
@@ -180,19 +181,29 @@ def build_scan_command() -> str:
     return _SCAN_COMMAND
 
 
-def build_usage_command(paths: list[str]) -> str:
-    """Build the ``du`` command for *paths*, each quoted and whitelisted.
+def _safe_usage_path(path: object) -> str:
+    """Validate one ``du`` target and return its normalised form.
 
-    Only absolute paths below ``/home/`` or ``/data/`` are accepted; anything
-    else, or a path containing a newline/NUL, raises :class:`ValueError`.
+    Only real paths directly below ``/home/`` or ``/data/`` are allowed: no
+    ``..`` segments (``/home/../etc`` would escape the allowed roots), no empty
+    component, and no control characters.
     """
+    if not isinstance(path, str) or not path.startswith(_USAGE_PREFIXES):
+        raise ValueError(f"不允许统计该路径的占用: {path!r}")
+    if any(char in path for char in ("\n", "\r", "\x00")):
+        raise ValueError(f"路径包含非法控制字符: {path!r}")
+    if ".." in path.split("/"):
+        raise ValueError(f"路径不允许包含上级目录: {path!r}")
+    if posixpath.normpath(path) != path.rstrip("/"):
+        raise ValueError(f"路径不是规范形式: {path!r}")
+    return path.rstrip("/")
+
+
+def build_usage_command(paths: list[str]) -> str:
+    """Build the ``du`` command for *paths*, each validated and quoted."""
     quoted: list[str] = []
     for path in paths:
-        if not isinstance(path, str) or not path.startswith(_USAGE_PREFIXES):
-            raise ValueError(f"不允许统计该路径的占用: {path!r}")
-        if "\n" in path or "\r" in path or "\x00" in path:
-            raise ValueError(f"路径包含非法控制字符: {path!r}")
-        quoted.append(shlex.quote(path))
+        quoted.append(shlex.quote(_safe_usage_path(path)))
     return "du -sx --block-size=1 -- " + " ".join(quoted)
 
 
@@ -252,6 +263,9 @@ def _parse_scan_output(
     homes: dict[str, dict] = {}
     data_dirs: dict[str, dict] = {}
     data_supported = False
+    saw_marker = False
+    saw_user_line = False
+    saw_unparseable = False
 
     for raw in text.splitlines():
         line = raw.rstrip("\r")
@@ -261,18 +275,22 @@ def _parse_scan_output(
         kind = fields[0]
 
         if kind == "U":
+            saw_user_line = True
             if len(fields) < 6:
+                saw_unparseable = True
                 continue
             name = fields[1]
             uid_text, gid_text = fields[2], fields[3]
             home, shell = fields[4], fields[5]
             gecos = "\t".join(fields[6:]) if len(fields) > 6 else ""
             if not validate_username(name) or name in seen:
+                saw_unparseable = True
                 continue
             try:
                 uid = int(uid_text)
                 gid = int(gid_text)
             except ValueError:
+                saw_unparseable = True
                 continue
             if uid < 1000:
                 continue
@@ -292,14 +310,17 @@ def _parse_scan_output(
 
         elif kind == "G":
             if len(fields) < 3:
+                saw_unparseable = True
                 continue
             name = fields[1]
             members_text = fields[3] if len(fields) > 3 else ""
             if not validate_username(name):
+                saw_unparseable = True
                 continue
             try:
                 gid = int(fields[2])
             except ValueError:
+                saw_unparseable = True
                 continue
             members = [
                 member.strip()
@@ -321,6 +342,20 @@ def _parse_scan_output(
         elif kind == "P":
             if len(fields) >= 2 and fields[1] in ("0", "1"):
                 data_supported = fields[1] == "1"
+                saw_marker = True
+
+    # A truncated/garbled response (empty output, only a marker, no group
+    # records) must not be mistaken for "the host now has zero users": that
+    # would wipe the snapshot and raise a false ``user-present`` for every
+    # baseline account.  The caller stores ``last_error`` and keeps the old data.
+    if not saw_marker:
+        raise RuntimeError("用户扫描输出缺少结束标记，已保留上次结果")
+    if not saw_user_line:
+        raise RuntimeError("用户扫描输出缺少账号数据，已保留上次结果")
+    if not users and saw_unparseable:
+        raise RuntimeError("用户扫描输出无法解析，已保留上次结果")
+    if users and not gid_names:
+        raise RuntimeError("用户扫描输出缺少组信息，已保留上次结果")
 
     return users, group_members, gid_names, homes, data_dirs, data_supported
 

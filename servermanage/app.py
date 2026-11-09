@@ -917,6 +917,12 @@ class MonitorService:
                 "errors": {},
             }
 
+        def report_progress(update: dict) -> None:
+            with self._user_scan_status_lock:
+                status = dict(self._user_scan_status)
+                status.update(update)
+                self._user_scan_status = status
+
         def worker() -> None:
             try:
                 summary = run_user_scan(
@@ -925,6 +931,7 @@ class MonitorService:
                     self.engine,
                     scan=self.collect_users,
                     force_usage=force_usage,
+                    progress=report_progress,
                 )
                 status = dict(summary)
                 status["running"] = False
@@ -1018,7 +1025,11 @@ class MonitorService:
         tasks.append(
             ScheduledTask("retention_cleanup", 3600, self.run_retention_cleanup)
         )
-        if self.config.user_monitoring.enabled:
+        # 全局关闭但个别主机单独开启时也要跑：run_user_scan 自己会跳过未启用的主机。
+        if any(
+            is_user_monitoring_enabled(host, self.config)
+            for host in self.config.servers
+        ):
             tasks.append(
                 ScheduledTask(
                     "user_scan",

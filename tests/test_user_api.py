@@ -9,6 +9,7 @@ login/CSRF patterns used by ``tests/test_web_api.py`` and
 from __future__ import annotations
 
 import re
+from dataclasses import replace
 from datetime import datetime, timezone
 
 import pytest
@@ -365,8 +366,10 @@ def test_host_status_unknown_then_ok_then_error(client):
     payload = test_client.get("/api/users").get_json()
     hosts = {row["name"]: row for row in payload["hosts"]}
     assert hosts[OTHER_HOST]["status"] == "ok"
+    # A row without measurements reports "not readable" (not "unknown"):
+    # the sizes are unavailable because ``du`` never ran for this account.
     assert all(
-        row["usage_readable"] is None
+        row["usage_readable"] is False
         for row in payload["accounts"]
         if row["host_name"] == OTHER_HOST
     )
@@ -549,6 +552,62 @@ def test_baseline_remove_unknown_row_returns_404(client):
 
     assert response.status_code == 404
     assert response.get_json()["error"] == "not_found"
+
+
+def test_baseline_remove_rejects_account_that_still_exists(client):
+    """Forgetting a live account would make the next scan report it as new."""
+    test_client, db_path = client
+
+    response = test_client.post(
+        "/api/users/baseline/remove", json={"host": HOST, "username": "alice"}
+    )
+
+    assert response.status_code == 409
+    assert response.get_json()["error"] == "account_present"
+    remaining = {row["username"] for row in get_user_baseline(HOST, db_path)}
+    assert "alice" in remaining
+
+
+def test_host_filter_keeps_every_host_in_the_payload(client):
+    """The host selector must not collapse to the filtered host (I3)."""
+    test_client, _db_path = client
+
+    payload = test_client.get(f"/api/users?host={HOST}").get_json()
+
+    assert {row["name"] for row in payload["hosts"]} == {HOST, OTHER_HOST}
+    assert {row["host_name"] for row in payload["accounts"]} == {HOST}
+
+
+def test_status_filter_accepts_ok(client):
+    """``status=ok`` shows only accounts without issues (M5)."""
+    test_client, _db_path = client
+
+    payload = test_client.get("/api/users?status=ok").get_json()
+
+    assert payload["filters"]["status"] == "ok"
+    assert payload["accounts"]
+    assert all(not row["issues"] for row in payload["accounts"])
+    assert all(row["state"] == "present" for row in payload["accounts"])
+
+
+def test_disabled_host_is_listed_but_not_monitored(tmp_path):
+    """A host with ``user_monitoring: false`` stays in the selector, with no rows."""
+    db_path = tmp_path / "users.db"
+    _seed(db_path)
+    config = _make_config()
+    config.servers[1] = replace(config.servers[1], user_monitoring=False)
+    app = create_app(config=config, db_path=db_path)
+    app.config.update(TESTING=True)
+    test_client = app.test_client()
+    _login(test_client)
+
+    payload = test_client.get("/api/users").get_json()
+
+    hosts = {row["name"]: row for row in payload["hosts"]}
+    assert hosts[OTHER_HOST]["status"] == "disabled"
+    assert hosts[OTHER_HOST]["monitored"] is False
+    assert hosts[OTHER_HOST]["accounts"] == 0
+    assert {row["host_name"] for row in payload["accounts"]} == {HOST}
 
 
 @pytest.mark.parametrize(

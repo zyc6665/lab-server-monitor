@@ -202,6 +202,19 @@ def test_owner_mismatch_emits_exactly_one_user_config_for_both_dirs():
     assert _fingerprints(events) == ["user-config:gpu-01:alice"]
 
 
+def test_unreadable_owner_does_not_raise_user_config():
+    """``None`` means "could not stat", not "owned by 未知".
+
+    The UI already treats an unreadable owner as fine, so alerting here would
+    produce an alarm with nothing to act on.
+    """
+    account = make_account(home_owner=None, data_owner=None)
+
+    events = evaluate_user_alerts(account, in_baseline=True, missing=False)
+
+    assert events == []
+
+
 def test_all_fields_use_account_host_and_username():
     account = make_account(
         host_name="gpu-02",

@@ -543,6 +543,10 @@ class SettingsService:
             alert_rules = _validate_alert_rules(payload.get("alert_rules"))
         else:
             alert_rules = (existing_entry or {}).get("alert_rules")
+        if "user_monitoring" in payload:
+            user_monitoring = _tri_state_bool(payload.get("user_monitoring"))
+        else:
+            user_monitoring = (existing_entry or {}).get("user_monitoring")
 
         # Validate every secret before the first write so a bad sudo value cannot
         # leave a partially written SSH credential behind.
@@ -584,6 +588,7 @@ class SettingsService:
             "owner": owner,
             "location": location,
             "notes": notes,
+            "user_monitoring": user_monitoring,
             "checks": checks,
             "alert_rules": alert_rules,
         }
@@ -614,6 +619,9 @@ class SettingsService:
         self._save_host_entries(entries)
         storage.delete_host_check_results(name, self.db_path)
         storage.delete_host_user_data(name, self.db_path)
+        # The host is gone: its rows will never be scanned again, so open user
+        # alerts must not linger as permanent active alerts.
+        storage.close_alerts_for_host(name, self.db_path, category="user")
         return self.load()
 
     def host_groups(self) -> list[str]:
@@ -993,6 +1001,7 @@ class SettingsService:
             "owner": str(entry.get("owner") or "").strip(),
             "location": str(entry.get("location") or "").strip(),
             "notes": str(entry.get("notes") or "").strip(),
+            "user_monitoring": _tri_state_bool_lenient(entry.get("user_monitoring")),
             "checks": [dict(check) for check in entry.get("checks") or []],
             "alert_rules": entry.get("alert_rules"),
             "password_configured": (
@@ -1051,6 +1060,9 @@ class SettingsService:
                     owner=str(entry.get("owner") or "").strip(),
                     location=str(entry.get("location") or "").strip(),
                     notes=str(entry.get("notes") or "").strip(),
+                    user_monitoring=_tri_state_bool_lenient(
+                        entry.get("user_monitoring")
+                    ),
                     checks=[
                         _build_host_check(check)
                         for check in entry.get("checks") or []
@@ -1694,6 +1706,32 @@ def _coerce_datetime(value: Any, field: str) -> datetime:
     return moment.astimezone(timezone.utc)
 
 
+def _tri_state_bool(value: Any) -> bool | None:
+    """Coerce a JSON/YAML value into ``True`` / ``False`` / ``None`` (inherit)."""
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)) and value in (0, 1):
+        return bool(value)
+    if isinstance(value, str):
+        text = value.strip().lower()
+        if text in ("", "inherit", "none", "null", "default"):
+            return None
+        if text in ("1", "true", "yes", "on"):
+            return True
+        if text in ("0", "false", "no", "off"):
+            return False
+    raise SettingsError(f"user_monitoring 必须是 true/false 或留空: {value!r}")
+
+
+def _tri_state_bool_lenient(value: Any) -> bool | None:
+    try:
+        return _tri_state_bool(value)
+    except SettingsError:
+        return None
+
+
 def _string_list(value: Any, *, default: list[str] | None = None) -> list[str]:
     if value is None:
         return list(default or [])
@@ -1928,6 +1966,7 @@ def _host_entry_from_config(host: HostConfig) -> dict[str, Any]:
         "owner": host.owner,
         "location": host.location,
         "notes": host.notes,
+        "user_monitoring": host.user_monitoring,
         "checks": [
             {
                 "name": check.name,

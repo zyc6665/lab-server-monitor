@@ -51,8 +51,11 @@
   // 后端返回的是带时区偏移的 ISO 字符串，这里显式转成本地时间展示。
   function formatTimestamp(value) {
     if (!value) { return '—'; }
-    var date = new Date(value);
-    if (isNaN(date.getTime())) { return String(value); }
+    var text = String(value);
+    // 后端已经格式化成 "YYYY-MM-DD HH:MM" 的本地时间，直接展示。
+    if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(text)) { return text; }
+    var date = new Date(text);
+    if (isNaN(date.getTime())) { return text; }
     return (
       date.getFullYear() + '-' + pad2(date.getMonth() + 1) + '-' + pad2(date.getDate()) +
       ' ' + pad2(date.getHours()) + ':' + pad2(date.getMinutes())
@@ -92,6 +95,19 @@
     return td;
   }
 
+  // 三态徽标：true/false 显示是否，null/undefined（例如账号已消失且没有历史）
+  // 显示破折号，避免把"未知"误显示为"否"。
+  function triBadgeCell(tr, value) {
+    if (value === null || value === undefined) {
+      return appendCell(tr, '—');
+    }
+    return appendBadgeCell(
+      tr,
+      value ? '是' : '否',
+      value ? 'badge-ok' : 'badge-muted'
+    );
+  }
+
   function directoryText(row, prefix) {
     if (prefix === 'data' && row.data_supported === false) { return '不支持'; }
     if (row.state === 'missing') { return '缺失'; }
@@ -118,25 +134,26 @@
     return '正常';
   }
 
+  function numberText(value) {
+    return value === null || value === undefined ? '—' : String(value);
+  }
+
   function buildRow(row) {
     var tr = document.createElement('tr');
     if (row.state === 'missing') { tr.className = 'user-row-missing'; }
 
     appendCell(tr, row.host_name || '—');
     appendCell(tr, row.username || '—');
-    appendCell(tr, row.uid === null || row.uid === undefined ? '—' : String(row.uid), 'mono');
+    appendCell(tr, numberText(row.uid), 'mono');
+    appendCell(tr, numberText(row.gid), 'mono');
     appendCell(tr, row.primary_group || '—');
     var groups = row.groups || [];
     appendCell(tr, groups.length ? groups.join(', ') : '—');
     appendBadgeCell(tr, statusBadgeText(row), statusBadgeClass(row));
 
-    if (row.state === 'missing') {
-      appendCell(tr, '—');
-      appendCell(tr, '—');
-    } else {
-      appendBadgeCell(tr, row.in_docker ? '是' : '否', row.in_docker ? 'badge-ok' : 'badge-muted');
-      appendBadgeCell(tr, row.in_sudo ? '是' : '否', row.in_sudo ? 'badge-ok' : 'badge-muted');
-    }
+    // 已消失的账号保留最后一次看到的属性，便于判断它当初是否在 docker/sudo 组。
+    triBadgeCell(tr, row.in_docker);
+    triBadgeCell(tr, row.in_sudo);
 
     appendCell(tr, directoryText(row, 'home'));
     appendCell(tr, directoryText(row, 'data'));
@@ -284,9 +301,18 @@
         finishRefresh('采集失败：' + payload.error);
         return null;
       }
+      var failed = payload.hosts_failed || 0;
+      var done = payload.hosts_done || 0;
+      var errors = payload.errors || {};
+      var failedHosts = Object.keys(errors);
       setRefreshStatus('采集完成，正在更新…');
       return fetchUsers().then(function () {
-        finishRefresh('已更新');
+        if (failed > 0) {
+          var detail = failedHosts.length ? failedHosts.join('、') : (failed + ' 台主机');
+          finishRefresh('已更新，但 ' + failed + ' 台主机采集失败：' + detail);
+        } else {
+          finishRefresh('已更新' + (done ? '（' + done + ' 台主机）' : ''));
+        }
         return payload;
       });
     }).catch(function () {

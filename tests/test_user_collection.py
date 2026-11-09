@@ -328,6 +328,61 @@ def test_added_account_creates_user_added_alert_that_is_not_auto_resolved(
     assert alerts[0]["fingerprint"] == "user-added:gpu-01:bob"
 
 
+def test_empty_first_scan_does_not_suppress_the_next_user_added(tmp_path):
+    """A host with zero accounts on its first scan is still "seeded".
+
+    The old ``not baseline and not previous_snapshot`` test treated the next
+    round as another first scan, so the first genuinely new account produced no
+    ``user-added`` alert.
+    """
+    db = tmp_path / "monitor.db"
+    engine, _ = make_engine(db)
+    alice = make_account("alice")
+    scan = FakeScan(lambda host, index: ([] if index == 0 else [alice], True, True))
+    config = make_config()
+
+    run_user_scan(config, db, engine, build_runner=recording_builder()[0],
+                  scan=scan, now=BASE)
+    assert storage.get_user_baseline("gpu-01", db) == []
+    assert storage.get_user_scan_state("gpu-01", db)["last_scan_at"]
+
+    run_user_scan(config, db, engine, build_runner=recording_builder()[0],
+                  scan=scan, now=BASE + timedelta(hours=1))
+
+    alerts = storage.list_alerts(db)
+    assert [row["fingerprint"] for row in alerts] == ["user-added:gpu-01:alice"]
+
+
+def test_due_usage_failure_marks_rows_stale_and_unreadable(tmp_path):
+    """``usage_due`` but no refresh => stale=True and usage_readable=False.
+
+    Persisting both flags is what lets the UI say "no permission" instead of
+    showing last week's byte counts as if they were current.
+    """
+    db = tmp_path / "monitor.db"
+    engine, _ = make_engine(db)
+    alice = make_account("alice")
+    config = make_config(
+        user_monitoring=UserMonitoringConfig(usage_interval_seconds=3600)
+    )
+    scan = FakeScan(lambda host, index: ([alice], True, True))
+
+    run_user_scan(config, db, engine, build_runner=recording_builder()[0],
+                  scan=scan, now=BASE)
+
+    # Due again, but this time du needs sudo and has none.
+    failing = FakeScan(lambda host, index: ([alice], False, False))
+    run_user_scan(config, db, engine, build_runner=recording_builder()[0],
+                  scan=failing, now=BASE + timedelta(hours=2))
+    assert failing.calls[-1].usage_due is True
+
+    [row] = storage.get_host_user_snapshot("gpu-01", db)
+    assert row["usage_stale"] is True
+    assert row["usage_readable"] is False
+    # Sizes are carried over from the last successful measurement.
+    assert row["home_size_bytes"] == alice.home_size_bytes
+
+
 def test_removed_account_alert_stays_active_then_resolves_when_it_returns(
     tmp_path,
 ):
@@ -732,3 +787,55 @@ def test_build_tasks_registers_user_scan_only_when_enabled(tmp_path):
         collect_users=FakeScan(lambda host, index: ([], True, False)),
     )
     assert "user_scan" not in {task.name for task in disabled._build_tasks()}
+
+
+def test_build_tasks_registers_user_scan_for_a_single_enabled_host(tmp_path):
+    """Global off + one host on must still schedule the scan."""
+    config = make_config(
+        make_host("gpu-01", user_monitoring=True),
+        user_monitoring=UserMonitoringConfig(enabled=False),
+    )
+
+    service = MonitorService(
+        config,
+        db_path=tmp_path / "m.db",
+        collect_users=FakeScan(lambda host, index: ([], True, False)),
+    )
+
+    assert "user_scan" in {task.name for task in service._build_tasks()}
+
+
+def test_refresh_users_reports_progress_per_host(tmp_path):
+    """The UI polls ``hosts_done``; it must advance during the round."""
+    seen: list[dict] = []
+
+    def handler(host, index):
+        return ([make_account(host_name=host.name)], True, False)
+
+    config = make_config(
+        make_host("gpu-01"), make_host("gpu-02", host="10.0.0.2")
+    )
+    service = MonitorService(
+        config,
+        db_path=tmp_path / "monitor.db",
+        collect_users=FakeScan(handler),
+    )
+
+    original = service._user_scan_status
+
+    def record_progress(update):
+        seen.append(dict(update))
+
+    assert service.refresh_users()["started"] is True
+    deadline = time.time() + 5
+    while service.user_scan_status()["running"] and time.time() < deadline:
+        window = service.user_scan_status()
+        if window.get("hosts_done"):
+            seen.append(dict(window))
+        time.sleep(0.01)
+
+    assert seen, "no progress was reported while the scan ran"
+    final = service.user_scan_status()
+    assert final["hosts_done"] == 2
+    assert final["hosts_total"] == 2
+    assert final["accounts"] == 2

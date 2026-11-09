@@ -43,9 +43,17 @@ from flask import (
     url_for,
 )
 
-from servermanage import capacity, disk_capacity, host_import, host_probe, maintenance, storage
+from servermanage import (
+    capacity,
+    disk_capacity,
+    host_import,
+    host_probe,
+    maintenance,
+    storage,
+)
 from servermanage.alerts import fingerprint_for
 from servermanage.availability import run_host_checks
+from servermanage.user_collection import is_user_monitoring_enabled
 from servermanage.disk_health import AlertEvent
 from servermanage.models import AuthConfig, HostConfig, WebhookConfig
 from servermanage.notify_webhook import send_webhook
@@ -1069,20 +1077,21 @@ def _user_row_issues(row: dict[str, Any]) -> list[str]:
     return issues
 
 
-def _user_usage_readable(row: dict[str, Any]) -> bool | None:
-    """Whether a snapshot row carries live directory sizes.
+def _user_usage_readable(row: dict[str, Any]) -> bool:
+    """Whether the collector could measure this account's directories.
 
-    There is no ``usage_readable`` column in the schema: the collector records
-    ``usage_stale`` plus the per-directory sizes, so the API derives the flag.
-    ``None`` means "not applicable / unknown" (stale usage counters), ``False``
-    means the account exists but its directories could not be measured.  A host
-    whose rows are ``False`` is *not* an error host.
+    Persisted by the collector (``usage_readable``): ``False`` means ``du``
+    failed for lack of privileges, so the size columns are last-known values
+    rather than live ones.  Rows collected before the column existed fall back
+    to "sizes present => readable".
     """
-    if row.get("home_size_bytes") is not None or row.get("data_size_bytes") is not None:
-        return True
-    if row.get("usage_stale"):
-        return None
-    return False
+    value = row.get("usage_readable")
+    if value is not None:
+        return bool(value)
+    return bool(
+        row.get("home_size_bytes") is not None
+        or row.get("data_size_bytes") is not None
+    )
 
 
 def _present_user_row(host_name: str, row: dict[str, Any]) -> dict[str, Any]:
@@ -1175,6 +1184,18 @@ def _user_host_status(scan_state: dict[str, Any] | None) -> str:
     return "unknown"
 
 
+def _to_local_text(value: Any, tz) -> Any:
+    """Render a stored ISO UTC timestamp as ``YYYY-MM-DD HH:MM`` local time.
+
+    Templates show this directly, so a raw ISO string with an offset would look
+    like machine output.  Unparseable values pass through untouched.
+    """
+    parsed = _parse_iso(value)
+    if parsed is None:
+        return value
+    return parsed.astimezone(tz).strftime("%Y-%m-%d %H:%M")
+
+
 def _build_user_rows(
     host_name: str,
     db_path,
@@ -1189,7 +1210,7 @@ def _build_user_rows(
     if tz is not None:
         for row in rows:
             for key in ("collected_at", "usage_collected_at", "last_seen_at"):
-                row[key] = _to_local_iso(row.get(key), tz)
+                row[key] = _to_local_text(row.get(key), tz)
     return rows
 
 
@@ -1205,30 +1226,45 @@ def _build_users_payload(
     """Build the ``GET /api/users`` payload for every configured host."""
     host_filter = (host or "").strip()
     needle = (query or "").strip().casefold()
-    status_filter = status if status in ("all", "warning", "error") else "all"
+    status_filter = status if status in ("all", "warning", "error", "ok") else "all"
 
-    host_names: list[str] = []
+    # ``hosts`` always lists every configured host: the page's selector must not
+    # collapse to a single entry just because a host filter is active.
+    all_names: list[str] = []
+    enabled: dict[str, bool] = {}
     for server in config.servers:
-        if server.name not in host_names:
-            host_names.append(server.name)
-    if host_filter:
-        host_names = [name for name in host_names if name == host_filter]
+        if server.name in enabled:
+            continue
+        all_names.append(server.name)
+        enabled[server.name] = is_user_monitoring_enabled(server, config)
 
     host_blocks: list[dict[str, Any]] = []
     all_rows: list[dict[str, Any]] = []
-    rows_by_host: dict[str, list[dict[str, Any]]] = {}
     statuses: dict[str, str] = {}
-    for name in host_names:
+    for name in all_names:
+        if not enabled[name]:
+            statuses[name] = "disabled"
+            host_blocks.append(
+                {
+                    "name": name,
+                    "status": "disabled",
+                    "monitored": False,
+                    "last_scan_at": None,
+                    "last_error": None,
+                    "accounts": 0,
+                }
+            )
+            continue
         rows = _build_user_rows(name, db_path, tz)
         state = storage.get_user_scan_state(name, db_path)
         host_status = _user_host_status(state)
         statuses[name] = host_status
-        rows_by_host[name] = rows
         all_rows.extend(rows)
         host_blocks.append(
             {
                 "name": name,
                 "status": host_status,
+                "monitored": True,
                 "last_scan_at": _to_local_iso((state or {}).get("last_scan_at"), tz),
                 "last_error": (state or {}).get("last_error") or None,
                 "accounts": len(rows),
@@ -1237,9 +1273,15 @@ def _build_users_payload(
 
     filtered: list[dict[str, Any]] = []
     for row in all_rows:
+        if host_filter and row["host_name"] != host_filter:
+            continue
         if status_filter == "warning" and not (row["issues"] or row["state"] == "missing"):
             continue
         if status_filter == "error" and statuses.get(row["host_name"]) != "error":
+            continue
+        if status_filter == "ok" and (
+            row["issues"] or row["state"] == "missing"
+        ):
             continue
         if needle:
             haystack = " ".join(
@@ -2122,6 +2164,22 @@ def register_routes(app: Flask) -> None:
         if host_name not in {server.name for server in _config(app).servers}:
             return jsonify({"error": "unknown_host"}), 400
         db_path = _db_path(app)
+        # Only a *missing* account may be forgotten.  Removing a live account's
+        # baseline would make the next scan report it as newly added.
+        snapshot_names = {
+            str(row.get("username"))
+            for row in storage.get_host_user_snapshot(host_name, db_path)
+        }
+        if username in snapshot_names:
+            return (
+                jsonify(
+                    {
+                        "error": "account_present",
+                        "message": "该账号仍存在于主机上，无法清除基线",
+                    }
+                ),
+                409,
+            )
         if not storage.delete_user_baseline(host_name, username, db_path):
             return jsonify({"error": "not_found"}), 404
         _resolve_user_present_alert(host_name, username, db_path)

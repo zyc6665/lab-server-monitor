@@ -200,6 +200,7 @@
         <tr>
           <th>用户名</th>
           <th>UID</th>
+          <th>GID</th>
           <th>主组</th>
           <th>附加组</th>
           <th>状态</th>
@@ -216,6 +217,7 @@
         <tr{% if user.state == 'missing' %} class="user-row-missing"{% endif %}>
           <td>{{ user.username or '—' }}</td>
           <td class="mono">{{ user.uid if user.uid is not none else '—' }}</td>
+          <td class="mono">{{ user.gid if user.gid is not none else '—' }}</td>
           <td>{{ user.primary_group or '—' }}</td>
           <td>{{ user.groups|join(', ') if user.groups else '—' }}</td>
           <td>{{ user_state_badge(user) }}</td>

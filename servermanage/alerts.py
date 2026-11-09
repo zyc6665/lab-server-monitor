@@ -392,12 +392,17 @@ def evaluate_user_alerts(
             )
         )
 
-    home_owner_bad = (
-        account.home_exists and account.home_owner != account.username
+    # An unreadable owner (``stat`` failed => None) is not a mismatch: alerting
+    # on it would claim "owner is 未知" for a directory we simply cannot read.
+    home_owner_bad = bool(
+        account.home_exists
+        and account.home_owner
+        and account.home_owner != account.username
     )
-    data_owner_bad = (
+    data_owner_bad = bool(
         account.data_supported
         and account.data_exists
+        and account.data_owner
         and account.data_owner != account.username
     )
     if home_owner_bad or data_owner_bad:

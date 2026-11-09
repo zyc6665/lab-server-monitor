@@ -285,6 +285,28 @@ def test_build_usage_command_accepts_home_and_data_prefixes():
     assert shlex.split(command)[-2:] == ["/home/alice", "/data/alice"]
 
 
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/home/../etc",
+        "/data/../root",
+        "/home/alice/../../etc",
+        "/home//alice",
+        "/home/.",
+    ],
+)
+def test_build_usage_command_rejects_traversal(path):
+    """``/home/../etc`` starts with an allowed prefix but escapes the roots."""
+    with pytest.raises(ValueError):
+        build_usage_command([path])
+
+
+def test_build_usage_command_accepts_trailing_slash():
+    command = build_usage_command(["/home/alice/"])
+
+    assert shlex.split(command)[-1] == "/home/alice"
+
+
 # --------------------------------------------------------------------------
 # du parsing
 # --------------------------------------------------------------------------
@@ -373,6 +395,30 @@ def test_collect_host_users_runs_scan_with_command_timeout():
     collect(runner, command_timeout=300)
 
     assert runner.run_calls == [(build_scan_command(), 300)]
+
+
+@pytest.mark.parametrize(
+    "output",
+    [
+        "",  # nothing at all
+        "P\t1\n",  # marker but no account records (awk failed)
+        "garbage\n",  # unparseable payload
+        "P\t1\nU\tbroken\n",  # truncated U record
+    ],
+)
+def test_collect_host_users_rejects_incomplete_scan_output(output):
+    """A garbled response must raise, not look like "this host has no users"."""
+    with pytest.raises(RuntimeError):
+        collect(FakeRunner(output))
+
+
+def test_collect_host_users_accepts_a_host_without_ordinary_accounts():
+    """Only system accounts is a legitimate empty result, not an error."""
+    scan = "P\t0\nU\troot\t0\t0\t/root\t/bin/bash\troot\nG\troot\t0\t\n"
+
+    accounts, _, _ = collect(FakeRunner(scan))
+
+    assert accounts == []
 
 
 def test_collect_host_users_primary_group_is_first_then_supplemental_sorted():
