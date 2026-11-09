@@ -1237,3 +1237,37 @@ html[data-theme="dark"] .command-footer { background: #111c2e; }
   .command-overlay { padding-top: 4vh; }
   .command-dialog { max-height: 82vh; }
 }
+
+.capacity-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.capacity-row {
+  display: grid;
+  grid-template-columns: minmax(120px, 1.4fr) .7fr .8fr 1.6fr;
+  gap: 10px;
+  align-items: center;
+  padding: 9px 12px;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  text-decoration: none;
+}
+.capacity-row:hover { background: var(--bg); }
+.capacity-row.capacity-risk-critical { border-left-color: #dc2626; }
+.capacity-row.capacity-risk-warning { border-left-color: #f59e0b; }
+.capacity-host { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.capacity-metric { color: var(--text-muted); }
+.capacity-value { color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.capacity-trend { text-align: right; font-variant-numeric: tabular-nums; }
+.capacity-risk-critical .capacity-trend { color: #dc2626; font-weight: 600; }
+.capacity-risk-warning .capacity-trend { color: #b45309; font-weight: 600; }
+html[data-theme="dark"] .capacity-row:hover { background: #1e2d47; }
+html[data-theme="dark"] .capacity-risk-warning .capacity-trend { color: #fbbf24; }
+@media (max-width: 760px) {
+  .capacity-row { grid-template-columns: 1fr auto; }
+  .capacity-value { display: none; }
+  .capacity-trend { grid-column: 1 / -1; text-align: left; }
+}

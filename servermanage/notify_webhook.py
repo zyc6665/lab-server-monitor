@@ -1,10 +1,11 @@
-"""Webhook notification channels (WeCom / DingTalk / generic JSON).
+"""Webhook notification channels (WeCom / DingTalk / Feishu / generic JSON).
 
-WeCom (企业微信) and DingTalk (钉钉) robot webhooks must receive a specific
-"text" payload; a generic webhook just receives a flat JSON object describing
-the alert.  :func:`send_webhook` performs the HTTP POST with a bounded timeout
-and never raises — it returns ``True`` only for a 2xx response so the composite
-notifier can isolate a failing channel.
+WeCom (企业微信), DingTalk (钉钉) and Feishu (飞书) robot webhooks must receive
+a specific "text" payload; a generic webhook just receives a flat JSON object
+describing the alert.  :func:`send_webhook` performs the HTTP POST with a
+bounded timeout and never raises — it returns ``True`` only for a 2xx response
+whose JSON body (when present) reports success so the composite notifier can
+isolate a failing channel.
 
 The webhook URL is resolved from ``config.url`` first and then from the
 environment variable named by ``config.url_env``.  The config loader normalises
@@ -60,10 +61,13 @@ def build_webhook_payload(kind: str, event: AlertEvent) -> dict[str, Any]:
     """Build the JSON payload for *kind* from *event*.
 
     * ``wecom`` / ``dingtalk`` → ``{"msgtype": "text", "text": {"content": ...}}``
+    * ``feishu`` → ``{"msg_type": "text", "content": {"text": ...}}``
     * anything else → a flat ``{"host", "severity", "title", "message",
       "timestamp"}`` object.
     """
     normalized = (kind or "").strip().lower()
+    if normalized == "feishu":
+        return {"msg_type": "text", "content": {"text": _text_content(event)}}
     if normalized in _TEXT_KINDS:
         return {"msgtype": "text", "text": {"content": _text_content(event)}}
     return {
@@ -94,6 +98,47 @@ def _response_status(response: Any) -> int | None:
         return int(status) if status is not None else None
     except (TypeError, ValueError):
         return None
+
+
+def _response_json(response: Any) -> dict[str, Any] | None:
+    """Read and decode a small JSON response body, if the object supports it."""
+    read = getattr(response, "read", None)
+    if not callable(read):
+        return None
+    try:
+        raw = read()
+    except Exception:  # noqa: BLE001 - response body is best-effort
+        return None
+    if isinstance(raw, bytes):
+        text = raw.decode("utf-8", errors="replace")
+    elif isinstance(raw, str):
+        text = raw
+    else:
+        return None
+    try:
+        payload = json.loads(text)
+    except (TypeError, ValueError):
+        return None
+    return payload if isinstance(payload, dict) else None
+
+
+def _webhook_body_ok(kind: str, payload: dict[str, Any] | None) -> bool:
+    """Check robot error codes when a channel returns HTTP 200 with an error."""
+    if not payload:
+        return True
+    normalized = (kind or "").strip().lower()
+    if normalized == "feishu":
+        code = payload.get("code", payload.get("StatusCode"))
+    elif normalized in _TEXT_KINDS:
+        code = payload.get("errcode")
+    else:
+        return True
+    if code is None:
+        return True
+    try:
+        return int(code) == 0
+    except (TypeError, ValueError):
+        return False
 
 
 def send_webhook(
@@ -135,6 +180,7 @@ def send_webhook(
         response = open_url(request, timeout=WEBHOOK_TIMEOUT_SECONDS)
         try:
             status = _response_status(response)
+            body = _response_json(response) if status is not None and 200 <= status < 300 else None
         finally:
             close = getattr(response, "close", None)
             if callable(close):
@@ -150,6 +196,9 @@ def send_webhook(
         return False
 
     if status is not None and 200 <= status < 300:
-        return True
+        if _webhook_body_ok(config.type, body):
+            return True
+        LOGGER.warning("Webhook endpoint reported an application error (type=%s)", config.type)
+        return False
     LOGGER.warning("Webhook endpoint returned non-2xx status: %s", status)
     return False

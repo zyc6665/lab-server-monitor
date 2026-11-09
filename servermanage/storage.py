@@ -743,14 +743,14 @@ def fetch_host_history(
     """Return chart points for one host.
 
     ``24h`` reads raw samples (the last 100 points kept by retention) so the
-    chart has detail.  ``7d``/``30d`` read the compact daily summary instead,
-    which survives raw-point pruning.
+    chart has detail.  ``7d``/``30d``/``90d`` read the compact daily summary
+    instead, which survives raw-point pruning.
     """
     db_path = Path(db_path)
     if not db_path.exists():
         return []
-    if range_key not in ("24h", "7d", "30d"):
-        raise ValueError("range_key must be 24h, 7d or 30d")
+    if range_key not in ("24h", "7d", "30d", "90d"):
+        raise ValueError("range_key must be 24h, 7d, 30d or 90d")
     current = now or datetime.now(timezone.utc)
     if current.tzinfo is None:
         current = current.replace(tzinfo=timezone.utc)
@@ -785,7 +785,7 @@ def fetch_host_history(
             )
         return points
 
-    days = 7 if range_key == "7d" else 30
+    days = {"7d": 7, "30d": 30, "90d": 90}[range_key]
     start_day = (current.astimezone(tz).date() - timedelta(days=days - 1)).isoformat()
     with sqlite3.connect(db_path) as conn:
         conn.row_factory = sqlite3.Row

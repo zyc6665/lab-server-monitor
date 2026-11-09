@@ -236,6 +236,42 @@ def test_login_and_overview(env):
     }
 
 
+def test_overview_capacity_endpoint(env):
+    client, db_path, _alert_id = env
+    import sqlite3
+    from datetime import timedelta
+    from zoneinfo import ZoneInfo
+
+    today = datetime.now(timezone.utc).astimezone(ZoneInfo("Asia/Shanghai")).date()
+    with sqlite3.connect(db_path) as conn:
+        for index in range(10):
+            day = (today - timedelta(days=9 - index)).isoformat()
+            conn.execute(
+                """
+                INSERT INTO host_daily_summary
+                    (day, host_name, tz, host, sample_count, success_count,
+                     disk_pct_sum, disk_pct_max, updated_at)
+                VALUES (?, ?, ?, ?, 1, 1, ?, ?, ?)
+                """,
+                (day, HOST_NAME, "Asia/Shanghai", HOST_ADDRESS, 50.0 + index * 3, 50.0 + index * 3, datetime.now(timezone.utc).isoformat()),
+            )
+
+    _login(client)
+    response = client.get("/api/overview/capacity?days=30")
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["days"] == 30
+    host = next(item for item in payload["hosts"] if item["host_name"] == HOST_NAME)
+    disk = next(metric for metric in host["metrics"] if metric["key"] == "disk")
+    assert disk["threshold"] == 90
+    assert disk["status"] in {"warning", "critical"}
+    assert disk["current"] == pytest.approx(77.0)
+
+    assert client.get("/api/overview/capacity?days=99").status_code == 400
+    overview = client.get("/api/overview").get_json()
+    assert "capacity" in overview
+
+
 def test_host_detail_and_alerts(env):
     client, db_path, _alert_id = env
     _login(client)

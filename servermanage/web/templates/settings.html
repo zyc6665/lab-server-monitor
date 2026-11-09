@@ -266,6 +266,7 @@
         <select data-field="webhook.type">
           <option value="wecom" {% if settings.alerts.webhook.type == 'wecom' %}selected{% endif %}>企业微信</option>
           <option value="dingtalk" {% if settings.alerts.webhook.type == 'dingtalk' %}selected{% endif %}>钉钉</option>
+          <option value="feishu" {% if settings.alerts.webhook.type == 'feishu' %}selected{% endif %}>飞书</option>
           <option value="generic" {% if settings.alerts.webhook.type == 'generic' %}selected{% endif %}>通用 Webhook</option>
         </select>
       </label>

@@ -241,6 +241,74 @@
     }
   }
 
+  var CAPACITY_LABELS = { memory: '内存', disk: '磁盘', gpu_memory: 'GPU 显存' };
+
+  function renderCapacityForecast(items) {
+    var list = document.getElementById('capacity-list');
+    var summary = document.getElementById('capacity-summary');
+    if (!list) { return; }
+    while (list.firstChild) { list.removeChild(list.firstChild); }
+    var risks = [];
+    var insufficient = 0;
+    (items || []).forEach(function (host) {
+      (host.metrics || []).forEach(function (metric) {
+        if (metric.status === 'insufficient_data') { insufficient += 1; }
+        if (metric.status === 'critical' || metric.status === 'warning') {
+          risks.push({ host: host, metric: metric });
+        }
+      });
+    });
+    risks.sort(function (a, b) {
+      if (a.metric.status !== b.metric.status) { return a.metric.status === 'critical' ? -1 : 1; }
+      return (a.metric.days_to_threshold == null ? 9999 : a.metric.days_to_threshold) - (b.metric.days_to_threshold == null ? 9999 : b.metric.days_to_threshold);
+    });
+    if (summary) {
+      if (risks.length) {
+        summary.textContent = '未来 30 天内有 ' + risks.length + ' 项容量风险';
+      } else if (insufficient) {
+        summary.textContent = '容量数据不足（需至少 5 天历史）';
+      } else {
+        summary.textContent = '未来 30 天容量平稳';
+      }
+    }
+    if (!risks.length) {
+      var empty = document.createElement('p');
+      empty.className = 'empty';
+      empty.textContent = insufficient ? '历史数据不足，暂时无法预测' : '暂无容量风险';
+      list.appendChild(empty);
+      return;
+    }
+    risks.slice(0, 8).forEach(function (item) {
+      var metric = item.metric;
+      var row = document.createElement('a');
+      row.className = 'capacity-row capacity-risk-' + metric.status;
+      row.href = '/host/' + encodeURIComponent(item.host.host_name || '');
+      var name = document.createElement('span');
+      name.className = 'capacity-host';
+      name.textContent = item.host.host_name || '未命名';
+      var label = document.createElement('span');
+      label.className = 'capacity-metric';
+      label.textContent = CAPACITY_LABELS[metric.key] || metric.key;
+      var value = document.createElement('span');
+      value.className = 'capacity-value';
+      value.textContent = '当前 ' + formatPercent(metric.current);
+      var trend = document.createElement('span');
+      trend.className = 'capacity-trend';
+      if (metric.days_to_threshold === 0) {
+        trend.textContent = '已达阈值 ' + formatPercent(metric.threshold);
+      } else if (metric.days_to_threshold == null) {
+        trend.textContent = '趋势平缓';
+      } else {
+        trend.textContent = '约 ' + Math.max(0, Math.round(metric.days_to_threshold)) + ' 天后达到 ' + formatPercent(metric.threshold);
+      }
+      row.appendChild(name);
+      row.appendChild(label);
+      row.appendChild(value);
+      row.appendChild(trend);
+      list.appendChild(row);
+    });
+  }
+
   function booleanBadge(online) {
     var badge = document.createElement('span');
     badge.className = 'badge ' + (online ? 'badge-online' : 'badge-offline');
@@ -1116,6 +1184,7 @@
       if (!data) { return; }
       updateSummary(data.summary, data.hosts);
       updateHosts(data.hosts);
+      renderCapacityForecast(data.capacity || []);
     });
   }
 

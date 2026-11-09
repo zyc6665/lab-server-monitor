@@ -283,6 +283,23 @@ def test_overview_has_resource_ranking_card(client):
         assert f'data-rank-metric="{metric}"' in html
 
 
+def test_overview_has_capacity_forecast_card(client):
+    html = _page(client, "/")
+    assert 'id="capacity-forecast"' in html
+    assert "容量预测" in html
+    assert 'id="capacity-summary"' in html
+    assert 'id="capacity-list"' in html
+
+    js = (STATIC / "app.js").read_text(encoding="utf-8")
+    assert "function renderCapacityForecast" in js
+    assert "data.capacity" in js
+    assert "days_to_threshold" in js
+
+    css = (STATIC / "style.css").read_text(encoding="utf-8")
+    assert ".capacity-row" in css
+    assert ".capacity-risk-critical" in css
+
+
 def test_overview_keeps_filter_bar_and_host_columns(client):
     html = _page(client, "/")
     assert 'id="host-filter"' in html

@@ -275,6 +275,12 @@ def test_settings_js_submits_checks_and_rules(client):
     assert "result.ok === false" in source
 
 
+def test_alert_form_exposes_feishu_webhook(client):
+    html = client.get("/settings").get_data(as_text=True)
+    assert 'value="feishu"' in html
+    assert "飞书" in html
+
+
 def test_alert_form_exposes_global_consecutive_periods(client):
     html = client.get("/settings").get_data(as_text=True)
 

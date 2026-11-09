@@ -43,7 +43,7 @@ from flask import (
     url_for,
 )
 
-from servermanage import disk_capacity, host_import, host_probe, maintenance, storage
+from servermanage import capacity, disk_capacity, host_import, host_probe, maintenance, storage
 from servermanage.availability import run_host_checks
 from servermanage.disk_health import AlertEvent
 from servermanage.models import AuthConfig, HostConfig, WebhookConfig
@@ -998,6 +998,13 @@ def _build_overview(config, db_path) -> dict[str, Any]:
             "silenced_count": silenced_count,
         },
         "hosts": hosts,
+        "capacity": capacity.build_capacity_forecasts(
+            db_path,
+            config.servers,
+            tz=tz,
+            now=now,
+            thresholds=config.alerts.thresholds,
+        ),
     }
 
 
@@ -1698,6 +1705,35 @@ def register_routes(app: Flask) -> None:
     @app.get("/api/overview")
     def api_overview():
         return jsonify(_build_overview(_config(app), _db_path(app)))
+
+    @app.get("/api/overview/capacity")
+    def api_overview_capacity():
+        try:
+            days = int(request.args.get("days", "30"))
+        except (TypeError, ValueError):
+            return jsonify({"error": "invalid_days"}), 400
+        if days not in (7, 30, 90):
+            return jsonify({"error": "invalid_days"}), 400
+        config = _config(app)
+        hosts = capacity.build_capacity_forecasts(
+            _db_path(app),
+            config.servers,
+            tz=resolve_timezone(config.app.timezone),
+            thresholds=config.alerts.thresholds,
+            days=days,
+        )
+        thresholds = config.alerts.thresholds
+        return jsonify(
+            {
+                "days": days,
+                "thresholds": {
+                    "memory": thresholds.memory_percent,
+                    "disk": thresholds.disk_percent,
+                    "gpu_memory": thresholds.gpu_memory_percent,
+                },
+                "hosts": hosts,
+            }
+        )
 
     @app.get("/api/overview/history")
     def api_overview_history():

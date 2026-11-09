@@ -58,6 +58,15 @@ class FakeResponse:
         self.closed = True
 
 
+class JsonFakeResponse(FakeResponse):
+    def __init__(self, status: int, payload: dict) -> None:
+        super().__init__(status)
+        self.payload = payload
+
+    def read(self) -> bytes:
+        return json.dumps(self.payload).encode("utf-8")
+
+
 class RecordingOpener:
     """Fake ``urlopen`` that records the request and returns a fixed response."""
 
@@ -100,6 +109,16 @@ def test_webhook_payload_dingtalk():
     assert "gpu-01" in content
 
 
+def test_webhook_payload_feishu():
+    payload = build_webhook_payload("feishu", _event())
+    assert payload["msg_type"] == "text"
+    assert set(payload["content"]) == {"text"}
+    content = payload["content"]["text"]
+    assert "warning" in content
+    assert "CPU 使用率过高" in content
+    assert "gpu-01" in content
+
+
 def test_webhook_payload_generic():
     payload = build_webhook_payload("generic", _event())
     assert payload["host"] == "gpu-01"
@@ -136,6 +155,24 @@ def test_send_webhook_posts_json():
     assert body["host"] == "gpu-01"
     assert body["severity"] == "warning"
     assert timeout is not None and timeout > 0
+
+
+def test_send_webhook_feishu_success_reads_code_zero():
+    opener = RecordingOpener(JsonFakeResponse(200, {"code": 0, "msg": "success"}))
+    config = WebhookConfig(enabled=True, type="feishu", url="https://open.feishu.cn/hook", url_env=None)
+    assert send_webhook(config, _event(), opener=opener) is True
+
+
+def test_send_webhook_feishu_application_error_returns_false():
+    opener = RecordingOpener(JsonFakeResponse(200, {"code": 9499, "msg": "Bad Request"}))
+    config = WebhookConfig(enabled=True, type="feishu", url="https://open.feishu.cn/hook", url_env=None)
+    assert send_webhook(config, _event(), opener=opener) is False
+
+
+def test_send_webhook_wecom_errcode_error_returns_false():
+    opener = RecordingOpener(JsonFakeResponse(200, {"errcode": 40013, "errmsg": "invalid corpid"}))
+    config = WebhookConfig(enabled=True, type="wecom", url="https://qyapi.weixin.qq.com/hook", url_env=None)
+    assert send_webhook(config, _event(), opener=opener) is False
 
 
 def test_send_webhook_reads_url_from_env(monkeypatch):
