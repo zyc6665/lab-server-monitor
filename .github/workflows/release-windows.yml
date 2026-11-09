@@ -59,6 +59,9 @@ jobs:
         shell: pwsh
 
       - name: Build portable package
+        env:
+          ELECTRON_MIRROR: https://npmmirror.com/mirrors/electron/
+          ELECTRON_BUILDER_BINARIES_MIRROR: https://npmmirror.com/mirrors/electron-builder-binaries/
         run: powershell -NoProfile -ExecutionPolicy Bypass -File desktop/scripts/build-portable.ps1
         shell: pwsh
 
