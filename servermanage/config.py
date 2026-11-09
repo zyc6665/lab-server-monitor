@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import re
 from pathlib import Path
 from typing import Any
 
@@ -17,6 +18,8 @@ from servermanage.models import (
     DiskHealthConfig,
     DiskHealthRuleConfig,
     ExecutiveReportConfig,
+    HostAlertRules,
+    HostCheckConfig,
     HostConfig,
     HostDiskHealthOverride,
     ReportConfig,
@@ -30,6 +33,17 @@ from servermanage.models import (
 
 class ConfigError(ValueError):
     pass
+
+
+_MAX_HOST_CHECKS = 20
+_EXPECTED_STATUS_RE = re.compile(r"^\d{3}(-\d{3})?$")
+_ALERT_RULE_RANGES = {
+    "cpu_percent": (1, 100),
+    "memory_percent": (1, 100),
+    "disk_percent": (1, 100),
+    "gpu_memory_percent": (1, 100),
+    "disk_temperature_c": (1, 120),
+}
 
 
 def _require_env(name: str) -> str:
@@ -181,7 +195,21 @@ def _load_alerts(data: Any) -> AlertsConfig:
         offline_failures=int(mapping.get("offline_failures", 2)),
         aggregate_by_host=bool(mapping.get("aggregate_by_host", True)),
         notify_on_recovery=bool(mapping.get("notify_on_recovery", True)),
+        consecutive_periods=_load_consecutive_periods(mapping.get("consecutive_periods")),
     )
+
+
+def _load_consecutive_periods(value: Any) -> int:
+    """Return a 1..10 period count, clamping out-of-range numbers."""
+    if value is None:
+        return 2
+    if isinstance(value, bool):
+        raise ConfigError("alerts.consecutive_periods must be an integer")
+    try:
+        periods = int(value)
+    except (TypeError, ValueError) as exc:
+        raise ConfigError("alerts.consecutive_periods must be an integer") from exc
+    return max(1, min(10, periods))
 
 
 def _load_disk_health_rules(data: Any) -> DiskHealthRuleConfig:
@@ -234,6 +262,112 @@ def _load_host_disk(data: Any) -> HostDiskHealthOverride | None:
         storcli_path=str(storcli_path) if storcli_path is not None else None,
         use_sudo=_optional_bool("use_sudo"),
     )
+
+
+def _load_host_checks(data: Any) -> list[HostCheckConfig]:
+    """Parse and validate the ``servers[].checks`` list from YAML."""
+    if data is None:
+        return []
+    if not isinstance(data, list):
+        raise ConfigError("servers[].checks must be a list")
+    if len(data) > _MAX_HOST_CHECKS:
+        raise ConfigError(
+            f"servers[].checks supports at most {_MAX_HOST_CHECKS} entries"
+        )
+    checks: list[HostCheckConfig] = []
+    seen: set[str] = set()
+    for index, item in enumerate(data):
+        label = f"servers[].checks[{index}]"
+        mapping = _require_mapping(item, label)
+        name = _require_string(mapping, "name", label)
+        if len(name) > 64:
+            raise ConfigError(f"{label}.name must be at most 64 characters")
+        folded = name.casefold()
+        if folded in seen:
+            raise ConfigError(f"{label}.name duplicates another check: {name}")
+        seen.add(folded)
+        check_type = _require_string(mapping, "type", label)
+        target = _require_string(mapping, "target", label)
+        timeout_raw = mapping.get("timeout_seconds", 5)
+        if isinstance(timeout_raw, bool) or not isinstance(timeout_raw, int):
+            raise ConfigError(f"{label}.timeout_seconds must be an integer")
+        if not 1 <= timeout_raw <= 30:
+            raise ConfigError(f"{label}.timeout_seconds must be between 1 and 30")
+        expected_raw = mapping.get("expected")
+        expected: str | None = None
+        if expected_raw is not None:
+            expected = str(expected_raw)
+            if not _EXPECTED_STATUS_RE.match(expected):
+                raise ConfigError(
+                    f"{label}.expected must be a status code or range (e.g. 200 or 200-299)"
+                )
+        checks.append(
+            HostCheckConfig(
+                name=name,
+                type=check_type,
+                target=target,
+                timeout_seconds=timeout_raw,
+                expected=expected,
+                enabled=bool(mapping.get("enabled", True)),
+            )
+        )
+    return checks
+
+
+def _load_host_alert_rules(data: Any) -> HostAlertRules | None:
+    """Parse the optional ``servers[].alert_rules`` mapping."""
+    if data is None:
+        return None
+    mapping = _require_mapping(data, "servers[].alert_rules")
+    values: dict[str, float | int | None] = {}
+    for key, (minimum, maximum) in _ALERT_RULE_RANGES.items():
+        raw = mapping.get(key)
+        if raw is None:
+            values[key] = None
+            continue
+        if isinstance(raw, bool):
+            raise ConfigError(f"servers[].alert_rules.{key} must be a number")
+        try:
+            number = float(raw)
+        except (TypeError, ValueError) as exc:
+            raise ConfigError(
+                f"servers[].alert_rules.{key} must be a number"
+            ) from exc
+        if not minimum <= number <= maximum:
+            raise ConfigError(
+                f"servers[].alert_rules.{key} must be between {minimum} and {maximum}"
+            )
+        values[key] = number
+    periods_raw = mapping.get("consecutive_periods")
+    if periods_raw is None:
+        values["consecutive_periods"] = None
+    else:
+        if isinstance(periods_raw, bool) or not isinstance(periods_raw, int):
+            raise ConfigError(
+                "servers[].alert_rules.consecutive_periods must be an integer"
+            )
+        if not 1 <= periods_raw <= 10:
+            raise ConfigError(
+                "servers[].alert_rules.consecutive_periods must be between 1 and 10"
+            )
+        values["consecutive_periods"] = periods_raw
+    return HostAlertRules(**values)
+
+
+def _load_host_sudo_password(
+    mapping: dict[str, Any], *, allow_missing_secrets: bool = False
+) -> str | None:
+    """Resolve a host sudo password, preferring ``sudo_password_env``."""
+    env_name = mapping.get("sudo_password_env")
+    if env_name:
+        env_value = os.getenv(str(env_name))
+        if env_value:
+            return env_value
+    direct = mapping.get("sudo_password")
+    if direct is None:
+        return None
+    text = str(direct)
+    return text or None
 
 
 def _load_smtp(data: Any, *, allow_missing_secrets: bool = False) -> SMTPConfig | None:
@@ -343,6 +477,11 @@ def _load_host(item: Any, *, allow_missing_secrets: bool = False) -> HostConfig:
         owner=str(mapping.get("owner") or ""),
         location=str(mapping.get("location") or ""),
         notes=str(mapping.get("notes") or ""),
+        checks=_load_host_checks(mapping.get("checks")),
+        alert_rules=_load_host_alert_rules(mapping.get("alert_rules")),
+        sudo_password=_load_host_sudo_password(
+            mapping, allow_missing_secrets=allow_missing_secrets
+        ),
     )
 
 

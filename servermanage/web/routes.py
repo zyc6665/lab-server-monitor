@@ -143,6 +143,30 @@ def _settings_snapshot(config: AppConfig) -> dict[str, Any]:
                 "passphrase_configured": bool(
                     auth.passphrase or auth.passphrase_env
                 ),
+                "checks": [
+                    {
+                        "name": check.name,
+                        "type": check.type,
+                        "target": check.target,
+                        "timeout_seconds": check.timeout_seconds,
+                        "expected": check.expected,
+                        "enabled": check.enabled,
+                    }
+                    for check in host.checks
+                ],
+                "alert_rules": (
+                    {
+                        "cpu_percent": host.alert_rules.cpu_percent,
+                        "memory_percent": host.alert_rules.memory_percent,
+                        "disk_percent": host.alert_rules.disk_percent,
+                        "gpu_memory_percent": host.alert_rules.gpu_memory_percent,
+                        "disk_temperature_c": host.alert_rules.disk_temperature_c,
+                        "consecutive_periods": host.alert_rules.consecutive_periods,
+                    }
+                    if host.alert_rules is not None
+                    else None
+                ),
+                "sudo_configured": bool(host.sudo_password),
             }
         )
     from servermanage import __version__ as app_version
@@ -199,6 +223,7 @@ def _settings_snapshot(config: AppConfig) -> dict[str, Any]:
             "cooldown_minutes": config.alerts.cooldown_minutes,
             "repeat_while_active": config.alerts.repeat_while_active,
             "offline_failures": config.alerts.offline_failures,
+            "consecutive_periods": config.alerts.consecutive_periods,
         },
         "report": {
             "daily_enabled": config.report.daily_enabled,

@@ -25,6 +25,43 @@ class HostDiskHealthOverride:
 
 
 @dataclass(frozen=True)
+class HostCheckConfig:
+    """One availability check configured for a host."""
+
+    name: str
+    type: str
+    target: str
+    timeout_seconds: int = 5
+    expected: str | None = None
+    enabled: bool = True
+
+
+@dataclass(frozen=True)
+class HostAlertRules:
+    """Per-host overrides for the global alert thresholds (``None`` = inherit)."""
+
+    cpu_percent: float | None = None
+    memory_percent: float | None = None
+    disk_percent: float | None = None
+    gpu_memory_percent: float | None = None
+    disk_temperature_c: float | None = None
+    consecutive_periods: int | None = None
+
+
+@dataclass(frozen=True)
+class HostCheckResult:
+    """Outcome of running one :class:`HostCheckConfig` against a host."""
+
+    name: str
+    type: str
+    target: str
+    status: str
+    message: str
+    latency_ms: float | None = None
+    checked_at: datetime | None = None
+
+
+@dataclass(frozen=True)
 class HostConfig:
     name: str
     host: str
@@ -38,6 +75,11 @@ class HostConfig:
     owner: str = ""
     location: str = ""
     notes: str = ""
+    checks: list[HostCheckConfig] = field(default_factory=list)
+    alert_rules: HostAlertRules | None = None
+    sudo_password: str | None = field(
+        default=None, repr=False, metadata={"sensitive": True}
+    )
 
 
 @dataclass(frozen=True)
@@ -158,6 +200,7 @@ class AlertsConfig:
     offline_failures: int = 2
     aggregate_by_host: bool = True
     notify_on_recovery: bool = True
+    consecutive_periods: int = 2
 
 
 @dataclass(frozen=True)
@@ -309,6 +352,7 @@ class HostReport:
     success: bool
     metrics: HostMetrics = field(default_factory=HostMetrics)
     errors: list[HostCollectionError] = field(default_factory=list)
+    checks: list[HostCheckResult] = field(default_factory=list)
 
 
 @dataclass(frozen=True)

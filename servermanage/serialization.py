@@ -9,7 +9,7 @@ conversion that :func:`json.dumps` can handle.
 from __future__ import annotations
 
 import json
-from dataclasses import asdict, is_dataclass
+from dataclasses import fields, is_dataclass
 from datetime import date, datetime
 from pathlib import Path
 from typing import Any
@@ -20,16 +20,23 @@ __all__ = ["to_jsonable", "dump_json"]
 def to_jsonable(obj: Any) -> Any:
     """Convert *obj* into a JSON-serialisable structure.
 
-    - dataclass instance -> ``dict`` (recursively, via :func:`dataclasses.asdict`)
+    - dataclass instance -> ``dict`` (recursively, walked field by field)
     - ``datetime`` / ``date`` -> ISO 8601 string
     - ``tuple`` / ``set`` / other list-likes -> ``list``
     - ``Path`` -> ``str``
+
+    Dataclass fields whose ``metadata["sensitive"]`` is truthy are omitted so
+    secrets (for example a host's ``sudo_password``) can never be serialised.
 
     Containers are walked recursively so datetimes nested inside plain
     ``dict`` / ``list`` values are converted too.
     """
     if is_dataclass(obj) and not isinstance(obj, type):
-        return {key: to_jsonable(value) for key, value in asdict(obj).items()}
+        return {
+            item.name: to_jsonable(getattr(obj, item.name))
+            for item in fields(obj)
+            if not item.metadata.get("sensitive")
+        }
     if isinstance(obj, dict):
         return {key: to_jsonable(value) for key, value in obj.items()}
     if isinstance(obj, datetime):

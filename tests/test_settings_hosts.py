@@ -8,6 +8,8 @@ import pytest
 
 from servermanage import security, storage
 from servermanage.disk_health import AlertEvent
+from servermanage.models import AuthConfig, HostConfig
+from servermanage.serialization import dump_json, to_jsonable
 from servermanage.settings import SettingsError, SettingsService
 
 
@@ -24,6 +26,18 @@ def _password_host(name: str, **overrides):
         "username": "u",
         "auth_type": "password",
         "password": "pw-" + name,
+    }
+    payload.update(overrides)
+    return payload
+
+
+def host_payload(name: str = "h", **overrides):
+    """Host payload helper: explicit keys only, plus baseline identity fields."""
+    payload = {
+        "name": name,
+        "host": "1.2.3.4",
+        "port": 22,
+        "username": "u",
     }
     payload.update(overrides)
     return payload
@@ -499,3 +513,195 @@ def test_add_all_silence_resolves_every_open_alert(tmp_path):
     statuses = {row["id"]: row["status"] for row in storage.list_alerts(svc.db_path)}
     assert statuses[a] == "resolved"
     assert statuses[b] == "resolved"
+
+
+# ---------------------------------------------------------------------------
+# Task 1: availability checks, alert rules and sudo password
+# ---------------------------------------------------------------------------
+
+_CHECKS = [
+    {
+        "name": "训练 API",
+        "type": "http",
+        "target": "http://127.0.0.1:8000/health",
+        "timeout_seconds": 5,
+        "expected": "200-299",
+    },
+    {"name": "SSH 端口", "type": "tcp", "target": "22"},
+]
+
+
+def test_upsert_host_persists_checks_and_preserves_them_when_editing_notes(tmp_path):
+    svc = _service(tmp_path)
+    svc.upsert_host(
+        "gpu",
+        host_payload(
+            "gpu",
+            auth_type="password",
+            password="pw",
+            checks=_CHECKS,
+            alert_rules={"cpu_percent": 95, "consecutive_periods": 3},
+        ),
+    )
+    host = svc.load().servers[0]
+    assert [check.name for check in host.checks] == ["训练 API", "SSH 端口"]
+    assert host.checks[0].type == "http"
+    assert host.checks[0].expected == "200-299"
+    assert host.alert_rules is not None
+    assert host.alert_rules.cpu_percent == 95
+    assert host.alert_rules.consecutive_periods == 3
+
+    entry = svc.get_host("gpu")
+    assert [check["name"] for check in entry["checks"]] == ["训练 API", "SSH 端口"]
+    assert entry["alert_rules"]["cpu_percent"] == 95
+
+    # Editing an unrelated field omits checks/alert_rules: they must survive.
+    svc.upsert_host("gpu", host_payload("gpu", auth_type="password", notes="edited"))
+    host = svc.load().servers[0]
+    assert [check.name for check in host.checks] == ["训练 API", "SSH 端口"]
+    assert host.alert_rules.cpu_percent == 95
+
+    # Explicit values (including empty) overwrite what was stored.
+    svc.upsert_host(
+        "gpu", host_payload("gpu", auth_type="password", checks=[], alert_rules=None)
+    )
+    host = svc.load().servers[0]
+    assert host.checks == []
+    assert host.alert_rules is None
+
+
+def test_sudo_password_is_write_only_and_clearable(tmp_path):
+    svc = _service(tmp_path)
+    svc.upsert_host(
+        "gpu",
+        host_payload(
+            "gpu", auth_type="password", password="pw", sudo_password="sudo-secret"
+        ),
+    )
+    assert svc.load().servers[0].sudo_password == "sudo-secret"
+    entry = svc.get_host("gpu")
+    assert entry["sudo_configured"] is True
+    assert "sudo_password" not in entry
+    # The raw persisted entry never carries the password or the computed flag.
+    raw = svc._read_host_entries()[0]
+    assert "sudo_password" not in raw
+    assert "sudo_configured" not in raw
+    assert storage.get_secret("host:gpu:sudo_password", svc.db_path) is not None
+
+    with pytest.raises(SettingsError):
+        svc.upsert_host(
+            "gpu", host_payload("gpu", auth_type="password", sudo_password="a\nb")
+        )
+    with pytest.raises(SettingsError):
+        svc.upsert_host(
+            "gpu", host_payload("gpu", auth_type="password", sudo_password="x" * 257)
+        )
+
+    # Editing other fields leaves the write-only password untouched.
+    svc.upsert_host("gpu", host_payload("gpu", auth_type="password", notes="n"))
+    assert svc.load().servers[0].sudo_password == "sudo-secret"
+
+    svc.upsert_host(
+        "gpu", host_payload("gpu", auth_type="password", clear_secrets=["sudo_password"])
+    )
+    assert svc.load().servers[0].sudo_password is None
+    assert svc.get_host("gpu")["sudo_configured"] is False
+    assert storage.get_secret("host:gpu:sudo_password", svc.db_path) is None
+
+
+def test_host_config_sudo_password_not_serialized():
+    host = HostConfig(
+        name="gpu",
+        host="1.2.3.4",
+        port=22,
+        username="u",
+        auth=AuthConfig(type="password", password="pw"),
+        sudo_password="super-secret",
+    )
+    payload = to_jsonable(host)
+    assert "sudo_password" not in payload
+    assert "super-secret" not in dump_json(host)
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"checks": [{"name": "a", "type": "bogus", "target": "22"}]},
+        {"checks": [{"name": "a", "type": "tcp", "target": ""}]},
+        {"checks": [{"name": "a", "type": "tcp", "target": "22", "timeout_seconds": 0}]},
+        {"checks": [{"name": "a", "type": "tcp", "target": "22", "expected": "bad"}]},
+        {"checks": [{"name": "Same", "type": "tcp", "target": "22"},
+                    {"name": "same", "type": "tcp", "target": "23"}]},
+        {"checks": "not-a-list"},
+        {"alert_rules": {"cpu_percent": 101}},
+        {"alert_rules": {"disk_temperature_c": 121}},
+        {"alert_rules": {"consecutive_periods": 0}},
+    ],
+)
+def test_upsert_host_rejects_invalid_checks_and_alert_rules(tmp_path, payload):
+    svc = _service(tmp_path)
+    with pytest.raises(SettingsError):
+        svc.upsert_host(
+            "bad",
+            host_payload("bad", auth_type="password", password="pw", **payload),
+        )
+    assert svc.load().servers == []
+
+
+def test_copy_host_copies_checks_alert_rules_and_sudo_secret(tmp_path):
+    svc = _service(tmp_path)
+    svc.upsert_host(
+        "src",
+        host_payload(
+            "src",
+            auth_type="password",
+            password="pw",
+            checks=_CHECKS,
+            alert_rules={"cpu_percent": 90},
+            sudo_password="sudo-src",
+        ),
+    )
+    svc.copy_host("src", "dst")
+    target = [h for h in svc.load().servers if h.name == "dst"][0]
+    assert [check.name for check in target.checks] == ["训练 API", "SSH 端口"]
+    assert target.alert_rules is not None
+    assert target.alert_rules.cpu_percent == 90
+    assert target.sudo_password == "sudo-src"
+    assert storage.get_secret("host:dst:sudo_password", svc.db_path) is not None
+
+
+def test_machine_reset_clears_sudo_secret_but_keeps_host(tmp_path):
+    svc = _service(tmp_path)
+    svc.upsert_host(
+        "gpu",
+        host_payload(
+            "gpu", auth_type="password", password="pw", sudo_password="sudo-secret"
+        ),
+    )
+    storage.save_app_settings("security", {"machine_id": "other-machine"}, svc.db_path)
+    svc2 = SettingsService(config_path=svc.config_path, db_path=svc.db_path)
+    assert svc2.setup_required() is True
+    assert storage.get_secret("host:gpu:sudo_password", svc.db_path) is None
+    # Non-sensitive host inventory survives the secret wipe.
+    assert [host.name for host in svc2.load().servers] == ["gpu"]
+
+
+def test_public_settings_includes_alerts_consecutive_periods(tmp_path):
+    svc = _service(tmp_path)
+    assert svc.public_settings()["alerts"]["consecutive_periods"] == 2
+    svc.save_section("alerts", {"consecutive_periods": 4})
+    assert svc.public_settings()["alerts"]["consecutive_periods"] == 4
+    assert svc.load().alerts.consecutive_periods == 4
+
+
+def test_old_host_entries_without_new_fields_still_load(tmp_path):
+    svc = _service(tmp_path)
+    svc.upsert_host("legacy", _password_host("legacy"))
+    entries = svc._read_host_entries()
+    entries[0].pop("checks", None)
+    entries[0].pop("alert_rules", None)
+    svc._save_host_entries(entries)
+    host = svc.load().servers[0]
+    assert host.checks == []
+    assert host.alert_rules is None
+    assert host.sudo_password is None

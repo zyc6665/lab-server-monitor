@@ -16,6 +16,7 @@ from __future__ import annotations
 import json
 import hmac
 import os
+import re
 import types
 from copy import deepcopy
 from dataclasses import fields, replace
@@ -34,6 +35,8 @@ from servermanage.models import (
     DashboardAuthConfig,
     DashboardConfig,
     DiskHealthConfig,
+    HostAlertRules,
+    HostCheckConfig,
     HostConfig,
     HostDiskHealthOverride,
     ReportConfig,
@@ -90,6 +93,7 @@ SECRET_SESSION = "dashboard:session_secret"
 _HOST_SECRET_PASSWORD = "host:{name}:ssh_password"
 _HOST_SECRET_KEY = "host:{name}:ssh_key"
 _HOST_SECRET_PASSPHRASE = "host:{name}:ssh_passphrase"
+_HOST_SECRET_SUDO_PASSWORD = "host:{name}:sudo_password"
 
 # The ``hosts`` section is internal: it is written by the host CRUD helpers,
 # never through :meth:`SettingsService.save_section` (which only accepts the
@@ -122,6 +126,7 @@ _ALERT_TOP_FIELDS = frozenset(
         "offline_failures",
         "aggregate_by_host",
         "notify_on_recovery",
+        "consecutive_periods",
     }
 )
 _WEBHOOK_FIELDS = frozenset({"enabled", "type", "url_env"})
@@ -438,6 +443,7 @@ class SettingsService:
                 "offline_failures": config.alerts.offline_failures,
                 "aggregate_by_host": config.alerts.aggregate_by_host,
                 "notify_on_recovery": config.alerts.notify_on_recovery,
+                "consecutive_periods": config.alerts.consecutive_periods,
             },
             "report": {
                 "daily_enabled": config.report.daily_enabled,
@@ -524,6 +530,18 @@ class SettingsService:
         clear_secrets = _string_list(payload.get("clear_secrets"))
         key_path_raw = payload.get("key_path")
         key_path = str(key_path_raw).strip() if key_path_raw not in (None, "") else None
+        entries = self._host_entries_for_update()
+        existing_entry = next(
+            (entry for entry in entries if entry.get("name") == name), None
+        )
+        if "checks" in payload:
+            checks = _sanitize_host_checks(payload.get("checks"))
+        else:
+            checks = list((existing_entry or {}).get("checks") or [])
+        if "alert_rules" in payload:
+            alert_rules = _validate_alert_rules(payload.get("alert_rules"))
+        else:
+            alert_rules = (existing_entry or {}).get("alert_rules")
 
         # Credentials first: a failed secret write must not mutate the inventory.
         has_inline_secret = bool(
@@ -546,6 +564,7 @@ class SettingsService:
                 key_path=key_path,
                 clear_secrets=clear_secrets,
             )
+        self._apply_host_sudo_password(name, payload, clear_secrets)
 
         entry = {
             "name": name,
@@ -561,8 +580,9 @@ class SettingsService:
             "owner": owner,
             "location": location,
             "notes": notes,
+            "checks": checks,
+            "alert_rules": alert_rules,
         }
-        entries = self._host_entries_for_update()
         for index, existing in enumerate(entries):
             if existing.get("name") == name:
                 entries[index] = entry
@@ -581,6 +601,7 @@ class SettingsService:
             _HOST_SECRET_PASSWORD,
             _HOST_SECRET_KEY,
             _HOST_SECRET_PASSPHRASE,
+            _HOST_SECRET_SUDO_PASSWORD,
         ):
             storage.delete_secret(template.format(name=name), self.db_path)
         entries = [
@@ -748,6 +769,7 @@ class SettingsService:
             _HOST_SECRET_PASSWORD,
             _HOST_SECRET_KEY,
             _HOST_SECRET_PASSPHRASE,
+            _HOST_SECRET_SUDO_PASSWORD,
         ):
             blob = storage.get_secret(template.format(name=source), self.db_path)
             if blob is not None:
@@ -882,6 +904,28 @@ class SettingsService:
         # Only switch over once the key credential is in place.
         storage.delete_secret(password_secret, self.db_path)
 
+    def _apply_host_sudo_password(
+        self,
+        name: str,
+        payload: dict[str, Any],
+        clear_secrets: list[str],
+    ) -> None:
+        """Persist a write-only sudo password; ``sudo_configured`` is derived."""
+        secret_name = _HOST_SECRET_SUDO_PASSWORD.format(name=name)
+        if "sudo_password" in set(clear_secrets):
+            storage.delete_secret(secret_name, self.db_path)
+        raw = payload.get("sudo_password")
+        if raw is None:
+            return
+        text = str(raw)
+        if text == "":
+            return
+        if "\n" in text or "\r" in text:
+            raise SettingsError("sudo 密码不能包含换行符")
+        if len(text.encode("utf-8")) > 256:
+            raise SettingsError("sudo 密码最多 256 字节")
+        self._store_secret(secret_name, text)
+
     def _host_entries_for_update(self) -> list[dict]:
         entries = self._read_host_entries()
         if entries is not None:
@@ -929,6 +973,8 @@ class SettingsService:
             "owner": str(entry.get("owner") or "").strip(),
             "location": str(entry.get("location") or "").strip(),
             "notes": str(entry.get("notes") or "").strip(),
+            "checks": [dict(check) for check in entry.get("checks") or []],
+            "alert_rules": entry.get("alert_rules"),
             "password_configured": (
                 storage.get_secret(_HOST_SECRET_PASSWORD.format(name=name), self.db_path)
                 is not None
@@ -940,6 +986,12 @@ class SettingsService:
             ),
             "passphrase_configured": (
                 storage.get_secret(_HOST_SECRET_PASSPHRASE.format(name=name), self.db_path)
+                is not None
+            ),
+            "sudo_configured": (
+                storage.get_secret(
+                    _HOST_SECRET_SUDO_PASSWORD.format(name=name), self.db_path
+                )
                 is not None
             ),
         }
@@ -975,6 +1027,15 @@ class SettingsService:
                     owner=str(entry.get("owner") or "").strip(),
                     location=str(entry.get("location") or "").strip(),
                     notes=str(entry.get("notes") or "").strip(),
+                    checks=[
+                        _build_host_check(check)
+                        for check in entry.get("checks") or []
+                        if isinstance(check, dict)
+                    ],
+                    alert_rules=_build_host_alert_rules(entry.get("alert_rules")),
+                    sudo_password=self._read_secret_text(
+                        _HOST_SECRET_SUDO_PASSWORD.format(name=name)
+                    ),
                 )
             )
         return servers
@@ -1632,6 +1693,154 @@ def _build_host_disk_health(value: Any) -> HostDiskHealthOverride | None:
     )
 
 
+_HOST_CHECK_TYPES = frozenset({"tcp", "http", "process", "service"})
+_MAX_HOST_CHECKS = 20
+_EXPECTED_STATUS_RE = re.compile(r"^\d{3}(-\d{3})?$")
+_ALERT_RULE_RANGES = {
+    "cpu_percent": (1, 100),
+    "memory_percent": (1, 100),
+    "disk_percent": (1, 100),
+    "gpu_memory_percent": (1, 100),
+    "disk_temperature_c": (1, 120),
+}
+
+
+def _validate_alert_rules(value: Any) -> dict[str, Any] | None:
+    """Validate per-host alert rule overrides, raising ``SettingsError``."""
+    if value is None:
+        return None
+    if not isinstance(value, dict):
+        raise SettingsError("alert_rules 必须是对象")
+    result: dict[str, Any] = {}
+    for key, (minimum, maximum) in _ALERT_RULE_RANGES.items():
+        raw = value.get(key)
+        if raw is None:
+            continue
+        if isinstance(raw, bool):
+            raise SettingsError(f"alert_rules.{key} 必须是数字")
+        try:
+            number = float(raw)
+        except (TypeError, ValueError) as exc:
+            raise SettingsError(f"alert_rules.{key} 必须是数字") from exc
+        if not minimum <= number <= maximum:
+            raise SettingsError(
+                f"alert_rules.{key} 必须在 {minimum} 到 {maximum} 之间"
+            )
+        result[key] = number
+    periods = value.get("consecutive_periods")
+    if periods is not None:
+        if isinstance(periods, bool) or not isinstance(periods, int):
+            raise SettingsError("alert_rules.consecutive_periods 必须是整数")
+        if not 1 <= periods <= 10:
+            raise SettingsError("alert_rules.consecutive_periods 必须在 1 到 10 之间")
+        result["consecutive_periods"] = periods
+    return result
+
+
+def _sanitize_host_checks(value: Any) -> list[dict[str, Any]]:
+    """Validate and normalise a host's availability checks."""
+    if value is None:
+        return []
+    if not isinstance(value, list):
+        raise SettingsError("checks 必须是列表")
+    if len(value) > _MAX_HOST_CHECKS:
+        raise SettingsError(f"checks 最多支持 {_MAX_HOST_CHECKS} 项")
+    result: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for index, item in enumerate(value):
+        if not isinstance(item, dict):
+            raise SettingsError(f"checks[{index}] 必须是对象")
+        name = str(item.get("name") or "").strip()
+        if not name:
+            raise SettingsError(f"checks[{index}].name 不能为空")
+        if len(name) > 64:
+            raise SettingsError(f"checks[{index}].name 最多 64 个字符")
+        folded = name.casefold()
+        if folded in seen:
+            raise SettingsError(f"check 名称重复: {name}")
+        seen.add(folded)
+        check_type = str(item.get("type") or "").strip().lower()
+        if check_type not in _HOST_CHECK_TYPES:
+            raise SettingsError(
+                f"checks[{index}].type 必须是 tcp/http/process/service 之一"
+            )
+        target = str(item.get("target") or "").strip()
+        if not target:
+            raise SettingsError(f"checks[{index}].target 不能为空")
+        if len(target) > 256:
+            raise SettingsError(f"checks[{index}].target 最多 256 个字符")
+        timeout_raw = item.get("timeout_seconds", 5)
+        if isinstance(timeout_raw, bool) or not isinstance(timeout_raw, int):
+            raise SettingsError(f"checks[{index}].timeout_seconds 必须是整数")
+        if not 1 <= timeout_raw <= 30:
+            raise SettingsError(f"checks[{index}].timeout_seconds 必须在 1 到 30 之间")
+        expected_raw = item.get("expected")
+        expected: str | None = None
+        if expected_raw is not None and str(expected_raw).strip():
+            expected = str(expected_raw).strip()
+            if not _EXPECTED_STATUS_RE.match(expected):
+                raise SettingsError(
+                    f"checks[{index}].expected 必须是 200 或 200-299 这样的状态码"
+                )
+        result.append(
+            {
+                "name": name,
+                "type": check_type,
+                "target": target,
+                "timeout_seconds": timeout_raw,
+                "expected": expected,
+                "enabled": bool(item.get("enabled", True)),
+            }
+        )
+    return result
+
+
+def _build_host_check(value: dict[str, Any]) -> HostCheckConfig:
+    try:
+        timeout_seconds = int(value.get("timeout_seconds", 5))
+    except (TypeError, ValueError):
+        timeout_seconds = 5
+    expected = value.get("expected")
+    return HostCheckConfig(
+        name=str(value.get("name") or ""),
+        type=str(value.get("type") or ""),
+        target=str(value.get("target") or ""),
+        timeout_seconds=timeout_seconds,
+        expected=str(expected) if expected is not None else None,
+        enabled=bool(value.get("enabled", True)),
+    )
+
+
+def _build_host_alert_rules(value: Any) -> HostAlertRules | None:
+    if not isinstance(value, dict):
+        return None
+
+    def _optional_float(key: str) -> float | None:
+        raw = value.get(key)
+        if raw is None:
+            return None
+        try:
+            return float(raw)
+        except (TypeError, ValueError):
+            return None
+
+    periods_raw = value.get("consecutive_periods")
+    try:
+        consecutive_periods = (
+            int(periods_raw) if periods_raw is not None else None
+        )
+    except (TypeError, ValueError):
+        consecutive_periods = None
+    return HostAlertRules(
+        cpu_percent=_optional_float("cpu_percent"),
+        memory_percent=_optional_float("memory_percent"),
+        disk_percent=_optional_float("disk_percent"),
+        gpu_memory_percent=_optional_float("gpu_memory_percent"),
+        disk_temperature_c=_optional_float("disk_temperature_c"),
+        consecutive_periods=consecutive_periods,
+    )
+
+
 def _host_entry_from_config(host: HostConfig) -> dict[str, Any]:
     auth = host.auth
     disk_health: dict[str, Any] | None = None
@@ -1655,6 +1864,29 @@ def _host_entry_from_config(host: HostConfig) -> dict[str, Any]:
         "owner": host.owner,
         "location": host.location,
         "notes": host.notes,
+        "checks": [
+            {
+                "name": check.name,
+                "type": check.type,
+                "target": check.target,
+                "timeout_seconds": check.timeout_seconds,
+                "expected": check.expected,
+                "enabled": check.enabled,
+            }
+            for check in host.checks
+        ],
+        "alert_rules": (
+            {
+                "cpu_percent": host.alert_rules.cpu_percent,
+                "memory_percent": host.alert_rules.memory_percent,
+                "disk_percent": host.alert_rules.disk_percent,
+                "gpu_memory_percent": host.alert_rules.gpu_memory_percent,
+                "disk_temperature_c": host.alert_rules.disk_temperature_c,
+                "consecutive_periods": host.alert_rules.consecutive_periods,
+            }
+            if host.alert_rules is not None
+            else None
+        ),
     }
 
 
