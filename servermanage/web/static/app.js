@@ -1053,6 +1053,37 @@
     return '/api/alerts' + (params.length ? '?' + params.join('&') : '');
   }
 
+  function syncAlertUrl() {
+    var params = [];
+    if (alertKeyword.trim()) { params.push('q=' + encodeURIComponent(alertKeyword.trim())); }
+    if (alertSeverity) { params.push('severity=' + encodeURIComponent(alertSeverity)); }
+    if (alertHost) { params.push('host=' + encodeURIComponent(alertHost)); }
+    if (alertTimeRange) { params.push('range=' + encodeURIComponent(alertTimeRange)); }
+    var url = '/alerts' + (params.length ? '?' + params.join('&') : '');
+    if (window.history && window.history.replaceState) {
+      window.history.replaceState(null, '', url);
+    }
+  }
+
+  function clearAlertFilters() {
+    alertKeyword = '';
+    alertSeverity = '';
+    alertHost = '';
+    alertTimeRange = '';
+    selectedAlertIds = {};
+    var search = document.getElementById('alert-search');
+    if (search) { search.value = ''; }
+    var severity = document.getElementById('alert-severity-filter');
+    if (severity) { severity.value = ''; }
+    var host = document.getElementById('alert-host-filter');
+    if (host) { host.value = ''; }
+    var range = document.getElementById('alert-range-filter');
+    if (range) { range.value = ''; }
+    renderAlertRows();
+    syncAlertUrl();
+    refreshAlerts().catch(function () {});
+  }
+
   function refreshAlerts() {
     return fetchJson(alertsUrl(alertStatus)).then(function (data) {
       if (!data) { return; }
@@ -1297,6 +1328,7 @@
     var alertHostFilter = document.getElementById('alert-host-filter');
     var alertRangeFilter = document.getElementById('alert-range-filter');
     var alertExport = document.getElementById('alert-export');
+    var alertClearFilters = document.getElementById('alert-clear-filters');
     // 支持从命令面板/外部链接带 q、severity 参数进入告警页时直接带上筛选条件。
     if (alertSearch && alertSearch.value) {
       alertKeyword = alertSearch.value;
@@ -1314,6 +1346,7 @@
       alertSearch.addEventListener('input', function () {
         alertKeyword = alertSearch.value || '';
         renderAlertRows();
+        syncAlertUrl();
       });
     }
     document.addEventListener('change', function (event) {
@@ -1331,20 +1364,24 @@
       alertSeverityFilter.addEventListener('change', function () {
         alertSeverity = alertSeverityFilter.value || '';
         renderAlertRows();
+        syncAlertUrl();
       });
     }
     if (alertHostFilter) {
       alertHostFilter.addEventListener('change', function () {
         alertHost = alertHostFilter.value || '';
         renderAlertRows();
+        syncAlertUrl();
       });
     }
     if (alertRangeFilter) {
       alertRangeFilter.addEventListener('change', function () {
         alertTimeRange = alertRangeFilter.value || '';
+        syncAlertUrl();
         refreshAlerts().catch(function () {});
       });
     }
+    if (alertClearFilters) { alertClearFilters.addEventListener('click', clearAlertFilters); }
     if (alertExport) { alertExport.addEventListener('click', exportAlertsCsv); }
 
     bindOverviewRanges();

@@ -395,6 +395,9 @@ def test_alerts_page_has_status_filters_and_ack(client):
     assert 'data-status="all"' in html
     assert 'id="alert-host-filter"' in html
     assert 'id="alert-range-filter"' in html
+    assert 'id="alert-clear-filters"' in html
+    assert "清除筛选" in html
+    assert 'id="alert-count"' in html
     assert 'value="24h"' in html
     assert 'value="7d"' in html
     assert 'value="30d"' in html
@@ -423,6 +426,10 @@ def test_alerts_page_supports_query_and_severity_deep_links(client):
     assert "alertTimeRange" in source
     assert "range=" in source
     assert "alertHost &&" in source
+    assert "function syncAlertUrl" in source
+    assert "function clearAlertFilters" in source
+    assert "history.replaceState" in source
+    assert "alert-clear-filters" in source
 
 
 def test_app_js_keeps_terminal_and_filter_logic():
