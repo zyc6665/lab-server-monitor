@@ -611,6 +611,7 @@ class SettingsService:
             entry for entry in self._host_entries_for_update() if entry.get("name") != name
         ]
         self._save_host_entries(entries)
+        storage.delete_host_check_results(name, self.db_path)
         return self.load()
 
     def host_groups(self) -> list[str]:

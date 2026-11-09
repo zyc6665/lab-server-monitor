@@ -10,7 +10,7 @@ from pathlib import Path
 
 from servermanage import disk_capacity
 from servermanage.disk_health import AlertEvent, DiskHealthReport
-from servermanage.models import DailyReport, HostReport
+from servermanage.models import DailyReport, HostCheckResult, HostReport
 from servermanage.serialization import dump_json, to_jsonable
 
 LOGGER = logging.getLogger(__name__)
@@ -238,6 +238,28 @@ CREATE INDEX IF NOT EXISTS idx_ssh_audit_started_at
     ON ssh_audit_sessions(started_at);
 """
 
+# Table added by the v0.2.0 availability-monitoring feature (Task 2): the latest
+# result of every configured availability check, one row per host/check pair.
+# Only the current snapshot is kept, so the table does not grow over time.
+_CREATE_HOST_CHECK_TABLES_SQL = """
+CREATE TABLE IF NOT EXISTS host_check_snapshot (
+    host_name TEXT NOT NULL,
+    check_name TEXT NOT NULL,
+    check_type TEXT NOT NULL,
+    target TEXT NOT NULL,
+    status TEXT NOT NULL,
+    message TEXT NOT NULL DEFAULT '',
+    latency_ms REAL,
+    checked_at TEXT NOT NULL,
+    PRIMARY KEY (host_name, check_name)
+);
+"""
+
+_CREATE_HOST_CHECK_INDEX_SQL = """
+CREATE INDEX IF NOT EXISTS idx_host_check_snapshot_host
+    ON host_check_snapshot(host_name);
+"""
+
 
 def _disk_percent_value(percent: str) -> int:
     digits = "".join(ch for ch in percent if ch.isdigit())
@@ -329,6 +351,8 @@ def init_storage(db_path: Path, *, daily_summary_tz: str | None = "UTC") -> None
         conn.executescript(_CREATE_SILENCE_INDEX_SQL)
         conn.executescript(_CREATE_SSH_AUDIT_TABLES_SQL)
         conn.executescript(_CREATE_SSH_AUDIT_INDEX_SQL)
+        conn.executescript(_CREATE_HOST_CHECK_TABLES_SQL)
+        conn.executescript(_CREATE_HOST_CHECK_INDEX_SQL)
 
 
 def _percent_value(used: float | None, total: float | None) -> float | None:
@@ -1471,6 +1495,97 @@ def get_all_host_snapshots(db_path: Path) -> list[dict]:
         if snapshot is not None:
             snapshots.append(snapshot)
     return snapshots
+
+
+# ---------------------------------------------------------------------------
+# Host check snapshots (latest result per configured availability check)
+# ---------------------------------------------------------------------------
+
+
+def save_host_check_results(
+    host_name: str, results: Sequence[HostCheckResult], db_path: Path
+) -> None:
+    """Replace the latest check snapshot for *host_name* in one transaction.
+
+    Existing rows for the host are deleted first so removing a configured check
+    also removes its stale result.  ``BEGIN IMMEDIATE`` keeps readers from seeing
+    a half-updated snapshot and the transaction is rolled back on any error.
+    """
+    db_path = Path(db_path)
+    init_storage(db_path)
+
+    now = datetime.now(timezone.utc)
+    rows = [
+        (
+            host_name,
+            item.name,
+            item.type,
+            item.target,
+            item.status,
+            item.message or "",
+            item.latency_ms,
+            _to_iso_utc(item.checked_at if item.checked_at is not None else now),
+        )
+        for item in results
+    ]
+
+    conn = sqlite3.connect(db_path)
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        conn.execute(
+            "DELETE FROM host_check_snapshot WHERE host_name = ?", (host_name,)
+        )
+        if rows:
+            conn.executemany(
+                """
+                INSERT INTO host_check_snapshot
+                    (host_name, check_name, check_type, target, status,
+                     message, latency_ms, checked_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                rows,
+            )
+        conn.commit()
+    except BaseException:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+def get_host_check_results(host_name: str, db_path: Path) -> list[dict]:
+    """Return the latest check snapshot for *host_name*, ordered by check name."""
+    db_path = Path(db_path)
+    if not db_path.exists():
+        return []
+
+    with sqlite3.connect(db_path) as conn:
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute(
+            """
+            SELECT host_name, check_name, check_type, target, status,
+                   message, latency_ms, checked_at
+            FROM host_check_snapshot
+            WHERE host_name = ?
+            ORDER BY check_name
+            """,
+            (host_name,),
+        ).fetchall()
+
+    return [dict(row) for row in rows]
+
+
+def delete_host_check_results(host_name: str, db_path: Path) -> None:
+    """Delete every stored check result for *host_name*."""
+    db_path = Path(db_path)
+    if not db_path.exists():
+        return
+
+    with sqlite3.connect(db_path) as conn:
+        conn.execute(
+            "DELETE FROM host_check_snapshot WHERE host_name = ?", (host_name,)
+        )
+        conn.commit()
 
 
 # ---------------------------------------------------------------------------

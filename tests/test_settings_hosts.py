@@ -8,7 +8,7 @@ import pytest
 
 from servermanage import security, storage
 from servermanage.disk_health import AlertEvent
-from servermanage.models import AuthConfig, HostConfig
+from servermanage.models import AuthConfig, HostCheckResult, HostConfig
 from servermanage.serialization import dump_json, to_jsonable
 from servermanage.settings import SettingsError, SettingsService
 
@@ -806,3 +806,28 @@ def test_old_host_entries_without_new_fields_still_load(tmp_path):
     assert host.checks == []
     assert host.alert_rules is None
     assert host.sudo_password is None
+
+
+def test_delete_host_removes_check_snapshot_rows(tmp_path):
+    svc = _service(tmp_path)
+    svc.upsert_host("gpu-01", _password_host("gpu-01"))
+    storage.save_host_check_results(
+        "gpu-01",
+        [
+            HostCheckResult(
+                name="API",
+                type="http",
+                target="http://127.0.0.1:8000/health",
+                status="ok",
+                message="",
+                latency_ms=4.2,
+                checked_at=datetime(2026, 11, 9, 4, 0, tzinfo=timezone.utc),
+            )
+        ],
+        svc.db_path,
+    )
+    assert storage.get_host_check_results("gpu-01", svc.db_path)
+
+    svc.delete_host("gpu-01")
+
+    assert storage.get_host_check_results("gpu-01", svc.db_path) == []
