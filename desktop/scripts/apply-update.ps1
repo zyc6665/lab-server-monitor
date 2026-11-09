@@ -77,6 +77,16 @@ try {
     Write-Log "update files replaced"
     Remove-Item -LiteralPath $Stage -Recurse -Force -ErrorAction SilentlyContinue
     Remove-Item -LiteralPath $Backup -Recurse -Force -ErrorAction SilentlyContinue
+    try {
+        $updatesRoot = [System.IO.Path]::GetFullPath((Join-Path $AppDir "data\updates"))
+        $zipFull = [System.IO.Path]::GetFullPath($ZipPath)
+        if ($zipFull.StartsWith($updatesRoot, [System.StringComparison]::OrdinalIgnoreCase)) {
+            Remove-Item -LiteralPath $ZipPath -Force -ErrorAction SilentlyContinue
+            Write-Log "update package removed: $ZipPath"
+        }
+    } catch {
+        Write-Log ("failed to remove update package: " + $_.Exception.Message)
+    }
     $exe = Join-Path $AppDir "servermonitor.exe"
     if (Test-Path -LiteralPath $exe) {
         Start-Process -FilePath $exe -WorkingDirectory $AppDir

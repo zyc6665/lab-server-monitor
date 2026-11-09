@@ -313,6 +313,22 @@
     <div class="health-grid" id="health-summary">
       <p class="empty">正在读取系统状态…</p>
     </div>
+    <div class="storage-maintenance">
+      <div class="section-head">
+        <h3>存储与维护</h3>
+        <button type="button" class="secondary-button" id="storage-refresh-button">刷新占用</button>
+      </div>
+      <div class="health-grid" id="storage-usage">
+        <p class="empty">正在读取磁盘占用…</p>
+      </div>
+      <div class="storage-actions">
+        <button type="button" class="secondary-button" data-maintenance-target="logs">清理日志</button>
+        <button type="button" class="secondary-button" data-maintenance-target="updates">清理更新包</button>
+        <button type="button" class="secondary-button" data-maintenance-target="cache">清理缓存</button>
+        <button type="button" class="secondary-button" data-maintenance-target="database">压缩数据库</button>
+      </div>
+      <p class="muted" id="maintenance-status"></p>
+    </div>
     <div class="backup-actions">
       <a class="secondary-button" href="/api/system/backup" download>下载数据库备份</a>
       <a class="secondary-button" href="/api/system/config-export" download>导出配置</a>

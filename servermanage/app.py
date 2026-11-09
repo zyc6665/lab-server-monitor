@@ -48,11 +48,14 @@ from servermanage.scheduler import (
     compute_weekly_fire,
 )
 from servermanage.ssh_client import SSHClientWrapper
+from servermanage.log_cleanup import prune_log_files
+from servermanage.maintenance import cleanup_logs
 from servermanage.storage import (
     _extract_disk_used_percent,
     backfill_daily_summary,
     get_disk_health,
     init_storage,
+    maintain_database,
     persist_host_reports,
     prune_alert_history,
     prune_alert_silences,
@@ -79,6 +82,7 @@ from servermanage.weekly import generate_weekly_report as _generate_weekly_repor
 LOGGER = logging.getLogger(__name__)
 
 _LOGGING_CONFIGURED = False
+_CONFIGURED_LOG_DIR: Path | None = None
 
 # Desktop startup: the single-instance mutex and the runtime-state file always
 # live in ``data/`` (design §3.7/§5.7).  They are resolved at call time so tests
@@ -115,9 +119,21 @@ def configure_logging(log_dir: Path = Path("logs")) -> None:
     Idempotent: a second call (for example from an embedded test) does not
     attach duplicate handlers.
     """
-    global _LOGGING_CONFIGURED
+    global _LOGGING_CONFIGURED, _CONFIGURED_LOG_DIR
     log_dir = Path(log_dir)
     log_dir.mkdir(parents=True, exist_ok=True)
+    _CONFIGURED_LOG_DIR = log_dir
+    # Keep the working directory from growing without bound: drop rotated /
+    # desktop / update logs older than 24 hours on every startup.  The live
+    # servermonitor.log and desktop.log are protected because they are open.
+    try:
+        prune_log_files(
+            log_dir,
+            retention_hours=24,
+            protected_names=("servermonitor.log", "desktop.log"),
+        )
+    except OSError:
+        pass
     if _LOGGING_CONFIGURED:
         return
 
@@ -601,6 +617,10 @@ class MonitorService:
                 self.db_path, self.config.app.host_daily_summary_retention_days
             )
             counts["alert_silences"] = prune_alert_silences(self.db_path)
+            if _CONFIGURED_LOG_DIR is not None:
+                counts["logs"] = cleanup_logs(_CONFIGURED_LOG_DIR)["deleted"]
+            db_maintenance = maintain_database(self.db_path)
+            counts["database_vacuumed"] = 1 if db_maintenance.get("vacuumed") else 0
         except Exception:  # pragma: no cover - cleanup must never kill the scheduler
             LOGGER.exception("Retention cleanup failed")
         LOGGER.info("Retention cleanup: %s", counts)

@@ -43,7 +43,7 @@ from flask import (
     url_for,
 )
 
-from servermanage import disk_capacity, host_import, host_probe, storage
+from servermanage import disk_capacity, host_import, host_probe, maintenance, storage
 from servermanage.disk_health import AlertEvent
 from servermanage.models import AuthConfig, HostConfig, WebhookConfig
 from servermanage.notify_webhook import send_webhook
@@ -736,7 +736,7 @@ def _system_diagnostics(config, db_path, *, now: datetime | None = None) -> dict
     now = now or datetime.now(timezone.utc)
     checks: list[dict[str, str]] = []
 
-    ok, message = storage.database_integrity(db_path)
+    ok, message = storage.database_integrity(db_path, cache_seconds=300)
     checks.append(
         {
             "key": "database",
@@ -834,15 +834,10 @@ def _system_diagnostics(config, db_path, *, now: datetime | None = None) -> dict
         }
     )
 
-    active_alerts = storage.list_alerts(db_path, status="active", limit=100_000)
-    critical = [
-        alert
-        for alert in active_alerts
-        if str(alert.get("severity") or "").lower() == "critical"
-    ]
-    if critical:
+    critical_count = storage.count_active_critical_alerts(db_path)
+    if critical_count:
         alert_status = "warning"
-        alert_message = f"{len(critical)} 条严重告警待处理"
+        alert_message = f"{critical_count} 条严重告警待处理"
     else:
         alert_status, alert_message = "ok", "没有未处理的严重告警"
     checks.append(
@@ -1732,6 +1727,44 @@ def register_routes(app: Flask) -> None:
                 "hosts_configured": len(config.servers),
                 "diagnostics": _system_diagnostics(config, _db_path(app)),
                 **stats,
+            }
+        )
+
+    @app.get("/api/system/storage")
+    def api_system_storage():
+        db_path = _db_path(app)
+        return jsonify(
+            {
+                "usage": maintenance.storage_usage(db_path),
+                "db_path": str(db_path),
+                "log_retention_hours": 24,
+            }
+        )
+
+    @app.post("/api/system/maintenance")
+    def api_system_maintenance():
+        payload = request.get_json(silent=True) or {}
+        target = str(payload.get("target") or "").strip()
+        db_path = _db_path(app)
+        app_dir = db_path.parent.parent
+        if target == "logs":
+            result = maintenance.cleanup_logs(app_dir / "logs")
+        elif target == "updates":
+            result = maintenance.cleanup_updates(
+                app_dir / "data" / "updates", retention_hours=0
+            )
+        elif target == "cache":
+            result = maintenance.cleanup_electron_cache(app_dir / "data" / "electron")
+        elif target == "database":
+            result = storage.maintain_database(db_path, force=True)
+        else:
+            return jsonify({"error": "unknown_target"}), 400
+        return jsonify(
+            {
+                "ok": True,
+                "target": target,
+                "result": result,
+                "usage": maintenance.storage_usage(db_path),
             }
         )
 

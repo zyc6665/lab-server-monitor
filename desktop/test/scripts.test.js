@@ -23,6 +23,7 @@ function readScript(name) {
 
 const build = readScript('build-portable.ps1');
 const verify = readScript('verify-package.ps1');
+const applyUpdate = readScript('apply-update.ps1');
 
 function assertContains(haystack, needle, label) {
   assert.ok(haystack.includes(needle), `${label || JSON.stringify(needle)} should appear in the script`);
@@ -139,4 +140,19 @@ test('verify-package.ps1 exits non-zero with a clear message on failure', () => 
 test('build-portable.ps1 keeps its UTF-8 BOM', () => {
   const buf = fs.readFileSync(path.join(scriptsDir, 'build-portable.ps1'));
   assert.deepEqual([...buf.subarray(0, 3)], [0xef, 0xbb, 0xbf], 'build-portable.ps1 must start with UTF-8 BOM');
+});
+
+// ---------------------------------------------------------------------------
+// apply-update.ps1
+// ---------------------------------------------------------------------------
+
+test('apply-update.ps1 removes the downloaded package after a successful update', () => {
+  assertContains(applyUpdate, 'update files replaced');
+  assert.match(applyUpdate, /data\\updates/);
+  assert.match(applyUpdate, /Remove-Item[^\n]*\$ZipPath/i);
+  assert.match(applyUpdate, /StartsWith\([^\n]*OrdinalIgnoreCase/i);
+});
+
+test('apply-update.ps1 never deletes a package outside the app updates directory', () => {
+  assert.match(applyUpdate, /if\s*\(\s*\$zipFull\.StartsWith\(\$updatesRoot/i);
 });

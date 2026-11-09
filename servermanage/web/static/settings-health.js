@@ -119,6 +119,91 @@
     });
   }
 
+  function renderStorage(payload) {
+    var container = document.getElementById('storage-usage');
+    if (!container) { return; }
+    container.textContent = '';
+    var usage = (payload && payload.usage) || {};
+    var rows = [
+      ['数据库', usage.database],
+      ['日志', usage.logs],
+      ['更新包', usage.updates],
+      ['界面缓存', usage.electron],
+      ['应用总占用', usage.total]
+    ];
+    rows.forEach(function (pair) {
+      container.appendChild(card(pair[0], formatBytes(pair[1]), pair[0] === '应用总占用' ? '' : ''));
+    });
+  }
+
+  function loadStorage() {
+    var button = document.getElementById('storage-refresh-button');
+    if (button) { button.disabled = true; }
+    fetchJson('/api/system/storage').then(renderStorage).catch(function () {
+      var container = document.getElementById('storage-usage');
+      if (container) {
+        container.textContent = '';
+        var error = document.createElement('p');
+        error.className = 'empty';
+        error.textContent = '磁盘占用读取失败。';
+        container.appendChild(error);
+      }
+    }).then(function () {
+      if (button) { button.disabled = false; }
+    });
+  }
+
+  function runMaintenance(target, button) {
+    var status = document.getElementById('maintenance-status');
+    var root = document.getElementById('settings-root');
+    if (!target || !status) { return; }
+    var labels = {
+      logs: '正在清理超过 24 小时的日志…',
+      updates: '正在清理已下载的更新包…',
+      cache: '正在清理界面缓存…',
+      database: '正在压缩数据库…'
+    };
+    if (button) { button.disabled = true; }
+    status.textContent = labels[target] || '正在清理…';
+    fetch('/api/system/maintenance', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRF-Token': root ? root.getAttribute('data-csrf') : ''
+      },
+      body: JSON.stringify({ target: target })
+    }).then(function (response) {
+      return response.json().catch(function () { return null; }).then(function (body) {
+        if (!response.ok) {
+          throw new Error((body && body.error) || '清理失败');
+        }
+        return body;
+      });
+    }).then(function (payload) {
+      var result = payload.result || {};
+      var freed = result.bytes != null ? formatBytes(result.bytes) : '';
+      status.textContent = '完成' + (freed ? '，释放 ' + freed : '') + '。';
+      renderStorage(payload);
+    }).catch(function (error) {
+      status.textContent = error.message || '清理失败，请稍后重试。';
+    }).then(function () {
+      if (button) { button.disabled = false; }
+    });
+  }
+
+  function setupStorage() {
+    var refresh = document.getElementById('storage-refresh-button');
+    if (refresh) { refresh.addEventListener('click', loadStorage); }
+    var buttons = document.querySelectorAll('[data-maintenance-target]');
+    Array.prototype.forEach.call(buttons, function (button) {
+      button.addEventListener('click', function () {
+        runMaintenance(button.getAttribute('data-maintenance-target'), button);
+      });
+    });
+    loadStorage();
+  }
+
   function load() {
     var button = document.getElementById('health-refresh-button');
     if (button) { button.disabled = true; }
@@ -130,7 +215,12 @@
   var button = document.getElementById('health-refresh-button');
   if (button) { button.addEventListener('click', load); }
   var tab = document.querySelector('[data-settings-tab="health"]');
-  if (tab) { tab.addEventListener('click', load); }
+  if (tab) {
+    tab.addEventListener('click', function () {
+      load();
+      loadStorage();
+    });
+  }
 
   function setupRestore() {
     var fileInput = document.getElementById('restore-file');
@@ -184,5 +274,6 @@
     });
   }
   setupRestore();
+  setupStorage();
   load();
 })();

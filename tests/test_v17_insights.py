@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+import re
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -189,7 +191,7 @@ def test_system_health_payload(tmp_path: Path) -> None:
 
     assert response.status_code == 200
     payload = response.get_json()
-    assert payload["version"] == "0.1.27"
+    assert payload["version"] == "0.1.28"
     assert payload["hosts_configured"] == 1
     assert payload["db_path"] == str(db_path)
     assert payload["db_size_bytes"] > 0
@@ -240,6 +242,8 @@ def test_system_check_card_and_settings_diagnostics_are_rendered(tmp_path: Path)
 
     settings = client.get("/settings").get_data(as_text=True)
     assert 'id="health-diagnostics"' in settings
+    assert 'id="storage-usage"' in settings
+    assert 'data-maintenance-target="database"' in settings
 
     app_js = client.get("/static/app.js").get_data(as_text=True)
     assert "refreshSystemChecks" in app_js
@@ -247,6 +251,65 @@ def test_system_check_card_and_settings_diagnostics_are_rendered(tmp_path: Path)
 
     health_js = client.get("/static/settings-health.js").get_data(as_text=True)
     assert "renderDiagnostics" in health_js
+    assert "renderStorage" in health_js
+    assert "runMaintenance" in health_js
+
+
+def test_system_storage_usage_and_invalid_maintenance_target(tmp_path: Path) -> None:
+    client, _app, _db_path = _client(tmp_path)
+
+    response = client.get("/api/system/storage")
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["log_retention_hours"] == 24
+    assert set(payload["usage"]) == {
+        "database",
+        "logs",
+        "updates",
+        "electron",
+        "total",
+    }
+    assert payload["usage"]["database"] > 0
+
+    settings = client.get("/settings").get_data(as_text=True)
+    token = re.search(r'data-csrf="([^"]+)"', settings).group(1)
+    invalid = client.post(
+        "/api/system/maintenance",
+        json={"target": "not-a-target"},
+        headers={"X-CSRF-Token": token},
+    )
+    assert invalid.status_code == 400
+
+
+def test_system_maintenance_cleans_expired_logs(tmp_path: Path) -> None:
+    app_dir = tmp_path / "portable"
+    db_path = app_dir / "data" / "monitor.db"
+    db_path.parent.mkdir(parents=True)
+    logs_dir = app_dir / "logs"
+    logs_dir.mkdir()
+    old_log = logs_dir / "old.log"
+    old_log.write_text("old", encoding="utf-8")
+    when = datetime.now(timezone.utc) - timedelta(hours=30)
+    os.utime(old_log, (when.timestamp(), when.timestamp()))
+    app = create_app(config=_config(), db_path=db_path)
+    app.config.update(TESTING=True)
+    client = app.test_client()
+    _login(client)
+    settings = client.get("/settings").get_data(as_text=True)
+    token = re.search(r'data-csrf="([^"]+)"', settings).group(1)
+
+    response = client.post(
+        "/api/system/maintenance",
+        json={"target": "logs"},
+        headers={"X-CSRF-Token": token},
+    )
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["ok"] is True
+    assert payload["result"]["deleted"] == 1
+    assert not old_log.exists()
 
 
 def test_saved_host_probe_returns_probe_payload(tmp_path: Path, monkeypatch) -> None:

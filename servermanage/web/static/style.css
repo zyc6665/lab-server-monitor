@@ -826,6 +826,10 @@ html[data-theme="dark"] #alert-page-size { background: #141c2b; color: #e6edf7; 
 .health-value { display: block; margin-top: 4px; font-size: 20px; color: var(--text); }
 .health-hint { display: block; margin-top: 4px; font-size: 11px; color: var(--text-muted); word-break: break-all; }
 @media (max-width: 900px) { .health-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.storage-maintenance { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--border); }
+.storage-maintenance .section-head h3 { margin: 0; font-size: 15px; }
+.storage-actions { display: flex; gap: 8px; flex-wrap: wrap; margin: 6px 0; }
+#maintenance-status { margin: 4px 0 0; font-size: 12px; }
 
 /* -- system self-check -------------------------------------------------- */
 .system-check-card { margin-bottom: 16px; }

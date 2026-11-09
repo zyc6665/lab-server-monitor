@@ -18,6 +18,7 @@ const {
 const { resolveAppDir, electronUserData, logsDir } = require('./paths.js');
 const { createBackendController } = require('./backend.js');
 const { createUpdater } = require('./updater.js');
+const maintenance = require('./maintenance.js');
 const {
   trayMenuTemplate,
   shouldHideOnClose,
@@ -26,6 +27,8 @@ const {
 
 const APP_TITLE = '服务器轮询监测工具';
 const START_HIDDEN = process.argv.includes('--start-hidden');
+const DAY_MS = 24 * 60 * 60 * 1000;
+const LOG_MAX_BYTES = 5 * 1024 * 1024;
 
 const isPackaged = app.isPackaged;
 const appDir = resolveAppDir({
@@ -53,6 +56,7 @@ function appendLog(message) {
   const line = `${new Date().toISOString()} [main] ${message}\n`;
   try {
     fs.mkdirSync(logsDir(appDir), { recursive: true });
+    maintenance.rotateLogFile(logFilePath(), { maxBytes: LOG_MAX_BYTES });
     fs.appendFileSync(logFilePath(), line);
   } catch (error) {
     console.error('failed to append desktop.log', error);
@@ -63,15 +67,39 @@ function trayIconPath() {
   return path.join(__dirname, '..', 'build', 'icon.ico');
 }
 
-function showWindow() {
+function destroyWindow() {
   if (!mainWindow) {
     return;
   }
-  if (mainWindow.isMinimized()) {
-    mainWindow.restore();
+  const win = mainWindow;
+  mainWindow = null;
+  try {
+    win.destroy();
+  } catch (error) {
+    appendLog(`failed to destroy window: ${error.message}`);
   }
-  mainWindow.show();
-  mainWindow.focus();
+}
+
+function ensureWindow() {
+  if (mainWindow) {
+    return mainWindow;
+  }
+  mainWindow = createWindow();
+  if (currentRuntimeUrl) {
+    mainWindow.loadURL(currentRuntimeUrl).catch((error) => {
+      appendLog(`failed to load dashboard: ${error.message}`);
+    });
+  }
+  return mainWindow;
+}
+
+function showWindow() {
+  const win = ensureWindow();
+  if (win.isMinimized()) {
+    win.restore();
+  }
+  win.show();
+  win.focus();
 }
 
 function quitApp() {
@@ -97,10 +125,17 @@ function createWindow() {
     },
   });
 
+  win.on('minimize', (event) => {
+    if (tray && !quitting) {
+      event.preventDefault();
+      destroyWindow();
+    }
+  });
+
   win.on('close', (event) => {
     if (shouldHideOnClose({ trayAvailable: Boolean(tray), quitting })) {
       event.preventDefault();
-      win.hide();
+      destroyWindow();
     }
   });
 
@@ -234,7 +269,41 @@ async function startBackendAndLoad() {
   }
 }
 
+function runStartupCleanup() {
+  try {
+    const logs = maintenance.pruneLogFiles(logsDir(appDir), {
+      retentionMs: DAY_MS,
+      protectedNames: ['desktop.log', 'servermonitor.log'],
+    });
+    if (logs.deleted) {
+      appendLog(`startup cleanup: removed ${logs.deleted} log files`);
+    }
+  } catch (error) {
+    appendLog(`startup log cleanup failed: ${error.message}`);
+  }
+  try {
+    const updates = maintenance.cleanupUpdateDownloads(
+      path.join(appDir, 'data', 'updates'),
+      { retentionMs: DAY_MS },
+    );
+    if (updates.deleted) {
+      appendLog(`startup cleanup: removed ${updates.deleted} update packages`);
+    }
+  } catch (error) {
+    appendLog(`startup update cleanup failed: ${error.message}`);
+  }
+  try {
+    const cache = maintenance.cleanupElectronCache(electronUserData(appDir));
+    if (cache.deleted) {
+      appendLog(`startup cleanup: removed ${cache.deleted} cache directories`);
+    }
+  } catch (error) {
+    appendLog(`startup cache cleanup failed: ${error.message}`);
+  }
+}
+
 async function bootstrap() {
+  runStartupCleanup();
   mainWindow = createWindow();
   createTray();
   registerIpc();
@@ -283,7 +352,7 @@ app.on('before-quit', (event) => {
 });
 
 app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') {
+  if (process.platform !== 'darwin' && (!tray || quitting)) {
     quitting = true;
     app.quit();
   }

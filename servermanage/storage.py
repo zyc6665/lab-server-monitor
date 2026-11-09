@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import sqlite3
+import time as _time
 from collections.abc import Mapping, Sequence
 from datetime import date, datetime, time, timedelta, timezone, tzinfo
 from pathlib import Path
@@ -313,6 +314,10 @@ def init_storage(db_path: Path, *, daily_summary_tz: str | None = "UTC") -> None
     db_path = Path(db_path)
     db_path.parent.mkdir(parents=True, exist_ok=True)
     with sqlite3.connect(db_path) as conn:
+        # On a brand-new file this must be set before any table exists.  Older
+        # databases keep auto_vacuum=0 until maintain_database() performs its
+        # one-time compaction.
+        conn.execute("PRAGMA auto_vacuum = INCREMENTAL")
         conn.executescript(_CREATE_TABLE_SQL)
         conn.executescript(_CREATE_INDEX_SQL)
         conn.executescript(_CREATE_EXTENDED_TABLES_SQL)
@@ -970,11 +975,32 @@ def list_task_states(db_path: Path) -> list[dict[str, object]]:
     return [dict(row) for row in rows]
 
 
-def database_integrity(db_path: Path) -> tuple[bool, str]:
-    """Run SQLite's quick integrity check and return ``(ok, message)``."""
+_INTEGRITY_CACHE: dict[tuple[str, int, int], tuple[float, tuple[bool, str]]] = {}
+
+
+def database_integrity(
+    db_path: Path,
+    *,
+    cache_seconds: float = 0.0,
+) -> tuple[bool, str]:
+    """Run SQLite's quick integrity check and return ``(ok, message)``.
+
+    ``quick_check`` reads the whole database, so dashboard polling must not run
+    it every 30 seconds.  Callers may pass ``cache_seconds`` to reuse the result
+    while the database file is unchanged (size and mtime are part of the key).
+    """
     db_path = Path(db_path)
     if not db_path.exists():
         return False, "数据库文件不存在"
+    try:
+        stat = db_path.stat()
+        cache_key = (str(db_path.resolve()), stat.st_size, stat.st_mtime_ns)
+    except OSError:
+        cache_key = None
+    if cache_key is not None and cache_seconds > 0:
+        cached = _INTEGRITY_CACHE.get(cache_key)
+        if cached is not None and _time.monotonic() - cached[0] < cache_seconds:
+            return cached[1]
     try:
         conn = sqlite3.connect(db_path)
         try:
@@ -985,8 +1011,78 @@ def database_integrity(db_path: Path) -> tuple[bool, str]:
     except sqlite3.DatabaseError as exc:
         return False, f"数据库无法读取：{exc}"
     if problems:
-        return False, "完整性检查发现问题：" + "；".join(problems[:3])
-    return True, "完整性检查通过"
+        result = (False, "完整性检查发现问题：" + "；".join(problems[:3]))
+    else:
+        result = (True, "完整性检查通过")
+    if cache_key is not None:
+        _INTEGRITY_CACHE[cache_key] = (_time.monotonic(), result)
+        if len(_INTEGRITY_CACHE) > 8:
+            oldest = min(_INTEGRITY_CACHE, key=lambda key: _INTEGRITY_CACHE[key][0])
+            _INTEGRITY_CACHE.pop(oldest, None)
+    return result
+
+
+def count_active_critical_alerts(db_path: Path) -> int:
+    """Count active critical alerts without materialising the whole alert list."""
+    db_path = Path(db_path)
+    if not db_path.exists():
+        return 0
+    with sqlite3.connect(db_path) as conn:
+        try:
+            row = conn.execute(
+                "SELECT COUNT(*) FROM alerts"
+                " WHERE status = 'active' AND lower(severity) = 'critical'"
+            ).fetchone()
+        except sqlite3.OperationalError:
+            return 0
+    return int(row[0]) if row else 0
+
+
+def maintain_database(
+    db_path: Path,
+    *,
+    force: bool = False,
+    min_free_pages: int = 0,
+) -> dict[str, object]:
+    """Reclaim free SQLite pages after retention deletes.
+
+    New databases are switched to ``auto_vacuum=INCREMENTAL``.  Existing
+    databases created before that setting need one ``VACUUM`` rewrite; later
+    calls only run the cheap incremental vacuum.
+    """
+    db_path = Path(db_path)
+    if not db_path.exists():
+        return {"vacuumed": False, "incremental": False, "free_pages": 0}
+    conn = sqlite3.connect(db_path)
+    try:
+        auto_vacuum = int(conn.execute("PRAGMA auto_vacuum").fetchone()[0])
+        page_count = int(conn.execute("PRAGMA page_count").fetchone()[0])
+        free_pages = int(conn.execute("PRAGMA freelist_count").fetchone()[0])
+        vacuumed = False
+        incremental = False
+        if auto_vacuum == 0:
+            if force or free_pages >= max(int(min_free_pages), 1):
+                conn.execute("PRAGMA auto_vacuum = INCREMENTAL")
+                conn.commit()
+                conn.execute("VACUUM")
+                conn.commit()
+                vacuumed = True
+                auto_vacuum = int(conn.execute("PRAGMA auto_vacuum").fetchone()[0])
+                free_pages = int(conn.execute("PRAGMA freelist_count").fetchone()[0])
+        else:
+            conn.execute("PRAGMA incremental_vacuum")
+            conn.commit()
+            incremental = True
+            free_pages = int(conn.execute("PRAGMA freelist_count").fetchone()[0])
+        return {
+            "vacuumed": vacuumed,
+            "incremental": incremental,
+            "auto_vacuum": auto_vacuum,
+            "page_count": page_count,
+            "free_pages": free_pages,
+        }
+    finally:
+        conn.close()
 
 
 def system_stats(db_path: Path) -> dict[str, object]:

@@ -5,6 +5,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const { backendPath, configPath, dotenvPath, dataDir, logsDir } = require('./paths.js');
+const { rotateLogFile } = require('./maintenance.js');
 
 const DEFAULT_STARTUP_TIMEOUT_MS = 30000;
 const DEFAULT_POLL_INTERVAL_MS = 250;
@@ -102,6 +103,7 @@ function createBackendController(options = {}) {
     }
     ensureLogsDir();
     try {
+      rotateLogFile(logFile, { maxBytes: 5 * 1024 * 1024, fsImpl });
       fsImpl.appendFileSync(logFile, `${payloadLines.join('\n')}\n`);
     } catch (error) {
       logger.error?.('failed to append to desktop.log', error);
