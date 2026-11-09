@@ -277,6 +277,7 @@
       <label class="field"><span>磁盘阈值 %</span><input type="number" step="0.1" data-field="thresholds.disk_percent" value="{{ settings.alerts.thresholds.disk_percent }}"></label>
       <label class="field"><span>GPU 显存阈值 %</span><input type="number" step="0.1" data-field="thresholds.gpu_memory_percent" value="{{ settings.alerts.thresholds.gpu_memory_percent }}"></label>
       <label class="field"><span>磁盘温度阈值 ℃</span><input type="number" step="0.1" data-field="thresholds.disk_temperature_c" value="{{ settings.alerts.thresholds.disk_temperature_c }}"></label>
+      <label class="field"><span>连续异常周期数</span><input type="number" min="1" max="10" step="1" data-field="consecutive_periods" value="{{ settings.alerts.consecutive_periods }}"></label>
       <label class="field"><span>冷却时间（分钟）</span><input type="number" min="0" data-field="cooldown_minutes" value="{{ settings.alerts.cooldown_minutes }}"></label>
       <label class="field"><span>离线判定次数</span><input type="number" min="1" data-field="offline_failures" value="{{ settings.alerts.offline_failures }}"></label>
       <label class="check-row"><input type="checkbox" data-field="repeat_while_active" {% if settings.alerts.repeat_while_active %}checked{% endif %}> 持续告警按冷却时间重复通知</label>

@@ -271,3 +271,10 @@ def test_settings_js_submits_checks_and_rules(client):
     assert "checks" in source
     assert "/checks/test" in source
     assert "请先保存主机再测试" in source
+
+
+def test_alert_form_exposes_global_consecutive_periods(client):
+    html = client.get("/settings").get_data(as_text=True)
+
+    assert 'data-field="consecutive_periods"' in html
+    assert "连续异常周期数" in html
