@@ -3,7 +3,8 @@
 Task 3 contributed the data models and the parsing helpers for storcli output.
 Task 4 builds on those public interfaces: single-drive / virtual-drive health
 evaluation plus :func:`collect_disk_health`, which probes storcli over SSH (as
-root via ``sudo -n``) and turns its JSON output into a :class:`DiskHealthReport`.
+root via ``run_sudo`` — a password on stdin when configured, else ``sudo -n``)
+and turns its JSON output into a :class:`DiskHealthReport`.
 """
 
 from __future__ import annotations
@@ -21,6 +22,7 @@ from servermanage.models import (
     HostDiskHealthOverride,
     SSHRunner,
 )
+from servermanage.ssh_client import SudoAuthError, SudoUnavailable
 
 __all__ = [
     "StorcliParseError",
@@ -676,6 +678,28 @@ def _brief(text: str | None, limit: int = 300) -> str:
     return value
 
 
+def _run_privileged(
+    runner: SSHRunner, command: str, timeout: int, use_sudo: bool
+) -> CommandResult:
+    """Single call path for the four privileged storcli invocations.
+
+    Runners that expose ``run_sudo`` (the real SSH wrapper) receive a **bare**
+    command and own the escalation/password handling.  Legacy test doubles
+    without ``run_sudo`` keep the historical ``sudo -n`` prefix through the
+    read-first ``run()``.
+    """
+    if not use_sudo:
+        return runner.run(command, timeout)
+    run_sudo = getattr(runner, "run_sudo", None)
+    if callable(run_sudo):
+        return run_sudo(command, timeout)
+    return runner.run("sudo -n " + command, timeout)
+
+
+def _permission_message(exc: Exception) -> str:
+    return f"{exc}；请在主机编辑中配置 sudo 密码或免密 sudo 后重试。"
+
+
 def disk_report_from_snapshot(snapshot: dict[str, Any]) -> DiskHealthReport:
     """Rebuild a :class:`DiskHealthReport` from ``storage.get_disk_health`` output.
 
@@ -804,7 +828,6 @@ def collect_disk_health(
         use_sudo = effective.use_sudo
     else:
         use_sudo = config.use_sudo
-    prefix = "sudo -n " if use_sudo else ""
 
     def _report(status: str, message: str | None, **kwargs: Any) -> DiskHealthReport:
         return DiskHealthReport(
@@ -823,7 +846,13 @@ def collect_disk_health(
     probe_errors: list[str] = []
     for candidate in candidates:
         try:
-            result = runner.run(f"{prefix}{candidate} -v", command_timeout)
+            result = _run_privileged(
+                runner, f"{candidate} -v", command_timeout, use_sudo
+            )
+        except SudoAuthError as exc:
+            return _report("permission_denied", _permission_message(exc))
+        except SudoUnavailable as exc:
+            return _report("permission_denied", _permission_message(exc))
         except Exception as exc:  # SSH transport errors must not crash polling.
             probe_errors.append(f"{candidate}: {exc}")
             continue
@@ -839,7 +868,8 @@ def collect_disk_health(
         if any(_looks_permission_error(item) for item in probe_errors):
             return _report(
                 "permission_denied",
-                "sudo 权限不足，无法以 root 运行 storcli；请配置免密 sudo（NOPASSWD）后重试。",
+                "sudo 权限不足，无法以 root 运行 storcli；"
+                "请在主机编辑中配置 sudo 密码，或配置免密 sudo 后重试。",
             )
         return _report(
             "no_storcli",
@@ -848,9 +878,13 @@ def collect_disk_health(
 
     # 2. Enumerate controllers.
     try:
-        controllers_result = runner.run(
-            f"{prefix}{storcli} /cALL show J", command_timeout
+        controllers_result = _run_privileged(
+            runner, f"{storcli} /cALL show J", command_timeout, use_sudo
         )
+    except SudoAuthError as exc:
+        return _report("permission_denied", _permission_message(exc))
+    except SudoUnavailable as exc:
+        return _report("permission_denied", _permission_message(exc))
     except Exception as exc:  # SSH transport errors must not crash a poll cycle.
         return _report("error", f"storcli /cALL show J 执行异常：{exc}")
 
@@ -860,7 +894,8 @@ def collect_disk_health(
         ):
             return _report(
                 "permission_denied",
-                "sudo 权限不足，无法以 root 运行 storcli；请配置免密 sudo（NOPASSWD）后重试。",
+                "sudo 权限不足，无法以 root 运行 storcli；"
+                "请在主机编辑中配置 sudo 密码，或配置免密 sudo 后重试。",
             )
         return _report(
             "error",
@@ -901,9 +936,11 @@ def collect_disk_health(
         cid = controller.controller
 
         try:
-            vd_result = runner.run(
-                f"{prefix}{storcli} /c{cid}/vall show J", command_timeout
+            vd_result = _run_privileged(
+                runner, f"{storcli} /c{cid}/vall show J", command_timeout, use_sudo
             )
+        except (SudoAuthError, SudoUnavailable) as exc:
+            warnings.append(f"控制器 {cid} 虚拟盘查询需要 sudo 权限：{exc}")
         except Exception as exc:  # SSH transport errors must not crash a poll cycle.
             warnings.append(f"控制器 {cid} 虚拟盘查询异常：{exc}")
         else:
@@ -918,9 +955,15 @@ def collect_disk_health(
                     warnings.append(f"控制器 {cid} 虚拟盘解析失败：{exc}")
 
         try:
-            pd_result = runner.run(
-                f"{prefix}{storcli} /c{cid}/eall/sall show all J", command_timeout
+            pd_result = _run_privileged(
+                runner,
+                f"{storcli} /c{cid}/eall/sall show all J",
+                command_timeout,
+                use_sudo,
             )
+        except (SudoAuthError, SudoUnavailable) as exc:
+            warnings.append(f"控制器 {cid} 物理盘查询需要 sudo 权限：{exc}")
+            continue
         except Exception as exc:  # Skip this controller's drives, keep the rest.
             warnings.append(f"控制器 {cid} 物理盘查询异常：{exc}")
             continue

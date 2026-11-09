@@ -5,9 +5,10 @@ auto-detect the basic facts the add-host wizard needs (hostname, OS release,
 kernel, CPU cores, memory, filesystem mounts and storcli/sudo availability).
 
 The probe is intentionally read-only: every identity command is sudo-free and
-the only privileged call is a non-interactive ``sudo -n <storcli> -v`` used to
-detect passwordless sudo.  Secret values from the candidate are never stored,
-serialised or logged; the returned :class:`ProbeResult` contains no credentials.
+the only privileged call is ``<storcli> -v`` through ``run_sudo`` (a
+non-interactive ``sudo -n`` when no password is supplied) used to detect sudo
+availability.  Secret values from the candidate are never stored, serialised or
+logged; the returned :class:`ProbeResult` contains no credentials.
 """
 
 from __future__ import annotations
@@ -21,7 +22,11 @@ from typing import Any, Callable, Protocol
 import paramiko
 
 from servermanage.models import AuthConfig, CommandResult, HostConfig
-from servermanage.ssh_client import SSHClientWrapper
+from servermanage.ssh_client import (
+    SSHClientWrapper,
+    SudoAuthError,
+    SudoUnavailable,
+)
 
 DEFAULT_TIMEOUT = 8
 
@@ -35,6 +40,9 @@ class ProbeRunner(Protocol):
     """Minimal interface shared by :class:`SSHClientWrapper` and test doubles."""
 
     def run(self, command: str, timeout: int) -> CommandResult:
+        ...
+
+    def run_sudo(self, command: str, timeout: int) -> CommandResult:
         ...
 
     def close(self) -> None:
@@ -109,6 +117,7 @@ def _build_host_config(candidate: Any) -> HostConfig:
         port=int(_candidate_value(candidate, "port", 22) or 22),
         username=str(_candidate_value(candidate, "username", "") or ""),
         auth=auth,
+        sudo_password=_candidate_value(candidate, "sudo_password"),
     )
 
 
@@ -243,11 +252,21 @@ def _run_probe(runner: ProbeRunner, timeout: int) -> ProbeResult:
     storcli_available = bool(storcli_path)
     sudo_available = False
     if storcli_path:
-        sudo_result = runner.run(f"sudo -n {storcli_path} -v", timeout)
-        sudo_available = sudo_result.exit_status == 0
+        sudo_available = False
+        try:
+            run_sudo = getattr(runner, "run_sudo", None)
+            if callable(run_sudo):
+                sudo_result = run_sudo(f"{storcli_path} -v", timeout)
+            else:
+                # Legacy test doubles only implement ``run``.
+                sudo_result = runner.run(f"sudo -n {storcli_path} -v", timeout)
+            sudo_available = sudo_result.exit_status == 0
+        except (SudoAuthError, SudoUnavailable):
+            sudo_available = False
         if not sudo_available:
             warnings.append(
-                "未检测到 sudo 免密权限，磁盘健康可能需要配置 sudoers"
+                "未检测到可用的 sudo 提权；可在主机编辑中配置 sudo 密码，"
+                "或配置免密 sudo 后重试"
             )
     else:
         warnings.append("未检测到 storcli，磁盘健康将不可用")

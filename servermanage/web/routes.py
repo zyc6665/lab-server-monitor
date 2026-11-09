@@ -384,6 +384,7 @@ def _host_config_from_payload(payload: dict[str, Any], *, name: str | None = Non
         port=_as_int(payload.get("port"), 22),
         username=str(payload.get("username") or ""),
         auth=auth,
+        sudo_password=_optional_text(payload.get("sudo_password")),
     )
 
 

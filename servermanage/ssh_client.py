@@ -9,6 +9,56 @@ import paramiko
 from servermanage.models import CommandResult, HostConfig
 
 
+class SudoAuthError(Exception):
+    """Raised when sudo rejects the supplied password.
+
+    The message is deliberately generic: the supplied password must never
+    appear in an exception message, ``repr`` or traceback.
+    """
+
+
+class SudoUnavailable(Exception):
+    """Raised when sudo cannot run and no password was supplied for it."""
+
+
+# Text sudo emits when the password it read from stdin is wrong.
+_SUDO_AUTH_MARKERS = (
+    "incorrect password",
+    "sorry, try again",
+)
+# Text sudo emits when it needs a password / escalation but could not get one.
+_SUDO_UNAVAILABLE_MARKERS = (
+    "a password is required",
+    "no tty present",
+    "askpass",
+    "not in the sudoers",
+    "is not allowed to",
+    "may not run sudo",
+)
+
+
+def _text_contains_any(texts: tuple[str | None, ...], markers: tuple[str, ...]) -> bool:
+    lowered = " ".join((text or "") for text in texts).lower()
+    return any(marker in lowered for marker in markers)
+
+
+def _execute_read_first(stdout, stderr) -> CommandResult:
+    """Read both streams to EOF *before* waiting for the exit status.
+
+    Reading first prevents a large writer (e.g. ``storcli show all J`` JSON)
+    from filling the SSH channel window and deadlocking while we block on
+    ``recv_exit_status``.
+    """
+    stdout_text = stdout.read().decode("utf-8", errors="replace")
+    stderr_text = stderr.read().decode("utf-8", errors="replace")
+    exit_status = stdout.channel.recv_exit_status()
+    return CommandResult(
+        stdout=stdout_text,
+        stderr=stderr_text,
+        exit_status=exit_status,
+    )
+
+
 def _load_inline_private_key(key_data: str, passphrase: str | None) -> paramiko.PKey:
     """Load an in-memory private key by trying each concrete paramiko key type.
 
@@ -111,12 +161,44 @@ class SSHClientWrapper:
     def run(self, command: str, timeout: int) -> CommandResult:
         client = self._get_client()
         _stdin, stdout, stderr = client.exec_command(command, timeout=timeout)
-        exit_status = stdout.channel.recv_exit_status()
-        return CommandResult(
-            stdout=stdout.read().decode("utf-8", errors="replace"),
-            stderr=stderr.read().decode("utf-8", errors="replace"),
-            exit_status=exit_status,
+        return _execute_read_first(stdout, stderr)
+
+    def run_sudo(self, command: str, timeout: int) -> CommandResult:
+        """Run *command* through sudo, feeding the password only via stdin.
+
+        With no ``HostConfig.sudo_password`` this degrades to non-interactive
+        ``sudo -n``; if that needs a password :class:`SudoUnavailable` is raised.
+        With a password it is written to stdin (never the command line, logs or
+        exceptions). Wrong-password output maps to :class:`SudoAuthError`.
+        """
+        password = getattr(self.host, "sudo_password", None)
+        if not password:
+            result = self.run("sudo -n " + command, timeout)
+            if result.exit_status != 0 and _text_contains_any(
+                (result.stderr, result.stdout), _SUDO_UNAVAILABLE_MARKERS
+            ):
+                raise SudoUnavailable("未配置 sudo 密码且免密 sudo 不可用") from None
+            return result
+
+        client = self._get_client()
+        stdin, stdout, stderr = client.exec_command(
+            "sudo -S -p '' " + command, timeout=timeout
         )
+        try:
+            stdin.write(password + "\n")
+            stdin.flush()
+        except Exception:  # noqa: BLE001 - never let the password into a traceback
+            raise SudoUnavailable("sudo 通道不可用") from None
+        try:
+            stdin.channel.shutdown_write()
+        except Exception:  # noqa: BLE001 - some transports close stdin already
+            pass
+        result = _execute_read_first(stdout, stderr)
+        if result.exit_status != 0 and _text_contains_any(
+            (result.stderr, result.stdout), _SUDO_AUTH_MARKERS
+        ):
+            raise SudoAuthError("sudo 密码错误") from None
+        return result
 
     def close(self) -> None:
         if self._client is not None:
