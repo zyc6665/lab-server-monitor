@@ -99,7 +99,7 @@
     <div class="table-wrap">
       <table class="data-table" id="host-settings-table">
         <thead>
-          <tr><th>名称</th><th>地址</th><th>端口</th><th>用户</th><th>认证</th><th>分组</th><th>负责人</th><th>容量目录</th><th>操作</th></tr>
+          <tr><th>名称</th><th>地址</th><th>端口</th><th>用户</th><th>认证</th><th>分组</th><th>负责人</th><th>容量目录</th><th>检查</th><th>操作</th></tr>
         </thead>
         <tbody>
           {% for host in settings.hosts %}
@@ -112,6 +112,7 @@
             <td>{{ host.group or '未分组' }}</td>
             <td>{{ host.owner }}</td>
             <td class="mono">{{ host.disk_mounts|join(', ') }}</td>
+            <td>{{ host.checks|length }} 项</td>
             <td class="row-actions">
               <button class="ack-btn" data-host-edit="{{ host.name }}" {% if not settings.writable %}disabled{% endif %}>编辑</button>
               <button class="secondary-button" data-host-copy="{{ host.name }}" {% if not settings.writable %}disabled{% endif %}>复制</button>
@@ -120,7 +121,7 @@
           </tr>
           {% endfor %}
           {% if not settings.hosts %}
-          <tr><td colspan="9" class="empty-cell">还没有主机，请点击“新增主机”或“批量导入”。</td></tr>
+          <tr><td colspan="10" class="empty-cell">还没有主机，请点击“新增主机”或“批量导入”。</td></tr>
           {% endif %}
         </tbody>
       </table>
@@ -151,7 +152,38 @@
         <label class="field"><span>负责人（可选）</span><input data-host-field="owner"></label>
         <label class="field"><span>位置（可选）</span><input data-host-field="location"></label>
         <label class="field span-2"><span>备注（可选）</span><textarea data-host-field="notes" rows="2"></textarea></label>
+        <label class="field"><span>sudo 密码（留空表示不改）</span><input type="password" data-host-field="sudo_password" autocomplete="new-password"></label>
+        <div class="field"><span>sudo 密码状态</span><p class="hint" id="host-sudo-state">未配置</p></div>
+        <label class="check-row span-2"><input type="checkbox" data-host-field="clear_sudo_password"> 清除 sudo 密码</label>
       </div>
+
+      <div class="checks-editor" id="host-checks">
+        <div class="checks-editor-header">
+          <h4>服务检查</h4>
+          <button type="button" class="secondary-button" id="add-check-button">添加检查</button>
+        </div>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr><th>名称</th><th>类型</th><th>目标</th><th>超时（秒）</th><th>期望值</th><th>启用</th><th>操作</th></tr>
+            </thead>
+            <tbody id="host-checks-body"></tbody>
+          </table>
+        </div>
+        <p class="hint">类型支持 tcp / http / process / service；期望值为 HTTP 状态码（如 200 或 200-299），留空表示只要命令成功。</p>
+      </div>
+      <p class="form-status" id="host-checks-status"></p>
+
+      <h4>告警规则（留空表示继承全局）</h4>
+      <div class="settings-grid">
+        <label class="field"><span>CPU 阈值 %</span><input type="number" min="1" max="100" step="0.1" data-host-field="alert_cpu_percent"></label>
+        <label class="field"><span>内存阈值 %</span><input type="number" min="1" max="100" step="0.1" data-host-field="alert_memory_percent"></label>
+        <label class="field"><span>磁盘阈值 %</span><input type="number" min="1" max="100" step="0.1" data-host-field="alert_disk_percent"></label>
+        <label class="field"><span>GPU 显存阈值 %</span><input type="number" min="1" max="100" step="0.1" data-host-field="alert_gpu_memory_percent"></label>
+        <label class="field"><span>磁盘温度阈值 ℃</span><input type="number" min="1" max="120" step="0.1" data-host-field="alert_disk_temperature_c"></label>
+        <label class="field"><span>连续异常周期数</span><input type="number" min="1" max="10" step="1" data-host-field="alert_consecutive_periods"></label>
+      </div>
+
       <p class="hint key-only">已配置的密钥不会显示原文；留空表示沿用已保存的凭据。</p>
       <p class="hint password-only">已配置的密码不会显示原文；留空表示沿用已保存的凭据。</p>
       <div class="form-actions">

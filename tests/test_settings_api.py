@@ -15,7 +15,7 @@ from datetime import datetime, timedelta, timezone
 import pytest
 
 from servermanage.config import load_config_from_mapping
-from servermanage.models import CommandResult
+from servermanage.models import CommandResult, HostCheckResult
 from servermanage.settings import SettingsService
 from servermanage.web import create_app
 
@@ -780,3 +780,169 @@ def test_system_restore_rejects_non_sqlite_file(client):
     )
     assert response.status_code == 400
     assert "SQLite" in response.get_json()["error"]
+
+
+# ---------------------------------------------------------------------------
+# Task 7: host checks, alert rules and write-only sudo password
+# ---------------------------------------------------------------------------
+
+
+def _host_payload(**overrides):
+    payload = {
+        "host": "10.0.0.60",
+        "port": 22,
+        "username": "u",
+        "auth_type": "password",
+        "password": "pw",
+    }
+    payload.update(overrides)
+    return payload
+
+
+def test_save_host_checks_and_sudo_password(client):
+    sudo_pw = "sudo-pw-do-not-leak"
+    resp = client.put(
+        "/api/settings/hosts/checked-host",
+        json=_host_payload(
+            sudo_password=sudo_pw,
+            checks=[
+                {
+                    "name": "API",
+                    "type": "http",
+                    "target": "http://127.0.0.1:8000/health",
+                },
+                {
+                    "name": "SSH",
+                    "type": "tcp",
+                    "target": "10.0.0.60:22",
+                    "timeout_seconds": 3,
+                    "expected": "200-299",
+                },
+            ],
+            alert_rules={"cpu_percent": 95, "consecutive_periods": 3},
+        ),
+    )
+    assert resp.status_code == 200
+    assert sudo_pw not in json.dumps(resp.get_json())
+
+    body = client.get("/api/settings").get_json()
+    host = next(item for item in body["hosts"] if item["name"] == "checked-host")
+    assert host["sudo_configured"] is True
+    assert sudo_pw not in json.dumps(body)
+    assert host["checks"][0]["name"] == "API"
+    assert host["checks"][1]["timeout_seconds"] == 3
+    assert host["alert_rules"]["cpu_percent"] == 95
+    assert host["alert_rules"]["consecutive_periods"] == 3
+
+
+def test_clear_sudo_password_marks_not_configured(client):
+    sudo_pw = "sudo-pw-clear"
+    assert (
+        client.put(
+            "/api/settings/hosts/sudo-host", json=_host_payload(sudo_password=sudo_pw)
+        ).status_code
+        == 200
+    )
+    assert (
+        client.get("/api/settings").get_json()["hosts"][0]["sudo_configured"] is True
+    )
+
+    resp = client.put(
+        "/api/settings/hosts/sudo-host",
+        json=_host_payload(clear_secrets=["sudo_password"]),
+    )
+    assert resp.status_code == 200
+    body = client.get("/api/settings").get_json()
+    host = body["hosts"][0]
+    assert host["sudo_configured"] is False
+    assert sudo_pw not in json.dumps(body)
+
+
+def test_invalid_alert_rules_returns_400(client):
+    resp = client.put(
+        "/api/settings/hosts/bad-rules",
+        json=_host_payload(alert_rules={"cpu_percent": 101}),
+    )
+    assert resp.status_code == 400
+    names = [host["name"] for host in client.get("/api/settings").get_json()["hosts"]]
+    assert "bad-rules" not in names
+
+
+def test_invalid_check_returns_400(client):
+    resp = client.put(
+        "/api/settings/hosts/bad-check",
+        json=_host_payload(checks=[{"name": "x", "type": "bogus", "target": "x"}]),
+    )
+    assert resp.status_code == 400
+
+
+def test_saved_host_checks_test_unknown_returns_404(client):
+    resp = client.post(
+        "/api/settings/hosts/ghost/checks/test",
+        json={"name": "API", "type": "tcp", "target": "127.0.0.1:22"},
+    )
+    assert resp.status_code == 404
+
+
+def test_saved_host_checks_test_runs_with_saved_credentials(client, monkeypatch):
+    import servermanage.web.routes as routes
+
+    live_secret = "live-host-secret"
+    _seed_host(client, "live-host", password=live_secret)
+
+    captured = {}
+
+    class FakeSSH:
+        def __init__(self, **kwargs):
+            captured["connect"] = kwargs
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+    def fake_run_host_checks(host, runner, checks, timeout):
+        captured["checks"] = list(checks)
+        captured["host_name"] = host.name
+        return [
+            HostCheckResult(
+                name=checks[0].name,
+                type=checks[0].type,
+                target=checks[0].target,
+                status="ok",
+                message="healthy",
+                latency_ms=1.5,
+            )
+        ]
+
+    monkeypatch.setattr(routes, "SSHClientWrapper", FakeSSH)
+    monkeypatch.setattr(routes, "run_host_checks", fake_run_host_checks)
+
+    resp = client.post(
+        "/api/settings/hosts/live-host/checks/test",
+        json={
+            "name": "API",
+            "type": "tcp",
+            "target": "127.0.0.1:22",
+            "timeout_seconds": 2,
+        },
+    )
+    assert resp.status_code == 200
+    body = resp.get_json()
+    assert body["results"][0]["status"] == "ok"
+    assert body["results"][0]["name"] == "API"
+    assert live_secret not in json.dumps(body)
+    assert "sudo_password" not in json.dumps(body)
+    assert captured["host_name"] == "live-host"
+    assert captured["checks"][0].name == "API"
+    assert captured["checks"][0].timeout_seconds == 2
+
+
+def test_checks_test_rejects_invalid_single_check(client):
+    _seed_host(client, "valid-host", password="pw")
+    resp = client.post(
+        "/api/settings/hosts/valid-host/checks/test",
+        json={"name": "", "type": "tcp", "target": ""},
+    )
+    assert resp.status_code == 400

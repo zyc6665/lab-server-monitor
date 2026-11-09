@@ -209,6 +209,205 @@
     });
   }
 
+  var CHECK_TYPES = ["tcp", "http", "process", "service"];
+  var MAX_CHECKS = 20;
+  var EXPECTED_RE = /^\d{3}(-\d{3})?$/;
+
+  function numberOrBlank(value) {
+    return value === undefined || value === null ? "" : value;
+  }
+
+  function checkRowPayload(row) {
+    return {
+      name: row.querySelector(".check-name").value.trim(),
+      type: row.querySelector(".check-type").value,
+      target: row.querySelector(".check-target").value.trim(),
+      timeout_seconds: Number(row.querySelector(".check-timeout").value) || 5,
+      expected: row.querySelector(".check-expected").value.trim() || null,
+      enabled: row.querySelector(".check-enabled").checked,
+    };
+  }
+
+  function collectChecks() {
+    return qsa("#host-checks-body tr").map(function (row) {
+      return checkRowPayload(row);
+    });
+  }
+
+  function validateCheck(check) {
+    if (!check.name) return "检查名称不能为空";
+    if (check.name.length > 64) return "检查名称最多 64 个字符";
+    if (CHECK_TYPES.indexOf(check.type) < 0) {
+      return "检查类型必须是 tcp/http/process/service";
+    }
+    if (!check.target) return "检查目标不能为空";
+    if (check.target.length > 256) return "检查目标最多 256 个字符";
+    if (
+      !Number.isInteger(check.timeout_seconds) ||
+      check.timeout_seconds < 1 ||
+      check.timeout_seconds > 30
+    ) {
+      return "检查超时必须是 1 到 30 之间的整数";
+    }
+    if (check.expected && !EXPECTED_RE.test(check.expected)) {
+      return "期望值必须是 200 或 200-299 这样的状态码";
+    }
+    return null;
+  }
+
+  function validateChecks(checks) {
+    if (checks.length > MAX_CHECKS) return "最多支持 " + MAX_CHECKS + " 项检查";
+    var seen = {};
+    for (var i = 0; i < checks.length; i += 1) {
+      var error = validateCheck(checks[i]);
+      if (error) return error;
+      var folded = checks[i].name.toLowerCase();
+      if (seen[folded]) return "检查名称重复：" + checks[i].name;
+      seen[folded] = true;
+    }
+    return null;
+  }
+
+  function appendCell(row, child) {
+    var cell = document.createElement("td");
+    cell.appendChild(child);
+    row.appendChild(cell);
+    return cell;
+  }
+
+  function addCheckRow(check) {
+    var body = qs("#host-checks-body");
+    if (!body) return;
+    if (body.querySelectorAll("tr").length >= MAX_CHECKS) {
+      status(hostStatus, "最多支持 " + MAX_CHECKS + " 项检查", true);
+      return;
+    }
+    var data = check || {};
+    var row = document.createElement("tr");
+
+    var nameInput = document.createElement("input");
+    nameInput.className = "check-name";
+    nameInput.type = "text";
+    nameInput.maxLength = 64;
+    nameInput.value = data.name || "";
+    appendCell(row, nameInput);
+
+    var typeSelect = document.createElement("select");
+    typeSelect.className = "check-type";
+    CHECK_TYPES.forEach(function (type) {
+      var option = document.createElement("option");
+      option.value = type;
+      option.textContent = type;
+      typeSelect.appendChild(option);
+    });
+    typeSelect.value = CHECK_TYPES.indexOf(data.type) >= 0 ? data.type : "tcp";
+    appendCell(row, typeSelect);
+
+    var targetInput = document.createElement("input");
+    targetInput.className = "check-target";
+    targetInput.type = "text";
+    targetInput.maxLength = 256;
+    targetInput.value = data.target || "";
+    appendCell(row, targetInput);
+
+    var timeoutInput = document.createElement("input");
+    timeoutInput.className = "check-timeout";
+    timeoutInput.type = "number";
+    timeoutInput.min = "1";
+    timeoutInput.max = "30";
+    timeoutInput.step = "1";
+    timeoutInput.value = data.timeout_seconds || 5;
+    appendCell(row, timeoutInput);
+
+    var expectedInput = document.createElement("input");
+    expectedInput.className = "check-expected";
+    expectedInput.type = "text";
+    expectedInput.value = data.expected || "";
+    appendCell(row, expectedInput);
+
+    var enabledInput = document.createElement("input");
+    enabledInput.className = "check-enabled";
+    enabledInput.type = "checkbox";
+    enabledInput.checked = data.enabled === undefined ? true : !!data.enabled;
+    appendCell(row, enabledInput);
+
+    var actions = document.createElement("td");
+    actions.className = "row-actions";
+    var testButton = document.createElement("button");
+    testButton.type = "button";
+    testButton.className = "secondary-button check-test-button";
+    testButton.textContent = "测试";
+    testButton.addEventListener("click", function () { testCheckRow(row); });
+    var removeButton = document.createElement("button");
+    removeButton.type = "button";
+    removeButton.className = "danger-button check-remove-button";
+    removeButton.textContent = "删除";
+    removeButton.addEventListener("click", function () {
+      row.parentNode.removeChild(row);
+    });
+    actions.appendChild(testButton);
+    actions.appendChild(removeButton);
+    row.appendChild(actions);
+
+    body.appendChild(row);
+  }
+
+  function resetCheckRows(checks) {
+    var body = qs("#host-checks-body");
+    if (!body) return;
+    while (body.firstChild) body.removeChild(body.firstChild);
+    (checks || []).forEach(function (check) { addCheckRow(check); });
+    status(qs("#host-checks-status"), "");
+  }
+
+  function testCheckRow(row) {
+    var checksStatus = qs("#host-checks-status");
+    var check = checkRowPayload(row);
+    var error = validateCheck(check);
+    if (error) { status(checksStatus, error, true); return; }
+    if (!originalHostName) {
+      status(checksStatus, "请先保存主机再测试", true);
+      return;
+    }
+    status(checksStatus, "正在测试检查 " + check.name + "…");
+    api(
+      "POST",
+      "/api/settings/hosts/" + encodeURIComponent(originalHostName) + "/checks/test",
+      check
+    )
+      .then(function (result) {
+        var items = (result && result.results) || [];
+        if (!items.length) { status(checksStatus, "检查未执行", true); return; }
+        var item = items[0];
+        status(
+          checksStatus,
+          check.name + "：" + item.status + (item.message ? " — " + item.message : ""),
+          item.status !== "ok"
+        );
+      })
+      .catch(function (err) { status(checksStatus, err.message, true); });
+  }
+
+  function collectAlertRules() {
+    var mapping = {
+      cpu_percent: "alert_cpu_percent",
+      memory_percent: "alert_memory_percent",
+      disk_percent: "alert_disk_percent",
+      gpu_memory_percent: "alert_gpu_memory_percent",
+      disk_temperature_c: "alert_disk_temperature_c",
+      consecutive_periods: "alert_consecutive_periods",
+    };
+    var rules = {};
+    var hasValue = false;
+    Object.keys(mapping).forEach(function (key) {
+      var raw = hostField(mapping[key]).value.trim();
+      if (raw === "") return;
+      rules[key] = Number(raw);
+      hasValue = true;
+    });
+    return hasValue ? rules : null;
+  }
+
   function openHostForm(host) {
     originalHostName = host ? host.name : null;
     qs("#host-form-title").textContent = host ? "编辑主机 " + host.name : "新增主机";
@@ -228,6 +427,20 @@
     hostField("owner").value = host ? (host.owner || "") : "";
     hostField("location").value = host ? (host.location || "") : "";
     hostField("notes").value = host ? (host.notes || "") : "";
+    hostField("sudo_password").value = "";
+    hostField("clear_sudo_password").checked = false;
+    var sudoState = qs("#host-sudo-state");
+    if (sudoState) {
+      sudoState.textContent = host && host.sudo_configured ? "已配置" : "未配置";
+    }
+    var rules = (host && host.alert_rules) || {};
+    hostField("alert_cpu_percent").value = numberOrBlank(rules.cpu_percent);
+    hostField("alert_memory_percent").value = numberOrBlank(rules.memory_percent);
+    hostField("alert_disk_percent").value = numberOrBlank(rules.disk_percent);
+    hostField("alert_gpu_memory_percent").value = numberOrBlank(rules.gpu_memory_percent);
+    hostField("alert_disk_temperature_c").value = numberOrBlank(rules.disk_temperature_c);
+    hostField("alert_consecutive_periods").value = numberOrBlank(rules.consecutive_periods);
+    resetCheckRows(host && host.checks ? host.checks : []);
     status(hostStatus, "");
     updateAuthVisibility();
     hostForm.hidden = false;
@@ -286,12 +499,25 @@
     if (hostField("private_key").value.trim()) payload.private_key = hostField("private_key").value;
     if (hostField("passphrase").value) payload.passphrase = hostField("passphrase").value;
     if (hostField("password").value) payload.password = hostField("password").value;
+    payload.checks = collectChecks();
+    payload.alert_rules = collectAlertRules();
+    if (hostField("clear_sudo_password").checked) {
+      payload.clear_secrets = ["sudo_password"];
+    } else if (hostField("sudo_password").value) {
+      payload.sudo_password = hostField("sudo_password").value;
+    }
     return payload;
   }
+
+  qs("#add-check-button").addEventListener("click", function () {
+    addCheckRow(null);
+  });
 
   qs("#save-host-button").addEventListener("click", function () {
     var name = hostField("name").value.trim();
     if (!name) { status(hostStatus, "主机名称不能为空", true); return; }
+    var checkError = validateChecks(collectChecks());
+    if (checkError) { status(hostStatus, checkError, true); return; }
     api("PUT", "/api/settings/hosts/" + encodeURIComponent(name), hostPayload())
       .then(function () { watchHostCollection([name]); })
       .catch(function (error) { status(hostStatus, error.message, true); });

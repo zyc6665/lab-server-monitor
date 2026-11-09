@@ -231,3 +231,43 @@ def test_settings_page_renders_host_rows(tmp_path):
     assert "10.0.0.5" in html
     assert "data-host-edit=\"edge\"" in html
     assert "data-host-copy=\"edge\"" in html
+
+
+# ---------------------------------------------------------------------------
+# Task 7: host form sudo password / checks editor / per-host alert rules
+# ---------------------------------------------------------------------------
+
+
+def test_host_form_contains_sudo_and_check_editor(client):
+    html = client.get("/settings").get_data(as_text=True)
+
+    assert 'data-host-field="sudo_password"' in html
+    assert 'id="host-checks"' in html
+    assert "添加检查" in html
+    assert "清除 sudo 密码" in html
+    assert "未配置" in html
+
+    for name in (
+        "alert_cpu_percent",
+        "alert_memory_percent",
+        "alert_disk_percent",
+        "alert_gpu_memory_percent",
+        "alert_disk_temperature_c",
+        "alert_consecutive_periods",
+    ):
+        assert f'data-host-field="{name}"' in html
+
+    # The new 检查 column must widen the empty-state colspan.
+    assert 'colspan="10"' in html
+    assert "<th>检查</th>" in html
+
+
+def test_settings_js_submits_checks_and_rules(client):
+    source = client.get("/static/settings.js").get_data(as_text=True)
+
+    assert "hostPayload()" in source
+    assert "sudo_password" in source
+    assert "alert_rules" in source
+    assert "checks" in source
+    assert "/checks/test" in source
+    assert "请先保存主机再测试" in source

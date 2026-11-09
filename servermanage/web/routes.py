@@ -26,7 +26,7 @@ import smtplib
 import tempfile
 import time
 from collections import deque
-from dataclasses import asdict
+from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
@@ -44,11 +44,13 @@ from flask import (
 )
 
 from servermanage import disk_capacity, host_import, host_probe, maintenance, storage
+from servermanage.availability import run_host_checks
 from servermanage.disk_health import AlertEvent
 from servermanage.models import AuthConfig, HostConfig, WebhookConfig
 from servermanage.notify_webhook import send_webhook
 from servermanage.runtime import read_runtime_state
-from servermanage.settings import SettingsError
+from servermanage.serialization import to_jsonable
+from servermanage.settings import SettingsError, _build_host_check, _sanitize_host_checks
 from servermanage.ssh_client import SSHClientWrapper
 from servermanage.ssh_terminal import (
     SessionNotFoundError,
@@ -1406,7 +1408,7 @@ def register_routes(app: Flask) -> None:
         except Exception as exc:  # defensive; probe_host normally reports failures
             LOGGER.exception("Host probe failed unexpectedly")
             return jsonify({"ok": False, "status": "error", "message": f"探测失败：{exc}"}), 200
-        return jsonify(asdict(result)), 200
+        return jsonify(to_jsonable(result)), 200
 
     # -- SSH terminal (desktop-only, loopback-only) ------------------------
 
@@ -2123,7 +2125,7 @@ def register_routes(app: Flask) -> None:
             return parse_error
         return jsonify(
             {
-                "candidates": [asdict(candidate) for candidate in parsed.candidates],
+                "candidates": [to_jsonable(candidate) for candidate in parsed.candidates],
                 "errors": parsed.errors,
                 "warnings": parsed.warnings,
             }
@@ -2141,7 +2143,7 @@ def register_routes(app: Flask) -> None:
                 "path": str(path),
                 "exists": exists,
                 "default_username": getpass.getuser(),
-                "candidates": [asdict(candidate) for candidate in parsed.candidates],
+                "candidates": [to_jsonable(candidate) for candidate in parsed.candidates],
                 "errors": parsed.errors,
                 "warnings": parsed.warnings,
             }
@@ -2171,7 +2173,7 @@ def register_routes(app: Flask) -> None:
         _path, exists, parsed = _read_ssh_config_candidates()
         selected = set(names) if names is not None else None
         candidates = [
-            asdict(candidate)
+            to_jsonable(candidate)
             for candidate in parsed.candidates
             if selected is None or candidate.name in selected
         ]
@@ -2215,7 +2217,7 @@ def register_routes(app: Flask) -> None:
             return parse_error
         try:
             result = service.import_hosts(
-                [asdict(candidate) for candidate in parsed.candidates],
+                [to_jsonable(candidate) for candidate in parsed.candidates],
                 overwrite=_truthy_arg(payload.get("overwrite")),
             )
         except SettingsError as exc:
@@ -2289,7 +2291,41 @@ def register_routes(app: Flask) -> None:
         result = host_probe.probe_host(
             host_config, timeout=config.ssh.connect_timeout
         )
-        return jsonify(asdict(result))
+        return jsonify(to_jsonable(result))
+
+    @app.post("/api/settings/hosts/<name>/checks/test")
+    def api_test_saved_host_check(name: str):
+        """Run one posted check against a saved host using stored credentials.
+
+        The host must already be saved (404 otherwise) so a browser never has to
+        send connection credentials merely to test a check.  Connection details
+        and the sudo password come from the saved configuration; nothing is
+        persisted and the response never carries secret material.
+        """
+        config = _config(app)
+        host_config = next((h for h in config.servers if h.name == name), None)
+        if host_config is None:
+            return jsonify({"error": "not_found"}), 404
+        payload = request.get_json(silent=True)
+        if not isinstance(payload, dict):
+            return jsonify({"error": "invalid_payload"}), 400
+        try:
+            sanitized = _sanitize_host_checks([payload])
+        except SettingsError as exc:
+            return jsonify({"error": str(exc)}), 400
+        check_config = _build_host_check(sanitized[0])
+        temp_host = replace(host_config, checks=[check_config])
+        try:
+            with SSHClientWrapper(
+                host=temp_host, connect_timeout=config.ssh.connect_timeout
+            ) as ssh:
+                results = run_host_checks(
+                    temp_host, ssh, [check_config], config.ssh.command_timeout
+                )
+        except Exception as exc:  # noqa: BLE001 - text-only error surface
+            LOGGER.exception("saved host check test failed for %s", name)
+            return jsonify({"ok": False, "error": str(exc)}), 200
+        return jsonify({"ok": True, "results": to_jsonable(results)})
 
     @app.post("/api/settings/hosts/<name>/collect")
     def api_collect_saved_host(name: str):
