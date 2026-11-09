@@ -7,6 +7,7 @@ from typing import Any
 
 import yaml
 
+from servermanage import usermode as user_mode
 from servermanage.models import (
     AlertsConfig,
     AlertThresholds,
@@ -101,6 +102,7 @@ def _load_app(data: Any) -> AppRuntimeConfig:
     if data is None:
         return AppRuntimeConfig()
     mapping = _require_mapping(data, "app")
+    mode, member_account = _load_view_mode(mapping)
     return AppRuntimeConfig(
         poll_interval_seconds=int(mapping.get("poll_interval_seconds", 600)),
         disk_poll_interval_seconds=int(mapping.get("disk_poll_interval_seconds", 86400)),
@@ -120,7 +122,20 @@ def _load_app(data: Any) -> AppRuntimeConfig:
         auto_port_fallback=bool(mapping.get("auto_port_fallback", True)),
         tray_enabled=bool(mapping.get("tray_enabled", True)),
         open_browser_on_start=bool(mapping.get("open_browser_on_start", True)),
+        mode=mode,
+        member_account=member_account,
     )
+
+
+def _load_view_mode(mapping: dict[str, Any]) -> tuple[str, str]:
+    """Return the (mode, member_account) pair declared in ``app``."""
+    try:
+        return user_mode.validate_mode(
+            mapping.get("mode", user_mode.MODE_ADMIN),
+            mapping.get("member_account", ""),
+        )
+    except user_mode.ModeError as exc:
+        raise ConfigError(f"app.{exc}") from exc
 
 
 def _load_dashboard_auth(data: Any) -> DashboardAuthConfig:

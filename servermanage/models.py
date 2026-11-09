@@ -149,6 +149,8 @@ class AppRuntimeConfig:
     auto_port_fallback: bool = True
     tray_enabled: bool = True
     open_browser_on_start: bool = True
+    mode: str = "admin"
+    member_account: str = ""
 
 
 @dataclass(frozen=True)

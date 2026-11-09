@@ -34,11 +34,17 @@
   </div>
 
   {% set is_app = session.get('logged_in') %}
-  {% set page_titles = {'overview': '概览', 'hosts': '主机', 'users': '服务器用户', 'disk_health': '磁盘健康', 'alerts': '告警', 'terminal': '终端', 'settings': '设置'} %}
+  {% set page_titles = {'overview': '概览', 'hosts': '主机', 'my': '我的服务器', 'users': '服务器用户', 'disk_health': '磁盘健康', 'alerts': '告警', 'terminal': '终端', 'settings': '设置'} %}
   <div class="app-body{% if not is_app %} app-body-auth{% endif %}">
     {% if is_app %}
     <aside class="sidebar" aria-label="侧边导航">
       <nav class="sidebar-nav" aria-label="主导航">
+        {% if view_mode == 'user' %}
+        <a href="{{ url_for('my_page') }}" class="sidebar-link{% if active_page == 'my' %} active{% endif %}">
+          <span class="sidebar-icon" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="7" rx="2"/><rect x="3" y="13" width="18" height="7" rx="2"/><path d="M7 7.5h.01M7 16.5h.01"/></svg></span>
+          <span class="sidebar-label">我的服务器</span>
+        </a>
+        {% else %}
         <a href="{{ url_for('overview_page') }}" class="sidebar-link{% if active_page == 'overview' %} active{% endif %}">
           <span class="sidebar-icon" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg></span>
           <span class="sidebar-label">概览</span>
@@ -63,6 +69,7 @@
           <span class="sidebar-icon" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9l3 3-3 3M13 15h4"/></svg></span>
           <span class="sidebar-label">终端</span>
         </a>
+        {% endif %}
         <a href="{{ url_for('settings_page') }}" class="sidebar-link{% if active_page == 'settings' %} active{% endif %}">
           <span class="sidebar-icon" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9c0 .66.39 1.26 1 1.51H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></span>
           <span class="sidebar-label">设置</span>
@@ -81,11 +88,13 @@
           <span class="topbar-title">{{ page_titles.get(active_page, '概览') }}</span>
         </div>
         <div class="topbar-status">
+          {% if view_mode != 'user' %}
           <button type="button" class="command-trigger no-drag" id="command-trigger" title="全局搜索（Ctrl+K）" aria-label="全局搜索" aria-haspopup="dialog" aria-controls="command-palette">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
             <span class="command-trigger-label">搜索</span>
             <kbd>Ctrl K</kbd>
           </button>
+          {% endif %}
           <button type="button" class="theme-toggle" id="theme-toggle" title="切换深色/浅色主题" aria-label="切换深色/浅色主题">
             <svg class="theme-icon theme-icon-moon" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
             <svg class="theme-icon theme-icon-sun" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
@@ -118,7 +127,7 @@
     </div>
   </div>
 
-  {% if is_app %}
+  {% if is_app and view_mode != 'user' %}
   <div class="command-overlay" id="command-palette" hidden>
     <div class="command-dialog" role="dialog" aria-modal="true" aria-labelledby="command-title">
       <h2 class="command-title" id="command-title">全局搜索</h2>
@@ -138,7 +147,7 @@
 
   <script src="{{ asset_url('titlebar.js') }}"></script>
   <script src="{{ asset_url('app.js') }}"></script>
-  {% if is_app %}<script src="{{ asset_url('command-palette.js') }}"></script>{% endif %}
+  {% if is_app and view_mode != 'user' %}<script src="{{ asset_url('command-palette.js') }}"></script>{% endif %}
   {% block scripts %}{% endblock %}
 </body>
 </html>

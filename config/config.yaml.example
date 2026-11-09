@@ -35,6 +35,10 @@ app:
   auto_port_fallback: true            # 端口被占用时在 8080..8099 内自动顺延
   tray_enabled: true                  # 显示系统托盘图标（Windows）
   open_browser_on_start: true         # 启动后自动打开看板
+  # 使用模式：admin = 管理员看全部功能；user = 实验室成员只看自己账号所在服务器
+  # user 模式必须同时填写 member_account（自己在服务器上的 Linux 账号名）
+  mode: "admin"
+  member_account: ""
 
 # ---------------------------------------------------------------------------
 # dashboard：本地 Web 看板

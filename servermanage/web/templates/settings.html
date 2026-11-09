@@ -68,6 +68,17 @@
       <label class="check-row"><input type="checkbox" data-field="open_browser_on_start" {% if settings.monitoring.open_browser_on_start %}checked{% endif %}> 启动时自动打开浏览器</label>
       {% endif %}
     </div>
+    <div class="mode-settings" data-section="view-mode">
+      <h3>使用模式</h3>
+      <p class="hint">用户模式只显示本机使用者在各服务器上的账号状态与占用，隐藏磁盘阵列、告警、终端等管理员功能；不会改变服务器上的实际权限。</p>
+      <div class="settings-grid">
+        <label class="check-row"><input type="radio" name="view-mode" value="admin" data-mode="admin" {% if settings.monitoring.mode != 'user' %}checked{% endif %}> 管理员模式</label>
+        <label class="check-row"><input type="radio" name="view-mode" value="user" data-mode="user" {% if settings.monitoring.mode == 'user' %}checked{% endif %}> 用户模式（实验室成员）</label>
+        <label class="field"><span>我的服务器账号名（用户模式必填）</span>
+          <input data-field="member_account" value="{{ settings.monitoring.member_account }}" placeholder="例如 zhouyc" autocomplete="off" spellcheck="false">
+        </label>
+      </div>
+    </div>
     <button class="primary-button" data-save="monitoring" {% if not settings.writable %}disabled{% endif %}>保存监控与存储</button>
   </section>
 

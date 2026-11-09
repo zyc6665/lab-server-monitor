@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="my-header card">
+  <div class="my-header-main">
+    <p class="my-eyebrow">我的服务器账号</p>
+    <h1 class="my-member">{{ member or '未填写账号' }}</h1>
+    <p class="my-hint" id="my-hint">正在读取你在这几台服务器上的账号信息…</p>
+  </div>
+  <div class="my-header-actions">
+    <button type="button" class="secondary-button" id="my-refresh">刷新</button>
+    <a class="secondary-button button-link" href="{{ url_for('settings_page') }}">设置</a>
+  </div>
+</section>
+
+<section class="my-stats" id="my-stats" hidden>
+  <div class="my-stat"><span class="my-stat-label">有账号的服务器</span><strong class="my-stat-value" id="my-stat-hosts">0</strong></div>
+  <div class="my-stat"><span class="my-stat-label">账号正常</span><strong class="my-stat-value" id="my-stat-present">0</strong></div>
+  <div class="my-stat"><span class="my-stat-label">账号缺失</span><strong class="my-stat-value" id="my-stat-missing">0</strong></div>
+  <div class="my-stat"><span class="my-stat-label">需要处理</span><strong class="my-stat-value" id="my-stat-issues">0</strong></div>
+  <div class="my-stat"><span class="my-stat-label">家目录合计</span><strong class="my-stat-value" id="my-stat-home">—</strong></div>
+  <div class="my-stat"><span class="my-stat-label">/data 合计</span><strong class="my-stat-value" id="my-stat-data">—</strong></div>
+</section>
+
+<section class="card" id="my-hosts-card">
+  <div class="section-head">
+    <h2>我的服务器</h2>
+    <span class="muted" id="my-host-count"></span>
+  </div>
+  <p class="my-empty" id="my-empty" hidden></p>
+  <div class="my-host-list" id="my-host-list"></div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ asset_url('my.js') }}"></script>
+{% endblock %}

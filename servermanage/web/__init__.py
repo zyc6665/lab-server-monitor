@@ -105,7 +105,17 @@ def create_app(
         def asset_url(filename: str) -> str:
             return url_for("static", filename=filename, v=APP_VERSION)
 
-        return {"app_version": APP_VERSION, "asset_url": asset_url}
+        current = app.config.get("CONFIG")
+        runtime_app = getattr(current, "app", None)
+        mode = getattr(runtime_app, "mode", "admin")
+        if mode not in ("admin", "user"):
+            mode = "admin"
+        return {
+            "app_version": APP_VERSION,
+            "asset_url": asset_url,
+            "view_mode": mode,
+            "member_account": str(getattr(runtime_app, "member_account", "") or ""),
+        }
 
     register_routes(app)
     return app

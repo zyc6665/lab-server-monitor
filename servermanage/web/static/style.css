@@ -1443,3 +1443,44 @@ html[data-theme="dark"] .user-acct.user-row-missing { background: #2a1a20; borde
 html[data-theme="dark"] .user-acct.has-issues { border-color: #7c4a12; }
 html[data-theme="dark"] .user-chip { border-color: #223049; }
 html[data-theme="dark"] .user-chip.active { background: #2563eb; border-color: #2563eb; color: #fff; }
+
+/* -- 我的服务器（用户模式） ------------------------------------------- */
+.my-header { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start; justify-content: space-between; }
+.my-eyebrow { margin: 0; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted, #64748b); }
+.my-member { margin: 4px 0 6px; font-size: 24px; font-weight: 600; }
+.my-hint { margin: 0; color: var(--muted, #64748b); font-size: 13px; }
+.my-header-actions { display: flex; gap: 8px; }
+.my-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin: 16px 0; }
+.my-stat { background: var(--card-bg, #fff); border: 1px solid var(--border, #e2e8f0); border-radius: 12px; padding: 12px 14px; display: flex; flex-direction: column; gap: 4px; }
+.my-stat-label { font-size: 12px; color: var(--muted, #64748b); }
+.my-stat-value { font-size: 18px; font-weight: 600; }
+.my-host-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 14px; margin-top: 12px; }
+.my-host-card { border: 1px solid var(--border, #e2e8f0); border-radius: 14px; padding: 16px; background: var(--card-bg, #fff); display: flex; flex-direction: column; gap: 10px; }
+.my-host-card.has-issues { border-color: #f59e0b; }
+.my-host-card.has-error { border-color: #ef4444; }
+.my-host-head { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.my-host-name { margin: 0; font-size: 16px; font-weight: 600; }
+.my-host-address { margin: 2px 0 0; font-size: 12px; color: var(--muted, #64748b); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.my-badges { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.my-badge { font-size: 11px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--border, #e2e8f0); color: var(--muted, #475569); }
+.my-badge-ok { border-color: #10b981; color: #047857; background: #ecfdf5; }
+.my-badge-warn { border-color: #f59e0b; color: #b45309; background: #fffbeb; }
+.my-badge-danger { border-color: #ef4444; color: #b91c1c; background: #fef2f2; }
+.my-host-meta { margin: 0; font-size: 12px; color: var(--muted, #64748b); }
+.my-host-error { margin: 0; font-size: 12px; color: #b91c1c; }
+.my-usages { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.my-usage { border: 1px dashed var(--border, #e2e8f0); border-radius: 10px; padding: 8px 10px; }
+.my-usage-head { display: flex; justify-content: space-between; font-size: 12px; gap: 8px; }
+.my-issues { margin: 0; padding-left: 18px; font-size: 12px; color: #b45309; }
+.my-empty { margin: 8px 0; color: var(--muted, #64748b); font-size: 13px; }
+html[data-theme="dark"] .my-stat,
+html[data-theme="dark"] .my-host-card { background: var(--card-bg, #111c2e); border-color: #223049; }
+html[data-theme="dark"] .my-badge-ok { background: #052e26; color: #6ee7b7; border-color: #065f46; }
+html[data-theme="dark"] .my-badge-warn { background: #2a1f05; color: #fcd34d; border-color: #92400e; }
+html[data-theme="dark"] .my-badge-danger { background: #2a1015; color: #fca5a5; border-color: #7f1d1d; }
+html[data-theme="dark"] .my-usage { border-color: #223049; }
+html[data-theme="dark"] .my-issues { color: #fbbf24; }
+@media (max-width: 760px) {
+  .my-host-list { grid-template-columns: 1fr; }
+  .my-usages { grid-template-columns: 1fr; }
+}

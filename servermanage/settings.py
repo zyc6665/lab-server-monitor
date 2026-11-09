@@ -25,7 +25,7 @@ from pathlib import Path
 from typing import Any, Union, get_args, get_origin, get_type_hints
 
 from servermanage import __version__ as APP_VERSION
-from servermanage import security, storage
+from servermanage import security, storage, usermode as user_mode
 from servermanage.availability import validate_check_target
 from servermanage.config import load_config
 from servermanage.models import (
@@ -401,6 +401,8 @@ class SettingsService:
                 "auto_port_fallback": config.app.auto_port_fallback,
                 "tray_enabled": config.app.tray_enabled,
                 "open_browser_on_start": config.app.open_browser_on_start,
+                "mode": config.app.mode,
+                "member_account": config.app.member_account,
             },
             "dashboard": {
                 "host": config.dashboard.host,
@@ -1327,7 +1329,18 @@ class SettingsService:
         self, config: AppConfig, section: str, payload: dict[str, Any]
     ) -> AppConfig:
         if section == SECTION_MONITORING:
-            app = _flat(config.app, payload)
+            data = dict(payload)
+            if "mode" in data or "member_account" in data:
+                try:
+                    mode, member = user_mode.validate_mode(
+                        data.get("mode", config.app.mode),
+                        data.get("member_account", config.app.member_account),
+                    )
+                except user_mode.ModeError as exc:
+                    raise SettingsError(str(exc)) from None
+                data["mode"] = mode
+                data["member_account"] = member
+            app = _flat(config.app, data)
             self._validate_monitoring(app)
             return replace(config, app=app)
         if section == SECTION_SSH:
@@ -1369,6 +1382,10 @@ class SettingsService:
                 raise SettingsError(
                     f"{field_name} 必须在 {minimum} 到 {maximum} 之间"
                 )
+        try:
+            user_mode.validate_mode(app.mode, app.member_account)
+        except user_mode.ModeError as exc:
+            raise SettingsError(str(exc)) from None
 
     def _apply_dashboard(
         self, dashboard: DashboardConfig, payload: dict[str, Any]

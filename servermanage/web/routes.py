@@ -51,6 +51,8 @@ from servermanage import (
     maintenance,
     storage,
 )
+from servermanage import usermode as user_mode
+from servermanage import __version__ as app_version
 from servermanage.alerts import fingerprint_for
 from servermanage.availability import run_host_checks
 from servermanage.user_collection import is_user_monitoring_enabled
@@ -97,6 +99,44 @@ def _config(app: Flask):
 
 def _db_path(app: Flask):
     return app.config["DB_PATH"]
+
+
+def _view_mode(config) -> str:
+    """Return the active viewing mode: ``admin`` or ``user``."""
+    mode = getattr(getattr(config, "app", None), "mode", user_mode.MODE_ADMIN)
+    return mode if mode in user_mode.MODES else user_mode.MODE_ADMIN
+
+
+def _member_account(config) -> str:
+    """Return the lab account name configured by a member-mode client."""
+    return str(getattr(getattr(config, "app", None), "member_account", "") or "")
+
+
+#: Paths a member-mode client may still reach.  Everything else is admin-only.
+_USER_MODE_ALLOWED = frozenset(
+    {
+        "/",
+        "/my",
+        "/api/my/summary",
+        "/settings",
+        "/api/settings",
+        "/api/settings/monitoring",
+        "/api/settings/password",
+        "/api/runtime",
+        "/login",
+        "/setup",
+        "/logout",
+    }
+)
+
+#: Keys a member may change through ``PUT /api/settings/monitoring``.
+_USER_MODE_SETTINGS_KEYS = frozenset({"mode", "member_account"})
+
+
+def _user_mode_allows(path: str) -> bool:
+    if path.startswith("/static/"):
+        return True
+    return path in _USER_MODE_ALLOWED
 
 
 def get_ssh_terminal_manager(app: Flask) -> SshTerminalManager:
@@ -1196,6 +1236,61 @@ def _to_local_text(value: Any, tz) -> Any:
     return parsed.astimezone(tz).strftime("%Y-%m-%d %H:%M")
 
 
+def _build_my_summary(config, db_path, *, tz=None) -> dict[str, Any]:
+    """Return only the signed-in member's accounts, grouped by host.
+
+    The member is identified by the locally configured account name; hosts that
+    have no such account (present or in the baseline) are omitted entirely so
+    a member never sees unrelated servers.
+    """
+    member = _member_account(config)
+    payload = _build_users_payload(config, db_path, tz=tz)
+    mine: dict[str, dict[str, Any]] = {}
+    for row in payload["accounts"]:
+        if member and str(row.get("username") or "") == member:
+            mine[str(row.get("host_name"))] = row
+    hosts: list[dict[str, Any]] = []
+    for block in payload["hosts"]:
+        account = mine.get(str(block.get("name")))
+        if account is None:
+            continue
+        hosts.append(
+            {
+                "name": block.get("name"),
+                "address": block.get("address"),
+                "status": block.get("status"),
+                "last_scan_at": _to_local_text(block.get("last_scan_at"), tz)
+                if tz is not None
+                else block.get("last_scan_at"),
+                "last_error": block.get("last_error"),
+                "account": account,
+            }
+        )
+    return {
+        "mode": _view_mode(config),
+        "member": member,
+        "hosts": hosts,
+        "summary": {
+            "hosts": len(hosts),
+            "present": sum(
+                1 for host in hosts if host["account"]["state"] == "present"
+            ),
+            "missing": sum(
+                1 for host in hosts if host["account"]["state"] == "missing"
+            ),
+            "issues": sum(1 for host in hosts if host["account"].get("issues")),
+            "host_errors": sum(1 for host in hosts if host.get("status") == "error"),
+            "home_bytes": sum(
+                host["account"].get("home_size_bytes") or 0 for host in hosts
+            ),
+            "data_bytes": sum(
+                host["account"].get("data_size_bytes") or 0 for host in hosts
+            ),
+        },
+    }
+
+
+
 def _build_user_rows(
     host_name: str,
     db_path,
@@ -1812,13 +1907,25 @@ def register_routes(app: Flask) -> None:
             return None
 
         config = _config(app)
-        if not config.dashboard.auth.enabled:
-            return None
-        if session.get("logged_in"):
-            return None
-        if path.startswith("/api/"):
-            return jsonify({"error": "unauthorized"}), 401
-        return redirect(url_for("login"))
+        if config.dashboard.auth.enabled and not session.get("logged_in"):
+            if path.startswith("/api/"):
+                return jsonify({"error": "unauthorized"}), 401
+            return redirect(url_for("login"))
+
+        # 4) Member (user) mode: only the personal surfaces stay reachable.
+        if _view_mode(config) == user_mode.MODE_USER and not _user_mode_allows(path):
+            if path.startswith("/api/"):
+                return (
+                    jsonify(
+                        {
+                            "error": "admin_only",
+                            "message": "该功能仅在管理员模式下可用",
+                        }
+                    ),
+                    403,
+                )
+            return redirect(url_for("my_page"))
+        return None
 
     # -- host connection probe ---------------------------------------------
 
@@ -2467,6 +2574,18 @@ def register_routes(app: Flask) -> None:
         payload = request.get_json(silent=True)
         if not isinstance(payload, dict):
             return jsonify({"error": "invalid_payload"}), 400
+        if _view_mode(_config(app)) == user_mode.MODE_USER:
+            extra = set(payload) - _USER_MODE_SETTINGS_KEYS
+            if section != "monitoring" or extra:
+                return (
+                    jsonify(
+                        {
+                            "error": "admin_only",
+                            "message": "用户模式下只能修改使用模式与账号名",
+                        }
+                    ),
+                    403,
+                )
         try:
             service.save_section(section, payload)
         except SettingsError as exc:
@@ -3054,7 +3173,10 @@ def register_routes(app: Flask) -> None:
 
     @app.get("/")
     def overview_page():
-        data = _build_overview(_config(app), _db_path(app))
+        config = _config(app)
+        if _view_mode(config) == user_mode.MODE_USER:
+            return redirect(url_for("my_page"))
+        data = _build_overview(config, _db_path(app))
         return render_template(
             "overview.html",
             active_page="overview",
@@ -3077,6 +3199,22 @@ def register_routes(app: Flask) -> None:
     @app.get("/users")
     def users_page():
         return render_template("users.html", active_page="users")
+
+    @app.get("/my")
+    def my_page():
+        config = _config(app)
+        return render_template(
+            "my.html",
+            active_page="my",
+            member=_member_account(config),
+            mode=_view_mode(config),
+        )
+
+    @app.get("/api/my/summary")
+    def api_my_summary():
+        config = _config(app)
+        tz = resolve_timezone(config.app.timezone)
+        return jsonify(_build_my_summary(config, _db_path(app), tz=tz))
 
     @app.get("/host/<name>")
     def host_page(name: str):
@@ -3180,6 +3318,14 @@ def register_routes(app: Flask) -> None:
     @app.get("/settings")
     def settings_page():
         config = _config(app)
+        if _view_mode(config) == user_mode.MODE_USER:
+            return render_template(
+                "settings_user.html",
+                active_page="settings",
+                member=_member_account(config),
+                version=app_version,
+                desktop_mode=os.environ.get("SERVERMONITOR_DESKTOP") == "1",
+            )
         service = _settings_service(app)
         settings = service.public_settings() if service is not None else _settings_snapshot(config)
         runtime = read_runtime_state(_RUNTIME_FILE) or {}

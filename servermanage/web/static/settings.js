@@ -129,6 +129,10 @@
         setNested(payload, path, input.value);
       }
     });
+    if (sectionName === "monitoring") {
+      var checkedMode = qs('[data-section="monitoring"] input[data-mode]:checked');
+      payload.mode = checkedMode ? checkedMode.getAttribute("data-mode") : "admin";
+    }
     return payload;
   }
 
