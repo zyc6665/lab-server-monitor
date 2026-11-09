@@ -1,4 +1,4 @@
-﻿# ============================================================================
+# ============================================================================
 # 服务器轮询监测工具 —— Windows PC 桌面客户端示例配置（v1.4，纯单机）
 # Server Polling Monitor —— Windows PC (PyInstaller onedir) example config
 #
@@ -59,9 +59,10 @@ alerts:
   cooldown_minutes: 60
   repeat_while_active: false
   offline_failures: 2                 # 连续失败 N 次判定离线
+  consecutive_periods: 2              # 连续异常周期数（1..10），减少瞬时抖动误报
   webhook:
-    enabled: false                    # 需要企业微信/钉钉等推送时改为 true
-    type: "wecom"
+    enabled: false                    # 需要企业微信/钉钉/飞书推送时改为 true
+    type: "wecom"                     # wecom / dingtalk / feishu / generic
     url_env: "ALERT_WEBHOOK_URL"
   thresholds:
     cpu_percent: 90
@@ -137,6 +138,22 @@ report:
 storage:
   enabled: true
   db_path: "data/servermonitor.db"
+
+# ---------------------------------------------------------------------------
+# user_monitoring：服务器用户只读监控（v0.3.0）
+#
+# 每小时读取每台主机的 /etc/passwd 与 /etc/group，只统计 UID >= 1000 的普通账号，
+# 系统账号（root、daemon、sshd 等）不采集、不展示、不告警。
+# 每 6 小时用 du 统计 /home/<用户名> 与 /data/<用户名> 的占用（需要 sudo 时使用主机
+# 已配置的 sudo 密码，未配置则回退 sudo -n；无权限只影响占用显示）。
+# 全程只读：不会创建账号、修改密码或目录权限。
+# 单台主机可在网页设置里用 user_monitoring: false 关闭。
+# ---------------------------------------------------------------------------
+user_monitoring:
+  enabled: true
+  scan_interval_seconds: 3600         # 账号/组/目录扫描间隔（300..86400）
+  usage_interval_seconds: 21600       # 目录占用统计间隔（3600..604800）
+  command_timeout: 120                # 单条远端命令超时秒数（10..600）
 
 # ---------------------------------------------------------------------------
 # servers：被监测的 Linux 服务器
