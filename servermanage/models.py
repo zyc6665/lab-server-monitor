@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Protocol
 
@@ -77,6 +77,7 @@ class HostConfig:
     notes: str = ""
     checks: list[HostCheckConfig] = field(default_factory=list)
     alert_rules: HostAlertRules | None = None
+    user_monitoring: bool | None = None
     sudo_password: str | None = field(
         default=None, repr=False, metadata={"sensitive": True}
     )
@@ -229,6 +230,16 @@ class DiskHealthConfig:
 
 
 @dataclass(frozen=True)
+class UserMonitoringConfig:
+    """Global read-only user monitoring settings."""
+
+    enabled: bool = True
+    scan_interval_seconds: int = 3600
+    usage_interval_seconds: int = 21600
+    command_timeout: int = 120
+
+
+@dataclass(frozen=True)
 class AppConfig:
     smtp: SMTPConfig | None
     ssh: SSHRuntimeConfig
@@ -239,6 +250,9 @@ class AppConfig:
     dashboard: DashboardConfig = field(default_factory=DashboardConfig)
     alerts: AlertsConfig = field(default_factory=AlertsConfig)
     disk_health: DiskHealthConfig = field(default_factory=DiskHealthConfig)
+    user_monitoring: UserMonitoringConfig = field(
+        default_factory=UserMonitoringConfig
+    )
 
 
 @dataclass(frozen=True)
@@ -340,6 +354,41 @@ class HostMetrics:
 
 
 @dataclass(frozen=True)
+class HostUserAccount:
+    """Read-only snapshot of one laboratory user account on a host."""
+
+    host_name: str
+    username: str
+    uid: int
+    gid: int
+    primary_group: str | None = None
+    gecos: str = ""
+    home: str = ""
+    shell: str = ""
+    groups: list[str] = field(default_factory=list)
+    in_docker: bool = False
+    in_sudo: bool = False
+    home_exists: bool = False
+    home_owner: str | None = None
+    home_group: str | None = None
+    home_mode: str | None = None
+    home_size_bytes: int | None = None
+    data_exists: bool = False
+    data_owner: str | None = None
+    data_group: str | None = None
+    data_mode: str | None = None
+    data_size_bytes: int | None = None
+    data_supported: bool = True
+    usage_readable: bool = True
+    usage_stale: bool = False
+    usage_collected_at: datetime | None = None
+    collected_at: datetime = field(
+        default_factory=lambda: datetime.now(timezone.utc)
+    )
+    state: str = "present"
+
+
+@dataclass(frozen=True)
 class HostCollectionError:
     stage: str
     message: str
@@ -353,6 +402,7 @@ class HostReport:
     metrics: HostMetrics = field(default_factory=HostMetrics)
     errors: list[HostCollectionError] = field(default_factory=list)
     checks: list[HostCheckResult] = field(default_factory=list)
+    users: list[HostUserAccount] = field(default_factory=list)
 
 
 @dataclass(frozen=True)

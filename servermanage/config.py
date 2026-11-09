@@ -26,6 +26,7 @@ from servermanage.models import (
     SMTPConfig,
     SSHRuntimeConfig,
     StorageConfig,
+    UserMonitoringConfig,
     WebhookConfig,
     WeeklyReportConfig,
 )
@@ -37,6 +38,11 @@ class ConfigError(ValueError):
 
 _MAX_HOST_CHECKS = 20
 _EXPECTED_STATUS_RE = re.compile(r"^\d{3}(-\d{3})?$")
+_USER_MONITORING_RANGES = {
+    "scan_interval_seconds": (300, 86400),
+    "usage_interval_seconds": (3600, 604800),
+    "command_timeout": (10, 600),
+}
 _ALERT_RULE_RANGES = {
     "cpu_percent": (1, 100),
     "memory_percent": (1, 100),
@@ -245,6 +251,37 @@ def _load_disk_health(data: Any) -> DiskHealthConfig:
         storcli_candidates=candidates,
         rules=_load_disk_health_rules(rules_raw),
     )
+
+
+def _load_user_monitoring(data: Any) -> UserMonitoringConfig:
+    """Parse the optional global ``user_monitoring`` mapping."""
+    if data is None:
+        return UserMonitoringConfig()
+    mapping = _require_mapping(data, "user_monitoring")
+    defaults = UserMonitoringConfig()
+    enabled = mapping.get("enabled", defaults.enabled)
+    if not isinstance(enabled, bool):
+        raise ConfigError("user_monitoring.enabled must be a boolean")
+    values: dict[str, Any] = {"enabled": enabled}
+    for key, (minimum, maximum) in _USER_MONITORING_RANGES.items():
+        raw = mapping.get(key, getattr(defaults, key))
+        if isinstance(raw, bool) or not isinstance(raw, int):
+            raise ConfigError(f"user_monitoring.{key} must be an integer")
+        if not minimum <= raw <= maximum:
+            raise ConfigError(
+                f"user_monitoring.{key} must be between {minimum} and {maximum}"
+            )
+        values[key] = raw
+    return UserMonitoringConfig(**values)
+
+
+def _load_host_user_monitoring(value: Any) -> bool | None:
+    """Parse ``servers[].user_monitoring`` (``None`` inherits the global setting)."""
+    if value is None:
+        return None
+    if not isinstance(value, bool):
+        raise ConfigError("servers[].user_monitoring must be a boolean")
+    return value
 
 
 def _load_host_disk(data: Any) -> HostDiskHealthOverride | None:
@@ -485,6 +522,7 @@ def _load_host(item: Any, *, allow_missing_secrets: bool = False) -> HostConfig:
         notes=str(mapping.get("notes") or ""),
         checks=_load_host_checks(mapping.get("checks")),
         alert_rules=_load_host_alert_rules(mapping.get("alert_rules")),
+        user_monitoring=_load_host_user_monitoring(mapping.get("user_monitoring")),
         sudo_password=_load_host_sudo_password(
             mapping, allow_missing_secrets=allow_missing_secrets
         ),
@@ -559,6 +597,7 @@ def load_config_from_mapping(
         dashboard=dashboard,
         alerts=alerts_cfg,
         disk_health=disk_cfg,
+        user_monitoring=_load_user_monitoring(raw.get("user_monitoring")),
     )
 
 
