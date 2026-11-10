@@ -1717,3 +1717,13 @@ html[data-theme="dark"] .save-hint-ok {
 html[data-theme="dark"] .collect-notice {
   border-left-color: #fbbf24;
 }
+
+/* v0.4.4：空态与提示的一致性 */
+.my-empty-action {
+  display: inline-block;
+  margin-top: 10px;
+}
+
+.host-head .page-subtitle .mono {
+  font-variant-numeric: tabular-nums;
+}

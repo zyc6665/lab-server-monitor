@@ -115,3 +115,24 @@ def test_hosts_page_empty_state_points_at_settings_and_ssh_import() -> None:
     markup = _template("hosts.html")
     assert "还没有主机" in markup
     assert "~/.ssh/config" in markup
+
+
+def test_host_page_empty_states_explain_the_reason() -> None:
+    markup = _template("host.html")
+    assert markup.count('<p class="empty">暂无数据</p>') == 0
+    for phrase in (
+        "没有返回磁盘挂载信息",
+        "没有检测到 NVIDIA GPU",
+        "还没有磁盘阵列数据",
+        "还没有服务检查",
+    ):
+        assert phrase in markup, phrase
+    assert "上次采集" in markup
+
+
+def test_my_page_offers_a_way_to_fix_the_account_name() -> None:
+    script = _script("my.js")
+    assert "修改账号名" in script
+    assert "填写账号名" in script
+    assert 'fix.href = "/settings"' in script
+    assert ".my-empty-action" in _style()

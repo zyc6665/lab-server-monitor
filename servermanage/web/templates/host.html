@@ -36,7 +36,7 @@
   <div class="page-head-main">
     <h1 class="page-title">{{ name }}</h1>
     <p class="page-subtitle muted">
-      {{ detail.host or '—' }}{% if detail.group %} · {{ detail.group }}{% endif %}{% if detail.owner %} · 负责人 {{ detail.owner }}{% endif %}
+      {{ detail.host or '—' }}{% if detail.group %} · {{ detail.group }}{% endif %}{% if detail.owner %} · 负责人 {{ detail.owner }}{% endif %}{% if detail.collected_at %} · 上次采集 <span class="mono">{{ detail.collected_at }}</span>{% endif %}
     </p>
   </div>
   <div class="page-actions">
@@ -202,7 +202,7 @@
     </table>
   </div>
   {% else %}
-  <p class="empty">暂无登录用户</p>
+  <p class="empty">当前没有已登录用户。</p>
   {% endif %}
 </section>
 
@@ -273,7 +273,7 @@
       </tbody>
     </table>
   </div>
-  <p class="empty" id="host-checks-empty"{% if detail.checks %} hidden{% endif %}>未配置服务检查</p>
+  <p class="empty" id="host-checks-empty"{% if detail.checks %} hidden{% endif %}>这台主机还没有服务检查。到设置页的主机编辑里可以添加 TCP 端口、HTTP 状态码或进程检查。</p>
 </section>
 
 <section class="card" id="host-alerts" data-host-panel="alerts">
@@ -309,7 +309,7 @@
     </table>
   </div>
   {% else %}
-  <p class="empty">暂无告警记录</p>
+  <p class="empty">这台主机还没有告警记录。</p>
   {% endif %}
 </section>
 
@@ -336,7 +336,7 @@
     </table>
   </div>
   {% else %}
-  <p class="empty">暂无数据</p>
+  <p class="empty">这台主机没有返回磁盘挂载信息。</p>
   {% endif %}
 </section>
 
@@ -362,7 +362,7 @@
     </table>
   </div>
   {% else %}
-  <p class="empty">暂无数据</p>
+  <p class="empty">这台主机没有检测到 NVIDIA GPU，或未安装 nvidia-smi。</p>
   {% endif %}
 </section>
 
@@ -402,7 +402,7 @@
     </table>
   </div>
   {% else %}
-  <p class="empty">暂无数据</p>
+  <p class="empty">没有控制器信息。</p>
   {% endif %}
 
   <h3>Virtual Drives</h3>
@@ -427,7 +427,7 @@
     </table>
   </div>
   {% else %}
-  <p class="empty">暂无数据</p>
+  <p class="empty">没有虚拟磁盘信息。</p>
   {% endif %}
 
   <h3>Physical Drives</h3>
@@ -462,10 +462,10 @@
     </table>
   </div>
   {% else %}
-  <p class="empty">暂无数据</p>
+  <p class="empty">没有物理磁盘信息。</p>
   {% endif %}
   {% else %}
-  <p class="empty">暂无磁盘阵列数据</p>
+  <p class="empty">还没有磁盘阵列数据：可能是未在设置里启用磁盘健康采集、最近一次采集失败，或该主机没有 LSI 控制器。</p>
   {% endif %}
 </section>
 {% endif %}

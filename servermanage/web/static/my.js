@@ -198,7 +198,13 @@
       if (!hosts.length) {
         emptyEl.textContent = payload.member
           ? "在已配置的服务器上没有找到账号“" + payload.member + "”。请确认设置里的账号名是否写错；如果服务器是刚添加的，等一轮用户采集完成后再刷新。"
-          : "还没有填写你的服务器账号名，请到设置里填写。";
+          : "还没有填写你的服务器账号名，请先到设置里填写。";
+        var fix = document.createElement("a");
+        fix.className = "secondary-button button-link my-empty-action";
+        fix.href = "/settings";
+        fix.textContent = payload.member ? "修改账号名" : "填写账号名";
+        emptyEl.appendChild(document.createElement("br"));
+        emptyEl.appendChild(fix);
       }
     }
   }
