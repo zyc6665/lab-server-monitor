@@ -194,6 +194,9 @@
             <option value="false">停用</option>
           </select>
         </label>
+        <label class="check-row span-2"><input type="checkbox" data-host-field="allow_user_write">
+          允许在这台主机上执行账号写操作（新建账号 / 重置密码 / 加 docker 组 / 建 data 目录）</label>
+        <p class="hint span-2">需要同时满足：全局“允许账号写操作”已开启、本机此开关打开、且已保存 sudo 密码。</p>
       </div>
 
       <h4>告警规则（留空表示继承全局）</h4>
@@ -465,8 +468,11 @@
       <label class="field"><span>账号扫描间隔（秒）</span><input type="number" min="300" max="86400" data-field="scan_interval_seconds" value="{{ settings.user_monitoring.scan_interval_seconds }}"></label>
       <label class="field"><span>目录占用统计间隔（秒）</span><input type="number" min="3600" max="604800" data-field="usage_interval_seconds" value="{{ settings.user_monitoring.usage_interval_seconds }}"></label>
       <label class="field"><span>单条命令超时（秒）</span><input type="number" min="10" max="600" data-field="command_timeout" value="{{ settings.user_monitoring.command_timeout }}"></label>
+      <label class="check-row span-2"><input type="checkbox" data-field="write_enabled" {% if settings.user_monitoring.write_enabled %}checked{% endif %}>
+        允许账号写操作（新建账号 / 重置密码 / 加入 docker 组 / 创建 data 目录）</label>
     </div>
     <p class="hint">账号清单按扫描间隔刷新，只读取 /etc/passwd 与 /etc/group；目录占用按统计间隔执行，<code>du</code> 以 idle I/O 与最低 CPU 优先级运行，失败时保留上次数值。默认每 6 小时统计一次占用即可。</p>
+    <p class="hint hint-warn">写操作默认关闭。打开后仍需在每台主机上单独允许，并且执行前必须预览计划、手动输入主机名与账号名确认；密码只经 SSH 标准输入传递，不写入日志或数据库，每次操作都会记入审计。</p>
     <button class="primary-button" data-save="user_monitoring" {% if not settings.writable %}disabled{% endif %}>保存用户采集</button>
   </section>
 

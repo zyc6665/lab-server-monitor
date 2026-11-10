@@ -78,6 +78,8 @@ class HostConfig:
     checks: list[HostCheckConfig] = field(default_factory=list)
     alert_rules: HostAlertRules | None = None
     user_monitoring: bool | None = None
+    #: Allows account provisioning on this host (needs the global switch too).
+    allow_user_write: bool = False
     sudo_password: str | None = field(
         default=None, repr=False, metadata={"sensitive": True}
     )
@@ -239,6 +241,9 @@ class UserMonitoringConfig:
     scan_interval_seconds: int = 3600
     usage_interval_seconds: int = 21600
     command_timeout: int = 120
+    #: Master switch for account write operations (create/password/docker/data).
+    #: Off by default; every host also needs ``allow_user_write``.
+    write_enabled: bool = False
 
 
 @dataclass(frozen=True)

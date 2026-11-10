@@ -277,7 +277,14 @@ def _load_user_monitoring(data: Any) -> UserMonitoringConfig:
     enabled = mapping.get("enabled", defaults.enabled)
     if not isinstance(enabled, bool):
         raise ConfigError("user_monitoring.enabled must be a boolean")
-    values: dict[str, Any] = {"enabled": enabled}
+    values: dict[str, Any] = {
+        "enabled": enabled,
+        "write_enabled": _load_bool(
+            mapping.get("write_enabled"),
+            "user_monitoring.write_enabled",
+            default=defaults.write_enabled,
+        ),
+    }
     for key, (minimum, maximum) in _USER_MONITORING_RANGES.items():
         raw = mapping.get(key, getattr(defaults, key))
         if isinstance(raw, bool) or not isinstance(raw, int):
@@ -296,6 +303,14 @@ def _load_host_user_monitoring(value: Any) -> bool | None:
         return None
     if not isinstance(value, bool):
         raise ConfigError("servers[].user_monitoring must be a boolean")
+    return value
+
+
+def _load_bool(value: Any, label: str, *, default: bool = False) -> bool:
+    if value is None:
+        return default
+    if not isinstance(value, bool):
+        raise ConfigError(f"{label} must be a boolean")
     return value
 
 
@@ -538,6 +553,7 @@ def _load_host(item: Any, *, allow_missing_secrets: bool = False) -> HostConfig:
         checks=_load_host_checks(mapping.get("checks")),
         alert_rules=_load_host_alert_rules(mapping.get("alert_rules")),
         user_monitoring=_load_host_user_monitoring(mapping.get("user_monitoring")),
+        allow_user_write=_load_bool(mapping.get("allow_user_write"), "servers[].allow_user_write"),
         sudo_password=_load_host_sudo_password(
             mapping, allow_missing_secrets=allow_missing_secrets
         ),

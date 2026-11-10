@@ -92,6 +92,8 @@
         <span class="muted" id="user-detail-meta"></span>
       </div>
       <a class="btn-link" id="user-detail-host-link" href="#">主机详情</a>
+      <button type="button" class="secondary-button user-detail-create" id="user-detail-create"
+              data-user-admin="create" hidden>新建账号</button>
     </div>
     <div class="user-detail-tabs" role="tablist" aria-label="账号筛选">
       <button type="button" class="user-chip active" data-user-state="all" aria-pressed="true">全部 <span id="chip-count-all">0</span></button>
@@ -101,6 +103,68 @@
     <div class="user-acct-list" id="user-acct-list"></div>
     <p class="empty" id="user-detail-empty" hidden>这台主机上没有符合条件的账号。</p>
   </section>
+
+  <!-- 账号写操作：默认关闭，必须先在设置里打开总开关与主机开关。 -->
+  <dialog class="user-admin-dialog" id="user-admin-dialog" aria-labelledby="user-admin-title">
+    <form method="dialog" class="user-admin-form" id="user-admin-form">
+      <header class="user-admin-head">
+        <h2 id="user-admin-title">账号操作</h2>
+        <button type="button" class="btn-link" id="user-admin-close" aria-label="关闭">✕</button>
+      </header>
+      <p class="muted" id="user-admin-host"></p>
+
+      <div class="user-admin-fields">
+        <label>操作
+          <select id="user-admin-operation">
+            <option value="create">新建账号（建号 + 初始密码 + 可选 docker / data）</option>
+            <option value="password">重置密码</option>
+            <option value="docker">加入 docker 组</option>
+            <option value="data">创建 /data 目录</option>
+          </select>
+        </label>
+        <label>账号名
+          <input type="text" id="user-admin-account" placeholder="例如 zhangsan" autocomplete="off" spellcheck="false" />
+        </label>
+        <label>密码（留空自动生成 16 位随机密码）
+          <input type="password" id="user-admin-password" autocomplete="new-password" spellcheck="false" />
+        </label>
+        <div class="user-admin-flags" id="user-admin-flags">
+          <label><input type="checkbox" id="user-admin-with-docker" checked /> 同时加入 docker 组</label>
+          <label><input type="checkbox" id="user-admin-with-data" checked /> 同时创建 /data 目录</label>
+        </div>
+      </div>
+
+      <div class="user-admin-actions">
+        <button type="button" class="secondary-button" id="user-admin-preview">预览执行计划</button>
+        <span class="muted" id="user-admin-status" role="status" aria-live="polite"></span>
+      </div>
+
+      <div class="user-admin-plan" id="user-admin-plan" hidden>
+        <h3 id="user-admin-plan-title">执行计划</h3>
+        <p class="muted" id="user-admin-plan-meta"></p>
+        <ul class="user-admin-steps" id="user-admin-steps"></ul>
+        <ul class="user-admin-blocked" id="user-admin-blocked" hidden></ul>
+        <ul class="user-admin-warnings" id="user-admin-warnings" hidden></ul>
+        <p class="user-admin-rollback muted" id="user-admin-rollback"></p>
+
+        <div class="user-admin-confirm" id="user-admin-confirm">
+          <p class="user-admin-confirm-hint">确认执行请在下面分别输入主机名与账号名：</p>
+          <label>主机名
+            <input type="text" id="user-admin-confirm-host" autocomplete="off" spellcheck="false" />
+          </label>
+          <label>账号名
+            <input type="text" id="user-admin-confirm-account" autocomplete="off" spellcheck="false" />
+          </label>
+          <button type="button" class="danger-button" id="user-admin-execute" disabled>确认执行</button>
+        </div>
+      </div>
+
+      <div class="user-admin-result" id="user-admin-result" hidden>
+        <h3>执行结果</h3>
+        <ul class="user-admin-steps" id="user-admin-result-steps"></ul>
+      </div>
+    </form>
+  </dialog>
 </div>
 {% endblock %}
 

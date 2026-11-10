@@ -163,17 +163,36 @@ class SSHClientWrapper:
         _stdin, stdout, stderr = client.exec_command(command, timeout=timeout)
         return _execute_read_first(stdout, stderr)
 
-    def run_sudo(self, command: str, timeout: int) -> CommandResult:
+    def run_sudo(
+        self, command: str, timeout: int, stdin_data: str | None = None
+    ) -> CommandResult:
         """Run *command* through sudo, feeding the password only via stdin.
 
         With no ``HostConfig.sudo_password`` this degrades to non-interactive
         ``sudo -n``; if that needs a password :class:`SudoUnavailable` is raised.
         With a password it is written to stdin (never the command line, logs or
         exceptions). Wrong-password output maps to :class:`SudoAuthError`.
+
+        ``stdin_data`` (e.g. a ``chpasswd`` line) is written *after* the sudo
+        password line; sudo consumes the first line and the child process reads
+        the rest from the same channel.
         """
         password = getattr(self.host, "sudo_password", None)
         if not password:
-            result = self.run("sudo -n " + command, timeout)
+            if stdin_data is None:
+                result = self.run("sudo -n " + command, timeout)
+            else:
+                client = self._get_client()
+                stdin, stdout, stderr = client.exec_command(
+                    "sudo -n " + command, timeout=timeout
+                )
+                try:
+                    stdin.write(stdin_data + "\n")
+                    stdin.flush()
+                    stdin.channel.shutdown_write()
+                except Exception:  # noqa: BLE001 - stdin may already be closed
+                    pass
+                result = _execute_read_first(stdout, stderr)
             if result.exit_status != 0 and _text_contains_any(
                 (result.stderr, result.stdout), _SUDO_UNAVAILABLE_MARKERS
             ):
@@ -186,6 +205,8 @@ class SSHClientWrapper:
         )
         try:
             stdin.write(password + "\n")
+            if stdin_data is not None:
+                stdin.write(stdin_data + "\n")
             stdin.flush()
         except Exception:  # noqa: BLE001 - never let the password into a traceback
             raise SudoUnavailable("sudo 通道不可用") from None

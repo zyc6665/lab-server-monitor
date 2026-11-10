@@ -1414,6 +1414,69 @@ html[data-theme="dark"] .capacity-risk-warning .capacity-trend { color: #fbbf24;
   font-size: 12px;
   border-top: 1px dashed var(--border, #e2e8f0);
   padding-top: 6px;
+  flex-wrap: wrap;
+}
+.user-acct-action { font-size: 12px; }
+
+/* 账号写操作弹窗：默认关闭，必须打开全局与主机两道开关才会出现入口。 */
+.user-detail-create { margin-left: 8px; }
+.user-admin-dialog {
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: 14px;
+  padding: 0;
+  width: min(680px, calc(100vw - 32px));
+  max-height: calc(100vh - 64px);
+  background: var(--surface, #fff);
+  color: var(--text, #0f172a);
+  box-shadow: 0 24px 64px rgba(15, 23, 42, 0.28);
+}
+.user-admin-dialog::backdrop { background: rgba(15, 23, 42, 0.45); }
+.user-admin-form { display: flex; flex-direction: column; gap: 14px; padding: 20px 22px 22px; overflow: auto; max-height: calc(100vh - 64px); }
+.user-admin-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.user-admin-head h2 { font-size: 18px; margin: 0; }
+.user-admin-fields { display: grid; gap: 10px; }
+.user-admin-fields label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
+.user-admin-fields input, .user-admin-fields select {
+  padding: 8px 10px;
+  border: 1px solid var(--border, #cbd5e1);
+  border-radius: 8px;
+  background: var(--input-bg, #fff);
+  color: inherit;
+  font-size: 14px;
+}
+.user-admin-flags { display: flex; gap: 16px; flex-wrap: wrap; font-size: 13px; }
+.user-admin-flags label { flex-direction: row; align-items: center; gap: 6px; }
+.user-admin-actions { display: flex; align-items: center; gap: 12px; }
+.user-admin-error { color: var(--danger, #dc2626); }
+.user-admin-plan { border-top: 1px dashed var(--border, #e2e8f0); padding-top: 12px; display: grid; gap: 8px; }
+.user-admin-plan h3, .user-admin-result h3 { font-size: 15px; margin: 0; }
+.user-admin-steps, .user-admin-blocked, .user-admin-warnings { margin: 0; padding-left: 18px; display: grid; gap: 6px; font-size: 13px; }
+.user-admin-steps li code {
+  display: block;
+  margin-top: 4px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: var(--code-bg, #f1f5f9);
+  font-size: 12px;
+  word-break: break-all;
+}
+.user-admin-blocked { color: var(--danger, #dc2626); }
+.user-admin-warnings { color: var(--warn, #b45309); }
+.user-admin-rollback { font-size: 12px; }
+.user-admin-confirm { display: grid; gap: 8px; border: 1px solid var(--border, #e2e8f0); border-radius: 10px; padding: 12px; }
+.user-admin-confirm-hint { margin: 0; font-size: 13px; }
+.user-admin-confirm label { display: grid; gap: 4px; font-size: 13px; }
+.user-admin-confirm input { padding: 8px 10px; border: 1px solid var(--border, #cbd5e1); border-radius: 8px; font-size: 14px; background: var(--input-bg, #fff); color: inherit; }
+.user-admin-step-ok { color: var(--ok, #15803d); }
+.user-admin-step-failed { color: var(--danger, #dc2626); }
+html[data-theme="dark"] .user-admin-dialog { background: #0f172a; color: #e2e8f0; }
+html[data-theme="dark"] .user-admin-steps li code { background: #1e293b; }
+html[data-theme="dark"] .user-admin-fields input,
+html[data-theme="dark"] .user-admin-fields select,
+html[data-theme="dark"] .user-admin-confirm input { background: #111c2e; border-color: #334155; color: #e2e8f0; }
+@media (max-width: 760px) {
+  .user-admin-form { padding: 16px; }
+  .user-admin-flags { flex-direction: column; gap: 6px; }
 }
 
 @media (max-width: 1180px) {

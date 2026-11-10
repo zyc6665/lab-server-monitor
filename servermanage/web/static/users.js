@@ -16,6 +16,7 @@
   var payloadState = null;
   var activeHost = '';
   var entryFilter = 'all';
+  var currentPlan = null;
 
   function csrfToken() {
     var meta = document.querySelector('meta[name="csrf-token"]');
@@ -332,6 +333,21 @@
         });
       });
       foot.appendChild(button);
+    } else if (canWriteHost(adminHost())) {
+      // 写操作入口只在“全局 + 主机”两道开关都打开、且已配置 sudo 密码时出现。
+      [
+        { operation: 'password', label: '重置密码' },
+        { operation: 'docker', label: '加入 docker 组' },
+        { operation: 'data', label: '建 data 目录' }
+      ].forEach(function (action) {
+        var actionButton = document.createElement('button');
+        actionButton.type = 'button';
+        actionButton.className = 'btn-link user-acct-action';
+        actionButton.textContent = action.label;
+        actionButton.setAttribute('data-user-admin', action.operation);
+        actionButton.setAttribute('data-user-account', row.username || '');
+        foot.appendChild(actionButton);
+      });
     }
     item.appendChild(foot);
     return item;
@@ -413,6 +429,8 @@
     }
     var link = document.getElementById('user-detail-host-link');
     if (link) { link.setAttribute('href', '/host/' + encodeURIComponent(activeHost)); }
+    var createButton = document.getElementById('user-detail-create');
+    if (createButton) { createButton.hidden = !canWriteHost(host); }
 
     var all = (data.accounts || []).filter(function (row) { return row.host_name === activeHost; });
     setText('chip-count-all', String(all.length));
@@ -658,6 +676,244 @@
     });
   }
 
+  // ---------------------------------------------------------------------
+  // 账号写操作（默认关闭；需全局开关 + 主机开关 + 已配置 sudo 密码）
+  // ---------------------------------------------------------------------
+
+  function adminHost() {
+    if (!activeHost || !payloadState) { return null; }
+    var list = payloadState.hosts || [];
+    for (var i = 0; i < list.length; i += 1) {
+      if (list[i].name === activeHost) { return list[i]; }
+    }
+    return null;
+  }
+
+  function canWriteHost(host) {
+    return Boolean(host && payloadWriteEnabled() && host.allow_user_write && host.sudo_configured);
+  }
+
+  function payloadWriteEnabled() {
+    return Boolean(payloadState && payloadState.write_enabled);
+  }
+
+  function adminEl(id) { return document.getElementById(id); }
+
+  function setAdminStatus(text, isError) {
+    var node = adminEl('user-admin-status');
+    if (!node) { return; }
+    node.textContent = text || '';
+    node.className = isError ? 'muted user-admin-error' : 'muted';
+  }
+
+  function openAdminDialog(defaults) {
+    var dialog = adminEl('user-admin-dialog');
+    if (!dialog) { return; }
+    var host = adminHost();
+    if (!canWriteHost(host)) {
+      setRefreshStatus('这台主机未开启账号写操作，或缺少 sudo 密码');
+      return;
+    }
+    var options = defaults || {};
+    adminEl('user-admin-host').textContent = '目标主机：' + host.name + '（' + (host.address || '') + '）';
+    adminEl('user-admin-account').value = options.account || '';
+    adminEl('user-admin-password').value = '';
+    adminEl('user-admin-operation').value = options.operation || 'create';
+    adminEl('user-admin-with-docker').checked = true;
+    adminEl('user-admin-with-data').checked = true;
+    adminEl('user-admin-plan').hidden = true;
+    adminEl('user-admin-result').hidden = true;
+    adminEl('user-admin-blocked').hidden = true;
+    adminEl('user-admin-warnings').hidden = true;
+    adminEl('user-admin-confirm-host').value = '';
+    adminEl('user-admin-confirm-account').value = '';
+    adminEl('user-admin-execute').disabled = true;
+    setAdminStatus('');
+    if (typeof dialog.showModal === 'function') {
+      dialog.showModal();
+    } else {
+      dialog.setAttribute('open', 'open');
+    }
+    adminEl('user-admin-account').focus();
+  }
+
+  function closeAdminDialog() {
+    var dialog = adminEl('user-admin-dialog');
+    if (!dialog) { return; }
+    if (typeof dialog.close === 'function') {
+      dialog.close();
+    } else {
+      dialog.removeAttribute('open');
+    }
+    currentPlan = null;
+  }
+
+  function adminPost(url, body) {
+    var token = csrfToken();
+    var headers = { Accept: 'application/json', 'Content-Type': 'application/json' };
+    if (token) { headers['X-CSRF-Token'] = token; }
+    return fetch(url, {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: headers,
+      body: JSON.stringify(body || {})
+    }).then(function (response) {
+      return response.json().catch(function () { return {}; }).then(function (data) {
+        return { status: response.status, ok: response.ok, data: data || {} };
+      });
+    });
+  }
+
+  function renderList(container, items, className) {
+    container.textContent = '';
+    (items || []).forEach(function (text) {
+      var item = document.createElement('li');
+      item.textContent = text;
+      if (className) { item.className = className; }
+      container.appendChild(item);
+    });
+    container.hidden = !(items && items.length);
+  }
+
+  function previewPlan() {
+    var host = adminHost();
+    if (!canWriteHost(host)) { return; }
+    var payload = {
+      host: host.name,
+      operation: adminEl('user-admin-operation').value,
+      account: adminEl('user-admin-account').value,
+      with_docker: adminEl('user-admin-with-docker').checked,
+      with_data: adminEl('user-admin-with-data').checked
+    };
+    var password = adminEl('user-admin-password').value;
+    if (password) { payload.password = password; }
+    setAdminStatus('正在生成执行计划…');
+    adminPost('/api/users/plan', payload).then(function (result) {
+      if (result.status === 401) { redirectToLogin(); return; }
+      if (!result.ok) {
+        setAdminStatus(result.data.message || '无法生成执行计划', true);
+        return;
+      }
+      currentPlan = result.data.plan;
+      renderPlan(currentPlan, host);
+    }).catch(function () {
+      setAdminStatus('无法生成执行计划，请检查网络后重试', true);
+    });
+  }
+
+  function renderPlan(plan, host) {
+    adminEl('user-admin-plan').hidden = false;
+    adminEl('user-admin-result').hidden = true;
+    adminEl('user-admin-plan-title').textContent = plan.operation_label + ' · ' + plan.account;
+    adminEl('user-admin-plan-meta').textContent = '计划编号 ' + plan.plan_hash.slice(0, 12) +
+      '，10 分钟内有效；密码只通过 SSH 标准输入传递，不会写入日志或浏览器。';
+
+    var steps = adminEl('user-admin-steps');
+    steps.textContent = '';
+    (plan.steps || []).forEach(function (step) {
+      var item = document.createElement('li');
+      var title = document.createElement('strong');
+      title.textContent = step.title + (step.elevated ? '（需要 root）' : '');
+      item.appendChild(title);
+      if (step.command) {
+        var code = document.createElement('code');
+        code.textContent = step.command;
+        item.appendChild(code);
+      }
+      if (step.stdin_label) {
+        var note = document.createElement('span');
+        note.className = 'muted';
+        note.textContent = ' · ' + step.stdin_label;
+        item.appendChild(note);
+      }
+      steps.appendChild(item);
+    });
+
+    renderList(adminEl('user-admin-blocked'), plan.blocked_reasons || []);
+    renderList(adminEl('user-admin-warnings'), plan.warnings || []);
+    adminEl('user-admin-rollback').textContent = plan.rollback_hint || '';
+
+    var confirm = adminEl('user-admin-confirm');
+    confirm.hidden = Boolean(plan.blocked);
+    adminEl('user-admin-confirm-host').value = '';
+    adminEl('user-admin-confirm-account').value = '';
+    adminEl('user-admin-execute').disabled = true;
+    if (plan.blocked) {
+      setAdminStatus('这个计划不能执行，请按上面的原因处理后重新预览', true);
+      return;
+    }
+    setAdminStatus('计划已生成，请核对命令后输入确认文本');
+    adminEl('user-admin-confirm-host').placeholder = host.name;
+    adminEl('user-admin-confirm-account').placeholder = plan.account;
+    adminEl('user-admin-confirm-host').focus();
+  }
+
+  function updateExecuteState() {
+    if (!currentPlan || currentPlan.blocked) { return; }
+    var hostOk = adminEl('user-admin-confirm-host').value.trim() === currentPlan.host;
+    var accountOk = adminEl('user-admin-confirm-account').value.trim() === currentPlan.account;
+    adminEl('user-admin-execute').disabled = !(hostOk && accountOk);
+  }
+
+  function executePlan() {
+    if (!currentPlan || currentPlan.blocked) { return; }
+    var button = adminEl('user-admin-execute');
+    button.disabled = true;
+    setAdminStatus('正在执行，请不要关闭窗口…');
+    adminPost('/api/users/execute', {
+      plan_hash: currentPlan.plan_hash,
+      confirm_host: adminEl('user-admin-confirm-host').value.trim(),
+      confirm_account: adminEl('user-admin-confirm-account').value.trim()
+    }).then(function (result) {
+      if (result.status === 401) { redirectToLogin(); return; }
+      var outcome = result.data.result || {};
+      var steps = outcome.steps || [];
+      var list = adminEl('user-admin-result-steps');
+      list.textContent = '';
+      steps.forEach(function (step) {
+        var item = document.createElement('li');
+        item.className = step.status === 'ok' ? 'user-admin-step-ok' : 'user-admin-step-failed';
+        item.textContent = (step.status === 'ok' ? '✓ ' : '✗ ') + step.title +
+          (step.stderr ? '：' + step.stderr : '');
+        list.appendChild(item);
+      });
+      adminEl('user-admin-result').hidden = false;
+      if (result.ok) {
+        setAdminStatus('执行成功，正在刷新账号列表…');
+        currentPlan = null;
+        fetchUsers();
+      } else {
+        setAdminStatus(result.data.message || outcome.error || '执行失败，请查看每一步的输出', true);
+      }
+    }).catch(function () {
+      setAdminStatus('执行请求失败，请检查网络后重试', true);
+      updateExecuteState();
+    });
+  }
+
+  function bindAdminDialog() {
+    var dialog = adminEl('user-admin-dialog');
+    if (!dialog) { return; }
+    adminEl('user-admin-close').addEventListener('click', closeAdminDialog);
+    adminEl('user-admin-preview').addEventListener('click', previewPlan);
+    adminEl('user-admin-execute').addEventListener('click', executePlan);
+    var hostInput = adminEl('user-admin-confirm-host');
+    var accountInput = adminEl('user-admin-confirm-account');
+    hostInput.addEventListener('input', updateExecuteState);
+    accountInput.addEventListener('input', updateExecuteState);
+    document.addEventListener('click', function (event) {
+      var target = event.target;
+      if (!target || !target.closest) { return; }
+      var trigger = target.closest('[data-user-admin]');
+      if (!trigger) { return; }
+      event.preventDefault();
+      openAdminDialog({
+        operation: trigger.getAttribute('data-user-admin') || 'create',
+        account: trigger.getAttribute('data-user-account') || ''
+      });
+    });
+  }
+
   function init() {
     if (!document.getElementById('user-host-grid')) { return; }
     try {
@@ -666,6 +922,7 @@
       activeHost = '';
     }
     bindFilters();
+    bindAdminDialog();
     var button = document.getElementById('user-refresh');
     if (button) { button.addEventListener('click', function () { refreshUsers(); }); }
     fetchUsers();

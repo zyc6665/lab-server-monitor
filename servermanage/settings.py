@@ -429,6 +429,7 @@ class SettingsService:
                 "scan_interval_seconds": config.user_monitoring.scan_interval_seconds,
                 "usage_interval_seconds": config.user_monitoring.usage_interval_seconds,
                 "command_timeout": config.user_monitoring.command_timeout,
+                "write_enabled": config.user_monitoring.write_enabled,
             },
             "dashboard": {
                 "host": config.dashboard.host,
@@ -575,6 +576,12 @@ class SettingsService:
             user_monitoring = _tri_state_bool(payload.get("user_monitoring"))
         else:
             user_monitoring = (existing_entry or {}).get("user_monitoring")
+        if "allow_user_write" in payload:
+            allow_user_write = _require_bool(
+                payload.get("allow_user_write"), "允许账号写操作"
+            )
+        else:
+            allow_user_write = bool((existing_entry or {}).get("allow_user_write"))
 
         # Validate every secret before the first write so a bad sudo value cannot
         # leave a partially written SSH credential behind.
@@ -617,6 +624,7 @@ class SettingsService:
             "location": location,
             "notes": notes,
             "user_monitoring": user_monitoring,
+            "allow_user_write": allow_user_write,
             "checks": checks,
             "alert_rules": alert_rules,
         }
@@ -1030,6 +1038,7 @@ class SettingsService:
             "location": str(entry.get("location") or "").strip(),
             "notes": str(entry.get("notes") or "").strip(),
             "user_monitoring": _tri_state_bool_lenient(entry.get("user_monitoring")),
+            "allow_user_write": bool(entry.get("allow_user_write")),
             "checks": [dict(check) for check in entry.get("checks") or []],
             "alert_rules": entry.get("alert_rules"),
             "password_configured": (
@@ -1091,6 +1100,7 @@ class SettingsService:
                     user_monitoring=_tri_state_bool_lenient(
                         entry.get("user_monitoring")
                     ),
+                    allow_user_write=bool(entry.get("allow_user_write")),
                     checks=[
                         _build_host_check(check)
                         for check in entry.get("checks") or []
@@ -1420,6 +1430,11 @@ class SettingsService:
             if not isinstance(enabled, bool):
                 raise SettingsError("启用服务器用户采集必须是布尔值")
             data["enabled"] = enabled
+        data["write_enabled"] = current.write_enabled
+        if "write_enabled" in payload:
+            data["write_enabled"] = _require_bool(
+                payload.get("write_enabled"), "允许账号写操作"
+            )
         labels = {
             "scan_interval_seconds": "账号扫描间隔",
             "usage_interval_seconds": "占用统计间隔",
@@ -1816,6 +1831,13 @@ def _tri_state_bool_lenient(value: Any) -> bool | None:
         return None
 
 
+def _require_bool(value: Any, label: str) -> bool:
+    """Strict boolean for safety switches: never guess from strings."""
+    if isinstance(value, bool):
+        return value
+    raise SettingsError(f"{label}必须是 true 或 false")
+
+
 def _string_list(value: Any, *, default: list[str] | None = None) -> list[str]:
     if value is None:
         return list(default or [])
@@ -2051,6 +2073,7 @@ def _host_entry_from_config(host: HostConfig) -> dict[str, Any]:
         "location": host.location,
         "notes": host.notes,
         "user_monitoring": host.user_monitoring,
+        "allow_user_write": host.allow_user_write,
         "checks": [
             {
                 "name": check.name,

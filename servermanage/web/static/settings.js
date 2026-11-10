@@ -575,6 +575,7 @@
       userMonitoring === true ? "true" : (userMonitoring === false ? "false" : "");
     hostField("sudo_password").value = "";
     hostField("clear_sudo_password").checked = false;
+    hostField("allow_user_write").checked = Boolean(host && host.allow_user_write);
     var sudoState = qs("#host-sudo-state");
     if (sudoState) {
       sudoState.textContent = host && host.sudo_configured ? "已配置" : "未配置";
@@ -650,6 +651,7 @@
     // 空字符串表示"继承全局"，不能用 true/false 表达，所以这里显式传 null。
     var monitoring = hostField("user_monitoring").value;
     payload.user_monitoring = monitoring === "" ? null : monitoring === "true";
+    payload.allow_user_write = hostField("allow_user_write").checked;
     if (hostField("clear_sudo_password").checked) {
       payload.clear_secrets = ["sudo_password"];
     } else if (hostField("sudo_password").value) {

@@ -51,6 +51,7 @@ from servermanage import (
     maintenance,
     storage,
 )
+from servermanage import user_admin as admin
 from servermanage import usermode as user_mode
 from servermanage import __version__ as app_version
 from servermanage.alerts import fingerprint_for
@@ -87,6 +88,11 @@ _VIRTUAL_FILESYSTEMS = {
     "mqueue",
     "shm",
 }
+
+# Previewed account plans live in memory only: the password they carry must
+# never be written to the database, a file or the browser.  The cache is
+# size-bounded and TTL-bounded in :class:`servermanage.user_admin.PlanCache`.
+_plan_cache = admin.PlanCache()
 
 # ---------------------------------------------------------------------------
 # Small value helpers
@@ -174,6 +180,22 @@ def _monitor_service(app: Flask):
     if service is None:
         service = _settings_service(app)
     return service
+
+
+def _request_user_refresh(app: Flask) -> None:
+    """Ask the background service to rescan users after a write operation.
+
+    Failure is not fatal: the account was already created on the host, and the
+    next scheduled scan will pick it up.  We only avoid a stale page.
+    """
+    service = _monitor_service(app)
+    refresh = getattr(service, "refresh_users", None)
+    if not callable(refresh):
+        return
+    try:
+        refresh()
+    except Exception:  # noqa: BLE001 - best-effort refresh only
+        LOGGER.warning("refresh_users() after provisioning failed", exc_info=True)
 
 
 # Editable settings sections accepted by ``PUT /api/settings/<section>``.  The
@@ -1423,6 +1445,8 @@ def _build_users_payload(
                     "last_scan_at": None,
                     "last_error": None,
                     "accounts": 0,
+                    "allow_user_write": False,
+                    "sudo_configured": False,
                     **_host_user_counts([]),
                 }
             )
@@ -1432,6 +1456,7 @@ def _build_users_payload(
         host_status = _user_host_status(state)
         statuses[name] = host_status
         all_rows.extend(rows)
+        server = servers_by_name.get(name)
         host_blocks.append(
             {
                 "name": name,
@@ -1441,6 +1466,8 @@ def _build_users_payload(
                 "last_scan_at": _to_local_iso((state or {}).get("last_scan_at"), tz),
                 "last_error": (state or {}).get("last_error") or None,
                 "accounts": len(rows),
+                "allow_user_write": bool(server and server.allow_user_write),
+                "sudo_configured": bool(server and server.sudo_password),
                 **_host_user_counts(rows),
             }
         )
@@ -1493,6 +1520,7 @@ def _build_users_payload(
         "accounts": filtered,
         "hosts": host_blocks,
         "summary": summary,
+        "write_enabled": bool(config.user_monitoring.write_enabled),
         "filters": {
             "host": host_filter,
             "q": (query or "").strip(),
@@ -2370,6 +2398,208 @@ def register_routes(app: Flask) -> None:
             return jsonify({"error": "not_found"}), 404
         _resolve_user_present_alert(host_name, username, db_path)
         return jsonify({"ok": True, "removed": 1})
+
+    def _user_write_host(config, host_name: str | None = None):
+        """Return ``(server, error)`` for an account-provisioning request.
+
+        Every gate must pass: the global write switch, the per-host switch and a
+        stored sudo password.  Failing closed keeps a stolen session from
+        creating accounts on a host the administrator never enabled.
+
+        ``host_name`` is passed explicitly by ``/api/users/execute`` (the plan
+        already carries it); otherwise it is read from the JSON body.
+        """
+        if not config.user_monitoring.write_enabled:
+            return None, (
+                jsonify(
+                    {
+                        "error": "write_disabled",
+                        "message": "账号写操作总开关未开启。请到设置 → 服务器用户监控里开启。",
+                    }
+                ),
+                403,
+            )
+        if host_name is None:
+            payload = request.get_json(silent=True)
+            if not isinstance(payload, dict):
+                return None, (jsonify({"error": "invalid_payload"}), 400)
+            host_name = str(payload.get("host") or "").strip()
+        server = next(
+            (item for item in config.servers if item.name == host_name), None
+        )
+        if server is None:
+            return None, (jsonify({"error": "unknown_host"}), 404)
+        if not server.allow_user_write:
+            return None, (
+                jsonify(
+                    {
+                        "error": "host_write_disabled",
+                        "message": f"{host_name} 未开启“允许账号写操作”，请先在该主机设置里打开。",
+                    }
+                ),
+                403,
+            )
+        if not server.sudo_password:
+            return None, (
+                jsonify(
+                    {
+                        "error": "sudo_password_missing",
+                        "message": "这台主机还没有配置 sudo 密码，无法执行需要 root 的操作。",
+                    }
+                ),
+                403,
+            )
+        return server, None
+
+    @app.post("/api/users/plan")
+    def api_users_plan():
+        """Preview an account operation; the returned plan contains no secrets."""
+        config = _config(app)
+        server, error = _user_write_host(config)
+        if error is not None:
+            return error
+        payload = request.get_json(silent=True) or {}
+        db_path = _db_path(app)
+        try:
+            account = admin.validate_account_name(payload.get("account"))
+            operation = str(payload.get("operation") or "").strip()
+            rows = _build_user_rows(server.name, db_path, None, server)
+            account_exists = any(
+                row.get("username") == account and row.get("state") == "present"
+                for row in rows
+            )
+            groups = next(
+                (row.get("groups") or [] for row in rows if row.get("username") == account),
+                [],
+            )
+            docker_group = bool(groups) or True
+            plan = admin.build_plan(
+                operation,
+                host_name=server.name,
+                account=account,
+                password=payload.get("password") or None,
+                account_exists=account_exists,
+                docker_group=docker_group,
+                data_supported=True,
+                sudo_configured=bool(server.sudo_password),
+                with_docker=bool(payload.get("with_docker", True)),
+                with_data=bool(payload.get("with_data", True)),
+            )
+        except admin.AdminPlanError as exc:
+            return jsonify({"error": "invalid_request", "message": str(exc)}), 400
+        _plan_cache.put(plan)
+        return jsonify({"ok": True, "plan": admin.public_plan(plan)})
+
+    @app.post("/api/users/execute")
+    def api_users_execute():
+        """Run a previously previewed plan after the typed confirmation matches."""
+        config = _config(app)
+        payload = request.get_json(silent=True) or {}
+        plan_hash = str(payload.get("plan_hash") or "").strip()
+        plan = _plan_cache.get(plan_hash)
+        if plan is None:
+            return (
+                jsonify(
+                    {
+                        "error": "plan_expired",
+                        "message": "执行计划已过期或不存在，请重新预览。",
+                    }
+                ),
+                410,
+            )
+        # The plan carries its own host; the gates are re-checked *now* so a
+        # switch turned off between preview and confirm still blocks execution.
+        server, error = _user_write_host(config, plan["host"])
+        if error is not None:
+            return error
+        if plan["host"] != server.name:
+            return jsonify({"error": "plan_mismatch", "message": "执行计划与主机不匹配。"}), 400
+        if plan.get("blocked"):
+            return (
+                jsonify(
+                    {
+                        "error": "plan_blocked",
+                        "message": "这个执行计划已被判定为不可执行，请按提示处理后重新预览。",
+                        "blocked_reasons": plan.get("blocked_reasons") or [],
+                    }
+                ),
+                400,
+            )
+        confirm_host = str(payload.get("confirm_host") or "").strip()
+        confirm_account = str(payload.get("confirm_account") or "").strip()
+        if confirm_host != plan["host"] or confirm_account != plan["account"]:
+            return (
+                jsonify(
+                    {
+                        "error": "confirm_mismatch",
+                        "message": "确认文本与主机名 / 账号名不一致，操作未执行。",
+                    }
+                ),
+                400,
+            )
+        actor = str(session.get("username") or "admin")
+        started = datetime.now(timezone.utc)
+        db_path = _db_path(app)
+        host_config = next(
+            (item for item in _config(app).servers if item.name == server.name), None
+        )
+        if host_config is None:
+            return jsonify({"error": "unknown_host"}), 404
+        try:
+            with SSHClientWrapper(
+                host=host_config, connect_timeout=config.ssh.connect_timeout
+            ) as ssh:
+                outcome = admin.execute_plan(plan, ssh)
+        except Exception as exc:  # noqa: BLE001 - never leak a traceback or password
+            outcome = {
+                "ok": False,
+                "status": "error",
+                "steps": [],
+                "error": str(exc)[:400],
+            }
+        _plan_cache.drop(plan_hash)
+        masked = [
+            {key: value for key, value in step.items() if key != "stdin"}
+            for step in plan["steps"]
+        ]
+        for entry in outcome.get("steps", []):
+            masked_step = next(
+                (item for item in masked if item["id"] == entry["id"]), None
+            )
+            if masked_step is not None:
+                masked_step["status"] = entry["status"]
+                masked_step["stderr"] = entry.get("stderr", "")
+                masked_step["stdout"] = entry.get("stdout", "")
+        storage.save_user_operation(
+            plan["host"],
+            plan["account"],
+            plan["operation"],
+            outcome.get("status", "error"),
+            actor=actor,
+            plan_hash=plan_hash,
+            steps=masked,
+            error=str(outcome.get("error") or ""),
+            created_at=started,
+            finished_at=datetime.now(timezone.utc),
+            db_path=db_path,
+        )
+        if outcome.get("ok"):
+            _request_user_refresh(app)
+        status_code = 200 if outcome.get("ok") else 400
+        return jsonify({"ok": bool(outcome.get("ok")), "result": outcome, "steps": masked}), status_code
+
+    @app.get("/api/users/operations")
+    def api_users_operations():
+        """Recent provisioning attempts (audit trail, newest first)."""
+        config = _config(app)
+        host_name = (request.args.get("host") or "").strip()
+        if host_name and host_name not in {server.name for server in config.servers}:
+            return jsonify({"error": "unknown_host"}), 404
+        limit = _as_int(request.args.get("limit"), 20)
+        items = storage.list_user_operations(
+            _db_path(app), host_name=host_name or None, limit=limit
+        )
+        return jsonify({"items": items})
 
     @app.get("/api/host/<name>/report")
     def api_host_report(name: str):

@@ -317,6 +317,19 @@ CREATE TABLE IF NOT EXISTS host_user_scan_state (
     last_usage_at TEXT,
     last_error TEXT
 );
+CREATE TABLE IF NOT EXISTS user_operations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    created_at TEXT NOT NULL,
+    finished_at TEXT,
+    host_name TEXT NOT NULL,
+    account TEXT NOT NULL,
+    operation TEXT NOT NULL,
+    status TEXT NOT NULL,
+    actor TEXT,
+    plan_hash TEXT,
+    steps_json TEXT NOT NULL DEFAULT '[]',
+    error TEXT
+);
 """
 
 _CREATE_USER_INDEX_SQL = """
@@ -3330,4 +3343,101 @@ def delete_host_user_data(host_name: str, db_path: Path) -> None:
         conn.commit()
     finally:
         conn.close()
+
+
+def save_user_operation(
+    host_name: str,
+    account: str,
+    operation: str,
+    status: str,
+    *,
+    actor: str = "",
+    plan_hash: str = "",
+    steps: Sequence[dict[str, Any]] | None = None,
+    error: str = "",
+    created_at: datetime | None = None,
+    finished_at: datetime | None = None,
+    db_path: Path,
+) -> int:
+    """Append one audit row for an account-provisioning attempt.
+
+    Secrets never reach this function: ``steps`` must already be the masked
+    description of what ran (no ``stdin`` field).
+    """
+    db_path = Path(db_path)
+    init_storage(db_path)
+    moment = created_at or datetime.now(timezone.utc)
+    finished = finished_at or datetime.now(timezone.utc)
+    payload = json.dumps(list(steps or []), ensure_ascii=False)
+
+    conn = sqlite3.connect(db_path)
+    try:
+        cursor = conn.execute(
+            "INSERT INTO user_operations"
+            " (created_at, finished_at, host_name, account, operation, status,"
+            "  actor, plan_hash, steps_json, error)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                moment.isoformat(),
+                finished.isoformat(),
+                host_name,
+                account,
+                operation,
+                status,
+                actor,
+                plan_hash,
+                payload,
+                error,
+            ),
+        )
+        conn.commit()
+        return int(cursor.lastrowid or 0)
+    finally:
+        conn.close()
+
+
+def list_user_operations(
+    db_path: Path, *, host_name: str | None = None, limit: int = 50
+) -> list[dict[str, Any]]:
+    """Return recent audit rows, newest first."""
+    db_path = Path(db_path)
+    if not db_path.exists():
+        return []
+    init_storage(db_path)
+
+    sql = "SELECT * FROM user_operations"
+    params: list[Any] = []
+    if host_name:
+        sql += " WHERE host_name = ?"
+        params.append(host_name)
+    sql += " ORDER BY id DESC LIMIT ?"
+    params.append(max(1, min(int(limit), 200)))
+
+    conn = sqlite3.connect(db_path)
+    try:
+        rows = conn.execute(sql, params).fetchall()
+    finally:
+        conn.close()
+    return [_decode_user_operation(row) for row in rows]
+
+
+def _decode_user_operation(row: Sequence[Any]) -> dict[str, Any]:
+    try:
+        steps = json.loads(row[9] or "[]")
+    except ValueError:
+        steps = []
+    return {
+        "id": row[0],
+        "created_at": row[1],
+        "finished_at": row[2],
+        "host_name": row[3],
+        "account": row[4],
+        "operation": row[5],
+        "status": row[6],
+        "actor": row[7] or "",
+        "plan_hash": row[8] or "",
+        "steps": steps,
+        "error": row[10] or "",
+    }
+
 

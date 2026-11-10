@@ -152,12 +152,18 @@ storage:
 # 已配置的 sudo 密码，未配置则回退 sudo -n；无权限只影响占用显示）。
 # 全程只读：不会创建账号、修改密码或目录权限。
 # 单台主机可在网页设置里用 user_monitoring: false 关闭。
+#
+# v0.5.0 起可选的账号写操作（新建账号 / 重置密码 / 加 docker 组 / 建 data 目录）：
+# write_enabled 是总开关，默认 false；即使打开，每台主机还要单独 allow_user_write:
+# true 且已保存 sudo 密码，并在页面上预览计划、手输主机名+账号名确认后才会执行。
+# 密码只经 SSH 标准输入传递，不进命令行、日志或数据库；每次操作写入审计表。
 # ---------------------------------------------------------------------------
 user_monitoring:
   enabled: true
   scan_interval_seconds: 3600         # 账号/组/目录扫描间隔（300..86400）
   usage_interval_seconds: 21600       # 目录占用统计间隔（3600..604800）
   command_timeout: 120                # 单条远端命令超时秒数（10..600）
+  write_enabled: false                # 账号写操作总开关（默认关闭）
 
 # ---------------------------------------------------------------------------
 # servers：被监测的 Linux 服务器
@@ -186,6 +192,7 @@ servers: []
 #       type: "password"
 #       password_env: "A100_SSH_PASSWORD"
 #     disk_mounts: ["/", "/data"]      # 容量监控目录（可在网页设置里逐台修改）
+#     allow_user_write: false          # 允许在这台主机执行账号写操作（默认关闭）
 #     disk_health:
 #       enabled: true
 #
