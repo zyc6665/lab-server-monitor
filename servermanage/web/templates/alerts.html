@@ -76,7 +76,7 @@
         <tr>
           <th class="check-col"><input type="checkbox" id="alert-select-all" aria-label="全选当前页活动告警"></th>
           <th>级别</th>
-          <th>类别</th>
+          <th class="col-secondary">类别</th>
           <th>主机</th>
           <th>标题</th>
           <th>内容</th>
@@ -94,10 +94,10 @@
             {% endif %}
           </td>
           <td><span class="severity severity-{{ alert.severity }}">{{ alert.severity }}</span></td>
-          <td>{{ alert.category }}</td>
+          <td class="col-secondary">{{ alert.category }}</td>
           <td>{{ alert.host_name }}</td>
           <td class="alert-title">{{ alert.title }}</td>
-          <td class="alert-message">{{ alert.message }}</td>
+          <td class="alert-message col-wide">{{ alert.message }}</td>
           <td class="mono">{{ alert.created_at }}</td>
           <td><span class="status status-{{ alert.status }}">{{ alert.status }}</span></td>
           <td class="alert-actions">

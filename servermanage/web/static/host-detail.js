@@ -378,10 +378,57 @@
     fromHash();
   }
 
+  function bindCollectNow() {
+    var button = document.getElementById('host-collect-now');
+    var notice = document.getElementById('host-collect-notice');
+    if (!button || !notice) { return; }
+    var detailEl = document.getElementById('host-collect-detail');
+    var titleEl = document.getElementById('host-collect-title');
+    var original = button.textContent;
+    var timer = null;
+
+    function stop(status, message, failed) {
+      if (timer) { window.clearInterval(timer); timer = null; }
+      button.disabled = false;
+      button.textContent = original;
+      if (titleEl) { titleEl.textContent = failed ? '采集失败' : '采集完成'; }
+      if (detailEl && message) { detailEl.textContent = message; }
+      if (!failed) { window.setTimeout(function () { window.location.reload(); }, 900); }
+    }
+
+    function poll() {
+      fetchJson('/api/settings/hosts/collection-status?names=' + encodeURIComponent(HOST_NAME))
+        .then(function (payload) {
+          var entry = (payload && payload.statuses && payload.statuses[HOST_NAME]) || {};
+          var state = entry.state || 'unknown';
+          if (state === 'done') { stop('done', '采集完成，正在刷新页面…', false); }
+          else if (state === 'error') { stop('error', entry.message || '采集失败，请检查 SSH 与 sudo 设置。', true); }
+        })
+        .catch(function () { /* 单次轮询失败继续等下一次 */ });
+    }
+
+    button.addEventListener('click', function () {
+      button.disabled = true;
+      button.textContent = '采集中…';
+      if (titleEl) { titleEl.textContent = '正在重新采集'; }
+      if (detailEl) { detailEl.textContent = '正在通过 SSH 读取这台主机的指标，通常需要几秒钟。'; }
+      fetchJson('/api/settings/hosts/' + encodeURIComponent(HOST_NAME) + '/collect', { method: 'POST' })
+        .then(function () {
+          if (timer) { window.clearInterval(timer); }
+          timer = window.setInterval(poll, 1500);
+          poll();
+        })
+        .catch(function (error) {
+          stop('error', error.message, true);
+        });
+    });
+  }
+
   bindHostTabs();
   bindAlertAcks();
   bindRanges();
   bindActions();
+  bindCollectNow();
   loadHistory('24h');
   loadChecks();
 })();

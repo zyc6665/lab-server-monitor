@@ -1672,3 +1672,48 @@ html[data-theme="dark"] .save-hint-dirty {
 html[data-theme="dark"] .save-hint-ok {
   color: #4ade80;
 }
+
+/* v0.4.3：主机采集提示与告警表窄屏列 */
+.collect-notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border-left: 3px solid #d97706;
+}
+
+.collect-notice-text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.collect-notice-text strong {
+  font-size: 14px;
+}
+
+.collect-notice-text p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--muted, #5b6472);
+  white-space: pre-wrap;
+}
+
+.collect-notice button {
+  flex: none;
+}
+
+@media (max-width: 900px) {
+  #alerts-table .col-secondary { display: none; }
+}
+
+@media (max-width: 760px) {
+  #alerts-table .col-wide { display: none; }
+  #alerts-table .alert-title { min-width: 0; }
+  .collect-notice { flex-direction: column; align-items: stretch; }
+  .collect-notice button { align-self: flex-start; }
+}
+
+html[data-theme="dark"] .collect-notice {
+  border-left-color: #fbbf24;
+}

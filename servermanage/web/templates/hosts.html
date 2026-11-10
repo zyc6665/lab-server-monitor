@@ -60,7 +60,7 @@
       <button type="button" class="btn-link" id="export-hosts">导出 CSV</button>
     </div>
   </div>
-  <p class="empty" id="empty-state"{% if hosts %} hidden{% endif %}>暂无数据</p>
+  <p class="empty" id="empty-state"{% if hosts %} hidden{% endif %}>还没有主机。到<a href="{{ url_for('settings_page') }}#hosts">设置页</a>添加，或从 <code>~/.ssh/config</code> 批量导入。</p>
   <div class="table-wrap">
     <table class="data-table" id="host-table"{% if not hosts %} hidden{% endif %}>
       <thead>

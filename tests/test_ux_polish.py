@@ -79,3 +79,39 @@ def test_settings_save_state_is_shown_per_section() -> None:
     assert ".save-hint" in css
     assert ".save-hint-dirty" in css
     assert ".save-hint-ok" in css
+
+
+def test_host_page_offers_a_retry_when_collection_failed() -> None:
+    markup = _template("host.html")
+    assert 'id="host-collect-notice"' in markup
+    assert 'id="host-collect-now"' in markup
+    assert "detail.errors" in markup
+
+    script = _script("host-detail.js")
+    assert "function bindCollectNow" in script
+    assert "/collect" in script
+    assert "collection-status?names=" in script
+    assert "bindCollectNow();" in script
+
+    css = _style()
+    assert ".collect-notice" in css
+
+
+def test_alert_table_hides_secondary_columns_on_narrow_screens() -> None:
+    markup = _template("alerts.html")
+    assert '<th class="col-secondary">类别</th>' in markup
+    assert 'class="alert-message col-wide"' in markup
+
+    app = _script("app.js")
+    assert "col-secondary" in app
+    assert "col-wide" in app
+
+    css = _style()
+    assert "#alerts-table .col-secondary { display: none; }" in css
+    assert "#alerts-table .col-wide { display: none; }" in css
+
+
+def test_hosts_page_empty_state_points_at_settings_and_ssh_import() -> None:
+    markup = _template("hosts.html")
+    assert "还没有主机" in markup
+    assert "~/.ssh/config" in markup

@@ -45,6 +45,23 @@
   </div>
 </div>
 
+{% if detail.success is none or not detail.success or detail.errors %}
+<section class="card collect-notice" id="host-collect-notice">
+  <div class="collect-notice-text">
+    <strong id="host-collect-title">
+      {%- if detail.success is none -%}还没有采集到这台主机的数据
+      {%- elif detail.errors -%}最近一次采集有异常
+      {%- else -%}最近一次采集失败{%- endif -%}
+    </strong>
+    <p id="host-collect-detail">
+      {%- if detail.errors -%}{{ detail.errors|join('；') }}
+      {%- else -%}可能是 SSH 连接失败、sudo 权限不足或主机离线，可以点右侧重新采集一次。{%- endif -%}
+    </p>
+  </div>
+  <button type="button" class="secondary-button" id="host-collect-now" data-host-name="{{ name }}">立即采集</button>
+</section>
+{% endif %}
+
 {% set mem = metrics.memory %}
 {% set ns = namespace(root_disk=None, gpu=None) %}
 {% for row in metrics.disk_usage or [] %}

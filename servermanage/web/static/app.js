@@ -927,7 +927,9 @@
     severityCell.appendChild(severity);
     tr.appendChild(severityCell);
 
-    tr.appendChild(textCell(alert.category));
+    var categoryCell = textCell(alert.category);
+    categoryCell.classList.add('col-secondary');
+    tr.appendChild(categoryCell);
     tr.appendChild(textCell(alert.host_name));
 
     var titleCell = document.createElement('td');
@@ -936,7 +938,7 @@
     tr.appendChild(titleCell);
 
     var messageCell = document.createElement('td');
-    messageCell.className = 'alert-message';
+    messageCell.className = 'alert-message col-wide';
     messageCell.textContent = alert.message || '—';
     tr.appendChild(messageCell);
 

@@ -635,3 +635,27 @@ def test_app_js_renders_terminal_link_without_user_innerhtml():
     # Terminal link must be built with DOM APIs + textContent, never innerHTML
     # fed from host data.
     assert "innerHTML" not in source
+
+
+def test_host_page_shows_collect_notice_when_last_collection_failed(client):
+    """A failed poll must explain itself on the detail page instead of showing dashes."""
+
+    healthy = client.get(f"/host/{HOST_NAME}").get_data(as_text=True)
+    assert 'id="host-collect-notice"' not in healthy
+
+    db_path = client.application.config["DB_PATH"]
+    save_host_snapshot(
+        HostReport(
+            host_name=HOST_NAME,
+            host=HOST_ADDRESS,
+            success=False,
+            errors=["ssh: connect to host 10.0.0.1 port 22: Connection refused"],
+        ),
+        db_path,
+    )
+
+    html = client.get(f"/host/{HOST_NAME}").get_data(as_text=True)
+    assert 'id="host-collect-notice"' in html
+    assert 'id="host-collect-now"' in html
+    assert "Connection refused" in html
+    assert "host-detail.js" in html
