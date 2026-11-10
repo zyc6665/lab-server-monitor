@@ -2428,3 +2428,31 @@ html[data-theme="dark"] .disk-jump-link { background: var(--surface-sunken); }
   .host-tabbar::-webkit-scrollbar { display: none; }
   .host-tab { flex: 0 0 auto; }
 }
+/* -- v0.7.2 磁盘健康筛选与双向跳转 -- */
+.disk-filter {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.disk-filter-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--card-bg);
+  font-size: 13px;
+  color: var(--text);
+  cursor: pointer;
+}
+.disk-filter-toggle:hover { border-color: var(--border-strong); }
+.disk-filter-toggle input { margin: 0; }
+.disk-filter-toggle:has(input:checked) {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, var(--card-bg));
+}
+.disk-jump-link[hidden],
+.disk-host[hidden] { display: none !important; }
+html[data-theme="dark"] .disk-filter-toggle { background: var(--surface-raised); }

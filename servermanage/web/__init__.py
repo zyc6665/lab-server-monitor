@@ -18,6 +18,7 @@ from flask import Flask, url_for
 
 from servermanage import __version__ as APP_VERSION
 from servermanage.models import AppConfig
+from servermanage.web.anchors import anchor_slug
 from servermanage.web.routes import register_routes
 
 __all__ = ["create_app"]
@@ -130,6 +131,11 @@ def create_app(
         if moment.tzinfo is not None:
             moment = moment.astimezone()
         return moment.strftime("%m-%d %H:%M")
+
+    @app.template_filter("anchor")
+    def _anchor_filter(value):
+        """主机名 → 页面内锚点，和磁盘健康页的分组 id 保持一致。"""
+        return anchor_slug(value)
 
     register_routes(app)
     return app

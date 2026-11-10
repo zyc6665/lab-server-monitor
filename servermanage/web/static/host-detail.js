@@ -375,9 +375,29 @@
         else if (event.key === 'End') { event.preventDefault(); activate(list[list.length - 1].getAttribute('data-host-tab') || 'overview', true); }
       });
     });
+    // 别的页面用元素 id 直接跳进来（例如磁盘健康页的 #disk-array），
+    // 这时先切到该元素所在的分区，再把元素滚到视口顶部。
+    var HASH_PANELS = { 'disk-array': 'storage', 'host-users': 'sessions' };
     function fromHash() {
-      var key = (window.location.hash || '').replace('#tab-', '');
+      var raw = (window.location.hash || '').replace('#', '');
+      var key = raw.replace(/^tab-/, '');
+      var elementId = '';
+      var known = false;
+      for (var i = 0; i < list.length; i += 1) {
+        if (list[i].getAttribute('data-host-tab') === key) { known = true; break; }
+      }
+      if (HASH_PANELS[key]) {
+        elementId = key;
+        key = HASH_PANELS[key];
+      } else if (key && !known) {
+        elementId = key;
+        key = 'overview';
+      }
       activate(key || 'overview', false);
+      if (elementId) {
+        var element = document.getElementById(elementId);
+        if (element) { element.scrollIntoView({ block: 'start' }); }
+      }
     }
     window.addEventListener('hashchange', fromHash);
     fromHash();

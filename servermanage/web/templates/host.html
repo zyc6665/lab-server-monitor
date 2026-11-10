@@ -317,6 +317,7 @@
     {% if detail.disk %}
     <span class="health health-{{ detail.disk.status }}">{{ detail.disk.status }}</span>
     {% endif %}
+    <a class="btn-link" href="{{ url_for('disk_health_page') }}#disk-{{ detail.name|anchor }}">在磁盘健康页查看</a>
   </div>
 
   {% if detail.disk %}

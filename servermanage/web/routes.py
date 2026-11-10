@@ -21,7 +21,6 @@ import hmac
 import json
 import logging
 import os
-import re
 import secrets
 import smtplib
 import tempfile
@@ -55,6 +54,7 @@ from servermanage import (
 from servermanage import user_admin as admin
 from servermanage import usermode as user_mode
 from servermanage import __version__ as app_version
+from servermanage.web.anchors import anchor_slug
 from servermanage.alerts import fingerprint_for
 from servermanage.availability import run_host_checks
 from servermanage.user_collection import is_user_monitoring_enabled
@@ -749,8 +749,7 @@ def _disk_health_summary(health: dict[str, Any] | None) -> dict[str, Any]:
 
 def _anchor(name: str) -> str:
     """HTML id-safe anchor for a host section."""
-    slug = re.sub(r"[^0-9A-Za-z_-]+", "-", str(name or "")).strip("-")
-    return slug or "host"
+    return anchor_slug(name)
 
 
 def _is_online(snapshot: dict[str, Any], poll_interval_seconds: int, now: datetime) -> bool:
@@ -3557,6 +3556,11 @@ def register_routes(app: Flask) -> None:
                     "healthy": counts["healthy"],
                     "warning": counts["warning"],
                     "critical": counts["critical"],
+                    "needs_attention": bool(
+                        counts["warning"]
+                        or counts["critical"]
+                        or counts["status"] in {"error", "no_storcli"}
+                    ),
                     "controller_count": len((health or {}).get("controllers") or []),
                     "vd_count": len((health or {}).get("virtual_drives") or []),
                     "pd_count": len((health or {}).get("physical_drives") or []),
