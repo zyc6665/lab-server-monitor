@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import logging
 import secrets
-from datetime import timedelta
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Callable
 
@@ -116,6 +116,20 @@ def create_app(
             "view_mode": mode,
             "member_account": str(getattr(runtime_app, "member_account", "") or ""),
         }
+
+    @app.template_filter("stamp")
+    def _stamp(value):
+        """把 ISO 时间串压成 ``MM-DD HH:MM``，表格里更紧凑、更好扫视。"""
+        if not value:
+            return "—"
+        text = str(value)
+        try:
+            moment = datetime.fromisoformat(text.replace("Z", "+00:00"))
+        except ValueError:
+            return text
+        if moment.tzinfo is not None:
+            moment = moment.astimezone()
+        return moment.strftime("%m-%d %H:%M")
 
     register_routes(app)
     return app

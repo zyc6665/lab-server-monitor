@@ -245,7 +245,7 @@
             <span class="health health-{{ host.disk_health.status }}">{{ host.disk_health.status }}</span>
             <span class="health-counts">健康 {{ host.disk_health.healthy }} · 告警 {{ host.disk_health.warning }} · 严重 {{ host.disk_health.critical }}</span>
           </td>
-          <td class="mono">{{ host.collected_at or '—' }}</td>
+          <td class="mono"{% if host.collected_at %} title="{{ host.collected_at }}"{% endif %}>{{ host.collected_at|stamp }}</td>
           <td class="host-actions">
             <button type="button" class="btn-link host-collect" data-host-name="{{ host.name }}">采集</button>
             <a class="btn-link terminal-link" href="/terminal?host={{ host.name|urlencode }}">终端</a>

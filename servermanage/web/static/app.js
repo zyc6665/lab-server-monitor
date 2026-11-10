@@ -118,6 +118,19 @@
     return td;
   }
 
+  // 时间戳：表格里只显示「月-日 时:分」，完整值放进 title，避免 ISO 串撑宽行。
+  function formatStamp(value) {
+    if (!value) { return '—'; }
+    var text = String(value);
+    var date = new Date(text);
+    if (isNaN(date.getTime())) { return text; }
+    function pad(n) { return n < 10 ? '0' + n : String(n); }
+    var sameYear = date.getFullYear() === new Date().getFullYear();
+    return (sameYear ? '' : date.getFullYear() + '-') +
+      pad(date.getMonth() + 1) + '-' + pad(date.getDate()) +
+      ' ' + pad(date.getHours()) + ':' + pad(date.getMinutes());
+  }
+
   // 百分比单元格：迷你进度条 + 数字，比纯文本更容易扫视。
   function percentCell(value) {
     var td = document.createElement('td');
@@ -546,7 +559,9 @@
     healthCell.appendChild(counts);
     tr.appendChild(healthCell);
 
-    tr.appendChild(textCell(host.collected_at, 'mono'));
+    var collectedCell = textCell(formatStamp(host.collected_at), 'mono');
+    if (host.collected_at) { collectedCell.title = String(host.collected_at); }
+    tr.appendChild(collectedCell);
 
     // 操作列：快捷采集 + 终端入口。用 DOM API + textContent 构建，避免把主机名当 HTML。
     var actionCell = document.createElement('td');
@@ -942,9 +957,12 @@
     var messageCell = document.createElement('td');
     messageCell.className = 'alert-message col-wide';
     messageCell.textContent = alert.message || '—';
+    if (alert.message) { messageCell.title = String(alert.message); }
     tr.appendChild(messageCell);
 
-    tr.appendChild(textCell(alert.created_at, 'mono'));
+    var timeCell = textCell(formatStamp(alert.created_at), 'mono');
+    if (alert.created_at) { timeCell.title = String(alert.created_at); }
+    tr.appendChild(timeCell);
     tr.appendChild(textCell(alert.status));
 
     var actionCell = document.createElement('td');
@@ -993,8 +1011,8 @@
       content.appendChild(title);
       var meta = document.createElement('div');
       meta.className = 'focus-meta';
-      meta.textContent = [alert.host_name, alert.message, alert.created_at]
-        .filter(function (part) { return part; }).join(' · ');
+      meta.textContent = [alert.host_name, alert.message, formatStamp(alert.created_at)]
+        .filter(function (part) { return part && part !== '—'; }).join(' · ');
       content.appendChild(meta);
       item.appendChild(content);
       list.appendChild(item);
@@ -1174,7 +1192,7 @@
     var rows = [
       ['主机', alert.host_name || '—'],
       ['类别', alert.category || '—'],
-      ['首次出现', alert.created_at || '—'],
+      ['首次出现', formatStamp(alert.created_at)],
       ['当前状态', alert.status || '—']
     ];
     for (var i = 0; i < rows.length; i += 1) {

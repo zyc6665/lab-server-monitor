@@ -103,7 +103,7 @@
           <td>{{ alert.host_name }}</td>
           <td class="alert-title">{{ alert.title }}</td>
           <td class="alert-message col-wide">{{ alert.message }}</td>
-          <td class="mono">{{ alert.created_at }}</td>
+          <td class="mono" title="{{ alert.created_at }}">{{ alert.created_at|stamp }}</td>
           <td><span class="status status-{{ alert.status }}">{{ alert.status }}</span></td>
           <td class="alert-actions">
             {% if alert.status == 'active' %}

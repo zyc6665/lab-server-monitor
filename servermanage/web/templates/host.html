@@ -24,7 +24,7 @@
   <div class="page-head-main">
     <h1 class="page-title">{{ name }}</h1>
     <p class="page-subtitle muted">
-      {{ detail.host or '—' }}{% if detail.group %} · {{ detail.group }}{% endif %}{% if detail.owner %} · 负责人 {{ detail.owner }}{% endif %}{% if detail.collected_at %} · 上次采集 <span class="mono">{{ detail.collected_at }}</span>{% endif %}
+      {{ detail.host or '—' }}{% if detail.group %} · {{ detail.group }}{% endif %}{% if detail.owner %} · 负责人 {{ detail.owner }}{% endif %}{% if detail.collected_at %} · 上次采集 <span class="mono" title="{{ detail.collected_at }}">{{ detail.collected_at|stamp }}</span>{% endif %}
     </p>
   </div>
   <div class="page-actions">
@@ -73,7 +73,7 @@
     <div class="stat-body">
       <div class="stat-label">采集状态</div>
       <div class="stat-value stat-value-text">{% if detail.success %}正常{% elif detail.success is none %}等待采集{% else %}异常{% endif %}</div>
-      <div class="stat-foot mono">{{ detail.collected_at or '—' }}</div>
+      <div class="stat-foot mono"{% if detail.collected_at %} title="{{ detail.collected_at }}"{% endif %}>{{ detail.collected_at|stamp }}</div>
     </div>
   </article>
   <article class="card stat-card stat-card-total">
@@ -148,7 +148,7 @@
   </div>
   <dl class="kv-grid">
     <div class="kv"><dt>主机地址</dt><dd class="mono">{{ detail.host or '—' }}</dd></div>
-    <div class="kv"><dt>采集时间</dt><dd class="mono">{{ detail.collected_at or '—' }}</dd></div>
+    <div class="kv"><dt>采集时间</dt><dd class="mono"{% if detail.collected_at %} title="{{ detail.collected_at }}"{% endif %}>{{ detail.collected_at|stamp }}</dd></div>
     <div class="kv"><dt>操作系统</dt><dd>{{ metrics.os_pretty_name or '—' }}</dd></div>
     <div class="kv"><dt>内核版本</dt><dd>{{ metrics.kernel_version or '—' }}</dd></div>
     <div class="kv"><dt>运行时长</dt><dd>{{ metrics.uptime or '—' }}</dd></div>
@@ -211,7 +211,7 @@
           <td class="mono">{{ check.target or '—' }}</td>
           <td><span class="status status-{{ check.status }}">{{ check.status or '—' }}</span></td>
           <td>{% if check.latency_ms is not none %}{{ '%.0f'|format(check.latency_ms) }} ms{% else %}—{% endif %}</td>
-          <td class="mono">{{ check.checked_at or '—' }}</td>
+          <td class="mono"{% if check.checked_at %} title="{{ check.checked_at }}"{% endif %}>{{ check.checked_at|stamp }}</td>
           <td>{{ check.message or '—' }}</td>
         </tr>
         {% endfor %}
@@ -239,7 +239,7 @@
           <td>{{ alert.category }}</td>
           <td class="alert-title">{{ alert.title }}</td>
           <td class="alert-message">{{ alert.message }}</td>
-          <td class="mono">{{ alert.created_at }}</td>
+          <td class="mono" title="{{ alert.created_at }}">{{ alert.created_at|stamp }}</td>
           <td><span class="status status-{{ alert.status }} alert-status">{% if alert.status == 'active' %}活动{% elif alert.status == 'acknowledged' %}已确认{% elif alert.status == 'resolved' %}已恢复{% else %}{{ alert.status }}{% endif %}</span></td>
           <td class="alert-actions">
             {% if alert.status == 'active' %}
@@ -323,7 +323,7 @@
   <p class="muted">
     整体状态：<strong>{{ detail.disk.status }}</strong>
     {% if detail.disk.message %} · {{ detail.disk.message }}{% endif %}
-    {% if detail.disk.collected_at %} · 采集时间 {{ detail.disk.collected_at }}{% endif %}
+    {% if detail.disk.collected_at %} · 采集时间 {{ detail.disk.collected_at|stamp }}{% endif %}
   </p>
 
   <h3>控制器</h3>
