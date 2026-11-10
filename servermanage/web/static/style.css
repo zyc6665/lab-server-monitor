@@ -1736,6 +1736,11 @@ html[data-theme="dark"] .collect-notice {
   padding: 6px 0 12px;
 }
 
+/* `hidden` 属性必须压过 .skeleton 的 display，否则数据加载完后骨架仍然可见 */
+.skeleton[hidden] {
+  display: none !important;
+}
+
 .skeleton-row {
   height: 34px;
   border-radius: 8px;

@@ -149,6 +149,8 @@ def test_first_render_uses_skeletons_instead_of_flashing_empty() -> None:
     assert "host-skeleton" in app
     assert "alert-skeleton" in app
     assert ".skeleton-row" in _style()
+    # 骨架用 display:flex，必须让 hidden 属性仍然生效，否则数据加载后骨架继续显示。
+    assert ".skeleton[hidden]" in _style()
 
 
 def test_command_palette_can_jump_to_the_mode_switch() -> None:
