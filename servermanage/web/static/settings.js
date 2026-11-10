@@ -199,8 +199,80 @@
     section.addEventListener("change", function () { markDirty(sectionName); });
   });
 
+  function fieldOf(sectionName, path) {
+    return qs('[data-section="' + sectionName + '"] [data-field="' + path + '"]');
+  }
+
+  function numberIn(sectionName, path, min, max, label, allowEmpty) {
+    var input = fieldOf(sectionName, path);
+    if (!input) return "";
+    var raw = String(input.value || "").trim();
+    if (!raw) return allowEmpty ? "" : label + "不能为空";
+    var value = Number(raw);
+    if (!isFinite(value) || value < min || value > max) {
+      markField(input, true);
+      input.focus();
+      return label + "需要在 " + min + "–" + max + " 之间";
+    }
+    markField(input, false);
+    return "";
+  }
+
+  function validateSection(sectionName) {
+    var message = "";
+    if (sectionName === "alerts") {
+      ["cpu_percent", "memory_percent", "disk_percent", "gpu_memory_percent"].forEach(function (key) {
+        if (message) return;
+        message = numberIn("alerts", "thresholds." + key, 1, 100, "告警阈值");
+      });
+      if (!message) message = numberIn("alerts", "thresholds.disk_temperature_c", 1, 120, "磁盘温度阈值");
+      if (!message) message = numberIn("alerts", "consecutive_periods", 1, 10, "连续异常周期数");
+      if (!message) message = numberIn("alerts", "cooldown_minutes", 0, 1440, "冷却时间");
+      if (!message) message = numberIn("alerts", "offline_failures", 1, 100, "离线判定次数");
+      var urlInput = fieldOf("alerts", "webhook.url");
+      if (!message && urlInput) {
+        var url = String(urlInput.value || "").trim();
+        if (url && !/^https?:\/\//i.test(url)) {
+          markField(urlInput, true);
+          urlInput.focus();
+          message = "Webhook 地址需要以 http:// 或 https:// 开头";
+        }
+      }
+    } else if (sectionName === "smtp") {
+      message = numberIn("smtp", "port", 1, 65535, "SMTP 端口");
+      var fromInput = fieldOf("smtp", "from_addr");
+      if (!message && fromInput) {
+        var from = String(fromInput.value || "").trim();
+        if (from && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(from)) {
+          markField(fromInput, true);
+          fromInput.focus();
+          message = "发件人需要一个完整的邮箱地址";
+        }
+      }
+      var toInput = fieldOf("smtp", "to_addrs");
+      if (!message && toInput) {
+        var to = String(toInput.value || "").trim();
+        if (to && to.split(/[,;]/).some(function (part) {
+          var value = part.trim();
+          return value && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(value);
+        })) {
+          markField(toInput, true);
+          toInput.focus();
+          message = "收件人里有不完整的邮箱地址";
+        }
+      }
+    }
+    return message;
+  }
+
   function saveSection(sectionName) {
     var button = qs('[data-save="' + sectionName + '"]');
+    var problem = validateSection(sectionName);
+    if (problem) {
+      status(button ? button.parentElement.querySelector(".form-status") : null, problem, true);
+      markDirty(sectionName);
+      return;
+    }
     var payload = collectSection(sectionName);
     if (button) button.disabled = true;
     api("PUT", "/api/settings/" + sectionName, payload)

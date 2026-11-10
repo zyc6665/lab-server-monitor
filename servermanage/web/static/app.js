@@ -1094,7 +1094,9 @@
     table.hidden = !hasData;
     if (empty) {
       empty.hidden = hasData;
-      empty.textContent = lastAlerts.length ? '没有匹配的告警' : '暂无数据';
+      empty.textContent = lastAlerts.length
+        ? '当前筛选没有匹配的告警，可以点“清除筛选”回到全部。'
+        : '还没有告警记录。主机离线或指标超过阈值时会自动生成。';
     }
     var suffix = total !== lastAlerts.length ? '（匹配 ' + total + ' 条）' : '';
     setText('alert-count', '共 ' + lastAlerts.length + ' 条' + suffix);

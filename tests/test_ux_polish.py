@@ -165,3 +165,28 @@ def test_host_form_validates_name_host_and_port_inline() -> None:
     assert "端口需要是 1–65535 之间的数字" in settings
     assert "主机名称只能包含字母、数字、点、下划线和短横线" in settings
     assert "input.is-invalid" in _style()
+
+
+def test_settings_sections_validate_before_saving() -> None:
+    settings = _script("settings.js")
+    assert "function validateSection" in settings
+    assert "function numberIn" in settings
+    for phrase in (
+        '"告警阈值"',
+        '"连续异常周期数"',
+        '"SMTP 端口"',
+        "Webhook 地址需要以 http:// 或 https:// 开头",
+        "收件人里有不完整的邮箱地址",
+        "需要在 ",
+    ):
+        assert phrase in settings, phrase
+    save_index = settings.index("function saveSection")
+    call_index = settings.index("validateSection(sectionName)", save_index)
+    request_index = settings.index('api("PUT"', save_index)
+    assert call_index < request_index
+
+
+def test_alert_empty_state_explains_filters() -> None:
+    app = _script("app.js")
+    assert "当前筛选没有匹配的告警" in app
+    assert "还没有告警记录" in app
