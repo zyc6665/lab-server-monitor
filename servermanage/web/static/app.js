@@ -679,6 +679,8 @@
       empty.hidden = hasData;
       if (hasData) { empty.textContent = ''; }
     }
+    var hostSkeleton = document.getElementById('host-skeleton');
+    if (hostSkeleton) { hostSkeleton.hidden = true; }
     var onboard = document.getElementById('onboard-card');
     if (onboard) { onboard.hidden = hasData; }
     setText('host-count', '共 ' + rows.length + ' 台');
@@ -1086,6 +1088,8 @@
       }
       body.appendChild(row);
     }
+    var skeleton = document.getElementById('alert-skeleton');
+    if (skeleton) { skeleton.hidden = true; }
     var hasData = visible.length > 0;
     table.hidden = !hasData;
     if (empty) {

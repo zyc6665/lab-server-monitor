@@ -68,7 +68,7 @@
       <label class="check-row"><input type="checkbox" data-field="open_browser_on_start" {% if settings.monitoring.open_browser_on_start %}checked{% endif %}> 启动时自动打开浏览器</label>
       {% endif %}
     </div>
-    <div class="mode-settings" data-section="view-mode">
+    <div class="mode-settings" data-section="view-mode" id="mode">
       <h3>使用模式</h3>
       <p class="hint">用户模式只显示本机使用者在各服务器上的账号状态与占用，隐藏磁盘阵列、告警、终端等管理员功能；不会改变服务器上的实际权限。</p>
       <div class="settings-grid">

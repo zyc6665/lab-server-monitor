@@ -25,7 +25,8 @@
     { label: '采集异常主机', meta: '操作 · 只采集异常', keywords: 'collect 采集 异常 离线 告警 主机', action: 'collect-abnormal' },
     { label: '查看严重告警', meta: '操作 · 只看 critical', href: '/alerts?severity=critical', keywords: 'critical 严重 告警 alerts' },
     { label: '打开系统状态', meta: '操作 · 设置页系统状态', href: '/settings#system', keywords: 'health 状态 系统 自检 diagnostics' },
-    { label: '全网巡检报告', meta: '操作 · 下载文本报告', href: '/api/overview/report', keywords: 'report 巡检 报告 导出' }
+    { label: '全网巡检报告', meta: '操作 · 下载文本报告', href: '/api/overview/report', keywords: 'report 巡检 报告 导出' },
+    { label: '切换使用模式', meta: '操作 · 管理员 / 用户模式', href: '/settings#mode', keywords: 'mode 模式 管理员 用户 成员 member' }
   ];
 
   var hosts = null;

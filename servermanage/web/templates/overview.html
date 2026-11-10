@@ -188,6 +188,11 @@
       <a class="btn-link button-link" id="onboard-open-users" href="{{ url_for('users_page') }}">查看服务器用户</a>
     </div>
   </div>
+  <div class="skeleton" id="host-skeleton"{% if hosts %} hidden{% endif %} aria-hidden="true">
+    <div class="skeleton-row"></div>
+    <div class="skeleton-row"></div>
+    <div class="skeleton-row"></div>
+  </div>
   <p class="empty" id="empty-state" hidden></p>
   <div class="table-wrap">
     <table class="data-table" id="host-table"{% if not hosts %} hidden{% endif %}>

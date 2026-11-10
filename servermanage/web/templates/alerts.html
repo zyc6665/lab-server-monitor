@@ -69,6 +69,11 @@
       <option value="100">每页 100 条</option>
     </select>
   </div>
+  <div class="skeleton" id="alert-skeleton"{% if alerts %} hidden{% endif %} aria-hidden="true">
+    <div class="skeleton-row"></div>
+    <div class="skeleton-row"></div>
+    <div class="skeleton-row"></div>
+  </div>
   <p class="empty" id="alerts-empty"{% if alerts %} hidden{% endif %}>暂无数据</p>
   <div class="table-wrap">
     <table class="data-table" id="alerts-table"{% if not alerts %} hidden{% endif %}>

@@ -1727,3 +1727,43 @@ html[data-theme="dark"] .collect-notice {
 .host-head .page-subtitle .mono {
   font-variant-numeric: tabular-nums;
 }
+
+/* v0.4.5：首屏骨架、表单校验与模式定位 */
+.skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 6px 0 12px;
+}
+
+.skeleton-row {
+  height: 34px;
+  border-radius: 8px;
+  background: linear-gradient(90deg, var(--surface-muted, #eef1f6) 25%, rgba(148, 163, 184, 0.22) 37%, var(--surface-muted, #eef1f6) 63%);
+  background-size: 400% 100%;
+  animation: skeleton-shimmer 1.4s ease-in-out infinite;
+}
+
+@keyframes skeleton-shimmer {
+  0% { background-position: 100% 50%; }
+  100% { background-position: 0 50%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton-row { animation: none; }
+}
+
+input.is-invalid,
+select.is-invalid {
+  border-color: #dc2626;
+  box-shadow: 0 0 0 2px rgba(220, 38, 38, 0.15);
+}
+
+#mode {
+  scroll-margin-top: 96px;
+}
+
+html[data-theme="dark"] .skeleton-row {
+  background: linear-gradient(90deg, #1b2029 25%, rgba(148, 163, 184, 0.18) 37%, #1b2029 63%);
+  background-size: 400% 100%;
+}

@@ -586,9 +586,47 @@
     addCheckRow(null);
   });
 
+  function markField(input, invalid) {
+    if (!input) return;
+    if (invalid) { input.classList.add("is-invalid"); } else { input.classList.remove("is-invalid"); }
+  }
+
+  function validateHostForm() {
+    var nameInput = hostField("name");
+    var hostInput = hostField("host");
+    var portInput = hostField("port");
+    markField(nameInput, false);
+    markField(hostInput, false);
+    markField(portInput, false);
+    if (!nameInput.value.trim()) {
+      markField(nameInput, true);
+      nameInput.focus();
+      return "主机名称不能为空";
+    }
+    if (!/^[A-Za-z0-9._-]{1,64}$/.test(nameInput.value.trim())) {
+      markField(nameInput, true);
+      nameInput.focus();
+      return "主机名称只能包含字母、数字、点、下划线和短横线，且不超过 64 个字符";
+    }
+    if (!hostInput.value.trim()) {
+      markField(hostInput, true);
+      hostInput.focus();
+      return "请填写服务器地址或 IP";
+    }
+    var portText = String(portInput.value || "").trim() || "22";
+    var port = Number(portText);
+    if (!/^[0-9]+$/.test(portText) || !isFinite(port) || port < 1 || port > 65535) {
+      markField(portInput, true);
+      portInput.focus();
+      return "端口需要是 1–65535 之间的数字";
+    }
+    return "";
+  }
+
   qs("#save-host-button").addEventListener("click", function () {
+    var formError = validateHostForm();
+    if (formError) { status(hostStatus, formError, true); return; }
     var name = hostField("name").value.trim();
-    if (!name) { status(hostStatus, "主机名称不能为空", true); return; }
     var checkError = validateChecks(collectChecks());
     if (checkError) { status(hostStatus, checkError, true); return; }
     api("PUT", "/api/settings/hosts/" + encodeURIComponent(name), hostPayload())

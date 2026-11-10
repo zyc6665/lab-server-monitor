@@ -136,3 +136,32 @@ def test_my_page_offers_a_way_to_fix_the_account_name() -> None:
     assert "填写账号名" in script
     assert 'fix.href = "/settings"' in script
     assert ".my-empty-action" in _style()
+
+
+def test_first_render_uses_skeletons_instead_of_flashing_empty() -> None:
+    overview = _template("overview.html")
+    alerts = _template("alerts.html")
+    assert 'id="host-skeleton"' in overview
+    assert 'class="skeleton"' in overview
+    assert 'id="alert-skeleton"' in alerts
+
+    app = _script("app.js")
+    assert "host-skeleton" in app
+    assert "alert-skeleton" in app
+    assert ".skeleton-row" in _style()
+
+
+def test_command_palette_can_jump_to_the_mode_switch() -> None:
+    palette = _script("command-palette.js")
+    assert "/settings#mode" in palette
+    assert "切换使用模式" in palette
+    assert 'id="mode"' in _template("settings.html")
+
+
+def test_host_form_validates_name_host_and_port_inline() -> None:
+    settings = _script("settings.js")
+    assert "function validateHostForm" in settings
+    assert "is-invalid" in settings
+    assert "端口需要是 1–65535 之间的数字" in settings
+    assert "主机名称只能包含字母、数字、点、下划线和短横线" in settings
+    assert "input.is-invalid" in _style()
