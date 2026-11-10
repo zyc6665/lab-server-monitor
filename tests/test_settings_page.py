@@ -286,3 +286,13 @@ def test_alert_form_exposes_global_consecutive_periods(client):
 
     assert 'data-field="consecutive_periods"' in html
     assert "连续异常周期数" in html
+
+
+def test_settings_page_exposes_user_monitoring_card(client):
+    html = client.get("/settings").get_data(as_text=True)
+
+    assert 'data-section="user_monitoring"' in html
+    assert 'data-field="scan_interval_seconds"' in html
+    assert 'data-field="usage_interval_seconds"' in html
+    assert 'data-field="command_timeout"' in html
+    assert "服务器用户采集" in html

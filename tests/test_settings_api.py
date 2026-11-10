@@ -962,3 +962,30 @@ def test_checks_test_rejects_invalid_single_check(client):
         json={"name": "", "type": "tcp", "target": ""},
     )
     assert resp.status_code == 400
+
+
+def test_put_user_monitoring_section_round_trips(client):
+    resp = client.put(
+        "/api/settings/user_monitoring",
+        json={
+            "enabled": True,
+            "scan_interval_seconds": 7200,
+            "usage_interval_seconds": 86400,
+            "command_timeout": 45,
+        },
+    )
+    assert resp.status_code == 200
+    assert resp.get_json()["ok"] is True
+
+    settings = client.get("/api/settings").get_json()
+    assert settings["user_monitoring"]["usage_interval_seconds"] == 86400
+    assert settings["user_monitoring"]["command_timeout"] == 45
+
+
+def test_put_user_monitoring_rejects_out_of_range_interval(client):
+    resp = client.put(
+        "/api/settings/user_monitoring",
+        json={"usage_interval_seconds": 60},
+    )
+    assert resp.status_code == 400
+    assert "占用统计间隔" in resp.get_json()["error"]

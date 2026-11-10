@@ -238,6 +238,10 @@
           message = "Webhook 地址需要以 http:// 或 https:// 开头";
         }
       }
+    } else if (sectionName === "user_monitoring") {
+      message = numberIn("user_monitoring", "scan_interval_seconds", 300, 86400, "账号扫描间隔");
+      if (!message) message = numberIn("user_monitoring", "usage_interval_seconds", 3600, 604800, "目录占用统计间隔");
+      if (!message) message = numberIn("user_monitoring", "command_timeout", 10, 600, "单条命令超时");
     } else if (sectionName === "smtp") {
       message = numberIn("smtp", "port", 1, 65535, "SMTP 端口");
       var fromInput = fieldOf("smtp", "from_addr");
@@ -1018,5 +1022,6 @@
   fillSection("alerts", initial.alerts);
   fillSection("report", initial.report);
   fillSection("disk_health", initial.disk_health);
+  fillSection("user_monitoring", initial.user_monitoring);
   fillSection("dashboard", initial.dashboard);
 })();

@@ -180,7 +180,16 @@ def _monitor_service(app: Flask):
 # ``hosts`` section is intentionally excluded: host rows are managed through the
 # dedicated CRUD endpoints so their credentials land in ``app_secrets``.
 _ALLOWED_SETTINGS_SECTIONS = frozenset(
-    {"monitoring", "dashboard", "alerts", "smtp", "report", "disk_health", "ssh"}
+    {
+        "monitoring",
+        "dashboard",
+        "alerts",
+        "smtp",
+        "report",
+        "disk_health",
+        "ssh",
+        "user_monitoring",
+    }
 )
 
 
@@ -249,6 +258,12 @@ def _settings_snapshot(config: AppConfig) -> dict[str, Any]:
             "disk_poll_interval_seconds": config.app.disk_poll_interval_seconds,
             "concurrency": config.app.concurrency,
             "retention_days": config.app.retention_days,
+        },
+        "user_monitoring": {
+            "enabled": config.user_monitoring.enabled,
+            "scan_interval_seconds": config.user_monitoring.scan_interval_seconds,
+            "usage_interval_seconds": config.user_monitoring.usage_interval_seconds,
+            "command_timeout": config.user_monitoring.command_timeout,
         },
         "dashboard": {
             "host": config.dashboard.host,

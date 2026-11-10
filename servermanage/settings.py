@@ -42,6 +42,7 @@ from servermanage.models import (
     HostDiskHealthOverride,
     ReportConfig,
     SMTPConfig,
+    UserMonitoringConfig,
 )
 
 __all__ = [
@@ -54,6 +55,7 @@ __all__ = [
     "SECTION_DISK_HEALTH",
     "SECTION_SSH",
     "SECTION_SMTP",
+    "SECTION_USER_MONITORING",
     "SECTION_NAMES",
     "SECRET_SMTP_PASSWORD",
     "SECRET_WEBHOOK_URL",
@@ -70,6 +72,7 @@ SECTION_REPORT = "report"
 SECTION_DISK_HEALTH = "disk_health"
 SECTION_SSH = "ssh"
 SECTION_SMTP = "smtp"
+SECTION_USER_MONITORING = "user_monitoring"
 
 SECTION_NAMES = (
     SECTION_MONITORING,
@@ -79,6 +82,7 @@ SECTION_NAMES = (
     SECTION_DISK_HEALTH,
     SECTION_SSH,
     SECTION_SMTP,
+    SECTION_USER_MONITORING,
 )
 
 _ALLOWED_SECTIONS = frozenset(SECTION_NAMES)
@@ -106,6 +110,12 @@ _DEFAULT_DISK_MOUNTS = ["/", "/data"]
 
 # Valid ranges for the v1.6 retention fields. These are enforced on save so a
 # bad value can never truncate all history or disable cleanup silently.
+_USER_MONITORING_RANGES = {
+    "scan_interval_seconds": (300, 86400),
+    "usage_interval_seconds": (3600, 604800),
+    "command_timeout": (10, 600),
+}
+
 _MONITORING_INT_RANGES = {
     "host_metrics_max_points": (10, 10000),
     "disk_health_retention_days": (1, 365),
@@ -355,6 +365,16 @@ class SettingsService:
         if not self.is_writable():
             raise SettingsError("settings are not writable on this platform")
         sanitized = deepcopy(payload)
+        if section == SECTION_USER_MONITORING:
+            # The card posts only its own fields; merge so a partial save cannot
+            # silently reset the intervals it did not touch back to defaults.
+            stored = storage.load_app_settings(self.db_path).get(
+                SECTION_USER_MONITORING
+            )
+            if isinstance(stored, dict):
+                merged = dict(stored)
+                merged.update(sanitized)
+                sanitized = merged
         if section == SECTION_DASHBOARD:
             sanitized = self._sanitize_dashboard(sanitized)
         elif section == SECTION_ALERTS:
@@ -403,6 +423,12 @@ class SettingsService:
                 "open_browser_on_start": config.app.open_browser_on_start,
                 "mode": config.app.mode,
                 "member_account": config.app.member_account,
+            },
+            "user_monitoring": {
+                "enabled": config.user_monitoring.enabled,
+                "scan_interval_seconds": config.user_monitoring.scan_interval_seconds,
+                "usage_interval_seconds": config.user_monitoring.usage_interval_seconds,
+                "command_timeout": config.user_monitoring.command_timeout,
             },
             "dashboard": {
                 "host": config.dashboard.host,
@@ -1370,7 +1396,48 @@ class SettingsService:
                 config,
                 disk_health=self._apply_disk_health(config.disk_health, payload),
             )
+        if section == SECTION_USER_MONITORING:
+            return replace(
+                config,
+                user_monitoring=self._apply_user_monitoring(
+                    config.user_monitoring, payload
+                ),
+            )
         raise SettingsError(f"unknown settings section: {section}")
+
+    def _apply_user_monitoring(
+        self, current: UserMonitoringConfig, payload: dict[str, Any]
+    ) -> UserMonitoringConfig:
+        """Validate the user-scan cadence so the scheduler cannot be hammered.
+
+        A missing key keeps the current value: the settings page posts only the
+        fields it renders, and a partial payload must not silently reset the
+        other intervals to their defaults.
+        """
+        data = {"enabled": current.enabled}
+        if "enabled" in payload:
+            enabled = payload.get("enabled")
+            if not isinstance(enabled, bool):
+                raise SettingsError("启用服务器用户采集必须是布尔值")
+            data["enabled"] = enabled
+        labels = {
+            "scan_interval_seconds": "账号扫描间隔",
+            "usage_interval_seconds": "占用统计间隔",
+            "command_timeout": "单次命令超时",
+        }
+        for key, (minimum, maximum) in _USER_MONITORING_RANGES.items():
+            if key not in payload:
+                data[key] = getattr(current, key)
+                continue
+            raw = payload.get(key)
+            if isinstance(raw, bool) or not isinstance(raw, int):
+                raise SettingsError(f"{labels[key]}必须是整数")
+            if not minimum <= raw <= maximum:
+                raise SettingsError(
+                    f"{labels[key]}必须在 {minimum} 到 {maximum} 之间"
+                )
+            data[key] = raw
+        return UserMonitoringConfig(**data)
 
     def _validate_monitoring(self, app: AppRuntimeConfig) -> None:
         """Reject retention values that would make history useless or unbounded."""

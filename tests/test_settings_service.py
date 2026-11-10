@@ -596,3 +596,46 @@ def test_public_settings_desktop_mode_false(tmp_path, monkeypatch):
     monkeypatch.delenv("SERVERMONITOR_DESKTOP", raising=False)
     svc = _service(tmp_path)
     assert svc.public_settings()["desktop_mode"] is False
+
+
+def test_save_user_monitoring_section_persists_intervals(tmp_path):
+    svc = _service(tmp_path)
+    cfg = svc.save_section(
+        "user_monitoring",
+        {
+            "enabled": True,
+            "scan_interval_seconds": 7200,
+            "usage_interval_seconds": 86400,
+            "command_timeout": 60,
+        },
+    )
+    assert cfg.user_monitoring.usage_interval_seconds == 86400
+    reloaded = svc.load().user_monitoring
+    assert reloaded.scan_interval_seconds == 7200
+    assert reloaded.command_timeout == 60
+
+
+def test_partial_user_monitoring_payload_keeps_other_fields(tmp_path):
+    svc = _service(tmp_path)
+    svc.save_section("user_monitoring", {"usage_interval_seconds": 43200})
+    svc.save_section("user_monitoring", {"command_timeout": 90})
+    settings = svc.load().user_monitoring
+    assert settings.usage_interval_seconds == 43200
+    assert settings.command_timeout == 90
+    assert settings.scan_interval_seconds == 3600
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"scan_interval_seconds": 60},
+        {"usage_interval_seconds": 60},
+        {"command_timeout": 5},
+        {"scan_interval_seconds": "600"},
+        {"enabled": "yes"},
+    ],
+)
+def test_invalid_user_monitoring_payload_is_rejected(tmp_path, payload):
+    svc = _service(tmp_path)
+    with pytest.raises(SettingsError):
+        svc.save_section("user_monitoring", payload)
