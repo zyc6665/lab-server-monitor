@@ -21,6 +21,7 @@ import hmac
 import json
 import logging
 import os
+import re
 import secrets
 import smtplib
 import tempfile
@@ -744,6 +745,12 @@ def _disk_health_summary(health: dict[str, Any] | None) -> dict[str, Any]:
         if value in counts:
             counts[value] += 1
     return {"status": str(health.get("status") or "unknown"), **counts}
+
+
+def _anchor(name: str) -> str:
+    """HTML id-safe anchor for a host section."""
+    slug = re.sub(r"[^0-9A-Za-z_-]+", "-", str(name or "")).strip("-")
+    return slug or "host"
 
 
 def _is_online(snapshot: dict[str, Any], poll_interval_seconds: int, now: datetime) -> bool:
@@ -3519,16 +3526,31 @@ def register_routes(app: Flask) -> None:
         host_rows: list[dict[str, Any]] = []
         drives: list[dict[str, Any]] = []
         totals = {"healthy": 0, "warning": 0, "critical": 0, "drives": 0}
-        for host_name in sorted(names):
+        severity_rank = {"critical": 0, "warning": 1, "ok": 2, "unknown": 3, "error": 4, "no_storcli": 5}
+        for host_name in names:
             health = healths.get(host_name)
             counts = _disk_health_summary(health)
             totals["healthy"] += counts["healthy"]
             totals["warning"] += counts["warning"]
             totals["critical"] += counts["critical"]
             totals["drives"] += counts["healthy"] + counts["warning"] + counts["critical"]
+            host_drives: list[dict[str, Any]] = []
+            for drive in (health or {}).get("physical_drives") or []:
+                if not isinstance(drive, dict):
+                    continue
+                item = dict(drive)
+                item["host_name"] = host_name
+                drives.append(item)
+                host_drives.append(item)
+            temperatures = [
+                drive["temperature_c"]
+                for drive in host_drives
+                if isinstance(drive.get("temperature_c"), (int, float))
+            ]
             host_rows.append(
                 {
                     "name": host_name,
+                    "anchor": _anchor(host_name),
                     "host": addresses.get(host_name),
                     "group": groups.get(host_name, "未分组"),
                     "status": counts["status"],
@@ -3539,15 +3561,15 @@ def register_routes(app: Flask) -> None:
                     "vd_count": len((health or {}).get("virtual_drives") or []),
                     "pd_count": len((health or {}).get("physical_drives") or []),
                     "message": (health or {}).get("message"),
+                    "temperature_max": max(temperatures) if temperatures else None,
                     "collected_at": _to_local_iso((health or {}).get("collected_at"), tz),
+                    "drives": host_drives,
                 }
             )
-            for drive in (health or {}).get("physical_drives") or []:
-                if not isinstance(drive, dict):
-                    continue
-                item = dict(drive)
-                item["host_name"] = host_name
-                drives.append(item)
+        # 有问题的主机排在前面，其余按名称排序，方便先看异常盘。
+        host_rows.sort(
+            key=lambda row: (severity_rank.get(row["status"], 9), row["name"].lower())
+        )
         return render_template(
             "disk_health.html",
             active_page="disk_health",

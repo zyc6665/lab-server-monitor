@@ -335,6 +335,11 @@
         panel.hidden = panel.getAttribute('data-host-panel') !== key;
       });
       if (focus && list[index]) { list[index].focus(); }
+      // 窄屏时标签条是横向滚动的，把当前分区滚到可见范围中间。
+      var bar = list[index] ? list[index].parentNode : null;
+      if (bar && list[index] && bar.scrollWidth > bar.clientWidth + 4) {
+        list[index].scrollIntoView({ block: 'nearest', inline: 'center' });
+      }
     }
     function currentKey() {
       for (var i = 0; i < list.length; i += 1) {

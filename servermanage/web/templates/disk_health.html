@@ -24,65 +24,70 @@
   </article>
 </section>
 
-<section class="card">
-  <div class="section-head"><h2>主机磁盘概览</h2><span class="muted">共 {{ hosts|length }} 台</span></div>
-  {% if hosts %}
-  <div class="table-wrap">
-    <table class="data-table">
-      <thead><tr><th>主机</th><th>地址</th><th>分组</th><th>整体状态</th><th>控制器</th><th>VD</th><th>物理盘</th><th>健康 / 告警 / 严重</th><th>采集时间</th><th>操作</th></tr></thead>
-      <tbody>
-        {% for host in hosts %}
-        <tr>
-          <td><a href="{{ url_for('host_page', name=host.name) }}">{{ host.name }}</a></td>
-          <td class="mono">{{ host.host or '—' }}</td>
-          <td>{{ host.group or '—' }}</td>
-          <td><span class="health health-{{ host.status }}">{{ host.status }}</span>{% if host.message %}<div class="muted small">{{ host.message }}</div>{% endif %}</td>
-          <td>{{ host.controller_count }}</td>
-          <td>{{ host.vd_count }}</td>
-          <td>{{ host.pd_count }}</td>
-          <td><span class="health-counts">{{ host.healthy }} / {{ host.warning }} / {{ host.critical }}</span></td>
-          <td class="mono"{% if host.collected_at %} title="{{ host.collected_at }}"{% endif %}>{{ host.collected_at|stamp }}</td>
-          <td><a class="btn-link" href="{{ url_for('host_page', name=host.name) }}#disk-array">查看详情</a></td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+<section class="card" id="disk-groups">
+  <div class="section-head">
+    <h2>按主机查看物理盘</h2>
+    <span class="muted">共 {{ hosts|length }} 台 · {{ drives|length }} 块盘{% if totals.warning or totals.critical %} · <span class="disk-attention">{{ totals.warning }} 告警 / {{ totals.critical }} 严重</span>{% endif %}</span>
   </div>
+  {% if hosts %}
+  <nav class="disk-jump" aria-label="按主机跳转">
+    {% for host in hosts %}
+    <a class="disk-jump-link" href="#disk-{{ host.anchor }}">
+      <span class="disk-jump-name">{{ host.name }}</span>
+      <span class="disk-jump-count">{{ host.pd_count }}</span>
+      {% if host.critical %}<span class="disk-jump-flag disk-jump-critical">{{ host.critical }}</span>{% elif host.warning %}<span class="disk-jump-flag disk-jump-warning">{{ host.warning }}</span>{% endif %}
+    </a>
+    {% endfor %}
+  </nav>
+  {% for host in hosts %}
+  <article class="disk-host" id="disk-{{ host.anchor }}">
+    <header class="disk-host-head">
+      <div class="disk-host-id">
+        <a href="{{ url_for('host_page', name=host.name) }}">{{ host.name }}</a>
+        <span class="muted mono">{{ host.host or '—' }}</span>
+        <span class="disk-host-group">{{ host.group }}</span>
+      </div>
+      <div class="disk-host-meta">
+        <span class="health health-{{ host.status }}">{{ host.status }}</span>
+        <span class="disk-host-counts"><b>{{ host.healthy }}</b> 健康 · <b>{{ host.warning }}</b> 告警 · <b>{{ host.critical }}</b> 严重</span>
+        <span class="muted">控制器 {{ host.controller_count }} · VD {{ host.vd_count }}</span>
+        {% if host.temperature_max is not none %}<span class="muted">最高 {{ host.temperature_max }} °C</span>{% endif %}
+        <span class="muted mono"{% if host.collected_at %} title="{{ host.collected_at }}"{% endif %}>{{ host.collected_at|stamp }}</span>
+        <a class="btn-link" href="{{ url_for('host_page', name=host.name) }}#disk-array">主机详情</a>
+      </div>
+    </header>
+    {% if host.drives %}
+    <div class="table-wrap">
+      <table class="data-table disk-table">
+        <thead><tr><th>控制器</th><th>Enclosure</th><th>Slot</th><th>型号</th><th>序列号</th><th>状态</th><th>介质错误</th><th>其他错误</th><th>Predictive</th><th>SMART</th><th>Shield</th><th>温度</th><th>健康</th></tr></thead>
+        <tbody>
+          {% for d in host.drives %}
+          <tr>
+            <td>{{ d.controller }}</td>
+            <td>{{ d.enclosure }}</td>
+            <td>{{ d.slot }}</td>
+            <td>{{ d.model or '—' }}</td>
+            <td class="mono">{{ d.serial or '—' }}</td>
+            <td>{{ d.state or '—' }}</td>
+            <td>{{ d.media_errors if d.media_errors is not none else '—' }}</td>
+            <td>{{ d.other_errors if d.other_errors is not none else '—' }}</td>
+            <td>{{ d.predictive_failures if d.predictive_failures is not none else '—' }}</td>
+            <td>{% if d.smart_alert is not none %}{{ '是' if d.smart_alert else '否' }}{% else %}—{% endif %}</td>
+            <td>{{ d.shield_counter if d.shield_counter is not none else '—' }}</td>
+            <td>{% if d.temperature_c is not none %}{{ d.temperature_c }} °C{% else %}—{% endif %}</td>
+            <td><span class="health health-{{ d.health }}">{{ d.health }}</span></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <p class="empty disk-host-empty">{{ host.message or '这台主机还没有物理盘数据。' }}</p>
+    {% endif %}
+  </article>
+  {% endfor %}
   {% else %}
   <p class="empty">还没有磁盘健康数据。请先在设置中配置磁盘健康采集，等待首次磁盘轮询完成。</p>
-  {% endif %}
-</section>
-
-<section class="card">
-  <div class="section-head"><h2>物理盘明细</h2><span class="muted">共 {{ drives|length }} 块</span></div>
-  {% if drives %}
-  <div class="table-wrap">
-    <table class="data-table">
-      <thead><tr><th>主机</th><th>控制器</th><th>Enclosure</th><th>Slot</th><th>型号</th><th>序列号</th><th>状态</th><th>介质错误</th><th>其他错误</th><th>Predictive</th><th>SMART</th><th>Shield</th><th>温度</th><th>健康</th></tr></thead>
-      <tbody>
-        {% for d in drives %}
-        <tr>
-          <td>{{ d.host_name }}</td>
-          <td>{{ d.controller }}</td>
-          <td>{{ d.enclosure }}</td>
-          <td>{{ d.slot }}</td>
-          <td>{{ d.model or '—' }}</td>
-          <td class="mono">{{ d.serial or '—' }}</td>
-          <td>{{ d.state or '—' }}</td>
-          <td>{{ d.media_errors if d.media_errors is not none else '—' }}</td>
-          <td>{{ d.other_errors if d.other_errors is not none else '—' }}</td>
-          <td>{{ d.predictive_failures if d.predictive_failures is not none else '—' }}</td>
-          <td>{% if d.smart_alert is not none %}{{ '是' if d.smart_alert else '否' }}{% else %}—{% endif %}</td>
-          <td>{{ d.shield_counter if d.shield_counter is not none else '—' }}</td>
-          <td>{% if d.temperature_c is not none %}{{ d.temperature_c }} °C{% else %}—{% endif %}</td>
-          <td><span class="health health-{{ d.health }}">{{ d.health }}</span></td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
-  {% else %}
-  <p class="empty">暂无物理盘数据。</p>
   {% endif %}
 </section>
 {% endblock %}

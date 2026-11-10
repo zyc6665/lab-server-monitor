@@ -2332,3 +2332,99 @@ html[data-theme="dark"] .container::-webkit-scrollbar-thumb { background: rgba(2
   .card { padding: 16px 16px; border-radius: 13px; }
   .section-head { align-items: flex-start; flex-direction: column; gap: 8px; }
 }
+
+/* -- v0.7.1 磁盘健康按主机分组 ---------------------------------------- */
+.disk-attention { color: var(--warning, #b54708); font-weight: 600; }
+
+.disk-jump {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 4px;
+  padding: 0 0 12px;
+  border-bottom: 1px solid var(--border);
+}
+.disk-jump-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-sunken);
+  color: var(--text);
+  font-size: 12.5px;
+  line-height: 1.3;
+  text-decoration: none;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.disk-jump-link:hover { border-color: var(--border-strong); background: var(--card-bg); text-decoration: none; }
+.disk-jump-name { font-weight: 500; }
+.disk-jump-count { color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.disk-jump-flag {
+  min-width: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 600;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.disk-jump-warning { background: rgba(247, 144, 9, 0.16); color: #b54708; }
+.disk-jump-critical { background: rgba(217, 45, 32, 0.14); color: #b42318; }
+
+.disk-host {
+  padding: 16px 0 4px;
+  border-top: 1px solid var(--border);
+  scroll-margin-top: 96px;
+}
+.disk-host:first-of-type { border-top: 0; }
+.disk-host-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+.disk-host-id { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.disk-host-id a { font-size: 15px; font-weight: 600; }
+.disk-host-group {
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: 11.5px;
+}
+.disk-host-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+.disk-host-counts { font-variant-numeric: tabular-nums; }
+.disk-host-counts b { color: var(--text); font-weight: 600; }
+.disk-table { font-size: 12.5px; }
+.disk-table th,
+.disk-table td { padding: 8px 10px; }
+.disk-host-empty { padding: 6px 0 10px; margin: 0; }
+
+html[data-theme="dark"] .disk-jump-warning { background: rgba(247, 144, 9, 0.22); color: #fdb022; }
+html[data-theme="dark"] .disk-jump-critical { background: rgba(240, 68, 56, 0.24); color: #fda29b; }
+html[data-theme="dark"] .disk-jump-link { background: var(--surface-sunken); }
+
+/* 主机详情分区标签：窄屏改为单行横向滚动，避免折成两排 */
+@media (max-width: 1000px) {
+  .host-tabbar {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    position: static;
+  }
+  .host-tabbar::-webkit-scrollbar { display: none; }
+  .host-tab { flex: 0 0 auto; }
+}

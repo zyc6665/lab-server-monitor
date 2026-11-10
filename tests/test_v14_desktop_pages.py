@@ -66,7 +66,7 @@ def test_hosts_and_disk_health_pages_are_wired(tmp_path):
     disk = client.get("/disk-health")
     assert disk.status_code == 200
     disk_html = disk.get_data(as_text=True)
-    assert "物理盘明细" in disk_html
+    assert "按主机查看物理盘" in disk_html
     assert "磁盘健康" in disk_html
 
     settings = client.get("/settings").get_data(as_text=True)
@@ -147,7 +147,7 @@ def test_v19_theme_and_overview_focus_panel(tmp_path):
     assert 'id="resource-rank"' in overview
     assert 'data-rank-metric="cpu"' in overview
     assert "theme.js" in overview
-    assert "v0.7.0 桌面客户端" in overview
+    assert "v0.7.1 桌面客户端" in overview
 
     app_js = client.get("/static/app.js").get_data(as_text=True)
     assert "bindAlertRanges" in app_js
