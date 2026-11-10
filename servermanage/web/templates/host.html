@@ -9,18 +9,6 @@
 {%- if value is undefined or value is none -%}—{%- elif value >= 1073741824 -%}{{ '%.1f'|format(value / 1073741824) }} GB{%- elif value >= 1048576 -%}{{ '%.1f'|format(value / 1048576) }} MB{%- elif value >= 1024 -%}{{ '%.1f'|format(value / 1024) }} KB{%- else -%}{{ value }} B{%- endif -%}
 {%- endmacro %}
 
-{% macro dir_cell(state, exists, owner, group, mode, size) -%}
-{%- if state == 'missing' or not exists -%}缺失{%- else -%}<span class="mono">{{ owner or '—' }}:{{ group or '—' }}</span> · {{ mode or '—' }} · {{ bytes_label(size) }}{%- endif -%}
-{%- endmacro %}
-
-{% macro user_state_badge(row) -%}
-{%- if row.state == 'missing' -%}<span class="badge badge-missing">缺失</span>{%- elif row.issues -%}<span class="badge badge-warning">异常</span>{%- else -%}<span class="badge badge-ok">正常</span>{%- endif -%}
-{%- endmacro %}
-
-{% macro yes_no(value) -%}
-{%- if value -%}<span class="badge badge-ok">是</span>{%- else -%}<span class="badge badge-muted">否</span>{%- endif -%}
-{%- endmacro %}
-
 {% block content %}
 <nav class="breadcrumb"><a href="{{ url_for('hosts_page') }}">主机</a> / <span>{{ name }}</span></nav>
 
@@ -76,7 +64,6 @@
   <button type="button" class="host-tab" data-host-tab="storage">存储与磁盘阵列</button>
   <button type="button" class="host-tab" data-host-tab="gpu">GPU</button>
   <button type="button" class="host-tab" data-host-tab="sessions">登录用户</button>
-  <button type="button" class="host-tab" data-host-tab="users">服务器用户{% if detail.users %} ({{ detail.users|length }}){% endif %}</button>
   <button type="button" class="host-tab" data-host-tab="checks">服务可用性</button>
   <button type="button" class="host-tab" data-host-tab="alerts">最近告警{% if detail.alerts|selectattr('status', 'equalto', 'active')|list %} ({{ detail.alerts|selectattr('status', 'equalto', 'active')|list|length }}){% endif %}</button>
 </nav>
@@ -204,48 +191,6 @@
   {% else %}
   <p class="empty">当前没有已登录用户。</p>
   {% endif %}
-</section>
-
-<section class="card" id="host-users" data-host-panel="users">
-  <div class="section-head">
-    <h2>服务器用户</h2>
-    <span class="muted">{{ detail.users|length if detail.users else 0 }} 个账号 · <a class="btn-link" href="/users?host={{ name|urlencode }}">在用户页查看</a></span>
-  </div>
-  <div class="user-acct-list" id="host-users-wrap"{% if not detail.users %} hidden{% endif %}>
-    {% for user in detail.users or [] %}
-    <article class="user-acct{% if user.state == 'missing' %} user-row-missing{% elif user.issues %} has-issues{% endif %}">
-      <div class="user-acct-head">
-        <span class="user-acct-name">{{ user.username or '—' }}</span>
-        {{ user_state_badge(user) }}
-        <span class="user-acct-badges">
-          <span class="user-acct-tag">docker {{ yes_no(user.in_docker) }}</span>
-          <span class="user-acct-tag">sudo {{ yes_no(user.in_sudo) }}</span>
-        </span>
-      </div>
-      <div class="user-acct-meta">
-        <span class="user-acct-meta-item"><span class="muted">UID</span><span class="mono">{{ user.uid if user.uid is not none else '—' }}</span></span>
-        <span class="user-acct-meta-item"><span class="muted">GID</span><span class="mono">{{ user.gid if user.gid is not none else '—' }}</span></span>
-        <span class="user-acct-meta-item"><span class="muted">主组</span><span>{{ user.primary_group or '—' }}</span></span>
-        <span class="user-acct-meta-item"><span class="muted">附加组</span><span>{{ user.groups|join(', ') if user.groups else '—' }}</span></span>
-      </div>
-      <div class="user-acct-dirs">
-        <div class="user-acct-dir{% if user.state != 'missing' and not user.home_exists %} is-warn{% endif %}">
-          <span class="user-acct-dir-label">家目录</span>
-          <span class="mono">{{ dir_cell(user.state, user.home_exists, user.home_owner, user.home_group, user.home_mode, user.home_size_bytes) }}</span>
-        </div>
-        <div class="user-acct-dir{% if user.state != 'missing' and user.data_supported is not sameas false and not user.data_exists %} is-warn{% endif %}">
-          <span class="user-acct-dir-label">数据目录</span>
-          <span class="mono">{% if user.data_supported is sameas false %}不支持{% else %}{{ dir_cell(user.state, user.data_exists, user.data_owner, user.data_group, user.data_mode, user.data_size_bytes) }}{% endif %}</span>
-        </div>
-      </div>
-      <div class="user-acct-foot">
-        <span class="muted mono">{{ '采集 ' ~ user.collected_at if user.collected_at else '尚未采集' }}</span>
-        {% if user.state == 'missing' %}<a class="btn-link" href="/users?host={{ name|urlencode }}">从基线移除</a>{% endif %}
-      </div>
-    </article>
-    {% endfor %}
-  </div>
-  <p class="empty" id="host-users-empty"{% if detail.users %} hidden{% endif %}>尚未采集服务器用户，或该主机没有普通账号。</p>
 </section>
 
 <section class="card" id="host-checks-panel" data-host-panel="checks">

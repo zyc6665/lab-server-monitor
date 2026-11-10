@@ -222,29 +222,22 @@ def test_users_js_switches_between_host_grid_and_detail():
 # ---------------------------------------------------------------------------
 
 
-def test_host_page_has_server_user_tab_and_panel(host_page):
-    assert 'data-host-tab="users"' in host_page
-    assert 'id="host-users"' in host_page
-    assert 'data-host-panel="users"' in host_page
-    assert 'id="host-users-empty"' in host_page
-    # The pre-existing "登录用户" (sessions) tab keeps its own panel key so the
-    # two tabs never activate together.
+def test_host_page_no_longer_duplicates_the_users_page(host_page):
+    # v0.6.0 收掉了主机详情里的“服务器用户”分区：账号只在一个地方看，
+    # 主机页保留“登录用户”（sessions）这个不同含义的分区。
+    assert 'data-host-tab="users"' not in host_page
+    assert 'id="host-users"' not in host_page
+    assert 'data-host-panel="users"' not in host_page
     assert 'data-host-tab="sessions"' in host_page
     assert 'data-host-panel="sessions"' in host_page
 
 
-def test_host_page_user_panel_uses_compact_account_cards(host_page):
-    panel = host_page.split('id="host-users"', 1)[1].split("</section>", 1)[0]
-    assert 'class="user-acct-list"' in panel
-    assert "<th>" not in panel
-    assert "/users?host=gpu-01" in panel
-
-    # The per-account card markup only renders when the host has accounts, so
-    # assert its shape on the template itself.
-    template = (TEMPLATES / "host.html").read_text(encoding="utf-8")
-    body = template.split('id="host-users"', 1)[1].split("</section>", 1)[0]
-    for marker in ("user-acct-name", "user-acct-dir-label", "user-acct-meta-item"):
-        assert marker in body, marker
+def test_sidebar_is_the_single_users_entry():
+    base = (TEMPLATES / "base.html").read_text(encoding="utf-8")
+    assert base.count('href="/users"') == 1
+    # 主机详情不再提供第二个入口。
+    host_template = (TEMPLATES / "host.html").read_text(encoding="utf-8")
+    assert "/users?host=" not in host_template
 
 
 def test_base_sidebar_has_users_navigation_entry():

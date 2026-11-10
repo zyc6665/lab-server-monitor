@@ -333,8 +333,9 @@
         });
       });
       foot.appendChild(button);
-    } else if (canWriteHost(adminHost())) {
-      // 写操作入口只在“全局 + 主机”两道开关都打开、且已配置 sudo 密码时出现。
+    } else {
+      // 写操作入口始终可见：闸门未开时点击会弹出说明，告诉用户缺哪一项，
+      // 而不是把按钮藏起来让人无从发现这个功能。
       [
         { operation: 'password', label: '重置密码' },
         { operation: 'docker', label: '加入 docker 组' },
@@ -430,7 +431,7 @@
     var link = document.getElementById('user-detail-host-link');
     if (link) { link.setAttribute('href', '/host/' + encodeURIComponent(activeHost)); }
     var createButton = document.getElementById('user-detail-create');
-    if (createButton) { createButton.hidden = !canWriteHost(host); }
+    if (createButton) { createButton.hidden = !host; }
 
     var all = (data.accounts || []).filter(function (row) { return row.host_name === activeHost; });
     setText('chip-count-all', String(all.length));
@@ -706,16 +707,55 @@
     node.className = isError ? 'muted user-admin-error' : 'muted';
   }
 
+  function writeBlocker(host) {
+    if (!payloadWriteEnabled()) {
+      return {
+        text: '账号写操作的总开关还没打开（设置 → 服务器用户监控 → 允许账号写操作）。',
+        href: '/settings#user-monitoring'
+      };
+    }
+    if (!host.allow_user_write) {
+      return {
+        text: '这台主机还没有允许账号写操作（设置 → 主机 → 编辑 → 允许账号写操作）。',
+        href: '/settings#hosts'
+      };
+    }
+    if (!host.sudo_configured) {
+      return {
+        text: '这台主机还没有配置 sudo 密码，写操作需要提权才能执行。',
+        href: '/settings#hosts'
+      };
+    }
+    return null;
+  }
+
   function openAdminDialog(defaults) {
     var dialog = adminEl('user-admin-dialog');
     if (!dialog) { return; }
     var host = adminHost();
-    if (!canWriteHost(host)) {
-      setRefreshStatus('这台主机未开启账号写操作，或缺少 sudo 密码');
+    if (!host) {
+      setRefreshStatus('请先选择一台主机');
       return;
     }
+    var blocker = writeBlocker(host);
     var options = defaults || {};
     adminEl('user-admin-host').textContent = '目标主机：' + host.name + '（' + (host.address || '') + '）';
+    var hint = adminEl('user-admin-hint');
+    if (hint) {
+      hint.hidden = !blocker;
+      if (blocker) {
+        setText('user-admin-hint-text', blocker.text + ' 开启后即可在这里预览执行计划。');
+        var hintLink = adminEl('user-admin-hint-link');
+        if (hintLink) { hintLink.setAttribute('href', blocker.href); }
+      }
+    }
+    ['user-admin-operation', 'user-admin-account', 'user-admin-password',
+      'user-admin-with-docker', 'user-admin-with-data'].forEach(function (id) {
+      var node = adminEl(id);
+      if (node) { node.disabled = Boolean(blocker); }
+    });
+    var previewButton = adminEl('user-admin-preview');
+    if (previewButton) { previewButton.disabled = Boolean(blocker); }
     adminEl('user-admin-account').value = options.account || '';
     adminEl('user-admin-password').value = '';
     adminEl('user-admin-operation').value = options.operation || 'create';

@@ -67,6 +67,23 @@
   function qs(selector, parent) {
     return (parent || document).querySelector(selector);
   }
+  var toastTimer = null;
+  function toast(text, isError) {
+    var node = document.getElementById("settings-toast");
+    if (!node) {
+      node = document.createElement("div");
+      node.id = "settings-toast";
+      node.className = "settings-toast";
+      node.setAttribute("role", "status");
+      node.setAttribute("aria-live", "polite");
+      document.body.appendChild(node);
+    }
+    node.textContent = text;
+    node.className = "settings-toast" + (isError ? " settings-toast-error" : "");
+    node.hidden = false;
+    if (toastTimer) { window.clearTimeout(toastTimer); }
+    toastTimer = window.setTimeout(function () { node.hidden = true; }, 4500);
+  }
   function qsa(selector, parent) {
     return Array.prototype.slice.call((parent || document).querySelectorAll(selector));
   }
@@ -707,9 +724,24 @@
     var name = hostField("name").value.trim();
     var checkError = validateChecks(collectChecks());
     if (checkError) { status(hostStatus, checkError, true); return; }
+    var saveButton = qs("#save-host-button");
+    saveButton.disabled = true;
+    status(hostStatus, "正在保存…");
     api("PUT", "/api/settings/hosts/" + encodeURIComponent(name), hostPayload())
-      .then(function () { watchHostCollection([name]); })
-      .catch(function (error) { status(hostStatus, error.message, true); });
+      .then(function () {
+        saveButton.disabled = false;
+        status(hostStatus, "");
+        // 保存成功后立刻收起表单，采集在后台继续，不再卡住界面。
+        hostForm.hidden = true;
+        toast("已保存主机 " + name + "，正在后台采集数据…");
+        watchHostCollection([name], function () {
+          toast("主机 " + name + " 采集完成，刷新页面即可看到最新数据");
+        });
+      })
+      .catch(function (error) {
+        saveButton.disabled = false;
+        status(hostStatus, error.message, true);
+      });
   });
 
   qs("#test-ssh-button").addEventListener("click", function () {
@@ -902,7 +934,14 @@
             (result.updated || []).length + " 台，跳过 " + (result.skipped || []).length +
             " 台，失败 " + (result.failed || []).length + " 台";
           status(importStatus, text, (result.failed || []).length > 0);
-          watchHostCollection((result.created || []).concat(result.updated || []));
+          // 采集在后台跑，导入完直接回主机列表，不在这里等采集结束。
+          var importedNames = (result.created || []).concat(result.updated || []);
+          toast(importedNames.length
+            ? "已导入 " + importedNames.length + " 台主机，正在后台采集数据…"
+            : "导入完成");
+          var importDialog = qs("#import-dialog");
+          if (importDialog && typeof importDialog.close === "function") { importDialog.close(); }
+          window.setTimeout(reloadToHosts, 700);
         })
         .catch(function (error) { status(importStatus, error.message, true); });
     });

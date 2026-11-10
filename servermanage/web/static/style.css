@@ -1446,6 +1446,17 @@ html[data-theme="dark"] .capacity-risk-warning .capacity-trend { color: #fbbf24;
 }
 .user-admin-flags { display: flex; gap: 16px; flex-wrap: wrap; font-size: 13px; }
 .user-admin-flags label { flex-direction: row; align-items: center; gap: 6px; }
+.user-admin-hint {
+  display: grid;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px solid var(--warn, #f59e0b);
+  border-radius: 10px;
+  background: var(--warn-bg, #fffbeb);
+  font-size: 13px;
+}
+.user-admin-hint p { margin: 0; }
+.user-admin-fields :disabled { opacity: 0.6; cursor: not-allowed; }
 .user-admin-actions { display: flex; align-items: center; gap: 12px; }
 .user-admin-error { color: var(--danger, #dc2626); }
 .user-admin-plan { border-top: 1px dashed var(--border, #e2e8f0); padding-top: 12px; display: grid; gap: 8px; }
@@ -1470,6 +1481,7 @@ html[data-theme="dark"] .capacity-risk-warning .capacity-trend { color: #fbbf24;
 .user-admin-step-ok { color: var(--ok, #15803d); }
 .user-admin-step-failed { color: var(--danger, #dc2626); }
 html[data-theme="dark"] .user-admin-dialog { background: #0f172a; color: #e2e8f0; }
+html[data-theme="dark"] .user-admin-hint { background: #2b230f; border-color: #a16207; }
 html[data-theme="dark"] .user-admin-steps li code { background: #1e293b; }
 html[data-theme="dark"] .user-admin-fields input,
 html[data-theme="dark"] .user-admin-fields select,
@@ -1843,3 +1855,23 @@ html[data-theme="dark"] .skeleton-row {
   color: var(--muted, #5b6472);
   line-height: 1.5;
 }
+
+/* 保存/导入后的轻提示：不打断操作，4.5 秒后自动消失。 */
+.settings-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 28px;
+  transform: translateX(-50%);
+  z-index: 60;
+  max-width: min(560px, calc(100vw - 48px));
+  padding: 10px 16px;
+  border-radius: 10px;
+  border: 1px solid var(--border, #cbd5e1);
+  background: var(--card-bg, #fff);
+  color: inherit;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.18);
+  font-size: 13px;
+}
+.settings-toast[hidden] { display: none !important; }
+.settings-toast-error { border-color: var(--danger, #dc2626); color: var(--danger, #dc2626); }
+html[data-theme="dark"] .settings-toast { background: #111c2e; border-color: #334155; }
