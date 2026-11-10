@@ -694,3 +694,17 @@ def test_host_detail_includes_users(client):
     assert users["carol"]["state"] == "missing"
     assert users["carol"]["issues"] == ["missing"]
     assert users["bob"]["issues"] == ["docker", "home", "data"]
+
+def test_usage_hint_explains_the_missing_sudo_password(client):
+    """A row without sizes must say *why*, not just "unreadable"."""
+    test_client, db_path = client
+    row = dict(ALICE)
+    row["usage_readable"] = False
+    row["home_size_bytes"] = None
+    row["data_size_bytes"] = None
+    save_host_user_snapshot(HOST, [row], db_path)
+
+    payload = test_client.get("/api/users").get_json()
+    account = _accounts(payload)[(HOST, "alice")]
+    assert account["usage_readable"] is False
+    assert "sudo" in account["usage_hint"]

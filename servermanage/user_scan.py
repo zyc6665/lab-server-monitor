@@ -204,7 +204,15 @@ def build_usage_command(paths: list[str]) -> str:
     quoted: list[str] = []
     for path in paths:
         quoted.append(shlex.quote(_safe_usage_path(path)))
-    return "du -sx --block-size=1 -- " + " ".join(quoted)
+    targets = " ".join(quoted)
+    # ``du`` only reads metadata, but on a busy login node it should still yield
+    # to interactive work: idle I/O class plus the lowest CPU priority.  ionice
+    # is util-linux-specific, so fall back to plain nice when it is missing.
+    return (
+        "if command -v ionice >/dev/null 2>&1; then "
+        f"ionice -c3 nice -n 19 du -sx --block-size=1 -- {targets}; "
+        f"else nice -n 19 du -sx --block-size=1 -- {targets}; fi"
+    )
 
 
 def parse_usage(text: str) -> dict[str, int]:

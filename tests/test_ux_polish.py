@@ -190,3 +190,12 @@ def test_alert_empty_state_explains_filters() -> None:
     app = _script("app.js")
     assert "当前筛选没有匹配的告警" in app
     assert "还没有告警记录" in app
+
+
+def test_member_view_explains_why_usage_is_missing() -> None:
+    my = _script("my.js")
+    users = _script("users.js")
+    assert "my-usage-hint" in my
+    assert "account.usage_hint" in my
+    assert "row.usage_hint" in users
+    assert ".my-usage-hint" in _style()

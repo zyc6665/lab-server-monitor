@@ -50,7 +50,7 @@
     return span;
   }
 
-  function usageBar(label, bytes, readable) {
+  function usageBar(label, bytes, readable, hint) {
     var row = document.createElement("div");
     row.className = "my-usage";
     var head = document.createElement("div");
@@ -58,10 +58,17 @@
     var name = document.createElement("span");
     name.textContent = label;
     var value = document.createElement("strong");
-    value.textContent = readable === false ? "无权限读取" : formatBytes(bytes);
+    value.textContent = readable === false ? "未统计" : formatBytes(bytes);
     head.appendChild(name);
     head.appendChild(value);
     row.appendChild(head);
+    if (readable === false && hint) {
+      value.title = hint;
+      var why = document.createElement("p");
+      why.className = "my-usage-hint";
+      why.textContent = hint;
+      row.appendChild(why);
+    }
     return row;
   }
 
@@ -135,8 +142,8 @@
 
     var usages = document.createElement("div");
     usages.className = "my-usages";
-    usages.appendChild(usageBar("家目录占用", account.home_size_bytes, account.usage_readable));
-    usages.appendChild(usageBar("/data 占用", account.data_size_bytes, account.usage_readable));
+    usages.appendChild(usageBar("家目录占用", account.home_size_bytes, account.usage_readable, account.usage_hint));
+    usages.appendChild(usageBar("/data 占用", account.data_size_bytes, account.usage_readable, account.usage_hint));
     card.appendChild(usages);
 
     if (account.usage_stale) {

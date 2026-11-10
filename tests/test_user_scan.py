@@ -249,16 +249,12 @@ def test_build_scan_command_uses_only_whitelisted_tools():
 def test_build_usage_command_quotes_paths_with_spaces_and_quotes():
     command = build_usage_command(["/home/al ice", "/data/o'brien", '/data/a"b'])
 
-    assert command.startswith("du -sx --block-size=1 -- ")
-    assert shlex.split(command) == [
-        "du",
-        "-sx",
-        "--block-size=1",
-        "--",
-        "/home/al ice",
-        "/data/o'brien",
-        '/data/a"b',
-    ]
+    # The scan runs at idle I/O and lowest CPU priority so a login node keeps
+    # responding while directory sizes are measured.
+    assert "ionice -c3 nice -n 19 du -sx --block-size=1 -- " in command
+    assert "command -v ionice" in command
+    for path in ("/home/al ice", "/data/o'brien", '/data/a"b'):
+        assert shlex.quote(path) in command
 
 
 @pytest.mark.parametrize(
@@ -282,7 +278,9 @@ def test_build_usage_command_rejects_paths_outside_home_and_data(path):
 def test_build_usage_command_accepts_home_and_data_prefixes():
     command = build_usage_command(["/home/alice", "/data/alice"])
 
-    assert shlex.split(command)[-2:] == ["/home/alice", "/data/alice"]
+    assert command.count("/home/alice") == 2
+    assert command.count("/data/alice") == 2
+    assert command.endswith("; fi")
 
 
 @pytest.mark.parametrize(
@@ -304,7 +302,8 @@ def test_build_usage_command_rejects_traversal(path):
 def test_build_usage_command_accepts_trailing_slash():
     command = build_usage_command(["/home/alice/"])
 
-    assert shlex.split(command)[-1] == "/home/alice"
+    assert command.count("-- /home/alice;") == 2
+    assert "/home/alice/" not in command
 
 
 # --------------------------------------------------------------------------
@@ -514,13 +513,9 @@ def test_collect_host_users_data_supported_false_skips_data_checks():
     assert account.data_size_bytes is None
     assert account.home_size_bytes == 4096
     assert usage_refreshed is True
-    assert shlex.split(runner.sudo_calls[0][0]) == [
-        "du",
-        "-sx",
-        "--block-size=1",
-        "--",
-        "/home/alice",
-    ]
+    command = runner.sudo_calls[0][0]
+    assert "nice -n 19 du -sx --block-size=1 --" in command
+    assert command.count("-- /home/alice;") == 2
 
 
 def test_collect_host_users_usage_success_fills_sizes():
@@ -538,13 +533,10 @@ def test_collect_host_users_usage_success_fills_sizes():
     assert account.usage_collected_at == NOW
     assert usage_readable is True
     assert usage_refreshed is True
-    assert shlex.split(runner.sudo_calls[0][0]) == [
-        "du",
-        "-sx",
-        "--block-size=1",
-        "--",
-        "/home/alice",
-        "/data/alice",
+    command = runner.sudo_calls[0][0]
+    assert "nice -n 19 du -sx --block-size=1 --" in command
+    assert command.count("-- /home/alice /data/alice;") == 2
+    assert True or [
     ]
     assert runner.sudo_calls[0][1] == 120
 

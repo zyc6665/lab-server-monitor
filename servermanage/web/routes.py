@@ -986,8 +986,8 @@ def _build_overview(config, db_path) -> dict[str, Any]:
     disk_reports = {
         item["host_name"]: item for item in storage.get_all_disk_health(db_path)
     }
-    servers_by_name = {server.name: server for server in config.servers}
     addresses = {server.name: server.host for server in config.servers}
+    servers_by_name = {server.name: server for server in config.servers}
     mounts_by_host = {server.name: server.disk_mounts for server in config.servers}
 
     active_silences = storage.list_silences(db_path, active_only=True)
@@ -1134,7 +1134,25 @@ def _user_usage_readable(row: dict[str, Any]) -> bool:
     )
 
 
-def _present_user_row(host_name: str, row: dict[str, Any]) -> dict[str, Any]:
+def _usage_hint(row: dict[str, Any], server: Any) -> str:
+    """Explain why directory sizes are missing, so the fix is obvious.
+
+    ``du`` needs privileges to walk other people's homes; without a sudo
+    password the collector intentionally degrades to "sizes unknown" instead of
+    writing partial numbers.  Spell that out rather than showing a bare
+    "无权限读取".
+    """
+    if _user_usage_readable(row):
+        return ""
+    has_password = bool(getattr(server, "sudo_password", None))
+    if not has_password:
+        return "未配置 sudo 密码，无法统计目录占用；可在该主机设置里填写 sudo 密码（或配置免密 sudo）。"
+    return "上次统计失败或超时，将在下个统计周期重试。"
+
+
+def _present_user_row(
+    host_name: str, row: dict[str, Any], server: Any = None
+) -> dict[str, Any]:
     """Build an API row for a user that exists in the latest snapshot."""
     item = dict(row)
     item["host_name"] = host_name
@@ -1142,6 +1160,7 @@ def _present_user_row(host_name: str, row: dict[str, Any]) -> dict[str, Any]:
     item.setdefault("first_seen_at", None)
     item.setdefault("last_seen_at", None)
     item["usage_readable"] = _user_usage_readable(item)
+    item["usage_hint"] = _usage_hint(item, server)
     item["issues"] = _user_row_issues(item)
     return item
 
@@ -1191,6 +1210,7 @@ def _merge_user_rows(
     host_name: str,
     snapshot_rows: list[dict[str, Any]],
     baseline_rows: list[dict[str, Any]],
+    server: Any = None,
 ) -> list[dict[str, Any]]:
     """Merge one host's snapshot (present) and baseline (missing) rows."""
     rows: list[dict[str, Any]] = []
@@ -1200,7 +1220,7 @@ def _merge_user_rows(
         if not username:
             continue
         present.add(str(username))
-        rows.append(_present_user_row(host_name, row))
+        rows.append(_present_user_row(host_name, row, server))
     for row in baseline_rows:
         username = row.get("username")
         if not username or str(username) in present:
@@ -1295,12 +1315,14 @@ def _build_user_rows(
     host_name: str,
     db_path,
     tz=None,
+    server: Any = None,
 ) -> list[dict[str, Any]]:
     """Return the merged present/missing rows for one host."""
     rows = _merge_user_rows(
         host_name,
         storage.get_host_user_snapshot(host_name, db_path),
         storage.get_user_baseline(host_name, db_path),
+        server,
     )
     if tz is not None:
         for row in rows:
@@ -1373,6 +1395,7 @@ def _build_users_payload(
     all_rows: list[dict[str, Any]] = []
     statuses: dict[str, str] = {}
     addresses = {server.name: server.host for server in config.servers}
+    servers_by_name = {server.name: server for server in config.servers}
     for name in all_names:
         if not enabled[name]:
             statuses[name] = "disabled"
@@ -1389,7 +1412,7 @@ def _build_users_payload(
                 }
             )
             continue
-        rows = _build_user_rows(name, db_path, tz)
+        rows = _build_user_rows(name, db_path, tz, servers_by_name.get(name))
         state = storage.get_user_scan_state(name, db_path)
         host_status = _user_host_status(state)
         statuses[name] = host_status
@@ -1516,7 +1539,7 @@ def _build_host_detail(name: str, config, db_path) -> dict[str, Any] | None:
         "disk": disk,
         "alerts": alerts,
         "checks": storage.get_host_check_results(name, db_path),
-        "users": _build_user_rows(name, db_path, tz),
+        "users": _build_user_rows(name, db_path, tz, server),
     }
 
 

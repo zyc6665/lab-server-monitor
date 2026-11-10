@@ -116,7 +116,7 @@
     var mode = row[prefix + '_mode'] || '—';
     var text = owner + ':' + group + ' · ' + mode + ' · ' + formatBytes(row[prefix + '_size_bytes']);
     if (row.usage_readable === false && row[prefix + '_size_bytes'] === null) {
-      text += ' · 无权限读取占用';
+      text += ' · ' + (row.usage_hint || '暂时无法统计占用');
     }
     return text;
   }

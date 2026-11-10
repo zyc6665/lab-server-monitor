@@ -1767,3 +1767,11 @@ html[data-theme="dark"] .skeleton-row {
   background: linear-gradient(90deg, #1b2029 25%, rgba(148, 163, 184, 0.18) 37%, #1b2029 63%);
   background-size: 400% 100%;
 }
+
+/* v0.4.7：占用统计说明 */
+.my-usage-hint {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--muted, #5b6472);
+  line-height: 1.5;
+}
