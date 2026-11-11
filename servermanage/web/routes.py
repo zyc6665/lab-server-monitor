@@ -45,6 +45,7 @@ from flask import (
 
 from servermanage import (
     capacity,
+    diagnostics as diagnostics_mod,
     disk_capacity,
     host_import,
     host_probe,
@@ -1614,7 +1615,7 @@ def _build_host_detail(name: str, config, db_path) -> dict[str, Any] | None:
         storage.list_alerts_for_host(name, db_path, limit=20),
         tz,
     )
-    return {
+    detail = {
         "name": name,
         "host": addresses.get(name),
         "collected_at": (
@@ -1634,6 +1635,14 @@ def _build_host_detail(name: str, config, db_path) -> dict[str, Any] | None:
         "network": storage.fetch_host_network_rates(db_path, name),
         "users": _build_user_rows(name, db_path, tz, server),
     }
+    detail["diagnostics"] = diagnostics_mod.build_host_diagnostics(
+        detail,
+        poll_interval_seconds=config.app.poll_interval_seconds,
+    )
+    detail["diagnostics_summary"] = diagnostics_mod.summarize_diagnostics(
+        detail["diagnostics"]
+    )
+    return detail
 
 
 def _report_number(value: Any) -> float | None:

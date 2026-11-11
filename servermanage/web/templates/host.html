@@ -122,6 +122,33 @@
   {% endif %}
 </section>
 
+<section class="card" id="host-diagnostics" data-host-panel="overview">
+  <div class="section-head">
+    <h2>健康诊断</h2>
+    {% set diag = detail.diagnostics_summary or {} %}
+    {% if diag.get('attention') %}
+    <span class="badge badge-warning">{{ diag.get('attention') }} 项需关注</span>
+    {% elif diag %}
+    <span class="badge badge-online">全部正常</span>
+    {% endif %}
+  </div>
+  {% if detail.diagnostics %}
+  <ul class="diag-list">
+    {% for row in detail.diagnostics %}
+    <li class="diag-item diag-{{ row.level }}" data-diag-key="{{ row.key }}">
+      <span class="diag-dot" aria-hidden="true"></span>
+      <div class="diag-body">
+        <div class="diag-head"><strong>{{ row.title }}</strong><span class="diag-detail">{{ row.detail }}</span></div>
+        {% if row.hint %}<p class="diag-hint">{{ row.hint }}</p>{% endif %}
+      </div>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="empty">暂无诊断结论，等待一次采集后再看。</p>
+  {% endif %}
+</section>
+
 <section class="card" id="host-trend" data-host-panel="overview">
   <div class="section-head">
     <h2>历史趋势</h2>
