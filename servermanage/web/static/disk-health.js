@@ -85,7 +85,28 @@
 
   if (!hosts.length) { toggle.disabled = true; }
 
-  // 每台主机的盘位明细可以折叠，盘多时先看摘要。
+  // 每台主机的盘位明细可以折叠，盘多时先看摘要；折叠状态记在 localStorage，
+  // 下次打开还是你上次收好的样子。
+  var COLLAPSE_KEY = 'disk:collapsed';
+
+  function readCollapsed() {
+    try {
+      var raw = window.localStorage.getItem(COLLAPSE_KEY);
+      var parsed = raw ? JSON.parse(raw) : [];
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (error) {
+      return [];
+    }
+  }
+
+  function saveCollapsed(list) {
+    try {
+      window.localStorage.setItem(COLLAPSE_KEY, JSON.stringify(list));
+    } catch (error) {
+      /* 隐私模式忽略 */
+    }
+  }
+
   function setCollapsed(button, collapsed) {
     var block = button.closest('.disk-host');
     if (!block) { return; }
@@ -95,6 +116,25 @@
     button.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
     var caret = button.querySelector('.disk-caret');
     if (caret) { caret.textContent = collapsed ? '▸' : '▾'; }
+    var anchor = block.id || '';
+    if (anchor) {
+      var list = readCollapsed().filter(function (item) { return item !== anchor; });
+      if (collapsed) { list.push(anchor); }
+      saveCollapsed(list);
+    }
+  }
+
+  var collapsed = readCollapsed();
+  if (collapsed.length) {
+    Array.prototype.forEach.call(
+      document.querySelectorAll('[data-disk-collapse]'),
+      function (button) {
+        var block = button.closest('.disk-host');
+        if (block && collapsed.indexOf(block.id) !== -1) {
+          setCollapsed(button, true);
+        }
+      }
+    );
   }
 
   document.addEventListener('click', function (event) {
@@ -103,6 +143,17 @@
     event.preventDefault();
     setCollapsed(button, button.getAttribute('aria-expanded') !== 'false');
   });
+
+  // 从别处跳到某台主机时，别让折叠把它藏起来。
+  if (window.location.hash) {
+    var jumpTarget = document.getElementById(window.location.hash.replace('#', ''));
+    if (jumpTarget) {
+      var jumpButton = jumpTarget.querySelector('[data-disk-collapse]');
+      if (jumpButton && jumpButton.getAttribute('aria-expanded') === 'false') {
+        setCollapsed(jumpButton, false);
+      }
+    }
+  }
 
   var exportButton = document.getElementById('disk-export');
   if (exportButton) {
