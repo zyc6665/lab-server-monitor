@@ -181,38 +181,51 @@
       {% if detail.success %}采集成功{% elif detail.success is none %}等待首次采集{% else %}采集失败{% endif %}
     </span>
   </div>
-  <dl class="kv-grid">
-    <div class="kv"><dt>主机地址</dt><dd class="mono">{{ detail.host or '—' }}</dd></div>
-    <div class="kv"><dt>采集时间</dt><dd class="mono"{% if detail.collected_at %} title="{{ detail.collected_at }}"{% endif %}>{{ detail.collected_at|stamp }}</dd></div>
-    <div class="kv"><dt>操作系统</dt><dd>{{ metrics.os_pretty_name or '—' }}</dd></div>
-    <div class="kv"><dt>内核版本</dt><dd>{{ metrics.kernel_version or '—' }}</dd></div>
-    <div class="kv"><dt>运行时长</dt><dd>{{ metrics.uptime or '—' }}</dd></div>
-    <div class="kv"><dt>CPU 核心</dt><dd>{{ metrics.cpu_core_count if metrics.cpu_core_count is not none else '—' }}</dd></div>
-    <div class="kv"><dt>CPU 使用率</dt><dd>{{ pct(metrics.cpu_usage_percent) }}</dd></div>
-    <div class="kv"><dt>内存</dt><dd>
-      {% if metrics.memory %}{{ metrics.memory.used_mb }} / {{ metrics.memory.total_mb }} MB{% else %}—{% endif %}
-    </dd></div>
-    <div class="kv"><dt>负载 (1/5/15)</dt><dd>
-      {% if metrics.load_average %}
-        {{ metrics.load_average.load_1 }} / {{ metrics.load_average.load_5 }} / {{ metrics.load_average.load_15 }}
-      {% else %}—{% endif %}
-    </dd></div>
-    <div class="kv"><dt>网络吞吐</dt><dd class="mono net-throughput">
+  <div class="kv-group">
+    <h3 class="kv-group-title">系统</h3>
+    <dl class="kv-grid">
+      <div class="kv"><dt>主机地址</dt><dd class="mono">{{ detail.host or '—' }}</dd></div>
+      <div class="kv"><dt>采集时间</dt><dd class="mono"{% if detail.collected_at %} title="{{ detail.collected_at }}"{% endif %}>{{ detail.collected_at|stamp }}</dd></div>
+      <div class="kv"><dt>操作系统</dt><dd>{{ metrics.os_pretty_name or '—' }}</dd></div>
+      <div class="kv"><dt>内核版本</dt><dd>{{ metrics.kernel_version or '—' }}</dd></div>
+      <div class="kv"><dt>运行时长</dt><dd>{{ metrics.uptime or '—' }}</dd></div>
+    </dl>
+  </div>
+  <div class="kv-group">
+    <h3 class="kv-group-title">资源</h3>
+    <dl class="kv-grid">
+      <div class="kv"><dt>CPU 核心</dt><dd>{{ metrics.cpu_core_count if metrics.cpu_core_count is not none else '—' }}</dd></div>
+      <div class="kv"><dt>CPU 使用率</dt><dd>{{ pct(metrics.cpu_usage_percent) }}</dd></div>
+      <div class="kv"><dt>内存</dt><dd>
+        {% if metrics.memory %}{{ metrics.memory.used_mb }} / {{ metrics.memory.total_mb }} MB{% else %}—{% endif %}
+      </dd></div>
+      <div class="kv"><dt>负载 (1/5/15)</dt><dd>
+        {% if metrics.load_average %}
+          {{ metrics.load_average.load_1 }} / {{ metrics.load_average.load_5 }} / {{ metrics.load_average.load_15 }}
+        {% else %}—{% endif %}
+      </dd></div>
+    </dl>
+  </div>
+  <div class="kv-group">
+    <h3 class="kv-group-title">网络与温度</h3>
+    <dl class="kv-grid">
+      <div class="kv"><dt>网络吞吐</dt><dd class="mono net-throughput">
       {% set net = detail.network or {} %}
       {% if net.rx_bytes_per_second is not none or net.tx_bytes_per_second is not none %}
-        <span class="net-rx">↓ {{ net.rx_bytes_per_second|rate }}</span>
-        <span class="net-tx">↑ {{ net.tx_bytes_per_second|rate }}</span>
-      {% else %}—{% endif %}
-    </dd></div>
-    <div class="kv kv-thermal"><dt>温度</dt><dd>
-      {% if metrics.thermal_zones %}
-        {% set hottest = metrics.thermal_zones[0] %}
-        {% set hot_class = 'is-critical' if hottest.celsius >= 85 else ('is-hot' if hottest.celsius >= 70 else '') %}
-        <span class="thermal-max {{ hot_class }}">{{ '%.1f'|format(hottest.celsius) }} °C</span>
-        <span class="thermal-zones">{% for zone in metrics.thermal_zones[:4] %}<span class="thermal-chip" title="{{ zone.label }}">{{ zone.label }} {{ '%.0f'|format(zone.celsius) }}°</span>{% endfor %}{% if metrics.thermal_zones|length > 4 %}<span class="thermal-more">+{{ metrics.thermal_zones|length - 4 }}</span>{% endif %}</span>
-      {% else %}—{% endif %}
-    </dd></div>
-  </dl>
+          <span class="net-rx">↓ {{ net.rx_bytes_per_second|rate }}</span>
+          <span class="net-tx">↑ {{ net.tx_bytes_per_second|rate }}</span>
+        {% else %}—{% endif %}
+      </dd></div>
+      <div class="kv kv-thermal"><dt>温度</dt><dd>
+        {% if metrics.thermal_zones %}
+          {% set hottest = metrics.thermal_zones[0] %}
+          {% set hot_class = 'is-critical' if hottest.celsius >= 85 else ('is-hot' if hottest.celsius >= 70 else '') %}
+          <span class="thermal-max {{ hot_class }}">{{ '%.1f'|format(hottest.celsius) }} °C</span>
+          <span class="thermal-zones">{% for zone in metrics.thermal_zones[:4] %}<span class="thermal-chip" title="{{ zone.label }}">{{ zone.label }} {{ '%.0f'|format(zone.celsius) }}°</span>{% endfor %}{% if metrics.thermal_zones|length > 4 %}<span class="thermal-more">+{{ metrics.thermal_zones|length - 4 }}</span>{% endif %}</span>
+        {% else %}—{% endif %}
+      </dd></div>
+    </dl>
+  </div>
 </section>
 
 <section class="card" id="logged-in-users" data-host-panel="sessions">

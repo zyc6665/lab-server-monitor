@@ -3462,3 +3462,17 @@ html[data-theme="dark"] .disk-filter .disk-search { background: var(--surface-su
 @media (max-width: 760px) {
   .disk-filter .disk-search { max-width: none; }
 }
+
+/* -- v0.1.109 主机指标分区 -- */
+.kv-group + .kv-group { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--border); }
+.kv-group-title {
+  margin: 0 0 8px;
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: .06em;
+  color: var(--text-muted);
+}
+.kv-group .kv-grid { margin: 0; }
+@media (max-width: 760px) {
+  .kv-group + .kv-group { margin-top: 14px; padding-top: 12px; }
+}
