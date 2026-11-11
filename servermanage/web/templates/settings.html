@@ -13,6 +13,25 @@
     {% endif %}
   </div>
 
+  <section class="card settings-summary" id="settings-summary" aria-label="当前配置摘要">
+    <div class="summary-chips">
+      <span class="summary-chip"><span class="summary-label">版本</span><b>v{{ settings.version }}</b></span>
+      <span class="summary-chip"><span class="summary-label">模式</span><b>{{ '用户模式' if settings.monitoring.mode == 'user' else '管理员模式' }}</b></span>
+      <span class="summary-chip"><span class="summary-label">主机</span><b>{{ config.servers|length }} 台</b></span>
+      <span class="summary-chip"><span class="summary-label">轮询</span><b>{{ (settings.monitoring.poll_interval_seconds // 60) }} 分钟</b></span>
+      <span class="summary-chip"><span class="summary-label">磁盘健康</span><b>{{ (settings.monitoring.disk_poll_interval_seconds // 3600) }} 小时</b></span>
+      <span class="summary-chip"><span class="summary-label">监听</span><b>{{ config.dashboard.host }}:{{ config.dashboard.port }}</b></span>
+      <span class="summary-chip"><span class="summary-label">告警</span>
+        <b>
+          {%- if settings.alerts.desktop_notification %}<span class="summary-flag is-on">桌面</span>{% endif -%}
+          {%- if settings.alerts.email %}<span class="summary-flag is-on">邮件</span>{% endif -%}
+          {%- if settings.alerts.webhook.enabled %}<span class="summary-flag is-on">Webhook</span>{% endif -%}
+          {%- if not settings.alerts.desktop_notification and not settings.alerts.email and not settings.alerts.webhook.enabled %}<span class="summary-flag">未启用</span>{% endif -%}
+        </b>
+      </span>
+    </div>
+  </section>
+
   <nav class="settings-tabs" id="settings-tabs" aria-label="设置分区">
     <button type="button" class="settings-tab active" data-settings-tab="monitoring">监控与存储</button>
     <button type="button" class="settings-tab" data-settings-tab="hosts">主机与 SSH</button>
