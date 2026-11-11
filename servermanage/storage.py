@@ -1004,8 +1004,8 @@ def fetch_overview_history(
         raise ValueError("offset_days must be zero or positive")
     if not db_path.exists():
         return []
-    if range_key not in ("24h", "7d", "30d"):
-        raise ValueError("range_key must be 24h, 7d or 30d")
+    if range_key not in ("24h", "7d", "30d", "90d"):
+        raise ValueError("range_key must be 24h, 7d, 30d or 90d")
     current = now or datetime.now(timezone.utc)
     if current.tzinfo is None:
         current = current.replace(tzinfo=timezone.utc)
@@ -1048,7 +1048,7 @@ def fetch_overview_history(
             for row in rows
         ]
 
-    days = 7 if range_key == "7d" else 30
+    days = {"7d": 7, "30d": 30, "90d": 90}[range_key]
     start_day = (current.astimezone(tz).date() - timedelta(days=days - 1)).isoformat()
     end_day = current.astimezone(tz).date().isoformat()
     with sqlite3.connect(db_path) as conn:

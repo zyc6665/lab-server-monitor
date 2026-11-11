@@ -2356,7 +2356,7 @@ def register_routes(app: Flask) -> None:
     @app.get("/api/overview/history")
     def api_overview_history():
         range_key = request.args.get("range", "24h")
-        if range_key not in ("24h", "7d", "30d"):
+        if range_key not in ("24h", "7d", "30d", "90d"):
             return jsonify({"error": "invalid_range"}), 400
         config = _config(app)
         tz = resolve_timezone(config.app.timezone)
@@ -2374,7 +2374,7 @@ def register_routes(app: Flask) -> None:
                     _db_path(app),
                     range_key=range_key,
                     tz=tz,
-                    offset_days=7 if range_key == "7d" else 30,
+                    offset_days={"7d": 7, "30d": 30, "90d": 90}[range_key],
                 )
         return jsonify(payload)
 
