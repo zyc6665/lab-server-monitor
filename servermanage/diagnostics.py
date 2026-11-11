@@ -263,6 +263,9 @@ def _disk_health_row(detail: dict[str, Any]) -> dict[str, str] | None:
             disk.get("message") or "未获取到 storcli 输出。",
             "确认 storcli 路径与 sudo 免密配置；没有阵列卡的主机可忽略。",
         )
+    if not drives:
+        # 状态是 ok 但没有明细时，说“0 块盘全部健康”会误导，宁可不显示这一行。
+        return None
     return _row("disk_health", LEVEL_OK, "磁盘阵列", f"{total} 块盘全部健康。")
 
 

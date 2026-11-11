@@ -450,6 +450,57 @@
     fromHash();
   }
 
+  function diagSummaryText() {
+    var card = document.getElementById('host-diagnostics');
+    if (!card) return '';
+    var hostName = card.getAttribute('data-host-name') || '';
+    var lines = ['主机健康诊断 · ' + hostName + ' · ' + stamp(new Date().toISOString())];
+    var items = card.querySelectorAll('.diag-item');
+    for (var i = 0; i < items.length; i += 1) {
+      var item = items[i];
+      var level = item.classList.contains('diag-crit')
+        ? '严重'
+        : item.classList.contains('diag-warn')
+          ? '需关注'
+          : '正常';
+      var titleEl = item.querySelector('strong');
+      var detailEl = item.querySelector('.diag-detail');
+      var hintEl = item.querySelector('.diag-hint');
+      var line = '- [' + level + '] ' + (titleEl ? titleEl.textContent : '')
+        + '：' + (detailEl ? detailEl.textContent : '');
+      if (hintEl && level !== '正常') {
+        line += '（建议：' + hintEl.textContent + '）';
+      }
+      lines.push(line);
+    }
+    return lines.join('\n');
+  }
+
+  function bindDiagCopy() {
+    var button = document.getElementById('host-diag-copy');
+    if (!button) return;
+    button.addEventListener('click', function () {
+      var text = diagSummaryText();
+      if (!text) return;
+      var done = function () {
+        var original = button.textContent;
+        button.textContent = '已复制';
+        setTimeout(function () { button.textContent = original; }, 1600);
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(done, done);
+      } else {
+        var area = document.createElement('textarea');
+        area.value = text;
+        document.body.appendChild(area);
+        area.select();
+        try { document.execCommand('copy'); } catch (err) { /* ignore */ }
+        document.body.removeChild(area);
+        done();
+      }
+    });
+  }
+
   function bindCollectNow() {
     var button = document.getElementById('host-collect-now');
     var notice = document.getElementById('host-collect-notice');
@@ -530,6 +581,7 @@
   bindRanges();
   bindActions();
   bindCollectNow();
+  bindDiagCopy();
   bindContainerFilter();
   loadHistory('24h');
   loadChecks();

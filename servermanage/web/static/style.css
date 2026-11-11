@@ -2902,3 +2902,24 @@ html[data-theme="dark"] .badge-warning {
 @media (max-width: 760px) {
   .diag-head { flex-direction: column; gap: 2px; }
 }
+
+/* -- v0.1.86 诊断摘要复制 -- */
+.diag-head-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+.diag-head-actions .btn-link {
+  font-size: 12.5px;
+  padding: 2px 4px;
+  background: none;
+  border: 0;
+  color: var(--accent);
+  cursor: pointer;
+}
+.diag-head-actions .btn-link:hover { text-decoration: underline; }
+.diag-head-actions .btn-link:focus-visible {
+  outline: 2px solid rgba(44, 92, 246, .45);
+  outline-offset: 2px;
+  border-radius: 6px;
+}

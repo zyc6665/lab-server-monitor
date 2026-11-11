@@ -122,15 +122,20 @@
   {% endif %}
 </section>
 
-<section class="card" id="host-diagnostics" data-host-panel="overview">
+<section class="card" id="host-diagnostics" data-host-panel="overview" data-host-name="{{ detail.name }}">
   <div class="section-head">
     <h2>健康诊断</h2>
-    {% set diag = detail.diagnostics_summary or {} %}
-    {% if diag.get('attention') %}
-    <span class="badge badge-warning">{{ diag.get('attention') }} 项需关注</span>
-    {% elif diag %}
-    <span class="badge badge-online">全部正常</span>
-    {% endif %}
+    <div class="diag-head-actions">
+      {% set diag = detail.diagnostics_summary or {} %}
+      {% if diag.get('attention') %}
+      <span class="badge badge-warning">{{ diag.get('attention') }} 项需关注</span>
+      {% elif diag %}
+      <span class="badge badge-online">全部正常</span>
+      {% endif %}
+      {% if detail.diagnostics %}
+      <button type="button" class="btn-link" id="host-diag-copy">复制摘要</button>
+      {% endif %}
+    </div>
   </div>
   {% if detail.diagnostics %}
   <ul class="diag-list">
