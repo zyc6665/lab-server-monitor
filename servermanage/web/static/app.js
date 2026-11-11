@@ -660,6 +660,7 @@
     tr.setAttribute('data-online', host.online ? '1' : '0');
     tr.setAttribute('data-silenced', host.silenced ? '1' : '0');
     tr.setAttribute('data-alert-count', host.active_alert_count || 0);
+    tr.setAttribute('data-attention', hostAttentionReasons(host).length);
     tr.setAttribute(
       'data-search',
       [host.name, host.host, host.group || '未分组', host.owner, host.location]
@@ -867,6 +868,7 @@
     card.setAttribute('data-online', host.online ? '1' : '0');
     card.setAttribute('data-silenced', host.silenced ? '1' : '0');
     card.setAttribute('data-alert-count', host.active_alert_count || 0);
+    card.setAttribute('data-attention', hostAttentionReasons(host).length);
     card.setAttribute(
       'data-search',
       [host.name, host.host, host.group || '未分组', host.owner, host.location]
@@ -974,6 +976,7 @@
     if (status === 'online' && tr.getAttribute('data-online') !== '1') { return false; }
     if (status === 'offline' && tr.getAttribute('data-online') !== '0') { return false; }
     if (status === 'alert' && Number(tr.getAttribute('data-alert-count') || 0) <= 0) { return false; }
+    if (status === 'attention' && Number(tr.getAttribute('data-attention') || 0) <= 0) { return false; }
     if (status === 'silenced' && tr.getAttribute('data-silenced') !== '1') { return false; }
     if (keyword) {
       var haystack = (tr.getAttribute('data-search') || tr.textContent || '').toLowerCase();
