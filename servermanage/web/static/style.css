@@ -3001,3 +3001,54 @@ html[data-theme="dark"] .save-notice-action {
   background: var(--surface-raised);
   border-color: #2a3a52;
 }
+
+/* -- v0.1.89 后端断连提示 -- */
+.conn-banner {
+  position: sticky;
+  top: 0;
+  z-index: 90;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 9px var(--gutter);
+  font-size: 12.5px;
+  color: #b91c1c;
+  background: #fef2f2;
+  border-bottom: 1px solid #fecaca;
+}
+.conn-banner[hidden] { display: none !important; }
+.conn-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #dc2626;
+  box-shadow: 0 0 0 3px rgba(220, 38, 38, .16);
+  animation: conn-pulse 1.6s ease-in-out infinite;
+}
+.conn-banner-ok {
+  color: #15803d;
+  background: #f0fdf4;
+  border-bottom-color: #bbf7d0;
+}
+.conn-banner-ok .conn-dot {
+  background: #16a34a;
+  box-shadow: 0 0 0 3px rgba(22, 163, 74, .18);
+  animation: none;
+}
+@keyframes conn-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: .35; }
+}
+html[data-theme="dark"] .conn-banner {
+  color: #fca5a5;
+  background: #2a1215;
+  border-bottom-color: #4c1d24;
+}
+html[data-theme="dark"] .conn-banner-ok {
+  color: #86efac;
+  background: #0f2418;
+  border-bottom-color: #14532d;
+}
+@media (prefers-reduced-motion: reduce) {
+  .conn-dot { animation: none; }
+}

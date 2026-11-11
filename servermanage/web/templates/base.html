@@ -10,6 +10,10 @@
   {% block head %}{% endblock %}
 </head>
 <body>
+  <div class="conn-banner" id="conn-banner" hidden role="status" aria-live="polite">
+    <span class="conn-dot"></span>
+    <span class="conn-text" id="conn-text">与后台的连接已断开，正在自动重试…</span>
+  </div>
   {# Custom title bar: always rendered so the browser build stays harmless.
      The whole bar is a drag region; interactive controls opt out via no-drag. #}
   <div class="titlebar" id="app-titlebar">

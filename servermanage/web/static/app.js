@@ -2061,7 +2061,57 @@
     });
   }
 
+  var CONNECTION_WATCH_MS = 15000;
+  var connectionTimer = null;
+  var connectionLost = false;
+
+  function setConnectionBanner(lost, recovered) {
+    var banner = document.getElementById('conn-banner');
+    if (!banner) { return; }
+    var text = document.getElementById('conn-text');
+    if (!lost) {
+      if (connectionLost && recovered) {
+        banner.className = 'conn-banner conn-banner-ok';
+        if (text) { text.textContent = '已恢复与后台的连接'; }
+        banner.hidden = false;
+        setTimeout(function () {
+          if (!connectionLost) { banner.hidden = true; }
+        }, 4000);
+      } else {
+        banner.hidden = true;
+      }
+      connectionLost = false;
+      return;
+    }
+    connectionLost = true;
+    banner.className = 'conn-banner';
+    if (text) { text.textContent = '与后台的连接已断开，正在自动重试…'; }
+    banner.hidden = false;
+  }
+
+  function checkConnection() {
+    return fetch('/api/runtime', { cache: 'no-store' })
+      .then(function (response) {
+        setConnectionBanner(!response.ok, response.ok);
+        return response.ok;
+      })
+      .catch(function () {
+        setConnectionBanner(true, false);
+        return false;
+      });
+  }
+
+  function startConnectionWatch() {
+    if (connectionTimer) { return; }
+    connectionTimer = setInterval(checkConnection, CONNECTION_WATCH_MS);
+    window.addEventListener('online', checkConnection);
+    document.addEventListener('visibilitychange', function () {
+      if (!document.hidden) { checkConnection(); }
+    });
+  }
+
   function init() {
+    startConnectionWatch();
     if (!hasDashboard()) { return; }
 
     setupCardCollapse();

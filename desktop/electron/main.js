@@ -47,6 +47,11 @@ let updater = null;
 let quitting = false;
 let cleanupDone = false;
 let currentRuntimeUrl = '';
+let recoveryTimer = null;
+let recoveryAttempts = 0;
+
+// 后端崩溃后的重试节奏：2s、5s、10s、20s，之后固定 30s 一次，永不放弃。
+const RECOVERY_DELAYS_MS = [2000, 5000, 10000, 20000, 30000];
 
 function logFilePath() {
   return path.join(logsDir(appDir), 'desktop.log');
@@ -242,6 +247,38 @@ function registerIpc() {
   });
 }
 
+function scheduleBackendRecovery() {
+  if (quitting || cleanupDone || recoveryTimer) {
+    return;
+  }
+  const index = Math.min(recoveryAttempts, RECOVERY_DELAYS_MS.length - 1);
+  const delay = RECOVERY_DELAYS_MS[index];
+  recoveryAttempts += 1;
+  appendLog(`scheduling backend recovery in ${delay}ms (attempt ${recoveryAttempts})`);
+  recoveryTimer = setTimeout(() => {
+    recoveryTimer = null;
+    attemptBackendRecovery().catch((error) => {
+      appendLog(`backend recovery failed: ${error.message}`);
+      scheduleBackendRecovery();
+    });
+  }, delay);
+}
+
+async function attemptBackendRecovery() {
+  if (quitting || cleanupDone || !backend) {
+    return;
+  }
+  appendLog('restarting backend after unexpected exit');
+  await backend.start();
+  const runtime = await backend.waitForRuntime();
+  currentRuntimeUrl = runtime.url;
+  recoveryAttempts = 0;
+  appendLog(`backend recovered at ${runtime.url}`);
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    await mainWindow.loadURL(runtime.url);
+  }
+}
+
 async function startBackendAndLoad() {
   backend = createBackendController({
     appDir,
@@ -253,6 +290,7 @@ async function startBackendAndLoad() {
     },
     onUnexpectedExit: (code, signal) => {
       appendLog(`backend exited unexpectedly (code=${code}, signal=${signal})`);
+      scheduleBackendRecovery();
     },
   });
 
@@ -343,6 +381,10 @@ app.on('before-quit', (event) => {
   }
   event.preventDefault();
   cleanupDone = true;
+  if (recoveryTimer) {
+    clearTimeout(recoveryTimer);
+    recoveryTimer = null;
+  }
   backend
     .stop()
     .catch((error) => appendLog(`failed to stop backend: ${error.stack || error.message}`))
