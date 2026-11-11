@@ -635,13 +635,27 @@
 
   var ATTENTION_LIMITS = { cpu: 90, memory: 90, disk: 90, gpu: 90, temperature: 70 };
 
+  // 关注项按"影响面"排序：检查失败/坏盘这类硬故障在前，占用类指标居中，
+  // 活动告警只是结果，放在最后。数字越大越靠前。
+  var ATTENTION_WEIGHTS = {
+    checks: 90,
+    diskHealth: 80,
+    temperature: 70,
+    disk: 65,
+    memory: 60,
+    cpu: 55,
+    gpu: 50,
+    alerts: 40,
+  };
+
   function hostAttentionReasons(host) {
-    var reasons = [];
+    var entries = [];
+    function add(weight, text) { entries.push({ weight: weight, text: text }); }
     var checks = host.checks || {};
-    if (checks.failed) { reasons.push(checks.failed + ' 项服务检查异常'); }
+    if (checks.failed) { add(ATTENTION_WEIGHTS.checks, checks.failed + ' 项服务检查异常'); }
     var disk = host.disk_health || {};
-    if (disk.critical) { reasons.push(disk.critical + ' 块盘严重'); }
-    else if (disk.warning) { reasons.push(disk.warning + ' 块盘告警'); }
+    if (disk.critical) { add(ATTENTION_WEIGHTS.diskHealth + 5, disk.critical + ' 块盘严重'); }
+    else if (disk.warning) { add(ATTENTION_WEIGHTS.diskHealth, disk.warning + ' 块盘告警'); }
     var usage = [
       ['cpu_percent', 'CPU', 'cpu'],
       ['memory_percent', '内存', 'memory'],
@@ -651,14 +665,15 @@
     usage.forEach(function (item) {
       var value = host[item[0]];
       if (typeof value === 'number' && value >= ATTENTION_LIMITS[item[2]]) {
-        reasons.push(item[1] + ' ' + Math.round(value) + '%');
+        add(ATTENTION_WEIGHTS[item[2]], item[1] + ' ' + Math.round(value) + '%');
       }
     });
     if (typeof host.temperature_c === 'number' && host.temperature_c >= ATTENTION_LIMITS.temperature) {
-      reasons.push('温度 ' + Math.round(host.temperature_c) + ' °C');
+      add(ATTENTION_WEIGHTS.temperature, '温度 ' + Math.round(host.temperature_c) + ' °C');
     }
-    if (host.active_alert_count > 0) { reasons.push(host.active_alert_count + ' 条活动告警'); }
-    return reasons;
+    if (host.active_alert_count > 0) { add(ATTENTION_WEIGHTS.alerts, host.active_alert_count + ' 条活动告警'); }
+    entries.sort(function (a, b) { return b.weight - a.weight; });
+    return entries.map(function (entry) { return entry.text; });
   }
 
   function attentionChip(host, compact) {
