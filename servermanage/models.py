@@ -358,6 +358,8 @@ class HostMetrics:
     top_memory_processes: list[ProcessRow] = field(default_factory=list)
     gpu_summary: list[GPUSummaryRow] = field(default_factory=list)
     gpu_processes: list[GPUProcessRow] = field(default_factory=list)
+    net_rx_bytes: int | None = None
+    net_tx_bytes: int | None = None
 
 
 @dataclass(frozen=True)

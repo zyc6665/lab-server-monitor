@@ -2540,3 +2540,9 @@ html[data-theme="dark"] .host-card { background: var(--surface-raised); }
 html[data-theme="dark"] .view-toggle { background: #0f1726; border-color: #1f2b3d; }
 html[data-theme="dark"] .view-tab.active { background: #1b2739; color: #e5edf7; }
 @media (max-width: 640px) { .host-card-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+/* -- v0.1.75 网络吞吐 -- */
+.net-throughput { display: inline-flex; align-items: baseline; gap: 10px; }
+.net-throughput .net-rx { color: var(--accent); font-weight: 600; }
+.net-throughput .net-tx { color: var(--text-muted); }
+html[data-theme="dark"] .net-throughput .net-rx { color: #7aa2ff; }

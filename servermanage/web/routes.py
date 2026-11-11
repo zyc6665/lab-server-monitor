@@ -1605,6 +1605,7 @@ def _build_host_detail(name: str, config, db_path) -> dict[str, Any] | None:
         "alerts": alerts,
         "checks": storage.get_host_check_results(name, db_path),
         "check_history": storage.get_host_check_history(name, db_path),
+        "network": storage.fetch_host_network_rates(db_path, name),
         "users": _build_user_rows(name, db_path, tz, server),
     }
 

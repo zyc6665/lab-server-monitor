@@ -16,6 +16,7 @@ from servermanage.commands import (
     HOSTNAME_STAGE,
     KERNEL_STAGE,
     MEMORY_STAGE,
+    NET_STAGE,
     OS_STAGE,
     PID_CONTAINER_STAGE,
     PID_USER_STAGE,
@@ -474,6 +475,28 @@ def _build_process_counts_by_user(
     return rows
 
 
+def parse_net_totals(text: str | None) -> tuple[int | None, int | None]:
+    """Parse aggregated ``rx tx`` byte counters produced by the probe command.
+
+    ``/proc/net/dev`` reports cumulative counters; the rate is derived later by
+    comparing two consecutive samples, so this helper only validates the two
+    integers and rejects anything unexpected instead of guessing.
+    """
+    if not text:
+        return None, None
+    parts = text.split()
+    if len(parts) < 2:
+        return None, None
+    try:
+        rx = int(float(parts[0]))
+        tx = int(float(parts[1]))
+    except (TypeError, ValueError):
+        return None, None
+    if rx < 0 or tx < 0:
+        return None, None
+    return rx, tx
+
+
 def parse_host_metrics(results: dict[str, CommandResult], host: HostConfig) -> HostMetrics:
     uptime_output = _stdout_if_ok(results, UPTIME_STAGE)
     gpu_summary_rows, uuid_to_index = parse_nvidia_smi_summary_with_uuid(
@@ -508,6 +531,9 @@ def parse_host_metrics(results: dict[str, CommandResult], host: HostConfig) -> H
         if pid_to_user
         else parse_process_counts(_stdout_if_ok_any(results, [PROCESS_COUNTS_STAGE, "process_counts_by_user"]))
     )
+    net_rx_bytes, net_tx_bytes = parse_net_totals(
+        _stdout_if_ok_any(results, [NET_STAGE, "net_dev"])
+    )
     return HostMetrics(
         hostname=_first_line(_stdout_if_ok(results, HOSTNAME_STAGE)) or host.name,
         os_pretty_name=parse_os_pretty_name(_stdout_if_ok(results, OS_STAGE)),
@@ -531,4 +557,6 @@ def parse_host_metrics(results: dict[str, CommandResult], host: HostConfig) -> H
             pid_to_user=pid_to_user,
             pid_to_command=pid_to_command,
         ),
+        net_rx_bytes=net_rx_bytes,
+        net_tx_bytes=net_tx_bytes,
     )

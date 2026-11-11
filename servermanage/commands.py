@@ -8,6 +8,7 @@ CPU_CORES_STAGE = "cpu_cores"
 CPU_USAGE_STAGE = "cpu_usage"
 MEMORY_STAGE = "memory"
 DISK_STAGE = "disk"
+NET_STAGE = "net"
 WHO_STAGE = "who"
 TOTAL_PROCESSES_STAGE = "total_processes"
 PROCESS_COUNTS_STAGE = "process_counts"
@@ -38,6 +39,10 @@ def build_command_map() -> dict[str, str]:
         ),
         MEMORY_STAGE: "free -m",
         DISK_STAGE: "df -hP",
+        NET_STAGE: (
+            "awk -F'[: ]+' 'NR>2 && $2 != \"lo\" {rx += $3; tx += $11} "
+            "END {printf \"%.0f %.0f\\n\", rx, tx}' /proc/net/dev"
+        ),
         WHO_STAGE: "who",
         TOTAL_PROCESSES_STAGE: "ps -e --no-headers | wc -l",
         PROCESS_COUNTS_STAGE: "ps -eo user= | sort | uniq -c | sort -nr",
@@ -74,6 +79,7 @@ __all__ = [
     "CPU_USAGE_STAGE",
     "MEMORY_STAGE",
     "DISK_STAGE",
+    "NET_STAGE",
     "WHO_STAGE",
     "TOTAL_PROCESSES_STAGE",
     "PROCESS_COUNTS_STAGE",

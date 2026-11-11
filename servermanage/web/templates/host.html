@@ -162,6 +162,13 @@
         {{ metrics.load_average.load_1 }} / {{ metrics.load_average.load_5 }} / {{ metrics.load_average.load_15 }}
       {% else %}—{% endif %}
     </dd></div>
+    <div class="kv"><dt>网络吞吐</dt><dd class="mono net-throughput">
+      {% set net = detail.network or {} %}
+      {% if net.rx_bytes_per_second is not none or net.tx_bytes_per_second is not none %}
+        <span class="net-rx">↓ {{ net.rx_bytes_per_second|rate }}</span>
+        <span class="net-tx">↑ {{ net.tx_bytes_per_second|rate }}</span>
+      {% else %}—{% endif %}
+    </dd></div>
   </dl>
 </section>
 

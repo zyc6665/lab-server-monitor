@@ -47,7 +47,9 @@ CREATE TABLE IF NOT EXISTS host_metrics_history (
     logged_in_user_count INTEGER,
     load_1 REAL,
     load_5 REAL,
-    load_15 REAL
+    load_15 REAL,
+    net_rx_bytes INTEGER,
+    net_tx_bytes INTEGER
 );
 """
 
@@ -440,6 +442,19 @@ def _migrate_host_daily_summary(conn: sqlite3.Connection, tz_key: str) -> None:
     conn.execute("DROP TABLE host_daily_summary_legacy")
 
 
+def _ensure_host_metrics_columns(conn: sqlite3.Connection) -> None:
+    """Add network counter columns to databases created before v0.1.75.
+
+    ``CREATE TABLE IF NOT EXISTS`` never touches an existing table, so older
+    installs need an explicit migration.  Both columns are nullable, which keeps
+    historical rows valid and lets the UI hide the metric when it is unknown.
+    """
+    existing = {row[1] for row in conn.execute("PRAGMA table_info(host_metrics_history)")}
+    for column in ("net_rx_bytes", "net_tx_bytes"):
+        if column not in existing:
+            conn.execute(f"ALTER TABLE host_metrics_history ADD COLUMN {column} INTEGER")
+
+
 def init_storage(db_path: Path, *, daily_summary_tz: str | None = "UTC") -> None:
     db_path = Path(db_path)
     db_path.parent.mkdir(parents=True, exist_ok=True)
@@ -449,6 +464,7 @@ def init_storage(db_path: Path, *, daily_summary_tz: str | None = "UTC") -> None
         # one-time compaction.
         conn.execute("PRAGMA auto_vacuum = INCREMENTAL")
         conn.executescript(_CREATE_TABLE_SQL)
+        _ensure_host_metrics_columns(conn)
         conn.executescript(_CREATE_INDEX_SQL)
         conn.executescript(_CREATE_EXTENDED_TABLES_SQL)
         if daily_summary_tz is not None:
@@ -641,6 +657,8 @@ def persist_host_reports(
                 load.load_1 if load else None,
                 load.load_5 if load else None,
                 load.load_15 if load else None,
+                metrics.net_rx_bytes,
+                metrics.net_tx_bytes,
             )
         )
         memory_used = memory.used_mb if memory else None
@@ -688,8 +706,9 @@ def persist_host_reports(
                 collected_at, host_name, host, success, cpu_usage_percent,
                 memory_used_mb, memory_total_mb, disk_used_percent,
                 gpu_utilization_percent, gpu_memory_used_mb, gpu_memory_total_mb,
-                total_processes, logged_in_user_count, load_1, load_5, load_15
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                total_processes, logged_in_user_count, load_1, load_5, load_15,
+                net_rx_bytes, net_tx_bytes
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             rows,
         )
@@ -1842,6 +1861,64 @@ def fetch_host_sparklines(
     return {
         name: {"cpu": series["cpu"][-points:], "memory": series["memory"][-points:]}
         for name, series in grouped.items()
+    }
+
+
+def fetch_host_network_rates(
+    db_path: Path,
+    host_name: str,
+) -> dict[str, float | None]:
+    """Return instantaneous rx/tx bytes per second for one host.
+
+    ``/proc/net/dev`` only exposes cumulative counters, so the rate comes from
+    the last two samples.  A negative delta means the counter was reset (reboot
+    or interface re-created) and is reported as unknown instead of a bogus
+    negative number.
+    """
+    empty: dict[str, float | None] = {
+        "rx_bytes_per_second": None,
+        "tx_bytes_per_second": None,
+    }
+    db_path = Path(db_path)
+    if not db_path.exists():
+        return empty
+
+    with sqlite3.connect(db_path) as conn:
+        rows = conn.execute(
+            """
+            SELECT collected_at, net_rx_bytes, net_tx_bytes
+              FROM host_metrics_history
+             WHERE host_name = ? AND success = 1
+               AND net_rx_bytes IS NOT NULL AND net_tx_bytes IS NOT NULL
+             ORDER BY collected_at DESC
+             LIMIT 2
+            """,
+            (host_name,),
+        ).fetchall()
+    if len(rows) < 2:
+        return empty
+
+    latest, previous = rows[0], rows[1]
+    try:
+        latest_at = _parse_collected_at(latest[0])
+        previous_at = _parse_collected_at(previous[0])
+    except (TypeError, ValueError):
+        return empty
+    seconds = (latest_at - previous_at).total_seconds()
+    if seconds <= 0:
+        return empty
+
+    def _rate(current: int | None, before: int | None) -> float | None:
+        if current is None or before is None:
+            return None
+        delta = int(current) - int(before)
+        if delta < 0:
+            return None
+        return round(delta / seconds, 1)
+
+    return {
+        "rx_bytes_per_second": _rate(latest[1], previous[1]),
+        "tx_bytes_per_second": _rate(latest[2], previous[2]),
     }
 
 

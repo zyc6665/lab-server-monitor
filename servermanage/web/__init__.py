@@ -137,5 +137,27 @@ def create_app(
         """主机名 → 页面内锚点，和磁盘健康页的分组 id 保持一致。"""
         return anchor_slug(value)
 
+    @app.template_filter("rate")
+    def _rate_filter(value):
+        """字节/秒 → 带单位的短文本，例如 ``12.3 MB/s``。"""
+        if value is None or value == "":
+            return "—"
+        try:
+            amount = float(value)
+        except (TypeError, ValueError):
+            return "—"
+        if amount < 0:
+            return "—"
+        units = ("B/s", "KB/s", "MB/s", "GB/s", "TB/s")
+        index = 0
+        while amount >= 1024 and index < len(units) - 1:
+            amount /= 1024.0
+            index += 1
+        if index == 0:
+            return f"{int(round(amount))} {units[index]}"
+        if amount >= 100:
+            return f"{amount:.0f} {units[index]}"
+        return f"{amount:.1f} {units[index]}"
+
     register_routes(app)
     return app
