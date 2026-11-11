@@ -437,32 +437,56 @@
     return el;
   }
 
-  function drawOverviewTrend(svg, values, key) {
-    if (!svg) { return; }
-    while (svg.firstChild) { svg.removeChild(svg.firstChild); }
-    var numbers = values.filter(function (v) {
+  function overviewNumbers(values) {
+    return (values || []).filter(function (v) {
       return v !== null && v !== undefined && !isNaN(Number(v));
     }).map(Number);
+  }
+
+  function overviewPath(values, min, max, width, height, padX, padY) {
+    var span = Math.max(1, values.length - 1);
+    var coords = [];
+    values.forEach(function (value, index) {
+      if (value === null || value === undefined || isNaN(Number(value))) { return; }
+      coords.push([
+        padX + (width - padX * 2) * (index / span),
+        height - padY - (height - padY * 2) * ((Number(value) - min) / (max - min))
+      ]);
+    });
+    return coords;
+  }
+
+  function drawOverviewTrend(svg, values, key, previous) {
+    if (!svg) { return; }
+    while (svg.firstChild) { svg.removeChild(svg.firstChild); }
+    var numbers = overviewNumbers(values);
+    var history = overviewNumbers(previous);
     var latest = document.querySelector('[data-overview-latest="' + key + '"]');
     if (latest) { latest.textContent = numbers.length ? formatPercent(numbers[numbers.length - 1]) : ''; }
     if (numbers.length < 2) { return; }
     var width = 300, height = 84, padX = 8, padY = 8;
-    var min = Math.min.apply(null, numbers), max = Math.max.apply(null, numbers);
+    var scale = numbers.concat(history.length >= 2 ? history : []);
+    var min = Math.min.apply(null, scale), max = Math.max.apply(null, scale);
     if (max - min < 1) { max = min + 1; }
-    var points = [];
-    values.forEach(function (value, index) {
-      if (value === null || value === undefined || isNaN(Number(value))) { return; }
-      points.push([
-        padX + (width - padX * 2) * (index / Math.max(1, values.length - 1)),
-        height - padY - (height - padY * 2) * ((Number(value) - min) / (max - min))
-      ]);
-    });
+    var points = overviewPath(values, min, max, width, height, padX, padY);
     [0, 0.5, 1].forEach(function (fraction) {
       var y = padY + (height - padY * 2) * fraction;
       svg.appendChild(overviewSvgEl('line', {
         x1: padX, x2: width - padX, y1: y, y2: y, stroke: '#e8edf5', 'stroke-width': '1'
       }));
     });
+    var previousPoints = history.length >= 2
+      ? overviewPath(previous, min, max, width, height, padX, padY)
+      : [];
+    if (previousPoints.length >= 2) {
+      svg.appendChild(overviewSvgEl('path', {
+        d: previousPoints.map(function (point, index) {
+          return (index ? 'L' : 'M') + point[0].toFixed(1) + ' ' + point[1].toFixed(1);
+        }).join(' '),
+        fill: 'none', stroke: OVERVIEW_COLORS[key], 'stroke-width': '1.4',
+        'stroke-dasharray': '4 4', 'stroke-opacity': '0.45', 'stroke-linecap': 'round'
+      }));
+    }
     svg.appendChild(overviewSvgEl('path', {
       d: points.map(function (point, index) {
         return (index ? 'L' : 'M') + point[0].toFixed(1) + ' ' + point[1].toFixed(1);
@@ -476,15 +500,22 @@
 
   function loadOverviewHistory(rangeKey) {
     if (!document.getElementById('overview-trend')) { return; }
-    fetchJson('/api/overview/history?range=' + encodeURIComponent(rangeKey)).then(function (payload) {
+    fetchJson('/api/overview/history?compare=1&range=' + encodeURIComponent(rangeKey)).then(function (payload) {
       var points = (payload && payload.points) || [];
+      var previous = (payload && payload.previous) || [];
       var empty = document.getElementById('overview-trend-empty');
       if (empty) { empty.hidden = points.length > 0; }
+      var hint = document.getElementById('overview-trend-hint');
+      if (hint) {
+        hint.hidden = previous.length < 2;
+        hint.textContent = previous.length >= 2 ? '虚线为上一周期' : '';
+      }
       ['cpu', 'memory', 'disk', 'gpu_util'].forEach(function (key) {
         drawOverviewTrend(
           document.querySelector('[data-overview-trend="' + key + '"]'),
           points.map(function (point) { return point[key]; }),
-          key
+          key,
+          previous.map(function (point) { return point[key]; })
         );
       });
     }).catch(function () {});

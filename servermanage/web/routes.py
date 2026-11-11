@@ -2359,12 +2359,24 @@ def register_routes(app: Flask) -> None:
         if range_key not in ("24h", "7d", "30d"):
             return jsonify({"error": "invalid_range"}), 400
         config = _config(app)
+        tz = resolve_timezone(config.app.timezone)
         points = storage.fetch_overview_history(
             _db_path(app),
             range_key=range_key,
-            tz=resolve_timezone(config.app.timezone),
+            tz=tz,
         )
-        return jsonify({"range": range_key, "points": points})
+        payload: dict[str, Any] = {"range": range_key, "points": points}
+        if request.args.get("compare") in ("1", "true", "yes"):
+            if range_key == "24h":
+                payload["previous"] = []
+            else:
+                payload["previous"] = storage.fetch_overview_history(
+                    _db_path(app),
+                    range_key=range_key,
+                    tz=tz,
+                    offset_days=7 if range_key == "7d" else 30,
+                )
+        return jsonify(payload)
 
     @app.get("/api/overview/alert-history")
     def api_overview_alert_history():

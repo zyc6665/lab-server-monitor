@@ -992,9 +992,16 @@ def fetch_overview_history(
     range_key: str = "24h",
     tz: tzinfo = timezone.utc,
     now: datetime | None = None,
+    offset_days: int = 0,
 ) -> list[dict[str, object]]:
-    """Return fleet-wide average chart points for the overview page."""
+    """Return fleet-wide average chart points for the overview page.
+
+    ``offset_days`` shifts the window backwards, which is how the overview
+    chart draws the previous period for comparison.
+    """
     db_path = Path(db_path)
+    if offset_days < 0:
+        raise ValueError("offset_days must be zero or positive")
     if not db_path.exists():
         return []
     if range_key not in ("24h", "7d", "30d"):
@@ -1002,9 +1009,12 @@ def fetch_overview_history(
     current = now or datetime.now(timezone.utc)
     if current.tzinfo is None:
         current = current.replace(tzinfo=timezone.utc)
+    if offset_days:
+        current = current - timedelta(days=offset_days)
 
     if range_key == "24h":
         cutoff = (current - timedelta(hours=24)).astimezone(timezone.utc).isoformat()
+        ceiling = current.astimezone(timezone.utc).isoformat()
         with sqlite3.connect(db_path) as conn:
             conn.row_factory = sqlite3.Row
             rows = conn.execute(
@@ -1019,11 +1029,11 @@ def fetch_overview_history(
                                 THEN gpu_memory_used_mb * 100.0 / gpu_memory_total_mb END) AS gpu_memory,
                        AVG(load_1) AS load_1
                   FROM host_metrics_history
-                 WHERE success = 1 AND collected_at >= ?
+                 WHERE success = 1 AND collected_at >= ? AND collected_at <= ?
                  GROUP BY collected_at
                  ORDER BY collected_at ASC
                 """,
-                (cutoff,),
+                (cutoff, ceiling),
             ).fetchall()
         return [
             {
@@ -1040,6 +1050,7 @@ def fetch_overview_history(
 
     days = 7 if range_key == "7d" else 30
     start_day = (current.astimezone(tz).date() - timedelta(days=days - 1)).isoformat()
+    end_day = current.astimezone(tz).date().isoformat()
     with sqlite3.connect(db_path) as conn:
         conn.row_factory = sqlite3.Row
         rows = conn.execute(
@@ -1053,11 +1064,11 @@ def fetch_overview_history(
                    SUM(load_sum) AS load_sum,
                    SUM(sample_count) AS sample_count
               FROM host_daily_summary
-             WHERE tz = ? AND day >= ?
+             WHERE tz = ? AND day >= ? AND day <= ?
              GROUP BY day
              ORDER BY day ASC
             """,
-            (_tz_key(tz), start_day),
+            (_tz_key(tz), start_day, end_day),
         ).fetchall()
     points = []
     for row in rows:

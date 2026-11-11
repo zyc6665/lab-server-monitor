@@ -3330,3 +3330,12 @@ html[data-theme="dark"] .disk-temp-max.is-critical {
     font-size: 12px;
   }
 }
+
+/* -- v0.1.100 概览趋势上一周期对比 -- */
+.trend-hint { margin: 0 12px 0 auto; font-size: 12px; color: var(--text-muted); }
+.trend-hint[hidden] { display: none !important; }
+[data-overview-trend] path[stroke-dasharray] { pointer-events: none; }
+html[data-theme="dark"] .trend-hint { color: #93a2bb; }
+@media (max-width: 760px) {
+  .trend-hint { margin: 0 0 0 auto; }
+}
