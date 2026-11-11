@@ -2474,3 +2474,69 @@ html[data-theme="dark"] .heartbeat .hb-fail { background: #f87171; }
 html[data-theme="dark"] .heartbeat .hb-unknown { background: #475569; }
 
 .spark-area { fill: currentColor; opacity: .12; }
+
+/* -- v0.1.74 主机卡片视图 -- */
+.section-head .view-toggle { margin-left: auto; margin-right: 14px; }
+.view-toggle {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-sunken);
+}
+.view-tab {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 500;
+  padding: 5px 13px;
+  border-radius: 7px;
+  cursor: pointer;
+  transition: background .15s ease, color .15s ease;
+}
+.view-tab:hover { color: var(--text); }
+.view-tab.active { background: var(--card-bg); color: var(--text); box-shadow: 0 1px 2px rgba(16,24,40,.08); }
+.host-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(268px, 1fr));
+  gap: 14px;
+}
+.host-card-grid[hidden] { display: none !important; }
+.host-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px 18px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--card-bg);
+  transition: border-color .15s ease, box-shadow .15s ease;
+}
+.host-card:hover { border-color: var(--border-strong); box-shadow: 0 2px 10px rgba(16,24,40,.06); }
+.host-card[hidden] { display: none !important; }
+.host-card-head { display: flex; align-items: center; gap: 8px; }
+.host-card-name { font-size: 14px; font-weight: 600; color: var(--text); text-decoration: none; }
+.host-card-name:hover { color: var(--accent); }
+.host-card-meta { margin: 0; font-size: 12px; color: var(--text-muted); }
+.host-card-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  padding: 10px 0;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+.host-card-metric { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.host-card-metric-label { font-size: 11px; color: var(--text-muted); }
+.host-card-metric-value { font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--text); }
+.host-card-metric .spark { margin-top: 2px; color: var(--accent); }
+.host-card-foot { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 12px; color: var(--text-muted); }
+.host-card-time { margin-left: auto; font-size: 12px; }
+.host-card-actions { display: flex; gap: 14px; }
+html[data-theme="dark"] .host-card { background: var(--surface-raised); }
+html[data-theme="dark"] .view-toggle { background: #0f1726; border-color: #1f2b3d; }
+html[data-theme="dark"] .view-tab.active { background: #1b2739; color: #e5edf7; }
+@media (max-width: 640px) { .host-card-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); } }

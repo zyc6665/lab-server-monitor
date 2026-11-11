@@ -641,6 +641,168 @@
     return tr;
   }
 
+  // ---- 概览主机卡片视图（纯前端渲染，数据与表格同源） ----
+  var HOST_VIEW_KEY = 'overview:host-view';
+  var hostView = 'table';
+
+  function readHostView() {
+    try {
+      var stored = window.localStorage.getItem(HOST_VIEW_KEY);
+      if (stored === 'cards' || stored === 'table') { return stored; }
+    } catch (error) { /* 隐私模式下忽略 */ }
+    return 'table';
+  }
+
+  function applyHostView(view) {
+    hostView = view === 'cards' ? 'cards' : 'table';
+    var wrap = document.getElementById('host-table-wrap');
+    var grid = document.getElementById('host-cards');
+    if (wrap) { wrap.hidden = hostView !== 'table'; }
+    if (grid) { grid.hidden = hostView !== 'cards'; }
+    var tabs = document.querySelectorAll('[data-host-view]');
+    for (var i = 0; i < tabs.length; i += 1) {
+      var active = tabs[i].getAttribute('data-host-view') === hostView;
+      tabs[i].classList.toggle('active', active);
+      tabs[i].setAttribute('aria-pressed', active ? 'true' : 'false');
+    }
+    try { window.localStorage.setItem(HOST_VIEW_KEY, hostView); } catch (error) { /* 隐私模式下忽略 */ }
+  }
+
+  function bindHostView() {
+    var toggle = document.querySelector('.view-toggle');
+    if (!toggle) { return; }
+    toggle.addEventListener('click', function (event) {
+      var target = event.target;
+      var button = target && target.closest ? target.closest('[data-host-view]') : null;
+      if (!button) { return; }
+      applyHostView(button.getAttribute('data-host-view'));
+    });
+    applyHostView(readHostView());
+  }
+
+  function percentText(value) {
+    if (value === null || value === undefined || value === '') { return '—'; }
+    var num = Number(value);
+    if (isNaN(num)) { return String(value); }
+    return num.toFixed(1) + '%';
+  }
+
+  function metricBlock(label, value, spark) {
+    var box = document.createElement('div');
+    box.className = 'host-card-metric';
+    var name = document.createElement('span');
+    name.className = 'host-card-metric-label';
+    name.textContent = label;
+    box.appendChild(name);
+    var val = document.createElement('span');
+    val.className = 'host-card-metric-value';
+    val.textContent = percentText(value);
+    box.appendChild(val);
+    var chart = Array.isArray(spark) && spark.length > 1 ? sparkline(spark, 'spark') : null;
+    if (chart) { box.appendChild(chart); }
+    return box;
+  }
+
+  function buildHostCard(host) {
+    var card = document.createElement('article');
+    card.className = 'host-card';
+    card.setAttribute('data-host', host.name || '');
+    card.setAttribute('data-group', host.group || '未分组');
+    card.setAttribute('data-owner', host.owner || '');
+    card.setAttribute('data-online', host.online ? '1' : '0');
+    card.setAttribute('data-silenced', host.silenced ? '1' : '0');
+    card.setAttribute('data-alert-count', host.active_alert_count || 0);
+    card.setAttribute(
+      'data-search',
+      [host.name, host.host, host.group || '未分组', host.owner, host.location]
+        .join(' ').toLowerCase()
+    );
+
+    var head = document.createElement('div');
+    head.className = 'host-card-head';
+    var link = document.createElement('a');
+    link.className = 'host-card-name';
+    link.href = '/host/' + encodeURIComponent(host.name || '');
+    link.textContent = host.name || '—';
+    head.appendChild(link);
+    head.appendChild(booleanBadge(!!host.online));
+    if (host.silenced) {
+      var silenceBadge = document.createElement('span');
+      silenceBadge.className = 'badge badge-silenced';
+      silenceBadge.title = '静默至 ' + (host.silenced_until || '—');
+      silenceBadge.textContent = '静默';
+      head.appendChild(silenceBadge);
+    }
+    card.appendChild(head);
+
+    var meta = document.createElement('p');
+    meta.className = 'host-card-meta';
+    meta.textContent = [host.host || '—', host.group || '未分组', host.owner]
+      .filter(function (item) { return !!item; }).join(' · ');
+    card.appendChild(meta);
+
+    var spark = host.spark || {};
+    var metrics = document.createElement('div');
+    metrics.className = 'host-card-metrics';
+    metrics.appendChild(metricBlock('CPU', host.cpu_percent, spark.cpu));
+    metrics.appendChild(metricBlock('内存', host.memory_percent, spark.memory));
+    metrics.appendChild(metricBlock('磁盘', host.disk_percent));
+    metrics.appendChild(metricBlock('GPU 显存', host.gpu_memory_percent));
+    card.appendChild(metrics);
+
+    var foot = document.createElement('div');
+    foot.className = 'host-card-foot';
+    var checks = host.checks || {};
+    var checkSpan = document.createElement('span');
+    if (checks.total) {
+      checkSpan.className = 'check-summary' + (checks.failed ? ' check-failed' : (checks.unknown ? ' check-unknown' : ''));
+      checkSpan.textContent = '检查 ' + (checks.ok || 0) + '/' + checks.total;
+    } else {
+      checkSpan.className = 'check-summary check-empty';
+      checkSpan.textContent = '检查 —';
+    }
+    foot.appendChild(checkSpan);
+
+    var dh = host.disk_health || {};
+    var health = document.createElement('span');
+    health.className = 'health health-' + (dh.status || 'unknown');
+    health.textContent = '磁盘' + (dh.status || 'unknown') + ' ' + (dh.healthy || 0) + '/' +
+      ((dh.healthy || 0) + (dh.warning || 0) + (dh.critical || 0));
+    foot.appendChild(health);
+
+    var time = document.createElement('span');
+    time.className = 'host-card-time mono';
+    time.textContent = formatStamp(host.collected_at);
+    if (host.collected_at) { time.title = String(host.collected_at); }
+    foot.appendChild(time);
+    card.appendChild(foot);
+
+    var actions = document.createElement('div');
+    actions.className = 'host-card-actions';
+    var collectButton = document.createElement('button');
+    collectButton.type = 'button';
+    collectButton.className = 'btn-link host-collect';
+    collectButton.setAttribute('data-host-name', host.name || '');
+    collectButton.textContent = '采集';
+    actions.appendChild(collectButton);
+    var terminalLink = document.createElement('a');
+    terminalLink.className = 'btn-link terminal-link';
+    terminalLink.href = '/terminal?host=' + encodeURIComponent(host.name || '');
+    terminalLink.textContent = '终端';
+    actions.appendChild(terminalLink);
+    card.appendChild(actions);
+    return card;
+  }
+
+  function renderHostCards(hosts) {
+    var grid = document.getElementById('host-cards');
+    if (!grid) { return; }
+    while (grid.firstChild) { grid.removeChild(grid.firstChild); }
+    for (var i = 0; i < hosts.length; i += 1) {
+      grid.appendChild(buildHostCard(hosts[i] || {}));
+    }
+  }
+
   function hostRowMatches(tr, group, status, keyword) {
     if (group && tr.getAttribute('data-group') !== group) { return false; }
     if (status === 'online' && tr.getAttribute('data-online') !== '1') { return false; }
@@ -654,33 +816,43 @@
     return true;
   }
 
-  // 纯客户端筛选：只显隐已渲染的 host 行，不触发任何网络请求。
+  // 纯客户端筛选：只显隐已渲染的 host 行与卡片，不触发任何网络请求。
   function applyHostFilters() {
     var tbody = document.getElementById('host-table-body');
-    if (!tbody) { return; }
+    var grid = document.getElementById('host-cards');
     var groupEl = document.getElementById('filter-group');
     var statusEl = document.getElementById('filter-status');
     var keywordEl = document.getElementById('filter-keyword');
     var group = groupEl ? groupEl.value : '';
     var status = statusEl ? statusEl.value : '';
     var keyword = keywordEl ? keywordEl.value.trim().toLowerCase() : '';
-    var rows = tbody.querySelectorAll('tr');
-    var visible = 0;
-    for (var i = 0; i < rows.length; i += 1) {
-      var show = hostRowMatches(rows[i], group, status, keyword);
-      rows[i].hidden = !show;
-      if (show) { visible += 1; }
+    var rows = tbody ? tbody.querySelectorAll('tr') : [];
+    var cards = grid ? grid.querySelectorAll('[data-host]') : [];
+    var i;
+    var rowsVisible = 0;
+    for (i = 0; i < rows.length; i += 1) {
+      var showRow = hostRowMatches(rows[i], group, status, keyword);
+      rows[i].hidden = !showRow;
+      if (showRow) { rowsVisible += 1; }
     }
+    var cardsVisible = 0;
+    for (i = 0; i < cards.length; i += 1) {
+      var showCard = hostRowMatches(cards[i], group, status, keyword);
+      cards[i].hidden = !showCard;
+      if (showCard) { cardsVisible += 1; }
+    }
+    var visible = hostView === 'cards' ? cardsVisible : rowsVisible;
+    var totalCount = hostView === 'cards' ? cards.length : rows.length;
     var count = document.getElementById('filter-count');
     if (count) {
       count.textContent = (group || status || keyword)
-        ? ('筛选出 ' + visible + ' / ' + rows.length + ' 台')
+        ? ('筛选出 ' + visible + ' / ' + totalCount + ' 台')
         : '';
     }
-    if (rows.length > 0) {
+    if (totalCount > 0) {
       var table = document.getElementById('host-table');
       var empty = document.getElementById('empty-state');
-      if (table) { table.hidden = visible === 0; }
+      if (table) { table.hidden = rowsVisible === 0; }
       if (empty) {
         empty.hidden = visible !== 0;
         empty.textContent = visible === 0 ? '没有符合筛选条件的主机' : '暂无数据';
@@ -760,6 +932,8 @@
     if (onboard) { onboard.hidden = hasData; }
     setText('host-count', '共 ' + rows.length + ' 台');
     updateSortIndicators();
+    renderHostCards(rows);
+    applyHostView(hostView);
     applyHostFilters();
   }
 
@@ -1642,6 +1816,7 @@
 
     setupCardCollapse();
     setupAlertRowExpansion();
+    bindHostView();
 
     // 供全局命令面板调用当前页面的快捷操作。
     window.serverMonitorActions = {
