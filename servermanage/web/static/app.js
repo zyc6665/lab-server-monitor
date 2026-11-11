@@ -713,6 +713,46 @@
     applyHostView(readHostView());
   }
 
+  // ---- 界面密度（舒适 / 紧凑，纯本地偏好） ----
+  var DENSITY_KEY = 'overview:density';
+
+  function readDensity() {
+    try {
+      var stored = window.localStorage.getItem(DENSITY_KEY);
+      if (stored === 'compact' || stored === 'cozy') { return stored; }
+    } catch (error) { /* 隐私模式下忽略 */ }
+    return 'cozy';
+  }
+
+  function applyDensity(value) {
+    var density = value === 'compact' ? 'compact' : 'cozy';
+    var root = document.documentElement;
+    if (density === 'compact') {
+      root.setAttribute('data-density', 'compact');
+    } else {
+      root.removeAttribute('data-density');
+    }
+    var buttons = document.querySelectorAll('[data-density]');
+    for (var i = 0; i < buttons.length; i += 1) {
+      var active = buttons[i].getAttribute('data-density') === density;
+      buttons[i].classList.toggle('active', active);
+      buttons[i].setAttribute('aria-pressed', active ? 'true' : 'false');
+    }
+    try { window.localStorage.setItem(DENSITY_KEY, density); } catch (error) { /* 隐私模式下忽略 */ }
+  }
+
+  function bindDensity() {
+    var toggle = document.querySelector('.density-toggle');
+    if (!toggle) { return; }
+    toggle.addEventListener('click', function (event) {
+      var target = event.target;
+      var button = target && target.closest ? target.closest('[data-density]') : null;
+      if (!button) { return; }
+      applyDensity(button.getAttribute('data-density'));
+    });
+    applyDensity(readDensity());
+  }
+
   function percentText(value) {
     if (value === null || value === undefined || value === '') { return '—'; }
     var num = Number(value);
@@ -2280,6 +2320,7 @@
     setupCardCollapse();
     setupAlertRowExpansion();
     bindHostView();
+    bindDensity();
 
     // 供全局命令面板调用当前页面的快捷操作。
     window.serverMonitorActions = {

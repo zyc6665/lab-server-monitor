@@ -3225,3 +3225,74 @@ html[data-theme="dark"] #host-containers tr.is-hot .container-mem {
 html[data-theme="dark"] #host-containers tr.is-hot td:first-child {
   box-shadow: inset 3px 0 0 #fbbf24;
 }
+
+/* -- v0.1.95 概览界面密度（紧凑模式） -- */
+.density-toggle .view-tab {
+  min-width: 44px;
+}
+
+html[data-density="compact"] .container {
+  padding-top: 12px;
+  padding-bottom: 32px;
+}
+
+html[data-density="compact"] .card {
+  padding: 13px 16px;
+}
+
+html[data-density="compact"] .stat-card {
+  padding: 11px 16px;
+}
+
+html[data-density="compact"] .stat-value {
+  font-size: 21px;
+}
+
+html[data-density="compact"] .stat-label,
+html[data-density="compact"] .stat-foot {
+  font-size: 11.5px;
+}
+
+html[data-density="compact"] .data-table th,
+html[data-density="compact"] .data-table td {
+  padding: 5px 9px;
+}
+
+html[data-density="compact"] .focus-item,
+html[data-density="compact"] .check-row,
+html[data-density="compact"] .rank-row {
+  padding: 6px 2px;
+}
+
+html[data-density="compact"] .host-card {
+  padding: 12px 14px;
+}
+
+html[data-density="compact"] .host-card-grid {
+  gap: 10px;
+  grid-template-columns: repeat(auto-fill, minmax(236px, 1fr));
+}
+
+html[data-density="compact"] .host-card-metrics {
+  gap: 6px;
+  margin: 8px 0 6px;
+}
+
+html[data-density="compact"] .section-head {
+  padding-bottom: 9px;
+  margin-bottom: 11px;
+}
+
+html[data-density="compact"] #host-table th,
+html[data-density="compact"] #host-table td {
+  padding: 4px 8px;
+}
+
+html[data-density="compact"] #alert-table th,
+html[data-density="compact"] #alert-table td {
+  padding: 5px 9px;
+}
+
+html[data-density="compact"] .timeline {
+  height: 56px;
+}
