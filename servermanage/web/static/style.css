@@ -3205,3 +3205,23 @@ html[data-theme="dark"] .chip-clear {
   background: color-mix(in srgb, #7aa2ff 16%, transparent);
   color: #a8c0ff;
 }
+
+/* -- v0.1.94 容器占用排序与高占用提示 -- */
+#host-containers tr.is-hot .container-cpu,
+#host-containers tr.is-hot .container-mem {
+  color: #b45309;
+  font-weight: 600;
+}
+
+#host-containers tr.is-hot td:first-child {
+  box-shadow: inset 3px 0 0 #d97706;
+}
+
+html[data-theme="dark"] #host-containers tr.is-hot .container-cpu,
+html[data-theme="dark"] #host-containers tr.is-hot .container-mem {
+  color: #fbbf24;
+}
+
+html[data-theme="dark"] #host-containers tr.is-hot td:first-child {
+  box-shadow: inset 3px 0 0 #fbbf24;
+}

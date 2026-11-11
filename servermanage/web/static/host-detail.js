@@ -595,6 +595,27 @@
     });
   }
 
+  function usageValue(row, selector) {
+    var cell = row.querySelector(selector);
+    if (!cell) { return -1; }
+    var text = (cell.textContent || '').replace('%', '').trim();
+    var num = Number(text);
+    return isNaN(num) ? -1 : num;
+  }
+
+  function sortContainerRowsByUsage() {
+    var body = document.getElementById('container-rows');
+    if (!body) { return; }
+    var rows = Array.prototype.slice.call(body.querySelectorAll('[data-container-row]'));
+    if (rows.length < 2) { return; }
+    rows.sort(function (a, b) {
+      var diff = usageValue(b, '.container-cpu') - usageValue(a, '.container-cpu');
+      if (diff) { return diff; }
+      return usageValue(b, '.container-mem') - usageValue(a, '.container-mem');
+    });
+    rows.forEach(function (row) { body.appendChild(row); });
+  }
+
   function bindContainerStats() {
     var button = document.getElementById('container-stats');
     var hint = document.getElementById('container-stats-hint');
@@ -629,9 +650,15 @@
               memCell.textContent = fmtPercent(data.memory_percent);
               if (data.memory_usage) { memCell.title = data.memory_usage; }
             }
+            row.classList.toggle(
+              'is-hot',
+              (data.cpu_percent || 0) >= 50 || (data.memory_percent || 0) >= 80
+            );
           });
+          sortContainerRowsByUsage();
           if (hint) {
-            hint.textContent = '占用为执行瞬间的单次采样，' + (payload.containers || []).length + ' 个运行中容器';
+            hint.className = 'container-stats-hint';
+            hint.textContent = '占用为执行瞬间的单次采样 · 已按 CPU 占用排序';
             hint.hidden = false;
           }
         })

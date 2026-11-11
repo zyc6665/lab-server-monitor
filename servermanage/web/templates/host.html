@@ -395,7 +395,7 @@
       <thead>
         <tr><th>名称</th><th>镜像</th><th>状态</th><th>运行情况</th><th>CPU</th><th>内存</th></tr>
       </thead>
-      <tbody>
+      <tbody id="container-rows">
         {% for container in metrics.containers %}
         <tr data-container-row data-container-search="{{ (container.name ~ ' ' ~ container.image)|lower }}" data-container-state="{{ (container.state or 'unknown')|lower }}">
           <td class="mono">{{ container.name }}</td>
