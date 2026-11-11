@@ -1440,6 +1440,38 @@
     tick();
   }
 
+  // 记住主机表的排序方式：刷新后仍按上次点过的列排。
+  var HOST_SORT_STORE = 'overview:sort';
+
+  function readHostSort() {
+    try {
+      var parsed = JSON.parse(localStorage.getItem(HOST_SORT_STORE) || 'null');
+      if (!parsed || typeof parsed.key !== 'string' || !parsed.key) { return null; }
+      return { key: parsed.key, dir: parsed.dir === -1 ? -1 : 1 };
+    } catch (err) {
+      return null;
+    }
+  }
+
+  function saveHostSort() {
+    try {
+      if (!hostSortKey) {
+        localStorage.removeItem(HOST_SORT_STORE);
+        return;
+      }
+      localStorage.setItem(HOST_SORT_STORE, JSON.stringify({ key: hostSortKey, dir: hostSortDir }));
+    } catch (err) {}
+  }
+
+  function restoreHostSort() {
+    var saved = readHostSort();
+    if (!saved) { return; }
+    var known = document.querySelector('#host-table th[data-sort-key="' + saved.key + '"]');
+    if (!known) { return; }
+    hostSortKey = saved.key;
+    hostSortDir = saved.dir;
+  }
+
   function setHostSort(key) {
     if (!key) { return; }
     if (hostSortKey === key) {
@@ -1448,6 +1480,7 @@
       hostSortKey = key;
       hostSortDir = 1;
     }
+    saveHostSort();
     renderHosts();
   }
 
@@ -2632,6 +2665,7 @@
     setupAlertRowExpansion();
     bindHostView();
     bindDensity();
+    restoreHostSort();
 
     // 供全局命令面板调用当前页面的快捷操作。
     window.serverMonitorActions = {
