@@ -12,14 +12,16 @@
     memory: '#7c3aed',
     disk: '#059669',
     gpu_memory: '#d97706',
-    temperature: '#e11d48'
+    temperature: '#e11d48',
+    net_rx: '#0891b2'
   };
   var TITLES = {
     cpu: 'CPU',
     memory: '内存',
     disk: '磁盘',
     gpu_memory: 'GPU 显存',
-    temperature: '温度'
+    temperature: '温度',
+    net_rx: '网络下行'
   };
 
   function csrfToken() {
@@ -78,11 +80,26 @@
     return el;
   }
 
+  function formatRate(bytesPerSecond) {
+    var num = Number(bytesPerSecond);
+    if (isNaN(num) || num < 0) { return '—'; }
+    var units = ['B/s', 'KB/s', 'MB/s', 'GB/s'];
+    var index = 0;
+    while (num >= 1024 && index < units.length - 1) {
+      num = num / 1024;
+      index += 1;
+    }
+    var digits = index === 0 ? 0 : (num >= 100 ? 0 : 1);
+    return num.toFixed(digits) + ' ' + units[index];
+  }
+
   function trendText(value, key) {
     if (value === null || value === undefined || value === '') { return '—'; }
     var num = Number(value);
     if (isNaN(num)) { return '—'; }
-    return key === 'temperature' ? num.toFixed(1) + ' °C' : fmt(num);
+    if (key === 'temperature') { return num.toFixed(1) + ' °C'; }
+    if (key === 'net_rx') { return formatRate(num); }
+    return fmt(num);
   }
 
   function drawTrend(svg, values, key) {
@@ -124,7 +141,7 @@
     }));
     svg.appendChild(makeSvgEl('text', {
       x: padX, y: 12, fill: '#8a94a6', 'font-size': '9'
-    })).textContent = '最低 ' + fmt(min) + ' · 最高 ' + fmt(max);
+    })).textContent = '最低 ' + trendText(min, key) + ' · 最高 ' + trendText(max, key);
   }
 
   function loadHistory(rangeKey) {

@@ -899,7 +899,8 @@ def fetch_host_history(
                 """
                 SELECT collected_at, cpu_usage_percent, memory_used_mb,
                        memory_total_mb, disk_used_percent, gpu_utilization_percent,
-                       gpu_memory_used_mb, gpu_memory_total_mb, load_1, temperature_c
+                       gpu_memory_used_mb, gpu_memory_total_mb, load_1, temperature_c,
+                       net_rx_bytes, net_tx_bytes
                   FROM host_metrics_history
                  WHERE host_name = ? AND success = 1 AND collected_at >= ?
                  ORDER BY collected_at ASC
@@ -907,10 +908,31 @@ def fetch_host_history(
                 (host_name, cutoff),
             ).fetchall()
         points: list[dict[str, object]] = []
+        previous_at: datetime | None = None
+        previous_rx: float | None = None
+        previous_tx: float | None = None
         for row in rows:
+            moment = _parse_collected_at(row["collected_at"]).astimezone(tz)
+            rx_raw = row["net_rx_bytes"]
+            tx_raw = row["net_tx_bytes"]
+            rx_rate = None
+            tx_rate = None
+            if (
+                previous_at is not None
+                and previous_rx is not None
+                and previous_tx is not None
+                and rx_raw is not None
+                and tx_raw is not None
+            ):
+                seconds = (moment - previous_at).total_seconds()
+                delta_rx = float(rx_raw) - previous_rx
+                delta_tx = float(tx_raw) - previous_tx
+                if seconds > 0 and delta_rx >= 0 and delta_tx >= 0:
+                    rx_rate = round(delta_rx / seconds, 1)
+                    tx_rate = round(delta_tx / seconds, 1)
             points.append(
                 {
-                    "t": _parse_collected_at(row["collected_at"]).astimezone(tz).isoformat(),
+                    "t": moment.isoformat(),
                     "cpu": row["cpu_usage_percent"],
                     "memory": _memory_percent(row),
                     "disk": row["disk_used_percent"],
@@ -918,8 +940,13 @@ def fetch_host_history(
                     "gpu_memory": _gpu_memory_percent(row),
                     "temperature": row["temperature_c"],
                     "load_1": row["load_1"],
+                    "net_rx": rx_rate,
+                    "net_tx": tx_rate,
                 }
             )
+            previous_at = moment
+            previous_rx = float(rx_raw) if rx_raw is not None else None
+            previous_tx = float(tx_raw) if tx_raw is not None else None
         return points
 
     days = {"7d": 7, "30d": 30, "90d": 90}[range_key]
@@ -950,8 +977,10 @@ def fetch_host_history(
                 "gpu_util": (float(row["gpu_util_sum"]) / count) if row["gpu_util_sum"] is not None else None,
                 "gpu_memory": (float(row["gpu_memory_pct_sum"]) / count) if row["gpu_memory_pct_sum"] is not None else None,
                 "load_1": (float(row["load_sum"]) / count) if row["load_sum"] is not None else None,
-                # 每日汇总目前不保存温度，保持与 24h 点位相同的键，前端不会画出脏线。
+                # 每日汇总目前不保存温度与网络吞吐，保持与 24h 点位相同的键。
                 "temperature": None,
+                "net_rx": None,
+                "net_tx": None,
             }
         )
     return points
