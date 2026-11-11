@@ -120,7 +120,7 @@ def test_host_page_lists_containers(tmp_path: Path):
     html = client.get("/host/a100-zyc").get_data(as_text=True)
     assert 'data-host-tab="containers"' in html
     assert "Docker 容器" in html
-    assert "2 个运行中" in html
+    assert "2 个容器" in html
     assert "train-py" in html
     assert "pytorch/pytorch:2.4-cuda" in html
     assert "Exited (0) 2 hours ago" in html

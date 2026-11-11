@@ -330,7 +330,17 @@
 <section class="card" id="host-containers" data-host-panel="containers">
   <div class="section-head">
     <h2>Docker 容器</h2>
-    <span class="muted">{{ metrics.containers|length if metrics.containers else 0 }} 个运行中</span>
+    <div class="container-toolbar">
+      <input type="search" id="container-search" class="container-search" placeholder="搜索名称或镜像" autocomplete="off">
+      <select id="container-state" class="container-state">
+        <option value="">全部状态</option>
+        <option value="running">运行中</option>
+        <option value="exited">已退出</option>
+        <option value="paused">已暂停</option>
+        <option value="restarting">重启中</option>
+      </select>
+      <span class="muted" id="container-count">{{ metrics.containers|length if metrics.containers else 0 }} 个容器</span>
+    </div>
   </div>
   {% if metrics.containers %}
   <div class="table-wrap">
@@ -340,7 +350,7 @@
       </thead>
       <tbody>
         {% for container in metrics.containers %}
-        <tr>
+        <tr data-container-row data-container-search="{{ (container.name ~ ' ' ~ container.image)|lower }}" data-container-state="{{ (container.state or 'unknown')|lower }}">
           <td class="mono">{{ container.name }}</td>
           <td class="mono container-image" title="{{ container.image }}">{{ container.image }}</td>
           <td><span class="status status-{{ 'ok' if container.state == 'running' else 'unknown' }}">{{ container.state or '—' }}</span></td>
@@ -350,6 +360,7 @@
       </tbody>
     </table>
   </div>
+  <p class="empty" id="container-filter-empty" hidden>没有匹配的容器，换个关键字或状态试试。</p>
   {% else %}
   <p class="empty">这台主机没有运行中的 Docker 容器，或未安装 Docker。</p>
   {% endif %}

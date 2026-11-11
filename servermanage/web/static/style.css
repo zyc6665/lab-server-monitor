@@ -2552,4 +2552,18 @@ html[data-theme="dark"] .net-throughput .net-rx { color: #7aa2ff; }
 #host-containers .data-table td { vertical-align: middle; }
 .host-card-containers { font-size: 12px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
 
+/* -- v0.1.77 容器搜索与状态筛选 -- */
+.container-toolbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.container-search {
+  min-width: 220px; padding: 5px 10px; font-size: 13px;
+  border: 1px solid var(--border); border-radius: 8px; background: var(--card-bg); color: var(--text);
+}
+.container-search:focus { outline: 2px solid rgba(44, 92, 246, .35); outline-offset: 1px; }
+.container-state {
+  padding: 5px 8px; font-size: 13px; border: 1px solid var(--border);
+  border-radius: 8px; background: var(--card-bg); color: var(--text);
+}
+[data-container-row][hidden] { display: none !important; }
+@media (max-width: 760px) { .container-search { min-width: 150px; } }
+
 @media (max-width: 760px) { #host-containers .container-image { max-width: 160px; } }

@@ -487,11 +487,41 @@
     });
   }
 
+
+  function bindContainerFilter() {
+    var search = document.getElementById('container-search');
+    var state = document.getElementById('container-state');
+    var countEl = document.getElementById('container-count');
+    var emptyEl = document.getElementById('container-filter-empty');
+    var rows = Array.prototype.slice.call(document.querySelectorAll('[data-container-row]'));
+    if (!rows.length) { return; }
+
+    function apply() {
+      var keyword = search ? search.value.trim().toLowerCase() : '';
+      var wanted = state ? state.value : '';
+      var visible = 0;
+      rows.forEach(function (row) {
+        var haystack = row.getAttribute('data-container-search') || '';
+        var rowState = row.getAttribute('data-container-state') || '';
+        var ok = (!keyword || haystack.indexOf(keyword) !== -1) && (!wanted || rowState === wanted);
+        row.hidden = !ok;
+        if (ok) { visible += 1; }
+      });
+      if (countEl) { countEl.textContent = visible === rows.length ? rows.length + ' 个容器' : visible + ' / ' + rows.length + ' 个容器'; }
+      if (emptyEl) { emptyEl.hidden = visible !== 0; }
+    }
+
+    if (search) { search.addEventListener('input', apply); }
+    if (state) { state.addEventListener('change', apply); }
+    apply();
+  }
+
   bindHostTabs();
   bindAlertAcks();
   bindRanges();
   bindActions();
   bindCollectNow();
+  bindContainerFilter();
   loadHistory('24h');
   loadChecks();
 })();
