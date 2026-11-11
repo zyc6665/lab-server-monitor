@@ -58,7 +58,7 @@
         <span class="health health-{{ host.status }}">{{ host.status }}</span>
         <span class="disk-host-counts"><b>{{ host.healthy }}</b> 健康 · <b>{{ host.warning }}</b> 告警 · <b>{{ host.critical }}</b> 严重</span>
         <span class="muted">控制器 {{ host.controller_count }} · VD {{ host.vd_count }}</span>
-        {% if host.temperature_max is not none %}<span class="muted">最高 {{ host.temperature_max }} °C</span>{% endif %}
+        {% if host.temperature_max is not none %}<span class="muted disk-temp-max{% if host.temperature_max >= 65 %} is-critical{% elif host.temperature_max >= 55 %} is-hot{% endif %}">最高 {{ host.temperature_max }} °C</span>{% endif %}
         <span class="muted mono"{% if host.collected_at %} title="{{ host.collected_at }}"{% endif %}>{{ host.collected_at|stamp }}</span>
         <a class="btn-link" href="{{ url_for('host_page', name=host.name) }}#disk-array">主机详情</a>
       </div>
@@ -81,7 +81,8 @@
             <td>{{ d.predictive_failures if d.predictive_failures is not none else '—' }}</td>
             <td>{% if d.smart_alert is not none %}{{ '是' if d.smart_alert else '否' }}{% else %}—{% endif %}</td>
             <td>{{ d.shield_counter if d.shield_counter is not none else '—' }}</td>
-            <td>{% if d.temperature_c is not none %}{{ d.temperature_c }} °C{% else %}—{% endif %}</td>
+            {% set temp = d.temperature_c %}
+            <td class="mono disk-temp{% if temp is not none and temp >= 65 %} is-critical{% elif temp is not none and temp >= 55 %} is-hot{% endif %}"{% if temp is not none %} title="盘温阈值：55 °C 起偏热，65 °C 起需关注"{% endif %}>{% if temp is not none %}{{ temp }} °C{% else %}—{% endif %}</td>
             <td><span class="health health-{{ d.health }}">{{ d.health }}</span></td>
           </tr>
           {% endfor %}

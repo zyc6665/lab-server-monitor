@@ -3296,3 +3296,37 @@ html[data-density="compact"] #alert-table td {
 html[data-density="compact"] .timeline {
   height: 56px;
 }
+
+/* -- v0.1.98 磁盘温度高亮 -- */
+.disk-temp {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.disk-temp.is-hot,
+.disk-temp-max.is-hot {
+  color: #b45309;
+  font-weight: 600;
+}
+
+.disk-temp.is-critical,
+.disk-temp-max.is-critical {
+  color: #b91c1c;
+  font-weight: 600;
+}
+
+html[data-theme="dark"] .disk-temp.is-hot,
+html[data-theme="dark"] .disk-temp-max.is-hot {
+  color: #fbbf24;
+}
+
+html[data-theme="dark"] .disk-temp.is-critical,
+html[data-theme="dark"] .disk-temp-max.is-critical {
+  color: #f87171;
+}
+
+@media (max-width: 760px) {
+  .disk-temp {
+    font-size: 12px;
+  }
+}
