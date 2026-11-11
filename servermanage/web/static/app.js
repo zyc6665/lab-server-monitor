@@ -1698,6 +1698,8 @@
       toggle.classList.toggle('active', alertGrouped);
       toggle.setAttribute('aria-pressed', alertGrouped ? 'true' : 'false');
     }
+    var expand = document.getElementById('alert-group-expand');
+    if (expand) { expand.hidden = !alertGrouped; }
   }
 
   function setAlertGrouping(value) {
@@ -1710,6 +1712,37 @@
       toggle.classList.toggle('active', alertGrouped);
       toggle.setAttribute('aria-pressed', alertGrouped ? 'true' : 'false');
     }
+    var expand = document.getElementById('alert-group-expand');
+    if (expand) { expand.hidden = !alertGrouped; }
+    renderAlertRows();
+  }
+
+  // 分组视图下几十条告警分布在多台主机时，一次全开或全收比逐组点快得多。
+  function groupHostsFor(alerts) {
+    var seen = {};
+    var hosts = [];
+    (alerts || []).forEach(function (alert) {
+      var host = (alert && alert.host_name) || '未命名主机';
+      if (!seen[host]) {
+        seen[host] = true;
+        hosts.push(host);
+      }
+    });
+    return hosts;
+  }
+
+  function updateGroupExpandLabel(alerts) {
+    var button = document.getElementById('alert-group-expand');
+    if (!button || !alertGrouped) { return; }
+    var hosts = groupHostsFor(alerts);
+    var collapsed = hosts.filter(function (host) { return collapsedHosts[host]; }).length;
+    button.textContent = hosts.length && collapsed === hosts.length ? '全部展开' : '全部折叠';
+  }
+
+  function toggleAllGroups(alerts) {
+    var hosts = groupHostsFor(alerts);
+    var allCollapsed = hosts.length > 0 && hosts.every(function (host) { return collapsedHosts[host]; });
+    hosts.forEach(function (host) { collapsedHosts[host] = !allCollapsed; });
     renderAlertRows();
   }
 
@@ -1847,6 +1880,7 @@
     var suffix = total !== lastAlerts.length ? '（匹配 ' + total + ' 条）' : '';
     setText('alert-count', '共 ' + lastAlerts.length + ' 条' + suffix);
     renderAlertSummary();
+    updateGroupExpandLabel(filteredAlerts(true));
     renderAlertPagination(total, pages, start, visible.length);
     updateAlertSelectionSummary();
     renderAlertTimeline(filteredAlerts(true));
@@ -2700,6 +2734,12 @@
     var groupToggle = document.getElementById('alert-group-toggle');
     if (groupToggle) {
       groupToggle.addEventListener('click', function () { setAlertGrouping(!alertGrouped); });
+    }
+    var groupExpand = document.getElementById('alert-group-expand');
+    if (groupExpand) {
+      groupExpand.addEventListener('click', function () {
+        toggleAllGroups(filteredAlerts(true));
+      });
     }
     document.addEventListener('click', function (event) {
       var row = event.target && event.target.closest
