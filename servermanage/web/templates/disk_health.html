@@ -51,6 +51,7 @@
   <article class="disk-host" id="disk-{{ host.anchor }}" data-disk-issues="{{ 1 if host.needs_attention else 0 }}">
     <header class="disk-host-head">
       <div class="disk-host-id">
+        <button type="button" class="disk-collapse" data-disk-collapse aria-expanded="true" aria-label="展开或收起 {{ host.name }} 的盘位明细" title="展开 / 收起盘位明细"><span class="disk-caret">▾</span></button>
         <a href="{{ url_for('host_page', name=host.name) }}">{{ host.name }}</a>
         <span class="muted mono">{{ host.host or '—' }}</span>
         <span class="disk-host-group">{{ host.group }}</span>

@@ -64,6 +64,25 @@
 
   if (!hosts.length) { toggle.disabled = true; }
 
+  // 每台主机的盘位明细可以折叠，盘多时先看摘要。
+  function setCollapsed(button, collapsed) {
+    var block = button.closest('.disk-host');
+    if (!block) { return; }
+    var body = block.querySelector('.table-wrap') || block.querySelector('.empty');
+    if (body) { body.hidden = collapsed; }
+    block.classList.toggle('is-collapsed', collapsed);
+    button.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+    var caret = button.querySelector('.disk-caret');
+    if (caret) { caret.textContent = collapsed ? '▸' : '▾'; }
+  }
+
+  document.addEventListener('click', function (event) {
+    var button = event.target.closest('[data-disk-collapse]');
+    if (!button) { return; }
+    event.preventDefault();
+    setCollapsed(button, button.getAttribute('aria-expanded') !== 'false');
+  });
+
   var exportButton = document.getElementById('disk-export');
   if (exportButton) {
     exportButton.addEventListener('click', function () {

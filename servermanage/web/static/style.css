@@ -3391,3 +3391,26 @@ html[data-theme="dark"] .attention-chip.is-critical {
   background: #2a1414;
   color: #f87171;
 }
+
+/* -- v0.1.105 磁盘按主机折叠 -- */
+.disk-collapse {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  margin-right: 2px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+}
+.disk-collapse:hover { background: var(--surface-sunken); border-color: var(--border); color: var(--text); }
+.disk-collapse:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(44, 92, 246, .18); }
+.disk-host.is-collapsed .disk-host-head { border-bottom-color: transparent; }
+.disk-host.is-collapsed .disk-host-meta { opacity: .75; }
+html[data-theme="dark"] .disk-collapse:hover { background: #1b2739; border-color: #26344c; color: #e2e8f0; }
