@@ -755,6 +755,15 @@ def _anchor(name: str) -> str:
     return anchor_slug(name)
 
 
+def _drive_sort_key(drive: dict[str, Any]) -> tuple:
+    """Hottest drive first; drives without a temperature sink to the bottom."""
+    temperature = drive.get("temperature_c")
+    hot = float(temperature) if isinstance(temperature, (int, float)) else float("-inf")
+    slot = drive.get("slot")
+    slot_key = slot if isinstance(slot, int) else 10**6
+    return (-hot, slot_key)
+
+
 def _is_online(snapshot: dict[str, Any], poll_interval_seconds: int, now: datetime) -> bool:
     """A host is online when its last snapshot succeeded recently.
 
@@ -3666,6 +3675,7 @@ def register_routes(app: Flask) -> None:
                 item["host_name"] = host_name
                 drives.append(item)
                 host_drives.append(item)
+            host_drives.sort(key=_drive_sort_key)
             temperatures = [
                 drive["temperature_c"]
                 for drive in host_drives

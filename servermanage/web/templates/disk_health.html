@@ -27,7 +27,7 @@
 <section class="card" id="disk-groups">
   <div class="section-head">
     <h2>按主机查看物理盘</h2>
-    <span class="muted">共 {{ hosts|length }} 台 · {{ drives|length }} 块盘{% if totals.warning or totals.critical %} · <span class="disk-attention">{{ totals.warning }} 告警 / {{ totals.critical }} 严重</span>{% endif %}</span>
+    <span class="muted">共 {{ hosts|length }} 台 · {{ drives|length }} 块盘{% if totals.warning or totals.critical %} · <span class="disk-attention">{{ totals.warning }} 告警 / {{ totals.critical }} 严重</span>{% endif %} · 每台按温度排序，热盘在前</span>
   </div>
   {% if hosts %}
   <div class="disk-filter">
