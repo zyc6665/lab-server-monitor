@@ -78,4 +78,4 @@ def test_example_config_documents_root_and_data_mounts():
 
 
 def test_project_version_is_1_5_0():
-    assert 'version = "0.1.89"' in PYPROJECT.read_text(encoding="utf-8")
+    assert 'version = "0.1.90"' in PYPROJECT.read_text(encoding="utf-8")

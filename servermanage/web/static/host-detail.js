@@ -548,6 +548,64 @@
   }
 
 
+  function fmtPercent(value) {
+    return value === null || value === undefined ? '—' : value.toFixed(1) + '%';
+  }
+
+  function bindContainerStats() {
+    var button = document.getElementById('container-stats');
+    var hint = document.getElementById('container-stats-hint');
+    if (!button) { return; }
+    button.addEventListener('click', function () {
+      var label = button.textContent;
+      button.disabled = true;
+      button.textContent = '读取中…';
+      if (hint) { hint.hidden = true; }
+      var request = HOST_NAME
+        ? fetchJson('/api/host/' + encodeURIComponent(HOST_NAME) + '/containers/stats', { method: 'POST' })
+        : Promise.reject(new Error('缺少主机信息'));
+      request
+        .then(function (payload) {
+          if (!payload || !payload.ok) {
+            throw new Error((payload && payload.error) || '读取失败');
+          }
+          var stats = {};
+          (payload.containers || []).forEach(function (row) { stats[row.name] = row; });
+          Array.prototype.forEach.call(document.querySelectorAll('[data-container-row]'), function (row) {
+            var name = row.querySelector('.container-cpu');
+            var data = name ? stats[name.getAttribute('data-container-name')] : null;
+            var cpuCell = row.querySelector('.container-cpu');
+            var memCell = row.querySelector('.container-mem');
+            if (!data) {
+              if (cpuCell) { cpuCell.textContent = '—'; }
+              if (memCell) { memCell.textContent = '—'; }
+              return;
+            }
+            if (cpuCell) { cpuCell.textContent = fmtPercent(data.cpu_percent); }
+            if (memCell) {
+              memCell.textContent = fmtPercent(data.memory_percent);
+              if (data.memory_usage) { memCell.title = data.memory_usage; }
+            }
+          });
+          if (hint) {
+            hint.textContent = '占用为执行瞬间的单次采样，' + (payload.containers || []).length + ' 个运行中容器';
+            hint.hidden = false;
+          }
+        })
+        .catch(function (error) {
+          if (hint) {
+            hint.className = 'container-stats-hint is-error';
+            hint.textContent = '读取失败：' + (error && error.message ? error.message : '未知错误');
+            hint.hidden = false;
+          }
+        })
+        .then(function () {
+          button.disabled = false;
+          button.textContent = label;
+        });
+    });
+  }
+
   function bindContainerFilter() {
     var search = document.getElementById('container-search');
     var state = document.getElementById('container-state');
@@ -583,6 +641,7 @@
   bindCollectNow();
   bindDiagCopy();
   bindContainerFilter();
+  bindContainerStats();
   loadHistory('24h');
   loadChecks();
 })();

@@ -52,6 +52,7 @@ from servermanage import (
     maintenance,
     storage,
 )
+from servermanage import container_stats as container_stats_mod
 from servermanage import user_admin as admin
 from servermanage import usermode as user_mode
 from servermanage import __version__ as app_version
@@ -3308,6 +3309,31 @@ def register_routes(app: Flask) -> None:
             LOGGER.exception("saved host check test failed for %s", name)
             return jsonify({"ok": False, "error": str(exc)}), 200
         return jsonify({"ok": True, "results": to_jsonable(results)})
+
+    @app.post("/api/host/<name>/containers/stats")
+    def api_host_container_stats(name: str):
+        """Run one read-only ``docker stats --no-stream`` for a saved host."""
+        config = _config(app)
+        host_config = next((h for h in config.servers if h.name == name), None)
+        if host_config is None:
+            return jsonify({"error": "not_found"}), 404
+        try:
+            with SSHClientWrapper(
+                host=host_config, connect_timeout=config.ssh.connect_timeout
+            ) as ssh:
+                rows = container_stats_mod.collect_container_stats(
+                    host_config, ssh, timeout=config.ssh.command_timeout
+                )
+        except Exception as exc:  # noqa: BLE001 - text-only error surface
+            LOGGER.exception("container stats failed for %s", name)
+            return jsonify({"ok": False, "error": str(exc)}), 200
+        return jsonify(
+            {
+                "ok": True,
+                "collected_at": datetime.now(timezone.utc).isoformat(),
+                "containers": rows,
+            }
+        )
 
     @app.post("/api/settings/hosts/<name>/collect")
     def api_collect_saved_host(name: str):

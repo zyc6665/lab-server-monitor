@@ -3052,3 +3052,21 @@ html[data-theme="dark"] .conn-banner-ok {
 @media (prefers-reduced-motion: reduce) {
   .conn-dot { animation: none; }
 }
+
+/* -- v0.1.90 容器资源占用按需读取 -- */
+.container-stats { flex: 0 0 auto; }
+.container-stats-hint {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.container-stats-hint.is-error { color: #b91c1c; }
+#host-containers .container-cpu,
+#host-containers .container-mem {
+  width: 84px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+html[data-theme="dark"] .container-stats-hint.is-error { color: #f87171; }
+@media (max-width: 760px) {
+  .container-stats-hint { display: none; }
+}

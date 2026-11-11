@@ -380,14 +380,16 @@
         <option value="paused">已暂停</option>
         <option value="restarting">重启中</option>
       </select>
+      <button type="button" class="secondary-button container-stats" id="container-stats"{% if not metrics.containers %} disabled{% endif %}>刷新占用</button>
       <span class="muted" id="container-count">{{ metrics.containers|length if metrics.containers else 0 }} 个容器</span>
+      <span class="container-stats-hint" id="container-stats-hint" hidden></span>
     </div>
   </div>
   {% if metrics.containers %}
   <div class="table-wrap">
     <table class="data-table">
       <thead>
-        <tr><th>名称</th><th>镜像</th><th>状态</th><th>运行情况</th></tr>
+        <tr><th>名称</th><th>镜像</th><th>状态</th><th>运行情况</th><th>CPU</th><th>内存</th></tr>
       </thead>
       <tbody>
         {% for container in metrics.containers %}
@@ -396,6 +398,8 @@
           <td class="mono container-image" title="{{ container.image }}">{{ container.image }}</td>
           <td><span class="status status-{{ 'ok' if container.state == 'running' else 'unknown' }}">{{ container.state or '—' }}</span></td>
           <td class="muted">{{ container.status or '—' }}</td>
+          <td class="mono container-cpu" data-container-name="{{ container.name }}">—</td>
+          <td class="mono container-mem" data-container-name="{{ container.name }}">—</td>
         </tr>
         {% endfor %}
       </tbody>
