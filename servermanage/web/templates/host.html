@@ -268,7 +268,7 @@
   <div class="table-wrap" id="host-checks-wrap"{% if not detail.checks %} hidden{% endif %}>
     <table class="data-table" id="host-checks-table">
       <thead>
-        <tr><th>名称</th><th>类型</th><th>目标</th><th>状态</th><th>最近 40 次</th><th>耗时</th><th>最近检查</th><th>消息</th></tr>
+        <tr><th>名称</th><th>类型</th><th>目标</th><th>状态</th><th>最近 40 次</th><th>可用率</th><th>耗时</th><th>最近检查</th><th>消息</th></tr>
       </thead>
       <tbody id="host-checks-body">
         {% for check in detail.checks %}
@@ -285,6 +285,14 @@
             </span>
             {% else %}<span class="muted">—</span>{% endif %}
           </td>
+          {% set beats_uptime = (detail.check_history or {}).get(check.check_name) or [] %}
+          {% if beats_uptime %}
+            {% set ok_count = beats_uptime|select('equalto', 'ok')|list|length %}
+            {% set ratio = ok_count * 100 / beats_uptime|length %}
+            <td class="mono uptime-cell{% if ratio < 95 %} is-low{% endif %}" title="{{ ok_count }} / {{ beats_uptime|length }} 次检查正常">{{ '%.1f'|format(ratio) }}%</td>
+          {% else %}
+            <td class="mono uptime-cell">—</td>
+          {% endif %}
           <td>{% if check.latency_ms is not none %}{{ '%.0f'|format(check.latency_ms) }} ms{% else %}—{% endif %}</td>
           <td class="mono"{% if check.checked_at %} title="{{ check.checked_at }}"{% endif %}>{{ check.checked_at|stamp }}</td>
           <td>{{ check.message or '—' }}</td>

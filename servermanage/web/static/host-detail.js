@@ -339,6 +339,20 @@
     return wrap;
   }
 
+  // 可用率：最近若干次检查里 ok 的占比，让“偶尔挂一下”也能一眼看出来。
+  function uptimeFor(statuses) {
+    var list = statuses || [];
+    if (!list.length) { return null; }
+    var ok = list.filter(function (item) { return item === 'ok'; }).length;
+    return { ratio: (ok * 100) / list.length, ok: ok, total: list.length };
+  }
+
+  function uptimeText(statuses) {
+    var summary = uptimeFor(statuses);
+    if (!summary) { return '—'; }
+    return summary.ratio.toFixed(1) + '%';
+  }
+
   function renderChecksTable(checks) {
     var body = document.getElementById('host-checks-body');
     if (!body) { return; }
@@ -363,6 +377,14 @@
       beatCell.className = 'heartbeat-cell';
       beatCell.appendChild(buildHeartbeat(checkHistory[check.check_name]));
       tr.appendChild(beatCell);
+      var uptimeSummary = uptimeFor(checkHistory[check.check_name]);
+      var uptimeCell = document.createElement('td');
+      uptimeCell.className = 'mono uptime-cell' + (uptimeSummary && uptimeSummary.ratio < 95 ? ' is-low' : '');
+      uptimeCell.textContent = uptimeText(checkHistory[check.check_name]);
+      if (uptimeSummary) {
+        uptimeCell.title = uptimeSummary.ok + ' / ' + uptimeSummary.total + ' 次检查正常';
+      }
+      tr.appendChild(uptimeCell);
       appendCheckCell(tr, fmtLatency(check.latency_ms));
       var stampCell = appendCheckCell(tr, stamp(check.checked_at), 'mono');
       if (check.checked_at) { stampCell.title = String(check.checked_at); }

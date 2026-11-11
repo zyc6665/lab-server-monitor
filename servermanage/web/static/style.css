@@ -3476,3 +3476,8 @@ html[data-theme="dark"] .disk-filter .disk-search { background: var(--surface-su
 @media (max-width: 760px) {
   .kv-group + .kv-group { margin-top: 14px; padding-top: 12px; }
 }
+
+/* -- v0.1.112 服务检查可用率 -- */
+.uptime-cell { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.uptime-cell.is-low { color: #b45309; font-weight: 600; }
+html[data-theme="dark"] .uptime-cell.is-low { color: #fbbf24; }
