@@ -28,6 +28,11 @@
   <div class="section-head">
     <h2>按主机查看物理盘</h2>
     <span class="muted">共 {{ hosts|length }} 台 · {{ drives|length }} 块盘{% if totals.warning or totals.critical %} · <span class="disk-attention">{{ totals.warning }} 告警 / {{ totals.critical }} 严重</span>{% endif %} · 每台按温度排序，热盘在前</span>
+    {% if temperature_stats and temperature_stats.samples %}
+    <span class="disk-temp-summary" title="仅统计上报了温度的盘位">
+      温度 最高 {{ temperature_stats.max }} °C · 平均 {{ temperature_stats.average }} °C{% if temperature_stats.hot %} · <span class="disk-temp-summary-hot">{{ temperature_stats.hot }} 块 ≥55 °C</span>{% endif %}
+    </span>
+    {% endif %}
     {% if drives %}<button type="button" class="btn-secondary disk-export" id="disk-export">导出 CSV</button>{% endif %}
   </div>
   {% if hosts %}

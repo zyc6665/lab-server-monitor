@@ -3721,12 +3721,24 @@ def register_routes(app: Flask) -> None:
         host_rows.sort(
             key=lambda row: (severity_rank.get(row["status"], 9), row["name"].lower())
         )
+        hot_temps = [
+            drive["temperature_c"]
+            for drive in drives
+            if isinstance(drive.get("temperature_c"), (int, float))
+        ]
+        temperature_stats = {
+            "max": max(hot_temps) if hot_temps else None,
+            "average": round(sum(hot_temps) / len(hot_temps), 1) if hot_temps else None,
+            "hot": sum(1 for value in hot_temps if value >= 55),
+            "samples": len(hot_temps),
+        }
         return render_template(
             "disk_health.html",
             active_page="disk_health",
             hosts=host_rows,
             drives=drives,
             totals=totals,
+            temperature_stats=temperature_stats,
         )
 
     @app.get("/alerts")
