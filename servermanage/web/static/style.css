@@ -3440,3 +3440,25 @@ html[data-theme="dark"] .disk-temp-summary-hot { color: #fbbf24; }
 @media (max-width: 1000px) {
   .disk-temp-summary { display: block; margin-top: 4px; }
 }
+
+/* -- v0.1.108 磁盘健康搜索 -- */
+.disk-filter .disk-search {
+  flex: 1 1 220px;
+  min-width: 180px;
+  max-width: 320px;
+  padding: 5px 10px;
+  font-size: 12.5px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--card-bg);
+  color: var(--text);
+}
+.disk-filter .disk-search:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(44, 92, 246, .14);
+}
+html[data-theme="dark"] .disk-filter .disk-search { background: var(--surface-sunken); border-color: #26344c; }
+@media (max-width: 760px) {
+  .disk-filter .disk-search { max-width: none; }
+}

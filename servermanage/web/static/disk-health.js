@@ -9,6 +9,8 @@
   if (!toggle) { return; }
 
   var emptyHint = document.getElementById('disk-filter-empty');
+  var searchEmpty = document.getElementById('disk-search-empty');
+  var search = document.getElementById('disk-search');
   var items = Array.prototype.slice.call(
     document.querySelectorAll('[data-disk-issues]')
   );
@@ -18,14 +20,28 @@
     return el.getAttribute('data-disk-issues') === '1';
   }
 
+  function keyword() {
+    return search ? (search.value || '').trim().toLowerCase() : '';
+  }
+
+  function matchesSearch(el, needle) {
+    if (!needle) { return true; }
+    var haystack = el.getAttribute('data-disk-search');
+    if (haystack === null) { haystack = (el.textContent || '').toLowerCase(); }
+    return haystack.indexOf(needle) !== -1;
+  }
+
+  // 两个筛选条件叠加：只看异常 + 关键字，谁筛掉了都要同步隐藏跳转芯片。
   function apply(onlyIssues) {
+    var needle = keyword();
     var visibleHosts = 0;
     items.forEach(function (el) {
-      var hide = onlyIssues && !isIssue(el);
+      var hide = (onlyIssues && !isIssue(el)) || !matchesSearch(el, needle);
       el.hidden = hide;
       if (!hide && el.classList.contains('disk-host')) { visibleHosts += 1; }
     });
     if (emptyHint) { emptyHint.hidden = !onlyIssues || visibleHosts > 0; }
+    if (searchEmpty) { searchEmpty.hidden = !needle || visibleHosts > 0; }
   }
 
   function read() {
@@ -51,6 +67,11 @@
     apply(toggle.checked);
     save(toggle.checked);
   });
+
+  if (search) {
+    search.addEventListener('input', function () { apply(toggle.checked); });
+    search.addEventListener('search', function () { apply(toggle.checked); });
+  }
 
   // 直接跳到某个主机锚点时，别让筛选把目标藏起来。
   if (window.location.hash && toggle.checked) {

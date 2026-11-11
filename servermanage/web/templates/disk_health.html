@@ -41,11 +41,13 @@
       <input type="checkbox" id="disk-only-issues">
       <span>只看异常主机</span>
     </label>
+    <input type="search" id="disk-search" class="disk-search" placeholder="搜索主机、分组、盘型号或序列号" aria-label="搜索磁盘">
     <span class="muted small" id="disk-filter-empty" hidden>当前没有告警、严重或采集失败的主机。</span>
+    <span class="muted small" id="disk-search-empty" hidden>没有匹配的磁盘记录。</span>
   </div>
   <nav class="disk-jump" aria-label="按主机跳转">
     {% for host in hosts %}
-    <a class="disk-jump-link" href="#disk-{{ host.anchor }}" data-disk-issues="{{ 1 if host.needs_attention else 0 }}">
+    <a class="disk-jump-link" href="#disk-{{ host.anchor }}" data-disk-issues="{{ 1 if host.needs_attention else 0 }}" data-disk-search="{{ host.name|lower }}">
       <span class="disk-jump-name">{{ host.name }}</span>
       <span class="disk-jump-count">{{ host.pd_count }}</span>
       {% if host.critical %}<span class="disk-jump-flag disk-jump-critical">{{ host.critical }}</span>{% elif host.warning %}<span class="disk-jump-flag disk-jump-warning">{{ host.warning }}</span>{% endif %}
@@ -53,7 +55,7 @@
     {% endfor %}
   </nav>
   {% for host in hosts %}
-  <article class="disk-host" id="disk-{{ host.anchor }}" data-disk-issues="{{ 1 if host.needs_attention else 0 }}">
+  <article class="disk-host" id="disk-{{ host.anchor }}" data-disk-issues="{{ 1 if host.needs_attention else 0 }}" data-disk-search="{{ host.search_text }}">
     <header class="disk-host-head">
       <div class="disk-host-id">
         <button type="button" class="disk-collapse" data-disk-collapse aria-expanded="true" aria-label="展开或收起 {{ host.name }} 的盘位明细" title="展开 / 收起盘位明细"><span class="disk-caret">▾</span></button>

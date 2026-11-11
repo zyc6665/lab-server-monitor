@@ -3715,6 +3715,22 @@ def register_routes(app: Flask) -> None:
                     "temperature_max": max(temperatures) if temperatures else None,
                     "collected_at": _to_local_iso((health or {}).get("collected_at"), tz),
                     "drives": host_drives,
+                    # 搜索用：主机、分组、地址加上盘型号/序列号，方便按盘找人。
+                    "search_text": " ".join(
+                        filter(
+                            None,
+                            [
+                                host_name,
+                                groups.get(host_name, ""),
+                                addresses.get(host_name) or "",
+                                " ".join(
+                                    str(drive.get(key) or "")
+                                    for drive in host_drives
+                                    for key in ("model", "serial")
+                                ),
+                            ],
+                        )
+                    ).lower(),
                 }
             )
         # 有问题的主机排在前面，其余按名称排序，方便先看异常盘。
