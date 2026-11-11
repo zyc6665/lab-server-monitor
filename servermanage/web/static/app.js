@@ -1362,12 +1362,123 @@
     if (next) { next.disabled = alertPage >= pages; }
   }
 
+  var ALERT_GROUP_KEY = 'alerts:group-by-host';
+  var alertGrouped = false;
+  var collapsedHosts = {};
+
+  function readAlertGrouping() {
+    try {
+      alertGrouped = localStorage.getItem(ALERT_GROUP_KEY) === '1';
+    } catch (err) {
+      alertGrouped = false;
+    }
+    var toggle = document.getElementById('alert-group-toggle');
+    if (toggle) {
+      toggle.classList.toggle('active', alertGrouped);
+      toggle.setAttribute('aria-pressed', alertGrouped ? 'true' : 'false');
+    }
+  }
+
+  function setAlertGrouping(value) {
+    alertGrouped = Boolean(value);
+    try {
+      localStorage.setItem(ALERT_GROUP_KEY, alertGrouped ? '1' : '0');
+    } catch (err) {}
+    var toggle = document.getElementById('alert-group-toggle');
+    if (toggle) {
+      toggle.classList.toggle('active', alertGrouped);
+      toggle.setAttribute('aria-pressed', alertGrouped ? 'true' : 'false');
+    }
+    renderAlertRows();
+  }
+
+  var SEVERITY_WEIGHT = { critical: 3, warning: 2, info: 1 };
+
+  function sortAlertsForGrouping(alerts) {
+    var copy = alerts.slice();
+    copy.sort(function (a, b) {
+      var left = String((a && a.host_name) || '');
+      var right = String((b && b.host_name) || '');
+      if (left < right) { return -1; }
+      if (left > right) { return 1; }
+      var ta = String((a && a.created_at) || '');
+      var tb = String((b && b.created_at) || '');
+      if (ta === tb) { return 0; }
+      return alertSortOrder === 'asc' ? (ta < tb ? -1 : 1) : (ta > tb ? -1 : 1);
+    });
+    return copy;
+  }
+
+  function groupAlertsByHost(alerts) {
+    var order = [];
+    var groups = {};
+    for (var i = 0; i < alerts.length; i += 1) {
+      var alert = alerts[i] || {};
+      var key = alert.host_name || '未知主机';
+      if (!groups[key]) {
+        groups[key] = { host: key, alerts: [], severity: 'info', latest: '' };
+        order.push(key);
+      }
+      var group = groups[key];
+      group.alerts.push(alert);
+      var weight = SEVERITY_WEIGHT[alert.severity] || 0;
+      if (weight > (SEVERITY_WEIGHT[group.severity] || 0)) {
+        group.severity = alert.severity;
+      }
+      if (!group.latest || String(alert.created_at || '') > String(group.latest)) {
+        group.latest = alert.created_at || group.latest;
+      }
+    }
+    return order.map(function (key) { return groups[key]; });
+  }
+
+  function buildAlertGroupRow(group) {
+    var tr = document.createElement('tr');
+    tr.className = 'alert-group';
+    tr.setAttribute('data-alert-group', group.host);
+    tr.setAttribute('data-severity', group.severity || 'info');
+    var cell = document.createElement('td');
+    cell.className = 'alert-group-cell';
+    cell.colSpan = 9;
+
+    var caret = document.createElement('span');
+    caret.className = 'alert-group-caret';
+    caret.textContent = collapsedHosts[group.host] ? '▸' : '▾';
+    cell.appendChild(caret);
+
+    var name = document.createElement('strong');
+    name.textContent = group.host;
+    cell.appendChild(name);
+
+    var count = document.createElement('span');
+    count.className = 'alert-group-count';
+    count.textContent = group.alerts.length + ' 条';
+    cell.appendChild(count);
+
+    var badge = document.createElement('span');
+    badge.className = 'severity severity-' + (group.severity || 'info');
+    badge.textContent = group.severity || '—';
+    cell.appendChild(badge);
+
+    var time = document.createElement('span');
+    time.className = 'alert-group-time mono';
+    time.textContent = formatRelative(group.latest);
+    if (group.latest) { time.title = formatStamp(group.latest); }
+    cell.appendChild(time);
+
+    tr.appendChild(cell);
+    tr.tabIndex = 0;
+    tr.setAttribute('aria-expanded', collapsedHosts[group.host] ? 'false' : 'true');
+    return tr;
+  }
+
   function renderAlertRows() {
     var body = document.getElementById('alerts-body');
     var table = document.getElementById('alerts-table');
     var empty = document.getElementById('alerts-empty');
     if (!body || !table) { return; }
     var matched = filteredAlerts();
+    if (alertGrouped) { matched = sortAlertsForGrouping(matched); }
     var total = matched.length;
     var pages = Math.max(1, Math.ceil(total / alertPageSize));
     if (alertPage > pages) { alertPage = pages; }
@@ -1375,14 +1486,32 @@
     var start = (alertPage - 1) * alertPageSize;
     var visible = matched.slice(start, start + alertPageSize);
     while (body.firstChild) { body.removeChild(body.firstChild); }
-    for (var i = 0; i < visible.length; i += 1) {
-      var row = buildAlertRow(visible[i] || {});
-      if (row && row.getAttribute('data-alert-row')) {
-        row.classList.add('alert-row');
-        row.tabIndex = 0;
-        row.setAttribute('aria-expanded', 'false');
+    if (alertGrouped) {
+      var groups = groupAlertsByHost(visible);
+      for (var g = 0; g < groups.length; g += 1) {
+        var group = groups[g];
+        body.appendChild(buildAlertGroupRow(group));
+        if (collapsedHosts[group.host]) { continue; }
+        for (var j = 0; j < group.alerts.length; j += 1) {
+          var subRow = buildAlertRow(group.alerts[j] || {});
+          if (subRow && subRow.getAttribute('data-alert-row')) {
+            subRow.classList.add('alert-row', 'alert-subrow');
+            subRow.tabIndex = 0;
+            subRow.setAttribute('aria-expanded', 'false');
+          }
+          body.appendChild(subRow);
+        }
       }
-      body.appendChild(row);
+    } else {
+      for (var i = 0; i < visible.length; i += 1) {
+        var row = buildAlertRow(visible[i] || {});
+        if (row && row.getAttribute('data-alert-row')) {
+          row.classList.add('alert-row');
+          row.tabIndex = 0;
+          row.setAttribute('aria-expanded', 'false');
+        }
+        body.appendChild(row);
+      }
     }
     var skeleton = document.getElementById('alert-skeleton');
     if (skeleton) { skeleton.hidden = true; }
@@ -1991,6 +2120,20 @@
     });
     var bulkAck = document.getElementById('alert-bulk-ack');
     if (bulkAck) { bulkAck.addEventListener('click', bulkAckSelected); }
+    var groupToggle = document.getElementById('alert-group-toggle');
+    if (groupToggle) {
+      groupToggle.addEventListener('click', function () { setAlertGrouping(!alertGrouped); });
+    }
+    document.addEventListener('click', function (event) {
+      var row = event.target && event.target.closest
+        ? event.target.closest('[data-alert-group]')
+        : null;
+      if (!row) { return; }
+      var hostKey = row.getAttribute('data-alert-group');
+      collapsedHosts[hostKey] = !collapsedHosts[hostKey];
+      renderAlertRows();
+    });
+    readAlertGrouping();
     if (alertSeverityFilter) {
       alertSeverityFilter.addEventListener('change', function () {
         alertSeverity = alertSeverityFilter.value || '';
