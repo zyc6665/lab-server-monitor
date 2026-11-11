@@ -429,7 +429,7 @@
   }
 
   var OVERVIEW_SVG_NS = 'http://www.w3.org/2000/svg';
-  var OVERVIEW_COLORS = { cpu: '#2563eb', memory: '#7c3aed', disk: '#059669', gpu_util: '#d97706' };
+  var OVERVIEW_COLORS = { cpu: '#2563eb', memory: '#7c3aed', disk: '#059669', gpu_util: '#d97706', load_1: '#0ea5e9' };
 
   function overviewSvgEl(name, attrs) {
     var el = document.createElementNS(OVERVIEW_SVG_NS, name);
@@ -462,7 +462,11 @@
     var numbers = overviewNumbers(values);
     var history = overviewNumbers(previous);
     var latest = document.querySelector('[data-overview-latest="' + key + '"]');
-    if (latest) { latest.textContent = numbers.length ? formatPercent(numbers[numbers.length - 1]) : ''; }
+    if (latest) {
+      latest.textContent = numbers.length
+        ? (key === 'load_1' ? numbers[numbers.length - 1].toFixed(2) : formatPercent(numbers[numbers.length - 1]))
+        : '';
+    }
     if (numbers.length < 2) { return; }
     var width = 300, height = 84, padX = 8, padY = 8;
     var scale = numbers.concat(history.length >= 2 ? history : []);
@@ -498,6 +502,8 @@
     svg.appendChild(overviewSvgEl('circle', { cx: last[0], cy: last[1], r: '2.8', fill: OVERVIEW_COLORS[key] }));
   }
 
+  var OVERVIEW_TREND_KEYS = ['cpu', 'memory', 'disk', 'gpu_util', 'load_1'];
+
   function loadOverviewHistory(rangeKey) {
     if (!document.getElementById('overview-trend')) { return; }
     fetchJson('/api/overview/history?compare=1&range=' + encodeURIComponent(rangeKey)).then(function (payload) {
@@ -510,7 +516,7 @@
         hint.hidden = previous.length < 2;
         hint.textContent = previous.length >= 2 ? '虚线为上一周期' : '';
       }
-      ['cpu', 'memory', 'disk', 'gpu_util'].forEach(function (key) {
+      OVERVIEW_TREND_KEYS.forEach(function (key) {
         drawOverviewTrend(
           document.querySelector('[data-overview-trend="' + key + '"]'),
           points.map(function (point) { return point[key]; }),
