@@ -664,12 +664,76 @@
   function attentionChip(host, compact) {
     var reasons = hostAttentionReasons(host);
     if (!reasons.length) { return null; }
-    var chip = document.createElement('span');
+    var chip = document.createElement('button');
+    chip.type = 'button';
     chip.className = compact ? 'attention-chip is-compact' : 'attention-chip';
     if (!host.online || reasons.length >= 3) { chip.className += ' is-critical'; }
     chip.textContent = compact ? String(reasons.length) : reasons.length + ' 项关注';
     chip.title = reasons.join(' · ');
+    chip.setAttribute('data-attention-host', host.name || '');
+    chip.setAttribute('aria-label', (host.name || '') + ' 的关注项：' + reasons.join('，'));
     return chip;
+  }
+
+  // 点"N 项关注"弹出原因清单，省得只能看 title 悬停。
+  function attentionPopover() {
+    var pop = document.getElementById('attention-pop');
+    if (pop) { return pop; }
+    pop = document.createElement('div');
+    pop.id = 'attention-pop';
+    pop.className = 'attention-pop';
+    pop.hidden = true;
+    document.body.appendChild(pop);
+    return pop;
+  }
+
+  function closeAttentionPopover() {
+    var pop = document.getElementById('attention-pop');
+    if (pop) { pop.hidden = true; }
+  }
+
+  function openAttentionPopover(button) {
+    var pop = attentionPopover();
+    var hostName = button.getAttribute('data-attention-host') || '';
+    var reasons = (button.title || '').split(' · ').filter(Boolean);
+    pop.textContent = '';
+    var head = document.createElement('div');
+    head.className = 'attention-pop-head';
+    head.textContent = hostName;
+    pop.appendChild(head);
+    var list = document.createElement('ul');
+    reasons.forEach(function (reason) {
+      var item = document.createElement('li');
+      item.textContent = reason;
+      list.appendChild(item);
+    });
+    pop.appendChild(list);
+    pop.hidden = false;
+    var rect = button.getBoundingClientRect();
+    var width = pop.offsetWidth || 220;
+    var left = Math.min(rect.left, window.innerWidth - width - 12);
+    pop.style.left = Math.max(12, left) + 'px';
+    pop.style.top = (rect.bottom + window.scrollY + 6) + 'px';
+  }
+
+  function bindAttentionChips() {
+    document.addEventListener('click', function (event) {
+      var chip = event.target.closest('[data-attention-host]');
+      if (!chip) {
+        closeAttentionPopover();
+        return;
+      }
+      event.preventDefault();
+      var pop = document.getElementById('attention-pop');
+      if (pop && !pop.hidden) {
+        closeAttentionPopover();
+        return;
+      }
+      openAttentionPopover(chip);
+    });
+    document.addEventListener('keydown', function (event) {
+      if (event.key === 'Escape') { closeAttentionPopover(); }
+    });
   }
 
   function buildHostRow(host) {
@@ -2722,6 +2786,7 @@
 
     bindOverviewRanges();
     bindFocusHosts();
+    bindAttentionChips();
     bindAlertRanges();
     bindAlertTimeline();
     bindResourceRankTabs();

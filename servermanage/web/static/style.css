@@ -3494,3 +3494,30 @@ html[data-theme="dark"] .uptime-cell.is-low { color: #fbbf24; }
 }
 .checks-filter input { margin: 0; }
 #host-checks-body tr[hidden] { display: none !important; }
+
+/* -- v0.1.114 关注项原因浮层 -- */
+.attention-chip {
+  border: 1px solid rgba(217, 119, 6, .35);
+  background: rgba(217, 119, 6, .08);
+  font: inherit;
+  cursor: pointer;
+}
+.attention-chip:hover { background: rgba(217, 119, 6, .16); }
+.attention-chip:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(217, 119, 6, .22); }
+.attention-pop {
+  position: absolute;
+  z-index: 40;
+  min-width: 180px;
+  max-width: 260px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--card-bg);
+  box-shadow: 0 8px 24px rgba(16, 24, 40, .12);
+  font-size: 12.5px;
+}
+.attention-pop[hidden] { display: none !important; }
+.attention-pop-head { font-weight: 600; margin-bottom: 6px; }
+.attention-pop ul { margin: 0; padding-left: 16px; color: var(--text-muted); }
+.attention-pop li + li { margin-top: 3px; }
+html[data-theme="dark"] .attention-pop { background: var(--surface-raised); border-color: #26344c; }
