@@ -364,6 +364,7 @@
     if (empty) { empty.hidden = list.length > 0; }
     list.forEach(function (check) {
       var tr = document.createElement('tr');
+      tr.setAttribute('data-check-status', check.status || 'unknown');
       appendCheckCell(tr, checkText(check.check_name));
       appendCheckCell(tr, checkText(check.check_type));
       appendCheckCell(tr, checkText(check.target), 'mono');
@@ -391,6 +392,40 @@
       appendCheckCell(tr, checkText(check.message));
       body.appendChild(tr);
     });
+    applyCheckFilter();
+  }
+
+  // 检查项多的时候，只看异常的那几行，省得逐行扫。
+  function applyCheckFilter() {
+    var toggle = document.getElementById('host-checks-only-bad');
+    var body = document.getElementById('host-checks-body');
+    if (!body) { return; }
+    var onlyBad = !!(toggle && toggle.checked);
+    var hidden = 0;
+    var total = 0;
+    Array.prototype.forEach.call(body.querySelectorAll('tr'), function (row) {
+      total += 1;
+      var bad = row.getAttribute('data-check-status') !== 'ok';
+      row.hidden = onlyBad && !bad;
+      if (row.hidden) { hidden += 1; }
+    });
+    var hint = document.getElementById('host-checks-hint');
+    if (hint && onlyBad) {
+      hint.hidden = false;
+      hint.className = 'checks-hint';
+      hint.textContent = hidden === total && total
+        ? '所有 ' + total + ' 项检查都正常'
+        : '只看异常：' + (total - hidden) + ' / ' + total + ' 项';
+    } else if (hint && !hint.textContent) {
+      hint.hidden = true;
+    }
+  }
+
+  function bindCheckFilter() {
+    var toggle = document.getElementById('host-checks-only-bad');
+    if (!toggle) { return; }
+    toggle.addEventListener('change', applyCheckFilter);
+    applyCheckFilter();
   }
 
   function loadChecks() {
@@ -748,6 +783,7 @@
   bindRanges();
   bindActions();
   bindCollectNow();
+  bindCheckFilter();
   bindDiagCopy();
   bindContainerFilter();
   bindContainerStats();

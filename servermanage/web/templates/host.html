@@ -261,6 +261,10 @@
     <h2>服务可用性</h2>
     <div class="checks-actions">
       <span class="muted">{{ detail.checks|length if detail.checks else 0 }} 项检查</span>
+      <label class="checks-filter">
+        <input type="checkbox" id="host-checks-only-bad">
+        <span>只看异常</span>
+      </label>
       <button type="button" class="secondary-button checks-run" id="host-checks-run"{% if not detail.checks %} disabled{% endif %}>立即检查</button>
       <span class="checks-hint" id="host-checks-hint" hidden></span>
     </div>
@@ -272,7 +276,7 @@
       </thead>
       <tbody id="host-checks-body">
         {% for check in detail.checks %}
-        <tr>
+        <tr data-check-status="{{ check.status or 'unknown' }}">
           <td>{{ check.check_name or '—' }}</td>
           <td>{{ check.check_type or '—' }}</td>
           <td class="mono">{{ check.target or '—' }}</td>
