@@ -32,7 +32,7 @@ def test_timeline_script_helpers():
     assert "function bindAlertTimeline()" in js
     assert "bindAlertTimeline();" in js
     # 时间分布随列表刷新
-    assert "renderAlertTimeline(filteredAlerts());" in js
+    assert "renderAlertTimeline(filteredAlerts(true));" in js
     # 分级别堆叠
     assert "timeline-seg-' + level" in js
     assert "severity === 'critical' || alert.severity === 'warning'" in js

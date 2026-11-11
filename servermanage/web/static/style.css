@@ -3164,3 +3164,44 @@ html[data-theme="dark"] .checks-hint.is-error { color: #f87171; }
 @media (max-width: 760px) {
   .checks-actions { width: 100%; }
 }
+
+/* -- v0.1.93 时间分布点击筛选 -- */
+.timeline-bar.is-clickable {
+  cursor: pointer;
+}
+
+.timeline-bar.is-clickable:hover {
+  filter: brightness(1.15);
+}
+
+.timeline-bar.is-selected {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.chip-clear {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border));
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  color: var(--accent);
+  font-size: 12.5px;
+  cursor: pointer;
+}
+
+.chip-clear[hidden] {
+  display: none !important;
+}
+
+.chip-clear:hover {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+html[data-theme="dark"] .chip-clear {
+  border-color: color-mix(in srgb, #7aa2ff 40%, #26344c);
+  background: color-mix(in srgb, #7aa2ff 16%, transparent);
+  color: #a8c0ff;
+}

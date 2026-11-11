@@ -1342,9 +1342,18 @@
     }
   }
 
-  function matchingAlerts(ignoreSeverity) {
+  function bucketStartFor(value, range) {
+    var when = typeof value === 'number' ? value : Date.parse(value || '');
+    if (isNaN(when)) { return 0; }
+    var spec = TIMELINE_RANGES[range] || TIMELINE_RANGES['24h'];
+    var stepMs = spec.stepHours * 3600 * 1000;
+    return Math.floor(when / stepMs) * stepMs;
+  }
+
+  function matchingAlerts(ignoreSeverity, ignoreBucket) {
     var keyword = (alertKeyword || '').trim().toLowerCase();
     return lastAlerts.filter(function (alert) {
+      if (!ignoreBucket && alertBucket && bucketStartFor(alert.created_at, timelineRange) !== alertBucket) { return false; }
       if (!ignoreSeverity && alertSeverity && (alert.severity || '') !== alertSeverity) { return false; }
       if (alertHost && (alert.host_name || '') !== alertHost) { return false; }
       if (!keyword) { return true; }
@@ -1354,8 +1363,8 @@
     });
   }
 
-  function filteredAlerts() {
-    var rows = matchingAlerts(false);
+  function filteredAlerts(ignoreBucket) {
+    var rows = matchingAlerts(false, ignoreBucket);
     rows.sort(function (left, right) {
       var a = String(left.created_at || '');
       var b = String(right.created_at || '');
@@ -1571,7 +1580,7 @@
     renderAlertSummary();
     renderAlertPagination(total, pages, start, visible.length);
     updateAlertSelectionSummary();
-    renderAlertTimeline(filteredAlerts());
+    renderAlertTimeline(filteredAlerts(true));
   }
 
   // -- 概览卡片折叠（记住上次状态） ---------------------------------------
@@ -1714,6 +1723,7 @@
     '30d': { hours: 24 * 30, stepHours: 24, label: '30 天' }
   };
   var timelineRange = '7d';
+  var alertBucket = 0;
 
   function timelineBuckets(range) {
     var spec = TIMELINE_RANGES[range] || TIMELINE_RANGES['24h'];
@@ -1769,6 +1779,9 @@
       var bar = document.createElement('div');
       bar.className = 'timeline-bar';
       bar.setAttribute('data-timeline-bar', timelineLabel(bucket, timelineRange));
+      bar.setAttribute('data-timeline-start', String(bucket.start));
+      if (alertBucket === bucket.start) { bar.classList.add('is-selected'); }
+      if (bucket.total) { bar.classList.add('is-clickable'); }
       var title = timelineLabel(bucket, timelineRange) + ' · 共 ' + bucket.total + ' 条';
       if (bucket.critical) { title += ' · 严重 ' + bucket.critical; }
       if (bucket.warning) { title += ' · 警告 ' + bucket.warning; }
@@ -1807,9 +1820,50 @@
           other.classList.toggle('active', active);
           other.setAttribute('aria-selected', active ? 'true' : 'false');
         });
-        renderAlertTimeline(filteredAlerts());
+        alertBucket = 0;
+        updateAlertBucketChip();
+        renderAlertRows();
+        renderAlertTimeline(filteredAlerts(true));
       });
     });
+    var container = document.getElementById('alert-timeline');
+    if (container) {
+      container.addEventListener('click', function (event) {
+        var bar = event.target.closest ? event.target.closest('[data-timeline-start]') : null;
+        if (!bar) { return; }
+        var start = Number(bar.getAttribute('data-timeline-start'));
+        if (!start || bar.classList.contains('is-empty')) { return; }
+        alertBucket = alertBucket === start ? 0 : start;
+        updateAlertBucketChip();
+        renderAlertRows();
+        renderAlertTimeline(filteredAlerts(true));
+      });
+    }
+    var chip = document.getElementById('alert-bucket-chip');
+    if (chip) {
+      chip.addEventListener('click', function () {
+        alertBucket = 0;
+        updateAlertBucketChip();
+        renderAlertRows();
+        renderAlertTimeline(filteredAlerts(true));
+      });
+    }
+    updateAlertBucketChip();
+  }
+
+  function updateAlertBucketChip() {
+    var chip = document.getElementById('alert-bucket-chip');
+    if (!chip) { return; }
+    if (!alertBucket) {
+      chip.hidden = true;
+      chip.textContent = '';
+      return;
+    }
+    var spec = TIMELINE_RANGES[timelineRange] || TIMELINE_RANGES['24h'];
+    var label = timelineLabel({ start: alertBucket }, timelineRange);
+    var scope = spec.stepHours === 1 ? '该小时' : '该天';
+    chip.hidden = false;
+    chip.textContent = label + ' ' + scope + ' ×';
   }
 
   function updateAlerts(alerts, counts) {
@@ -1825,7 +1879,7 @@
       if (!activeIds[alertId]) { delete selectedAlertIds[alertId]; }
     });
     renderAlertRows();
-    renderAlertTimeline(filteredAlerts());
+    renderAlertTimeline(filteredAlerts(true));
   }
 
   function updateAlertSelectionSummary() {
@@ -1974,6 +2028,7 @@
     alertSeverity = '';
     alertHost = '';
     alertTimeRange = '';
+    alertBucket = 0;
     alertSortOrder = 'desc';
     alertPage = 1;
     selectedAlertIds = {};
@@ -1987,6 +2042,7 @@
     if (range) { range.value = ''; }
     var sort = document.getElementById('alert-sort');
     if (sort) { sort.value = 'desc'; }
+    updateAlertBucketChip();
     renderAlertStatusTabs();
     renderAlertRows();
     syncAlertUrl();
