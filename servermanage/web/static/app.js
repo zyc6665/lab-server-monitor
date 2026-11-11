@@ -1269,15 +1269,44 @@
     return tr;
   }
 
+  var FOCUS_SEVERITY_WEIGHT = { critical: 3, warning: 2, info: 1 };
+
+  function focusRank(alert) {
+    var weight = FOCUS_SEVERITY_WEIGHT[(alert && alert.severity) || 'info'] || 0;
+    var stamp = Date.parse((alert && alert.created_at) || '') || 0;
+    return weight * 1e13 + stamp;
+  }
+
+  function pickFocusAlerts(alerts) {
+    // 同一台主机只保留最严重（同级取最新）的一条，避免 5 条全是同一台机器。
+    var groups = {};
+    var order = [];
+    alerts.forEach(function (alert) {
+      var key = (alert && alert.host_name) || '';
+      if (!groups[key]) {
+        groups[key] = { alert: alert, total: 0, extra: 0 };
+        order.push(key);
+      }
+      groups[key].total += 1;
+      if (focusRank(alert) > focusRank(groups[key].alert)) { groups[key].alert = alert; }
+    });
+    var picks = order.map(function (key) { return groups[key]; });
+    picks.forEach(function (pick) { pick.extra = pick.total - 1; });
+    picks.sort(function (a, b) { return focusRank(b.alert) - focusRank(a.alert); });
+    return picks.slice(0, 5);
+  }
+
   function updateFocusAlerts(alerts) {
     var list = document.getElementById('focus-alert-list');
     if (!list) { return; }
-    var visible = alerts.slice(0, 5);
+    var visible = pickFocusAlerts(alerts || []);
     while (list.firstChild) { list.removeChild(list.firstChild); }
     for (var i = 0; i < visible.length; i += 1) {
-      var alert = visible[i] || {};
+      var pick = visible[i] || {};
+      var alert = pick.alert || {};
       var item = document.createElement('li');
       item.className = 'focus-item';
+      item.setAttribute('data-host', alert.host_name || '');
       var dot = document.createElement('span');
       dot.className = 'focus-dot focus-' + (alert.severity || 'info');
       item.appendChild(dot);
@@ -1286,6 +1315,13 @@
       var title = document.createElement('div');
       title.className = 'focus-title';
       title.textContent = alert.title || alert.category || '告警';
+      if (pick.extra > 0) {
+        var extra = document.createElement('span');
+        extra.className = 'focus-extra';
+        extra.textContent = '另有 ' + pick.extra + ' 条';
+        extra.title = '这台主机还有 ' + pick.extra + ' 条活动告警';
+        title.appendChild(extra);
+      }
       content.appendChild(title);
       var meta = document.createElement('div');
       meta.className = 'focus-meta';
@@ -1297,6 +1333,13 @@
     }
     var empty = document.getElementById('focus-empty');
     if (empty) { empty.hidden = visible.length > 0; }
+    var hint = document.getElementById('focus-hint');
+    if (hint) {
+      hint.textContent = visible.length
+        ? '每台主机只列最严重一条 · 共 ' + (alerts || []).length + ' 条活动告警'
+        : '';
+      hint.hidden = visible.length === 0;
+    }
   }
 
   function matchingAlerts(ignoreSeverity) {
