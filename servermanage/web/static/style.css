@@ -3414,3 +3414,17 @@ html[data-theme="dark"] .attention-chip.is-critical {
 .disk-host.is-collapsed .disk-host-head { border-bottom-color: transparent; }
 .disk-host.is-collapsed .disk-host-meta { opacity: .75; }
 html[data-theme="dark"] .disk-collapse:hover { background: #1b2739; border-color: #26344c; color: #e2e8f0; }
+
+/* -- v0.1.106 重点关注定位主机 -- */
+.focus-host {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  cursor: pointer;
+  border-bottom: 1px dashed rgba(44, 92, 246, .45);
+}
+.focus-host:hover { border-bottom-style: solid; }
+.focus-host:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(44, 92, 246, .18); border-radius: 3px; }
+html[data-theme="dark"] .focus-host { color: #7aa2ff; border-bottom-color: rgba(122, 162, 255, .45); }

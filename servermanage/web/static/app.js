@@ -527,6 +527,26 @@
     }).catch(function () {});
   }
 
+  // 重点关注里点主机名，直接把下方主机列表筛到这一台，不再手动输关键字。
+  function bindFocusHosts() {
+    var list = document.getElementById('focus-alert-list');
+    if (!list) { return; }
+    list.addEventListener('click', function (event) {
+      var target = event.target.closest('[data-focus-host]');
+      if (!target) { return; }
+      var name = target.getAttribute('data-focus-host') || '';
+      var keyword = document.getElementById('filter-keyword');
+      if (keyword) {
+        keyword.value = name;
+      }
+      applyHostFilters();
+      var section = document.getElementById('host-table-wrap') || document.getElementById('host-cards');
+      if (section && section.scrollIntoView) {
+        section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    });
+  }
+
   function bindOverviewRanges() {
     var tabs = document.querySelectorAll('[data-overview-range]');
     if (!tabs.length) { return; }
@@ -1452,8 +1472,22 @@
       content.appendChild(title);
       var meta = document.createElement('div');
       meta.className = 'focus-meta';
-      meta.textContent = [alert.host_name, alert.message, formatStamp(alert.created_at)]
+      if (alert.host_name) {
+        var hostButton = document.createElement('button');
+        hostButton.type = 'button';
+        hostButton.className = 'focus-host';
+        hostButton.setAttribute('data-focus-host', alert.host_name);
+        hostButton.title = '在下方主机列表里只看这台';
+        hostButton.textContent = alert.host_name;
+        meta.appendChild(hostButton);
+      }
+      var rest = [alert.message, formatStamp(alert.created_at)]
         .filter(function (part) { return part && part !== '—'; }).join(' · ');
+      if (rest) {
+        var restSpan = document.createElement('span');
+        restSpan.textContent = (alert.host_name ? ' · ' : '') + rest;
+        meta.appendChild(restSpan);
+      }
       content.appendChild(meta);
       item.appendChild(content);
       list.appendChild(item);
@@ -1463,7 +1497,7 @@
     var hint = document.getElementById('focus-hint');
     if (hint) {
       hint.textContent = visible.length
-        ? '每台主机只列最严重一条 · 共 ' + (alerts || []).length + ' 条活动告警'
+        ? '每台主机只列最严重一条 · 共 ' + (alerts || []).length + ' 条活动告警 · 点主机名可筛选下表'
         : '';
       hint.hidden = visible.length === 0;
     }
@@ -2687,6 +2721,7 @@
     if (alertExport) { alertExport.addEventListener('click', exportAlertsCsv); }
 
     bindOverviewRanges();
+    bindFocusHosts();
     bindAlertRanges();
     bindAlertTimeline();
     bindResourceRankTabs();
