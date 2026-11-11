@@ -3673,3 +3673,13 @@ html[data-theme="dark"] .host-alert-day-bar { background: #16233a; }
 #alerts-table.hide-host .col-host,
 #alerts-table.hide-message .col-message { display: none; }
 html[data-theme="dark"] .col-menu-body { background: var(--surface-raised); border-color: #26344c; }
+
+/* -- v0.1.123 概览趋势导出 CSV -- */
+#overview-trend .trend-export {
+  margin-left: auto;
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+#overview-trend .trend-export:hover { color: var(--accent); }
+#overview-trend .trend-export[hidden] { display: none !important; }
+html[data-theme="dark"] #overview-trend .trend-export:hover { color: #7aa2ff; }

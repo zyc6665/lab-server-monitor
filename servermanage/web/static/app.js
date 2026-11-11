@@ -503,6 +503,15 @@
   }
 
   var OVERVIEW_TREND_KEYS = ['cpu', 'memory', 'disk', 'gpu_util', 'load_1'];
+  var OVERVIEW_TREND_LABELS = {
+    cpu: 'CPU %',
+    memory: '内存 %',
+    disk: '磁盘 %',
+    gpu_util: 'GPU 显存 %',
+    load_1: '负载(1)',
+  };
+  // 最近一次拉到的趋势数据，导出 CSV 时直接复用，不再请求接口。
+  var overviewHistory = { range: '24h', points: [], previous: [] };
 
   function loadOverviewHistory(rangeKey) {
     if (!document.getElementById('overview-trend')) { return; }
@@ -524,7 +533,62 @@
           previous.map(function (point) { return point[key]; })
         );
       });
+      overviewHistory = { range: rangeKey, points: points, previous: previous };
+      var exportButton = document.getElementById('overview-trend-export');
+      if (exportButton) { exportButton.hidden = points.length === 0; }
     }).catch(function () {});
+  }
+
+  function overviewPointLabel(point) {
+    var raw = point && point.t;
+    if (!raw) { return ''; }
+    var text = String(raw);
+    if (text.length >= 16) { return text.slice(5, 16).replace('T', ' '); }
+    return text;
+  }
+
+  function csvEscape(value) {
+    var text = value == null ? '' : String(value);
+    return '"' + text.split('"').join('""') + '"';
+  }
+
+  function exportOverviewHistory() {
+    var points = overviewHistory.points || [];
+    if (!points.length) { return; }
+    var previous = overviewHistory.previous || [];
+    var header = ['时间'];
+    OVERVIEW_TREND_KEYS.forEach(function (key) { header.push(OVERVIEW_TREND_LABELS[key]); });
+    header.push('上一周期时间');
+    OVERVIEW_TREND_KEYS.forEach(function (key) { header.push('上一周期 ' + OVERVIEW_TREND_LABELS[key]); });
+    var lines = [header.map(csvEscape).join(',')];
+    points.forEach(function (point, index) {
+      var prior = previous[index] || {};
+      var cells = [overviewPointLabel(point)];
+      OVERVIEW_TREND_KEYS.forEach(function (key) {
+        cells.push(typeof point[key] === 'number' ? point[key].toFixed(1) : '');
+      });
+      cells.push(previous.length ? overviewPointLabel(prior) : '');
+      OVERVIEW_TREND_KEYS.forEach(function (key) {
+        cells.push(typeof prior[key] === 'number' ? prior[key].toFixed(1) : '');
+      });
+      lines.push(cells.map(csvEscape).join(','));
+    });
+    var blob = new Blob(['\ufeff' + lines.join('\r\n') + '\r\n'], { type: 'text/csv;charset=utf-8' });
+    var url = URL.createObjectURL(blob);
+    var link = document.createElement('a');
+    var stamp = new Date().toISOString().slice(0, 10);
+    link.href = url;
+    link.download = 'overview-trend-' + overviewHistory.range + '-' + stamp + '.csv';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+  }
+
+  function bindOverviewExport() {
+    var button = document.getElementById('overview-trend-export');
+    if (!button) { return; }
+    button.addEventListener('click', exportOverviewHistory);
   }
 
   // 重点关注里点主机名，直接把下方主机列表筛到这一台，不再手动输关键字。
@@ -2974,6 +3038,7 @@
     if (alertExport) { alertExport.addEventListener('click', exportAlertsCsv); }
 
     bindOverviewRanges();
+    bindOverviewExport();
     bindFocusHosts();
     bindAttentionChips();
     bindAlertRanges();
