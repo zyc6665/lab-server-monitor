@@ -3564,3 +3564,15 @@ html[data-theme="dark"] .settings-summary .summary-flag.is-on {
 @media (max-width: 760px) {
   .settings-summary .summary-chips { gap: 6px 14px; }
 }
+
+/* -- v0.1.117 概览筛选记忆与清除 -- */
+.filter-bar .filter-clear {
+  padding: 2px 4px;
+  font-size: 12.5px;
+}
+.filter-bar .filter-clear[hidden] { display: none !important; }
+.filter-bar .filter-clear:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(44, 92, 246, .18);
+  border-radius: 4px;
+}

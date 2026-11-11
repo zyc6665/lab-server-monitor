@@ -1069,6 +1069,46 @@
     return true;
   }
 
+  // 记住上次用的分组/状态筛选：刷新或切页回来不用重新选一遍。
+  var HOST_FILTER_KEY = 'overview:filters';
+
+  function readHostFilters() {
+    try {
+      var raw = localStorage.getItem(HOST_FILTER_KEY);
+      var parsed = raw ? JSON.parse(raw) : null;
+      return parsed && typeof parsed === 'object' ? parsed : {};
+    } catch (err) {
+      return {};
+    }
+  }
+
+  function saveHostFilters(group, status) {
+    try {
+      if (!group && !status) {
+        localStorage.removeItem(HOST_FILTER_KEY);
+        return;
+      }
+      localStorage.setItem(HOST_FILTER_KEY, JSON.stringify({ group: group || '', status: status || '' }));
+    } catch (err) {}
+  }
+
+  function restoreHostFilters() {
+    var saved = readHostFilters();
+    var groupEl = document.getElementById('filter-group');
+    var statusEl = document.getElementById('filter-status');
+    var pairs = [[groupEl, saved.group], [statusEl, saved.status]];
+    pairs.forEach(function (pair) {
+      var el = pair[0];
+      var value = pair[1];
+      if (!el || !value) { return; }
+      var found = false;
+      for (var i = 0; i < el.options.length; i += 1) {
+        if (el.options[i].value === value) { found = true; break; }
+      }
+      if (found) { el.value = value; }
+    });
+  }
+
   // 纯客户端筛选：只显隐已渲染的 host 行与卡片，不触发任何网络请求。
   function applyHostFilters() {
     var tbody = document.getElementById('host-table-body');
@@ -1102,6 +1142,9 @@
         ? ('筛选出 ' + visible + ' / ' + totalCount + ' 台')
         : '';
     }
+    var clear = document.getElementById('filter-clear');
+    if (clear) { clear.hidden = !(group || status || keyword); }
+    saveHostFilters(group, status);
     if (totalCount > 0) {
       var table = document.getElementById('host-table');
       var empty = document.getElementById('empty-state');
@@ -2636,6 +2679,16 @@
     if (groupFilter) { groupFilter.addEventListener('change', applyHostFilters); }
     if (statusFilter) { statusFilter.addEventListener('change', applyHostFilters); }
     if (keywordFilter) { keywordFilter.addEventListener('input', applyHostFilters); }
+    var clearFilterButton = document.getElementById('filter-clear');
+    if (clearFilterButton) {
+      clearFilterButton.addEventListener('click', function () {
+        if (groupFilter) { groupFilter.value = ''; }
+        if (statusFilter) { statusFilter.value = ''; }
+        if (keywordFilter) { keywordFilter.value = ''; }
+        applyHostFilters();
+      });
+    }
+    restoreHostFilters();
     applyHostFilters();
 
     var collectAllButton = document.getElementById('collect-all-hosts');
