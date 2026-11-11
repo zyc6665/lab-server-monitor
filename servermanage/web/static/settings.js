@@ -286,6 +286,72 @@
     return message;
   }
 
+  var SAVE_MESSAGE = {
+    monitoring: "已保存，下个轮询周期生效",
+    alerts: "已保存，新规则从下一轮判断开始生效",
+    user_monitoring: "已保存，下一轮用户扫描生效",
+    disk_health: "已保存，下一次磁盘采集生效",
+    report: "已保存，下份报告按新设置生成",
+    smtp: "已保存，下封邮件按新设置发送",
+    ssh: "已保存，新建连接使用新超时",
+    logs: "已保存"
+  };
+
+  function saveMessage(sectionName, restartRequired) {
+    if (restartRequired) {
+      return "已保存；端口/监听地址等改动需重启后台服务后生效";
+    }
+    return SAVE_MESSAGE[sectionName] || "已保存";
+  }
+
+  function renderSaveNotice(button, message, restartRequired) {
+    var next = button.nextElementSibling;
+    while (next && next.classList.contains("save-notice")) {
+      var stale = next.nextElementSibling;
+      next.remove();
+      next = stale;
+    }
+    var oldStatus = button.nextElementSibling;
+    if (oldStatus && oldStatus.classList.contains("form-status")) oldStatus.remove();
+
+    var note = document.createElement("div");
+    note.className = "save-notice" + (restartRequired ? " save-notice-restart" : "");
+    var text = document.createElement("span");
+    text.className = "save-notice-text";
+    text.textContent = message;
+    note.appendChild(text);
+
+    if (restartRequired && window.desktopBridge && window.desktopBridge.restartBackend) {
+      var restart = document.createElement("button");
+      restart.type = "button";
+      restart.className = "save-notice-action";
+      restart.textContent = "重启后台服务";
+      restart.addEventListener("click", function () {
+        restart.disabled = true;
+        text.textContent = "正在重启后台…";
+        window.desktopBridge.restartBackend().then(
+          function (result) {
+            var ok = !!(result && result.ok);
+            note.className = "save-notice" + (ok ? "" : " save-notice-error");
+            text.textContent = ok ? "后台已重启，新设置已生效" : "重启失败，请手动关闭并重开客户端";
+            if (ok) { restart.remove(); }
+          },
+          function () {
+            note.className = "save-notice save-notice-error";
+            text.textContent = "重启失败，请手动关闭并重开客户端";
+          }
+        );
+      });
+      note.appendChild(restart);
+    } else if (restartRequired) {
+      var hint = document.createElement("span");
+      hint.className = "save-notice-hint";
+      hint.textContent = "请关闭客户端并重新打开";
+      note.appendChild(hint);
+    }
+    button.insertAdjacentElement("afterend", note);
+  }
+
   function saveSection(sectionName) {
     var button = qs('[data-save="' + sectionName + '"]');
     var problem = validateSection(sectionName);
@@ -303,25 +369,11 @@
           : null;
         status(qs("#settings-root"), "");
         window.__SETTINGS__[sectionName] = payload;
-        if (result && result.restart_required && window.desktopBridge) {
-          status(formStatus, "正在重启后台…");
-          return window.desktopBridge.restartBackend().then(function (restartResult) {
-            var ok = !!(restartResult && restartResult.ok);
-            status(formStatus, ok ? "已重启" : "重启失败", !ok);
-            markSaved(sectionName, ok ? "已保存并重启 " + clockLabel() : "");
-          });
-        }
-        var message = "已保存";
-        if (result && result.restart_required) message = "已保存，重启程序后生效";
+        var restartRequired = !!(result && result.restart_required);
+        var message = saveMessage(sectionName, restartRequired);
         status(formStatus, message);
         markSaved(sectionName, message + " " + clockLabel());
-        if (!button) return;
-        var note = document.createElement("p");
-        note.className = "form-status form-status-ok";
-        note.textContent = message;
-        var existing = button.nextElementSibling;
-        if (existing && existing.classList.contains("form-status")) existing.remove();
-        button.insertAdjacentElement("afterend", note);
+        if (button) renderSaveNotice(button, message, restartRequired);
       })
       .catch(function (error) {
         status(button ? button.parentElement.querySelector(".form-status") : null, error.message, true);

@@ -2948,3 +2948,56 @@ html[data-theme="dark"] .focus-extra {
   background: #16233a;
   border-color: #26344c;
 }
+
+/* -- v0.1.88 设置保存后的生效提示 -- */
+.save-notice {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 10px 0 0;
+  padding: 9px 12px;
+  border-radius: 9px;
+  border: 1px solid rgba(22, 163, 74, .28);
+  background: rgba(22, 163, 74, .07);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+.save-notice-text { flex: 1 1 auto; min-width: 0; }
+.save-notice-hint { color: var(--text-muted); }
+.save-notice-restart {
+  border-color: rgba(217, 119, 6, .3);
+  background: rgba(217, 119, 6, .08);
+}
+.save-notice-error {
+  border-color: rgba(220, 38, 38, .3);
+  background: rgba(220, 38, 38, .08);
+}
+.save-notice-action {
+  flex: 0 0 auto;
+  padding: 4px 11px;
+  font-size: 12.5px;
+  border-radius: 7px;
+  border: 1px solid var(--border-strong);
+  background: var(--card-bg);
+  color: var(--text);
+  cursor: pointer;
+}
+.save-notice-action:hover { border-color: var(--accent); color: var(--accent); }
+.save-notice-action[disabled] { opacity: .6; cursor: default; }
+html[data-theme="dark"] .save-notice {
+  border-color: rgba(34, 197, 94, .28);
+  background: rgba(34, 197, 94, .1);
+}
+html[data-theme="dark"] .save-notice-restart {
+  border-color: rgba(251, 191, 36, .28);
+  background: rgba(251, 191, 36, .1);
+}
+html[data-theme="dark"] .save-notice-error {
+  border-color: rgba(248, 113, 113, .3);
+  background: rgba(248, 113, 113, .1);
+}
+html[data-theme="dark"] .save-notice-action {
+  background: var(--surface-raised);
+  border-color: #2a3a52;
+}
