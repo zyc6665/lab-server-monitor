@@ -14,6 +14,7 @@
   var alertSeverity = '';
   var alertKeyword = '';
   var alertHost = '';
+  var alertCategory = '';
   var alertTimeRange = '';
   var alertSortOrder = 'desc';
   var alertPage = 1;
@@ -1390,12 +1391,56 @@
     return Math.floor(when / stepMs) * stepMs;
   }
 
+  var ALERT_CATEGORY_LABELS = {
+    cpu: 'CPU',
+    memory: '内存',
+    disk: '磁盘',
+    gpu: 'GPU',
+    offline: '主机离线',
+    host: '主机',
+    system: '系统',
+    user: '服务器账号',
+    availability: '服务检查',
+    batch: '批量采集',
+    storage: '存储'
+  };
+
+  function alertCategoryLabel(category) {
+    return ALERT_CATEGORY_LABELS[category] || category;
+  }
+
+  function populateAlertCategories(alerts) {
+    var select = document.getElementById('alert-category-filter');
+    if (!select) { return; }
+    var seen = {};
+    (alerts || []).forEach(function (alert) {
+      var value = alert.category || '';
+      if (value) { seen[value] = (seen[value] || 0) + 1; }
+    });
+    var names = Object.keys(seen).sort(function (a, b) {
+      return alertCategoryLabel(a).localeCompare(alertCategoryLabel(b), 'zh-Hans-CN');
+    });
+    while (select.options.length > 1) { select.remove(1); }
+    names.forEach(function (name) {
+      var option = document.createElement('option');
+      option.value = name;
+      option.textContent = alertCategoryLabel(name) + '（' + seen[name] + '）';
+      select.appendChild(option);
+    });
+    if (alertCategory && !seen[alertCategory]) {
+      // 当前类别在这次数据里已经不存在（例如全部已恢复），回落到“全部类别”。
+      alertCategory = '';
+    }
+    select.value = alertCategory;
+  }
+
   function matchingAlerts(ignoreSeverity, ignoreBucket) {
     var keyword = (alertKeyword || '').trim().toLowerCase();
     return lastAlerts.filter(function (alert) {
       if (!ignoreBucket && alertBucket && bucketStartFor(alert.created_at, timelineRange) !== alertBucket) { return false; }
       if (!ignoreSeverity && alertSeverity && (alert.severity || '') !== alertSeverity) { return false; }
       if (alertHost && (alert.host_name || '') !== alertHost) { return false; }
+      if (alertCategory && (alert.category || '') !== alertCategory) { return false; }
       if (!keyword) { return true; }
       return [alert.host_name, alert.title, alert.message, alert.category]
         .filter(function (part) { return part; })
@@ -1910,6 +1955,7 @@
     if (!Array.isArray(alerts)) { return; }
     updateFocusAlerts(alerts);
     lastAlerts = alerts;
+    populateAlertCategories(alerts);
     renderAlertStatusCounts(counts);
     var activeIds = {};
     alerts.forEach(function (alert) {
@@ -2054,6 +2100,7 @@
     if (alertKeyword.trim()) { params.push('q=' + encodeURIComponent(alertKeyword.trim())); }
     if (alertSeverity) { params.push('severity=' + encodeURIComponent(alertSeverity)); }
     if (alertHost) { params.push('host=' + encodeURIComponent(alertHost)); }
+    if (alertCategory) { params.push('category=' + encodeURIComponent(alertCategory)); }
     if (alertTimeRange) { params.push('range=' + encodeURIComponent(alertTimeRange)); }
     if (alertSortOrder === 'asc') { params.push('sort=asc'); }
     var url = '/alerts' + (params.length ? '?' + params.join('&') : '');
@@ -2067,6 +2114,7 @@
     alertKeyword = '';
     alertSeverity = '';
     alertHost = '';
+    alertCategory = '';
     alertTimeRange = '';
     alertBucket = 0;
     alertSortOrder = 'desc';
@@ -2078,6 +2126,8 @@
     if (severity) { severity.value = ''; }
     var host = document.getElementById('alert-host-filter');
     if (host) { host.value = ''; }
+    var category = document.getElementById('alert-category-filter');
+    if (category) { category.value = ''; }
     var range = document.getElementById('alert-range-filter');
     if (range) { range.value = ''; }
     var sort = document.getElementById('alert-sort');
@@ -2405,6 +2455,7 @@
     var alertSearch = document.getElementById('alert-search');
     var alertSeverityFilter = document.getElementById('alert-severity-filter');
     var alertHostFilter = document.getElementById('alert-host-filter');
+    var alertCategoryFilter = document.getElementById('alert-category-filter');
     var alertRangeFilter = document.getElementById('alert-range-filter');
     var alertSort = document.getElementById('alert-sort');
     var alertPageSizeSelect = document.getElementById('alert-page-size');
@@ -2422,6 +2473,9 @@
     }
     if (alertHostFilter && alertHostFilter.value) {
       alertHost = alertHostFilter.value;
+    }
+    if (alertCategoryFilter && alertCategoryFilter.value) {
+      alertCategory = alertCategoryFilter.value;
     }
     if (alertRangeFilter && alertRangeFilter.value) {
       alertTimeRange = alertRangeFilter.value;
@@ -2484,6 +2538,14 @@
     if (alertHostFilter) {
       alertHostFilter.addEventListener('change', function () {
         alertHost = alertHostFilter.value || '';
+        alertPage = 1;
+        renderAlertRows();
+        syncAlertUrl();
+      });
+    }
+    if (alertCategoryFilter) {
+      alertCategoryFilter.addEventListener('change', function () {
+        alertCategory = alertCategoryFilter.value || '';
         alertPage = 1;
         renderAlertRows();
         syncAlertUrl();
