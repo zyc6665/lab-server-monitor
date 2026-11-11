@@ -3576,3 +3576,30 @@ html[data-theme="dark"] .settings-summary .summary-flag.is-on {
   box-shadow: 0 0 0 3px rgba(44, 92, 246, .18);
   border-radius: 4px;
 }
+
+/* -- v0.1.119 磁盘按分组折叠 -- */
+.disk-group-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 18px 0 8px;
+  padding: 6px 2px 6px 0;
+  border-bottom: 1px solid var(--border);
+}
+.disk-group-head[hidden] { display: none !important; }
+.disk-group-collapse {
+  width: 20px;
+  height: 20px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 11px;
+  cursor: pointer;
+}
+.disk-group-collapse:hover { background: var(--surface-sunken); color: var(--text); }
+.disk-group-collapse:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(44, 92, 246, .22); }
+.disk-group-name { font-size: 13px; font-weight: 600; }
+.disk-group-count { font-size: 12px; color: var(--text-muted); }
+.disk-group-head.is-collapsed .disk-group-name { color: var(--text-muted); }
+html[data-theme="dark"] .disk-group-collapse:hover { background: #16233a; }

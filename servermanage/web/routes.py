@@ -3737,6 +3737,20 @@ def register_routes(app: Flask) -> None:
         host_rows.sort(
             key=lambda row: (severity_rank.get(row["status"], 9), row["name"].lower())
         )
+        # 主机多于一个分组时，在每组第一台前面插一条分组头，方便按组查看。
+        grouped_names = {row["group"] for row in host_rows}
+        show_group_headers = len(grouped_names) > 1
+        last_group = None
+        for row in host_rows:
+            row["group_header"] = None
+            row["group_size"] = 0
+            if not show_group_headers:
+                continue
+            if row["group"] != last_group:
+                row["group_header"] = row["group"]
+                row["group_size"] = sum(1 for item in host_rows if item["group"] == row["group"])
+                last_group = row["group"]
+
         hot_temps = [
             drive["temperature_c"]
             for drive in drives

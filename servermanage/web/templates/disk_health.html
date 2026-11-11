@@ -55,7 +55,14 @@
     {% endfor %}
   </nav>
   {% for host in hosts %}
-  <article class="disk-host" id="disk-{{ host.anchor }}" data-disk-issues="{{ 1 if host.needs_attention else 0 }}" data-disk-search="{{ host.search_text }}">
+  {% if host.group_header %}
+  <div class="disk-group-head" data-disk-group="{{ host.group_header }}">
+    <button type="button" class="disk-group-collapse" data-disk-group-collapse aria-expanded="true" aria-label="展开或收起分组 {{ host.group_header }}" title="展开 / 收起这个分组"><span class="disk-group-caret">▾</span></button>
+    <span class="disk-group-name">{{ host.group_header }}</span>
+    <span class="disk-group-count">{{ host.group_size }} 台主机</span>
+  </div>
+  {% endif %}
+  <article class="disk-host" id="disk-{{ host.anchor }}" data-disk-group-member="{{ host.group }}" data-disk-issues="{{ 1 if host.needs_attention else 0 }}" data-disk-search="{{ host.search_text }}">
     <header class="disk-host-head">
       <div class="disk-host-id">
         <button type="button" class="disk-collapse" data-disk-collapse aria-expanded="true" aria-label="展开或收起 {{ host.name }} 的盘位明细" title="展开 / 收起盘位明细"><span class="disk-caret">▾</span></button>

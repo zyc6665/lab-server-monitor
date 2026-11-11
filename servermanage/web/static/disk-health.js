@@ -31,17 +31,69 @@
     return haystack.indexOf(needle) !== -1;
   }
 
-  // 两个筛选条件叠加：只看异常 + 关键字，谁筛掉了都要同步隐藏跳转芯片。
+  // 分组折叠：收起某个分组时只留分组标题，成员主机全部隐藏。
+  var GROUP_KEY = 'disk:collapsed-groups';
+
+  function readGroups() {
+    try {
+      var raw = window.localStorage.getItem(GROUP_KEY);
+      var parsed = raw ? JSON.parse(raw) : [];
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (error) {
+      return [];
+    }
+  }
+
+  function saveGroups(list) {
+    try {
+      window.localStorage.setItem(GROUP_KEY, JSON.stringify(list));
+    } catch (error) {
+      /* 隐私模式忽略 */
+    }
+  }
+
+  function groupOf(el) {
+    return el.getAttribute('data-disk-group-member') || '';
+  }
+
+  // 三个条件叠加：只看异常 + 关键字 + 分组折叠，谁筛掉了都要同步隐藏跳转芯片；
+  // 分组标题在该组没有任何匹配主机时也一起隐藏。
   function apply(onlyIssues) {
     var needle = keyword();
+    var collapsedGroups = readGroups();
     var visibleHosts = 0;
+    var matchedGroups = {};
     items.forEach(function (el) {
-      var hide = (onlyIssues && !isIssue(el)) || !matchesSearch(el, needle);
-      el.hidden = hide;
-      if (!hide && el.classList.contains('disk-host')) { visibleHosts += 1; }
+      var matched = !((onlyIssues && !isIssue(el)) || !matchesSearch(el, needle));
+      if (matched && el.classList.contains('disk-host')) {
+        matchedGroups[groupOf(el)] = true;
+      }
+      var collapsed = el.classList.contains('disk-host') && collapsedGroups.indexOf(groupOf(el)) !== -1;
+      el.hidden = !matched || collapsed;
+      if (!el.hidden && el.classList.contains('disk-host')) { visibleHosts += 1; }
     });
+    Array.prototype.forEach.call(
+      document.querySelectorAll('.disk-group-head'),
+      function (head) {
+        var name = head.getAttribute('data-disk-group') || '';
+        head.hidden = !matchedGroups[name];
+      }
+    );
     if (emptyHint) { emptyHint.hidden = !onlyIssues || visibleHosts > 0; }
     if (searchEmpty) { searchEmpty.hidden = !needle || visibleHosts > 0; }
+  }
+
+  function setGroupCollapsed(head, collapsed) {
+    var name = head.getAttribute('data-disk-group') || '';
+    var list = readGroups().filter(function (item) { return item !== name; });
+    if (collapsed) { list.push(name); }
+    saveGroups(list);
+    head.classList.toggle('is-collapsed', collapsed);
+    var button = head.querySelector('[data-disk-group-collapse]');
+    if (button) { button.setAttribute('aria-expanded', collapsed ? 'false' : 'true'); }
+    var caret = head.querySelector('.disk-group-caret');
+    if (caret) { caret.textContent = collapsed ? '▸' : '▾'; }
+    apply(toggle.checked);
   }
 
   function read() {
@@ -138,11 +190,31 @@
   }
 
   document.addEventListener('click', function (event) {
+    var groupButton = event.target.closest('[data-disk-group-collapse]');
+    if (groupButton) {
+      event.preventDefault();
+      var head = groupButton.closest('.disk-group-head');
+      if (head) { setGroupCollapsed(head, groupButton.getAttribute('aria-expanded') !== 'false'); }
+      return;
+    }
     var button = event.target.closest('[data-disk-collapse]');
     if (!button) { return; }
     event.preventDefault();
     setCollapsed(button, button.getAttribute('aria-expanded') !== 'false');
   });
+
+  // 刷新后把上次收起来的分组恢复。
+  var groupsCollapsed = readGroups();
+  if (groupsCollapsed.length) {
+    Array.prototype.forEach.call(
+      document.querySelectorAll('.disk-group-head'),
+      function (head) {
+        if (groupsCollapsed.indexOf(head.getAttribute('data-disk-group') || '') !== -1) {
+          setGroupCollapsed(head, true);
+        }
+      }
+    );
+  }
 
   // 从别处跳到某台主机时，别让折叠把它藏起来。
   if (window.location.hash) {
