@@ -613,6 +613,45 @@
     loadAlertHistory('24h');
   }
 
+  var ATTENTION_LIMITS = { cpu: 90, memory: 90, disk: 90, gpu: 90, temperature: 70 };
+
+  function hostAttentionReasons(host) {
+    var reasons = [];
+    var checks = host.checks || {};
+    if (checks.failed) { reasons.push(checks.failed + ' 项服务检查异常'); }
+    var disk = host.disk_health || {};
+    if (disk.critical) { reasons.push(disk.critical + ' 块盘严重'); }
+    else if (disk.warning) { reasons.push(disk.warning + ' 块盘告警'); }
+    var usage = [
+      ['cpu_percent', 'CPU', 'cpu'],
+      ['memory_percent', '内存', 'memory'],
+      ['disk_percent', '磁盘', 'disk'],
+      ['gpu_memory_percent', 'GPU 显存', 'gpu'],
+    ];
+    usage.forEach(function (item) {
+      var value = host[item[0]];
+      if (typeof value === 'number' && value >= ATTENTION_LIMITS[item[2]]) {
+        reasons.push(item[1] + ' ' + Math.round(value) + '%');
+      }
+    });
+    if (typeof host.temperature_c === 'number' && host.temperature_c >= ATTENTION_LIMITS.temperature) {
+      reasons.push('温度 ' + Math.round(host.temperature_c) + ' °C');
+    }
+    if (host.active_alert_count > 0) { reasons.push(host.active_alert_count + ' 条活动告警'); }
+    return reasons;
+  }
+
+  function attentionChip(host, compact) {
+    var reasons = hostAttentionReasons(host);
+    if (!reasons.length) { return null; }
+    var chip = document.createElement('span');
+    chip.className = compact ? 'attention-chip is-compact' : 'attention-chip';
+    if (!host.online || reasons.length >= 3) { chip.className += ' is-critical'; }
+    chip.textContent = compact ? String(reasons.length) : reasons.length + ' 项关注';
+    chip.title = reasons.join(' · ');
+    return chip;
+  }
+
   function buildHostRow(host) {
     var tr = document.createElement('tr');
     if (host.name) { tr.setAttribute('data-host', host.name); }
@@ -649,6 +688,11 @@
       silenceBadge.textContent = '静默';
       statusCell.appendChild(document.createTextNode(' '));
       statusCell.appendChild(silenceBadge);
+    }
+    var rowAttention = attentionChip(host, true);
+    if (rowAttention) {
+      statusCell.appendChild(document.createTextNode(' '));
+      statusCell.appendChild(rowAttention);
     }
     tr.appendChild(statusCell);
 
@@ -839,6 +883,8 @@
     head.appendChild(booleanBadge(!!host.online));
     var cardTemp = temperatureChip(host.temperature_c);
     if (cardTemp) { head.appendChild(cardTemp); }
+    var cardAttention = attentionChip(host);
+    if (cardAttention) { head.appendChild(cardAttention); }
     if (host.silenced) {
       var silenceBadge = document.createElement('span');
       silenceBadge.className = 'badge badge-silenced';

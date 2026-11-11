@@ -3350,3 +3350,44 @@ html[data-theme="dark"] #disk-groups .disk-export { border-color: var(--border-s
   .overview-trend-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); }
   .overview-trend-grid .trend-block h3 { font-size: 11.5px; }
 }
+
+/* -- v0.1.103 概览需关注徽标 -- */
+.attention-chip {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 6px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  border: 1px solid #f5c99b;
+  background: #fff7ed;
+  color: #b45309;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: default;
+}
+
+.attention-chip.is-compact {
+  min-width: 18px;
+  justify-content: center;
+  padding: 0 5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.attention-chip.is-critical {
+  border-color: #f3b4b4;
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
+html[data-theme="dark"] .attention-chip {
+  border-color: #6b4a1d;
+  background: #2a2110;
+  color: #fbbf24;
+}
+
+html[data-theme="dark"] .attention-chip.is-critical {
+  border-color: #6d2b2b;
+  background: #2a1414;
+  color: #f87171;
+}
