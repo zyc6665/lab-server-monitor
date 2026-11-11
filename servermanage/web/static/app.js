@@ -131,6 +131,20 @@
       ' ' + pad(date.getHours()) + ':' + pad(date.getMinutes());
   }
 
+  // v0.1.81：温度小徽标（≥70℃ 琥珀、≥85℃ 红），无数据时不渲染。
+  function temperatureChip(value) {
+    if (value === null || value === undefined || value === '') { return null; }
+    var num = Number(value);
+    if (isNaN(num)) { return null; }
+    var chip = document.createElement('span');
+    chip.className = 'temp-chip';
+    if (num >= 85) { chip.classList.add('is-critical'); }
+    else if (num >= 70) { chip.classList.add('is-hot'); }
+    chip.textContent = Math.round(num) + '°';
+    chip.title = '最高温度 ' + num.toFixed(1) + ' °C';
+    return chip;
+  }
+
   // v0.1.79：相对时间（3 分钟前 / 2 小时前），超过 7 天回退到绝对时间。
   function formatRelative(value) {
     if (!value) { return '—'; }
@@ -580,6 +594,8 @@
     link.href = '/host/' + encodeURIComponent(host.name || '');
     link.textContent = host.name || '—';
     nameCell.appendChild(link);
+    var rowTemp = temperatureChip(host.temperature_c);
+    if (rowTemp) { nameCell.appendChild(rowTemp); }
     tr.appendChild(nameCell);
 
     tr.appendChild(textCell(host.host, 'mono'));
@@ -743,6 +759,8 @@
     link.textContent = host.name || '—';
     head.appendChild(link);
     head.appendChild(booleanBadge(!!host.online));
+    var cardTemp = temperatureChip(host.temperature_c);
+    if (cardTemp) { head.appendChild(cardTemp); }
     if (host.silenced) {
       var silenceBadge = document.createElement('span');
       silenceBadge.className = 'badge badge-silenced';

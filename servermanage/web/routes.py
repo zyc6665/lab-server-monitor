@@ -812,6 +812,26 @@ def _summarize_checks(results: list[dict[str, Any]]) -> dict[str, int]:
     return {"total": total, "ok": ok, "failed": failed, "unknown": unknown}
 
 
+def _hottest_temperature(metrics: dict[str, Any]) -> float | None:
+    """Highest CPU/board/GPU temperature in a stored metrics payload."""
+
+    values: list[float] = []
+    for zone in metrics.get("thermal_zones") or []:
+        try:
+            values.append(float(zone.get("celsius")))
+        except (TypeError, ValueError):
+            continue
+    for row in metrics.get("gpu_summary") or []:
+        try:
+            if row.get("temperature_c") is not None:
+                values.append(float(row["temperature_c"]))
+        except (TypeError, ValueError):
+            continue
+    if not values:
+        return None
+    return round(max(values), 1)
+
+
 def _host_row(
     *,
     name: str,
@@ -839,6 +859,7 @@ def _host_row(
         "memory": list((spark or {}).get("memory") or []),
     }
     container_count = len(((snapshot or {}).get("metrics") or {}).get("containers") or [])
+    temperature_c = _hottest_temperature((snapshot or {}).get("metrics") or {})
     meta = {
         "group": group or "未分组",
         "owner": owner or "",
@@ -864,6 +885,7 @@ def _host_row(
             "checks": checks,
             "spark": spark_data,
             "container_count": container_count,
+            "temperature_c": temperature_c,
             **meta,
         }
     metrics = snapshot.get("metrics") or {}
@@ -880,6 +902,7 @@ def _host_row(
         "checks": checks,
         "spark": spark_data,
         "container_count": container_count,
+        "temperature_c": temperature_c,
         **meta,
     }
 
