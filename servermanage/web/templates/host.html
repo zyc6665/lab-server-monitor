@@ -201,7 +201,7 @@
   <div class="table-wrap" id="host-checks-wrap"{% if not detail.checks %} hidden{% endif %}>
     <table class="data-table" id="host-checks-table">
       <thead>
-        <tr><th>名称</th><th>类型</th><th>目标</th><th>状态</th><th>耗时</th><th>最近检查</th><th>消息</th></tr>
+        <tr><th>名称</th><th>类型</th><th>目标</th><th>状态</th><th>最近 40 次</th><th>耗时</th><th>最近检查</th><th>消息</th></tr>
       </thead>
       <tbody id="host-checks-body">
         {% for check in detail.checks %}
@@ -210,6 +210,14 @@
           <td>{{ check.check_type or '—' }}</td>
           <td class="mono">{{ check.target or '—' }}</td>
           <td><span class="status status-{{ check.status }}">{{ check.status or '—' }}</span></td>
+          <td class="heartbeat-cell">
+            {% set beats = (detail.check_history or {}).get(check.check_name) or [] %}
+            {% if beats %}
+            <span class="heartbeat" title="最近 {{ beats|length }} 次检查">
+              {% for beat in beats %}<i class="hb hb-{{ beat }}"></i>{% endfor %}
+            </span>
+            {% else %}<span class="muted">—</span>{% endif %}
+          </td>
           <td>{% if check.latency_ms is not none %}{{ '%.0f'|format(check.latency_ms) }} ms{% else %}—{% endif %}</td>
           <td class="mono"{% if check.checked_at %} title="{{ check.checked_at }}"{% endif %}>{{ check.checked_at|stamp }}</td>
           <td>{{ check.message or '—' }}</td>

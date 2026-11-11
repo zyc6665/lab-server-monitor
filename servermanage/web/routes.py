@@ -830,9 +830,14 @@ def _host_row(
     silenced_until: str | None = None,
     active_alert_count: int = 0,
     checks: dict[str, int] | None = None,
+    spark: dict[str, list[float]] | None = None,
 ) -> dict[str, Any]:
     if checks is None:
         checks = {"total": 0, "ok": 0, "failed": 0, "unknown": 0}
+    spark_data = {
+        "cpu": list((spark or {}).get("cpu") or []),
+        "memory": list((spark or {}).get("memory") or []),
+    }
     meta = {
         "group": group or "未分组",
         "owner": owner or "",
@@ -856,6 +861,7 @@ def _host_row(
             "logged_in_sessions": 0,
             "disk_health": _disk_health_summary(disk_health),
             "checks": checks,
+            "spark": spark_data,
             **meta,
         }
     metrics = snapshot.get("metrics") or {}
@@ -870,6 +876,7 @@ def _host_row(
         "logged_in_sessions": session_count,
         "disk_health": _disk_health_summary(disk_health),
         "checks": checks,
+        "spark": spark_data,
         **meta,
     }
 
@@ -1041,6 +1048,14 @@ def _build_overview(config, db_path) -> dict[str, Any]:
         if host_name:
             alert_counts[host_name] = alert_counts.get(host_name, 0) + 1
 
+    # 24 h CPU/memory series for the inline sparkline in every host row.  One
+    # query for all hosts, so the 30 s poll stays a single cheap read.
+    try:
+        sparklines = storage.fetch_host_sparklines(db_path, now=now)
+    except Exception:  # noqa: BLE001 - a missing column must not break the page
+        LOGGER.exception("Failed to load host sparklines")
+        sparklines = {}
+
     groups: list[str] = []
     for server in config.servers:
         group_name = server.group or "未分组"
@@ -1091,6 +1106,7 @@ def _build_overview(config, db_path) -> dict[str, Any]:
                 checks=_summarize_checks(
                     storage.get_host_check_results(host_name, db_path)
                 ),
+                spark=sparklines.get(host_name),
             )
         )
 
@@ -1588,6 +1604,7 @@ def _build_host_detail(name: str, config, db_path) -> dict[str, Any] | None:
         "disk": disk,
         "alerts": alerts,
         "checks": storage.get_host_check_results(name, db_path),
+        "check_history": storage.get_host_check_history(name, db_path),
         "users": _build_user_rows(name, db_path, tz, server),
     }
 

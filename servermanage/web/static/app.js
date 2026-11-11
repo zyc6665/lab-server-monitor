@@ -131,8 +131,61 @@
       ' ' + pad(date.getHours()) + ':' + pad(date.getMinutes());
   }
 
+  // 迷你趋势线：纯 SVG，不引第三方图表库。数据点不足两个时返回 null。
+  function sparkline(values, className) {
+    var list = (values || []).filter(function (item) {
+      return item !== null && item !== undefined && !isNaN(Number(item));
+    });
+    if (list.length < 2) { return null; }
+    var width = 34;
+    var height = 14;
+    var pad = 1.5;
+    var min = Math.min.apply(null, list);
+    var max = Math.max.apply(null, list);
+    var span = max - min;
+    if (span < 1) { span = 1; }
+    var step = (width - pad * 2) / (list.length - 1);
+    var points = list.map(function (item, index) {
+      var x = pad + step * index;
+      var ratio = (Number(item) - min) / span;
+      var y = height - pad - ratio * (height - pad * 2);
+      return x.toFixed(1) + ',' + y.toFixed(1);
+    });
+    var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('class', 'spark ' + (className || ''));
+    svg.setAttribute('viewBox', '0 0 ' + width + ' ' + height);
+    svg.setAttribute('width', String(width));
+    svg.setAttribute('height', String(height));
+    svg.setAttribute('aria-hidden', 'true');
+    // 面积填充让趋势更易读，最后一根竖线标出当前点。
+    var area = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+    area.setAttribute(
+      'points',
+      points.join(' ') + ' ' + (width - pad).toFixed(1) + ',' + height + ' ' + pad + ',' + height
+    );
+    area.setAttribute('class', 'spark-area');
+    svg.appendChild(area);
+    var line = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
+    line.setAttribute('points', points.join(' '));
+    line.setAttribute('fill', 'none');
+    line.setAttribute('stroke', 'currentColor');
+    line.setAttribute('stroke-width', '1.4');
+    line.setAttribute('stroke-linecap', 'round');
+    line.setAttribute('stroke-linejoin', 'round');
+    svg.appendChild(line);
+    var lastPoint = points[points.length - 1].split(',');
+    var dot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    dot.setAttribute('cx', lastPoint[0]);
+    dot.setAttribute('cy', lastPoint[1]);
+    dot.setAttribute('r', '1.6');
+    dot.setAttribute('fill', 'currentColor');
+    svg.appendChild(dot);
+    return svg;
+  }
+
   // 百分比单元格：迷你进度条 + 数字，比纯文本更容易扫视。
-  function percentCell(value) {
+  // 有 24h 序列时用趋势线替代进度条，直观看出最近是涨还是跌。
+  function percentCell(value, spark) {
     var td = document.createElement('td');
     td.className = 'pct-cell';
     if (value === null || value === undefined || value === '') {
@@ -144,17 +197,23 @@
       td.textContent = String(value);
       return td;
     }
-    var meter = document.createElement('span');
-    meter.className = 'pct-meter';
-    meter.setAttribute('aria-hidden', 'true');
-    var fill = document.createElement('span');
-    fill.className = 'pct-meter-fill';
-    fill.style.width = Math.max(0, Math.min(100, num)) + '%';
-    meter.appendChild(fill);
+    var trend = sparkline(spark, 'spark-pct');
+    if (trend) {
+      trend.setAttribute('title', '最近 ' + (spark || []).length + ' 次采集趋势');
+      td.appendChild(trend);
+    } else {
+      var meter = document.createElement('span');
+      meter.className = 'pct-meter';
+      meter.setAttribute('aria-hidden', 'true');
+      var fill = document.createElement('span');
+      fill.className = 'pct-meter-fill';
+      fill.style.width = Math.max(0, Math.min(100, num)) + '%';
+      meter.appendChild(fill);
+      td.appendChild(meter);
+    }
     var label = document.createElement('span');
     label.className = 'pct-value';
     label.textContent = formatPercent(num);
-    td.appendChild(meter);
     td.appendChild(label);
     return td;
   }
@@ -522,8 +581,9 @@
     }
     tr.appendChild(statusCell);
 
-    tr.appendChild(percentCell(host.cpu_percent));
-    tr.appendChild(percentCell(host.memory_percent));
+    var spark = host.spark || {};
+    tr.appendChild(percentCell(host.cpu_percent, spark.cpu));
+    tr.appendChild(percentCell(host.memory_percent, spark.memory));
     tr.appendChild(percentCell(host.disk_percent));
     tr.appendChild(percentCell(host.gpu_memory_percent));
     tr.appendChild(textCell(host.logged_in_user_count == null ? '—' : host.logged_in_user_count));

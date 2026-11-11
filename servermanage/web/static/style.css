@@ -2456,3 +2456,21 @@ html[data-theme="dark"] .disk-jump-link { background: var(--surface-sunken); }
 .disk-jump-link[hidden],
 .disk-host[hidden] { display: none !important; }
 html[data-theme="dark"] .disk-filter-toggle { background: var(--surface-raised); }
+/* -- v0.1.73 主机趋势线与可用性心跳条 -- */
+.spark { display: inline-block; margin-right: 6px; overflow: visible; vertical-align: middle; color: var(--accent); }
+.pct-cell .spark { opacity: .95; }
+.spark-pct { color: var(--accent); }
+.heartbeat { display: inline-flex; align-items: center; gap: 2px; height: 16px; }
+.heartbeat .hb { display: block; width: 4px; height: 12px; border-radius: 1.5px; background: var(--border-strong); }
+.heartbeat .hb-ok { background: #16a34a; }
+.heartbeat .hb-error { background: #dc2626; }
+.heartbeat .hb-fail { background: #dc2626; }
+.heartbeat .hb-unknown { background: #cbd5e1; }
+.heartbeat-cell { white-space: nowrap; }
+html[data-theme="dark"] .heartbeat .hb { background: #334155; }
+html[data-theme="dark"] .heartbeat .hb-ok { background: #22c55e; }
+html[data-theme="dark"] .heartbeat .hb-error,
+html[data-theme="dark"] .heartbeat .hb-fail { background: #f87171; }
+html[data-theme="dark"] .heartbeat .hb-unknown { background: #475569; }
+
+.spark-area { fill: currentColor; opacity: .12; }

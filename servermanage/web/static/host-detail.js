@@ -5,6 +5,8 @@
 
   var HOST_NAME = window.__HOST_NAME__ || '';
   var SVG_NS = 'http://www.w3.org/2000/svg';
+  // {check_name: [oldest…newest status]}，由 /api/host/<name> 返回。
+  var checkHistory = {};
   var COLORS = {
     cpu: '#2563eb',
     memory: '#7c3aed',
@@ -54,6 +56,16 @@
     if (value === null || value === undefined || value === '') { return '—'; }
     var num = Number(value);
     return isNaN(num) ? '—' : num.toFixed(1) + '%';
+  }
+
+  // 与服务端 `stamp` 过滤器保持一致：MM-DD HH:MM，原始值放 title。
+  function stamp(value) {
+    if (!value) { return '—'; }
+    var date = new Date(String(value));
+    if (isNaN(date.getTime())) { return String(value); }
+    function pad(n) { return n < 10 ? '0' + n : String(n); }
+    return pad(date.getMonth() + 1) + '-' + pad(date.getDate()) +
+      ' ' + pad(date.getHours()) + ':' + pad(date.getMinutes());
   }
 
   function makeSvgEl(name, attrs) {
@@ -282,6 +294,25 @@
     return td;
   }
 
+  function buildHeartbeat(statuses) {
+    var list = statuses || [];
+    if (!list.length) {
+      var none = document.createElement('span');
+      none.className = 'muted';
+      none.textContent = '—';
+      return none;
+    }
+    var wrap = document.createElement('span');
+    wrap.className = 'heartbeat';
+    wrap.title = '最近 ' + list.length + ' 次检查';
+    list.forEach(function (status) {
+      var beat = document.createElement('i');
+      beat.className = 'hb hb-' + String(status || 'unknown');
+      wrap.appendChild(beat);
+    });
+    return wrap;
+  }
+
   function renderChecksTable(checks) {
     var body = document.getElementById('host-checks-body');
     if (!body) { return; }
@@ -302,8 +333,13 @@
       status.textContent = checkText(check.status);
       statusCell.appendChild(status);
       tr.appendChild(statusCell);
+      var beatCell = document.createElement('td');
+      beatCell.className = 'heartbeat-cell';
+      beatCell.appendChild(buildHeartbeat(checkHistory[check.check_name]));
+      tr.appendChild(beatCell);
       appendCheckCell(tr, fmtLatency(check.latency_ms));
-      appendCheckCell(tr, checkText(check.checked_at), 'mono');
+      var stampCell = appendCheckCell(tr, stamp(check.checked_at), 'mono');
+      if (check.checked_at) { stampCell.title = String(check.checked_at); }
       appendCheckCell(tr, checkText(check.message));
       body.appendChild(tr);
     });
@@ -311,7 +347,9 @@
 
   function loadChecks() {
     fetchJson('/api/host/' + encodeURIComponent(HOST_NAME)).then(function (payload) {
-      if (payload && payload.checks) {
+      if (!payload) { return; }
+      checkHistory = payload.check_history || {};
+      if (payload.checks) {
         renderChecksTable(payload.checks);
       }
     }).catch(function () {});

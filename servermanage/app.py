@@ -59,6 +59,7 @@ from servermanage.user_collection import (
 from servermanage.user_scan import collect_host_users
 from servermanage.storage import (
     _extract_disk_used_percent,
+    append_host_check_history,
     backfill_daily_summary,
     get_disk_health,
     init_storage,
@@ -431,6 +432,7 @@ class MonitorService:
         """
         try:
             save_host_check_results(host_name, results, self.db_path)
+            append_host_check_history(host_name, results, self.db_path)
         except Exception:  # noqa: BLE001 - persistence must not break polling
             LOGGER.exception(
                 "Failed to save host check results for %s", host_name

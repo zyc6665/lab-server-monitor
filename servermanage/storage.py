@@ -260,6 +260,25 @@ CREATE INDEX IF NOT EXISTS idx_host_check_snapshot_host
     ON host_check_snapshot(host_name);
 """
 
+# Only the status of each cycle is kept so the dashboard can draw an uptime
+# heartbeat strip.  Rows are pruned per check to a small window, so the table
+# stays bounded no matter how long the tool runs.
+_CREATE_HOST_CHECK_HISTORY_SQL = """
+CREATE TABLE IF NOT EXISTS host_check_history (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    host_name TEXT NOT NULL,
+    check_name TEXT NOT NULL,
+    status TEXT NOT NULL,
+    latency_ms REAL,
+    checked_at TEXT NOT NULL
+);
+"""
+
+_CREATE_HOST_CHECK_HISTORY_INDEX_SQL = """
+CREATE INDEX IF NOT EXISTS idx_host_check_history_lookup
+    ON host_check_history(host_name, check_name, id);
+"""
+
 # Tables added by the v0.3.0 server-user monitoring feature (Task 2).  The
 # snapshot holds the accounts found by the latest successful scan and is
 # replaced as a whole per host.  The baseline keeps the last-known attributes of
@@ -442,6 +461,8 @@ def init_storage(db_path: Path, *, daily_summary_tz: str | None = "UTC") -> None
         conn.executescript(_CREATE_SSH_AUDIT_INDEX_SQL)
         conn.executescript(_CREATE_HOST_CHECK_TABLES_SQL)
         conn.executescript(_CREATE_HOST_CHECK_INDEX_SQL)
+        conn.executescript(_CREATE_HOST_CHECK_HISTORY_SQL)
+        conn.executescript(_CREATE_HOST_CHECK_HISTORY_INDEX_SQL)
         conn.executescript(_CREATE_USER_TABLES_SQL)
         _ensure_user_snapshot_columns(conn)
         conn.executescript(_CREATE_USER_INDEX_SQL)
@@ -1677,7 +1698,151 @@ def delete_host_check_results(host_name: str, db_path: Path) -> None:
         conn.execute(
             "DELETE FROM host_check_snapshot WHERE host_name = ?", (host_name,)
         )
+        conn.execute(
+            "DELETE FROM host_check_history WHERE host_name = ?", (host_name,)
+        )
         conn.commit()
+
+
+def append_host_check_history(
+    host_name: str,
+    results: Sequence[HostCheckResult],
+    db_path: Path,
+    *,
+    keep: int = 60,
+) -> None:
+    """Append one heartbeat row per check and prune each check to *keep* rows.
+
+    The snapshot table only holds the latest state; this keeps a short rolling
+    history so the UI can show whether a check has been healthy lately.  Pruning
+    inside the same transaction keeps the table bounded forever.
+    """
+    if not results:
+        return
+    db_path = Path(db_path)
+    init_storage(db_path)
+
+    now = datetime.now(timezone.utc)
+    rows = [
+        (
+            host_name,
+            item.name,
+            item.status,
+            item.latency_ms,
+            _to_iso_utc(item.checked_at if item.checked_at is not None else now),
+        )
+        for item in results
+    ]
+
+    keep = max(1, int(keep))
+    conn = sqlite3.connect(db_path)
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        conn.executemany(
+            """
+            INSERT INTO host_check_history
+                (host_name, check_name, status, latency_ms, checked_at)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            rows,
+        )
+        conn.execute(
+            """
+            DELETE FROM host_check_history
+            WHERE host_name = ?
+              AND id NOT IN (
+                  SELECT id FROM host_check_history
+                  WHERE host_name = ?
+                  ORDER BY id DESC
+                  LIMIT ?
+              )
+            """,
+            (host_name, host_name, keep * max(1, len(rows))),
+        )
+        conn.commit()
+    except BaseException:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+def get_host_check_history(
+    host_name: str, db_path: Path, *, limit: int = 40
+) -> dict[str, list[str]]:
+    """Return ``{check_name: [oldest…newest statuses]}`` for *host_name*."""
+    db_path = Path(db_path)
+    if not db_path.exists():
+        return {}
+
+    limit = max(1, int(limit))
+    with sqlite3.connect(db_path) as conn:
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute(
+            """
+            SELECT check_name, status, id
+            FROM host_check_history
+            WHERE host_name = ?
+            ORDER BY id DESC
+            LIMIT ?
+            """,
+            (host_name, limit * 32),
+        ).fetchall()
+
+    grouped: dict[str, list[str]] = {}
+    for row in reversed(rows):
+        bucket = grouped.setdefault(row["check_name"], [])
+        bucket.append(row["status"])
+    return {name: statuses[-limit:] for name, statuses in grouped.items()}
+
+
+def fetch_host_sparklines(
+    db_path: Path,
+    *,
+    points: int = 24,
+    hours: int = 24,
+    now: datetime | None = None,
+) -> dict[str, dict[str, list[float]]]:
+    """Return recent CPU/memory series per host for the overview table.
+
+    One query for every host keeps the 30 s overview poll cheap: the table only
+    renders a handful of points and a per-host ``LIMIT`` would issue N queries.
+    Values are percentages (0–100) rounded to one decimal.
+    """
+    db_path = Path(db_path)
+    if not db_path.exists():
+        return {}
+
+    points = max(2, int(points))
+    now = now or datetime.now(timezone.utc)
+    since = _to_iso_utc(now - timedelta(hours=max(1, int(hours))))
+
+    with sqlite3.connect(db_path) as conn:
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute(
+            """
+            SELECT host_name, cpu_usage_percent, memory_used_mb, memory_total_mb
+            FROM host_metrics_history
+            WHERE success = 1 AND collected_at >= ?
+            ORDER BY collected_at
+            """,
+            (since,),
+        ).fetchall()
+
+    grouped: dict[str, dict[str, list[float]]] = {}
+    for row in rows:
+        entry = grouped.setdefault(row["host_name"], {"cpu": [], "memory": []})
+        cpu = row["cpu_usage_percent"]
+        if cpu is not None:
+            entry["cpu"].append(round(float(cpu), 1))
+        memory = _percent_value(row["memory_used_mb"], row["memory_total_mb"])
+        if memory is not None:
+            entry["memory"].append(round(memory, 1))
+
+    return {
+        name: {"cpu": series["cpu"][-points:], "memory": series["memory"][-points:]}
+        for name, series in grouped.items()
+    }
 
 
 # ---------------------------------------------------------------------------
