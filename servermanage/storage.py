@@ -49,7 +49,8 @@ CREATE TABLE IF NOT EXISTS host_metrics_history (
     load_5 REAL,
     load_15 REAL,
     net_rx_bytes INTEGER,
-    net_tx_bytes INTEGER
+    net_tx_bytes INTEGER,
+    temperature_c REAL
 );
 """
 
@@ -453,6 +454,8 @@ def _ensure_host_metrics_columns(conn: sqlite3.Connection) -> None:
     for column in ("net_rx_bytes", "net_tx_bytes"):
         if column not in existing:
             conn.execute(f"ALTER TABLE host_metrics_history ADD COLUMN {column} INTEGER")
+    if "temperature_c" not in existing:
+        conn.execute("ALTER TABLE host_metrics_history ADD COLUMN temperature_c REAL")
 
 
 def init_storage(db_path: Path, *, daily_summary_tz: str | None = "UTC") -> None:
@@ -659,6 +662,7 @@ def persist_host_reports(
                 load.load_15 if load else None,
                 metrics.net_rx_bytes,
                 metrics.net_tx_bytes,
+                metrics.hottest_temperature_c,
             )
         )
         memory_used = memory.used_mb if memory else None
@@ -707,8 +711,8 @@ def persist_host_reports(
                 memory_used_mb, memory_total_mb, disk_used_percent,
                 gpu_utilization_percent, gpu_memory_used_mb, gpu_memory_total_mb,
                 total_processes, logged_in_user_count, load_1, load_5, load_15,
-                net_rx_bytes, net_tx_bytes
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                net_rx_bytes, net_tx_bytes, temperature_c
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             rows,
         )
@@ -895,7 +899,7 @@ def fetch_host_history(
                 """
                 SELECT collected_at, cpu_usage_percent, memory_used_mb,
                        memory_total_mb, disk_used_percent, gpu_utilization_percent,
-                       gpu_memory_used_mb, gpu_memory_total_mb, load_1
+                       gpu_memory_used_mb, gpu_memory_total_mb, load_1, temperature_c
                   FROM host_metrics_history
                  WHERE host_name = ? AND success = 1 AND collected_at >= ?
                  ORDER BY collected_at ASC
@@ -912,6 +916,7 @@ def fetch_host_history(
                     "disk": row["disk_used_percent"],
                     "gpu_util": row["gpu_utilization_percent"],
                     "gpu_memory": _gpu_memory_percent(row),
+                    "temperature": row["temperature_c"],
                     "load_1": row["load_1"],
                 }
             )
@@ -945,6 +950,8 @@ def fetch_host_history(
                 "gpu_util": (float(row["gpu_util_sum"]) / count) if row["gpu_util_sum"] is not None else None,
                 "gpu_memory": (float(row["gpu_memory_pct_sum"]) / count) if row["gpu_memory_pct_sum"] is not None else None,
                 "load_1": (float(row["load_sum"]) / count) if row["load_sum"] is not None else None,
+                # 每日汇总目前不保存温度，保持与 24h 点位相同的键，前端不会画出脏线。
+                "temperature": None,
             }
         )
     return points

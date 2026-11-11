@@ -11,13 +11,15 @@
     cpu: '#2563eb',
     memory: '#7c3aed',
     disk: '#059669',
-    gpu_memory: '#d97706'
+    gpu_memory: '#d97706',
+    temperature: '#e11d48'
   };
   var TITLES = {
     cpu: 'CPU',
     memory: '内存',
     disk: '磁盘',
-    gpu_memory: 'GPU 显存'
+    gpu_memory: 'GPU 显存',
+    temperature: '温度'
   };
 
   function csrfToken() {
@@ -76,12 +78,19 @@
     return el;
   }
 
+  function trendText(value, key) {
+    if (value === null || value === undefined || value === '') { return '—'; }
+    var num = Number(value);
+    if (isNaN(num)) { return '—'; }
+    return key === 'temperature' ? num.toFixed(1) + ' °C' : fmt(num);
+  }
+
   function drawTrend(svg, values, key) {
     if (!svg) { return; }
     while (svg.firstChild) { svg.removeChild(svg.firstChild); }
     var numbers = values.filter(function (v) { return v !== null && v !== undefined && !isNaN(Number(v)); }).map(Number);
     var latest = document.querySelector('[data-trend-latest="' + key + '"]');
-    if (latest) { latest.textContent = numbers.length ? fmt(numbers[numbers.length - 1]) : ''; }
+    if (latest) { latest.textContent = numbers.length ? trendText(numbers[numbers.length - 1], key) : ''; }
     if (numbers.length < 2) { return; }
     var width = 300, height = 84, padX = 8, padY = 8;
     var min = Math.min.apply(null, numbers);

@@ -381,6 +381,18 @@ class HostMetrics:
     containers: list[ContainerInfo] = field(default_factory=list)
     thermal_zones: list[ThermalZone] = field(default_factory=list)
 
+    @property
+    def hottest_temperature_c(self) -> float | None:
+        """Highest CPU/board/GPU temperature seen in this collection, if any."""
+
+        values: list[float] = [zone.celsius for zone in self.thermal_zones if zone.celsius]
+        for row in self.gpu_summary or []:
+            if row.temperature_c is not None:
+                values.append(float(row.temperature_c))
+        if not values:
+            return None
+        return round(max(values), 1)
+
 
 @dataclass(frozen=True)
 class HostUserAccount:
