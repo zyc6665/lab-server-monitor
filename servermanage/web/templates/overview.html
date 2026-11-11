@@ -198,6 +198,11 @@
     <div class="skeleton-row"></div>
   </div>
   <p class="empty" id="empty-state" hidden></p>
+  <div class="load-banner" id="host-load-banner" hidden role="status">
+    <span class="load-banner-dot" aria-hidden="true"></span>
+    <span class="load-banner-text" id="host-load-text">数据加载失败</span>
+    <button type="button" class="btn-secondary load-banner-retry" id="host-load-retry">重试</button>
+  </div>
   <div class="table-wrap" id="host-table-wrap">
     <table class="data-table" id="host-table"{% if not hosts %} hidden{% endif %}>
       <thead>

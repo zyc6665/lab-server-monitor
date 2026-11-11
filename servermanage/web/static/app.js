@@ -1756,12 +1756,38 @@
     showToast('已导出 ' + rows.length + ' 条告警', 'success');
   }
 
+  function showLoadBanner(id, text) {
+    var banner = document.getElementById(id);
+    if (!banner) { return; }
+    var label = banner.querySelector('.load-banner-text');
+    if (label && text) { label.textContent = text; }
+    banner.hidden = false;
+  }
+
+  function hideLoadBanner(id) {
+    var banner = document.getElementById(id);
+    if (banner) { banner.hidden = true; }
+  }
+
+  function hideSkeleton(id) {
+    var skeleton = document.getElementById(id);
+    if (skeleton) { skeleton.hidden = true; }
+  }
+
   function refreshOverview() {
     return fetchJson('/api/overview').then(function (data) {
-      if (!data) { return; }
+      if (!data) {
+        hideSkeleton('host-skeleton');
+        showLoadBanner('host-load-banner', '主机数据加载失败，点击重试或检查后台服务是否在运行。');
+        return;
+      }
+      hideLoadBanner('host-load-banner');
       updateSummary(data.summary, data.hosts);
       updateHosts(data.hosts);
       renderCapacityForecast(data.capacity || []);
+    }).catch(function () {
+      hideSkeleton('host-skeleton');
+      showLoadBanner('host-load-banner', '主机数据加载失败，点击重试或检查后台服务是否在运行。');
     });
   }
 
@@ -1819,8 +1845,16 @@
 
   function refreshAlerts() {
     return fetchJson(alertsUrl(alertStatus)).then(function (data) {
-      if (!data) { return; }
+      if (!data) {
+        hideSkeleton('alert-skeleton');
+        showLoadBanner('alert-load-banner', '告警数据加载失败，点击重试或检查后台服务是否在运行。');
+        return;
+      }
+      hideLoadBanner('alert-load-banner');
       updateAlerts(data.alerts, data.counts);
+    }).catch(function () {
+      hideSkeleton('alert-skeleton');
+      showLoadBanner('alert-load-banner', '告警数据加载失败，点击重试或检查后台服务是否在运行。');
     });
   }
 
@@ -2120,6 +2154,14 @@
     });
     var bulkAck = document.getElementById('alert-bulk-ack');
     if (bulkAck) { bulkAck.addEventListener('click', bulkAckSelected); }
+    var hostRetry = document.getElementById('host-load-retry');
+    if (hostRetry) {
+      hostRetry.addEventListener('click', function () { refreshOverview(); });
+    }
+    var alertRetry = document.getElementById('alert-load-retry');
+    if (alertRetry) {
+      alertRetry.addEventListener('click', function () { refreshAlerts(); });
+    }
     var groupToggle = document.getElementById('alert-group-toggle');
     if (groupToggle) {
       groupToggle.addEventListener('click', function () { setAlertGrouping(!alertGrouped); });

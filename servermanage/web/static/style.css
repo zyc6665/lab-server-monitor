@@ -2811,3 +2811,33 @@ tr.alert-subrow > td:first-child { padding-left: 26px; }
 tr.alert-subrow { background: color-mix(in srgb, var(--surface-sunken) 45%, transparent); }
 html[data-theme="dark"] .alert-group > td.alert-group-cell { background: #121c2b; }
 html[data-theme="dark"] .alert-group-count { background: #16202f; border-color: #22314a; }
+
+/* -- v0.1.84 加载失败提示统一 -- */
+.load-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 14px;
+  padding: 10px 12px 10px 13px;
+  border-radius: 10px;
+  border: 1px solid rgba(220, 38, 38, .28);
+  background: rgba(220, 38, 38, .07);
+  font-size: 13px;
+  color: var(--text);
+}
+.load-banner[hidden] { display: none !important; }
+.load-banner-dot {
+  width: 7px;
+  height: 7px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: #dc2626;
+  box-shadow: 0 0 0 3px rgba(220, 38, 38, .16);
+}
+.load-banner-text { flex: 1 1 auto; min-width: 0; }
+.load-banner-retry { flex: 0 0 auto; padding: 5px 12px; font-size: 12.5px; }
+html[data-theme="dark"] .load-banner {
+  border-color: rgba(248, 113, 113, .3);
+  background: rgba(248, 113, 113, .1);
+}
+html[data-theme="dark"] .load-banner-dot { background: #f87171; }

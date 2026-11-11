@@ -70,6 +70,11 @@
       <option value="100">每页 100 条</option>
     </select>
   </div>
+  <div class="load-banner" id="alert-load-banner" hidden role="status">
+    <span class="load-banner-dot" aria-hidden="true"></span>
+    <span class="load-banner-text" id="alert-load-text">数据加载失败</span>
+    <button type="button" class="btn-secondary load-banner-retry" id="alert-load-retry">重试</button>
+  </div>
   <div class="skeleton" id="alert-skeleton"{% if alerts %} hidden{% endif %} aria-hidden="true">
     <div class="skeleton-row"></div>
     <div class="skeleton-row"></div>
