@@ -91,5 +91,5 @@ def test_app_js_formats_stamps_client_side() -> None:
     script = (STATIC / "app.js").read_text(encoding="utf-8")
     assert "function formatStamp(value)" in script
     assert "textCell(formatStamp(host.collected_at), 'mono')" in script
-    assert "textCell(formatStamp(alert.created_at), 'mono')" in script
-    assert "formatStamp(alert.created_at)" in script  # 重点关注里的时间
+    assert "textCell(formatRelative(alert.created_at), 'mono alert-time')" in script
+    assert "formatStamp(alert.created_at)" in script  # 悬停显示绝对时间 / 重点关注

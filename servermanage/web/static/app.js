@@ -131,6 +131,23 @@
       ' ' + pad(date.getHours()) + ':' + pad(date.getMinutes());
   }
 
+  // v0.1.79：相对时间（3 分钟前 / 2 小时前），超过 7 天回退到绝对时间。
+  function formatRelative(value) {
+    if (!value) { return '—'; }
+    var date = new Date(String(value));
+    if (isNaN(date.getTime())) { return String(value); }
+    var seconds = Math.round((Date.now() - date.getTime()) / 1000);
+    if (seconds < 0) { seconds = 0; }
+    if (seconds < 45) { return '刚刚'; }
+    var minutes = Math.round(seconds / 60);
+    if (minutes < 60) { return minutes + ' 分钟前'; }
+    var hours = Math.round(minutes / 60);
+    if (hours < 24) { return hours + ' 小时前'; }
+    var days = Math.round(hours / 24);
+    if (days <= 7) { return days + ' 天前'; }
+    return formatStamp(value);
+  }
+
   // 迷你趋势线：纯 SVG，不引第三方图表库。数据点不足两个时返回 null。
   function sparkline(values, className) {
     var list = (values || []).filter(function (item) {
@@ -1165,6 +1182,8 @@
   function buildAlertRow(alert) {
     var tr = document.createElement('tr');
     if (alert.id != null) { tr.setAttribute('data-alert-row', alert.id); }
+    tr.setAttribute('data-severity', alert.severity || 'info');
+    tr.setAttribute('data-status', alert.status || 'active');
 
     var checkCell = document.createElement('td');
     checkCell.className = 'check-col';
@@ -1201,8 +1220,8 @@
     if (alert.message) { messageCell.title = String(alert.message); }
     tr.appendChild(messageCell);
 
-    var timeCell = textCell(formatStamp(alert.created_at), 'mono');
-    if (alert.created_at) { timeCell.title = String(alert.created_at); }
+    var timeCell = textCell(formatRelative(alert.created_at), 'mono alert-time');
+    if (alert.created_at) { timeCell.title = formatStamp(alert.created_at); }
     tr.appendChild(timeCell);
     tr.appendChild(textCell(alert.status));
 

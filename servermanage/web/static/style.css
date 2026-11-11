@@ -2610,3 +2610,43 @@ html[data-theme="dark"] .kv-thermal .thermal-max.is-hot {
 html[data-theme="dark"] .kv-thermal .thermal-max.is-critical {
   color: #f87171;
 }
+
+/* -- v0.1.79 告警列表可视化打磨 -- */
+#alert-table tbody tr[data-severity] {
+  box-shadow: inset 3px 0 0 transparent;
+  transition: background-color .15s ease;
+}
+#alert-table tbody tr[data-severity="critical"] {
+  box-shadow: inset 3px 0 0 #dc2626;
+}
+#alert-table tbody tr[data-severity="warning"] {
+  box-shadow: inset 3px 0 0 #d97706;
+}
+#alert-table tbody tr[data-severity="info"] {
+  box-shadow: inset 3px 0 0 #94a3b8;
+}
+#alert-table tbody tr[data-status="resolved"] {
+  opacity: .62;
+}
+#alert-table tbody tr[data-status="acknowledged"] td.alert-time {
+  color: var(--text-muted);
+}
+#alert-table td.alert-time {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+#alert-table tbody tr:hover {
+  background: rgba(44, 92, 246, .045);
+}
+html[data-theme="dark"] #alert-table tbody tr[data-severity="critical"] {
+  box-shadow: inset 3px 0 0 #f87171;
+}
+html[data-theme="dark"] #alert-table tbody tr[data-severity="warning"] {
+  box-shadow: inset 3px 0 0 #fbbf24;
+}
+html[data-theme="dark"] #alert-table tbody tr[data-severity="info"] {
+  box-shadow: inset 3px 0 0 #64748b;
+}
+html[data-theme="dark"] #alert-table tbody tr:hover {
+  background: rgba(122, 162, 255, .08);
+}
