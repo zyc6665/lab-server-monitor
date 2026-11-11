@@ -314,6 +314,18 @@
     <span class="muted">{{ detail.alerts|length if detail.alerts else 0 }} 条</span>
   </div>
   {% if detail.alerts %}
+  <div class="host-alert-days" aria-label="最近 7 天告警分布">
+    {% for day in detail.alert_days %}
+    <div class="host-alert-day{% if not day.total %} is-empty{% endif %}" data-alert-day="{{ day.key }}" title="{{ day.label }}：{{ day.total }} 条（严重 {{ day.critical }} · 警告 {{ day.warning }} · 提示 {{ day.info }}）">
+      <div class="host-alert-day-bar" style="height: {{ day.height }}%">
+        {% if day.critical %}<span class="host-alert-seg host-alert-seg-critical" style="flex-grow: {{ day.critical }}"></span>{% endif %}
+        {% if day.warning %}<span class="host-alert-seg host-alert-seg-warning" style="flex-grow: {{ day.warning }}"></span>{% endif %}
+        {% if day.info %}<span class="host-alert-seg host-alert-seg-info" style="flex-grow: {{ day.info }}"></span>{% endif %}
+      </div>
+      <span class="host-alert-day-label mono">{{ day.label }}</span>
+    </div>
+    {% endfor %}
+  </div>
   <div class="table-wrap">
     <table class="data-table">
       <thead>

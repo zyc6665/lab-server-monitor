@@ -1603,6 +1603,64 @@ def _resolve_user_present_alert(host_name: str, username: str, db_path) -> None:
         storage.update_alert(int(alert["id"]), db_path, status="resolved")
 
 
+def _parse_iso_datetime(value: Any) -> datetime | None:
+    """Parse an ISO timestamp, tolerating ``Z`` suffixes and junk values."""
+
+    if not value:
+        return None
+    text = str(value).strip()
+    if not text:
+        return None
+    try:
+        moment = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if moment.tzinfo is None:
+        return moment.replace(tzinfo=timezone.utc)
+    return moment
+
+
+def _host_alert_days(
+    alerts: list[dict[str, Any]], tz, *, days: int = 7, now: datetime | None = None
+) -> list[dict[str, Any]]:
+    """Bucket *alerts* into the last *days* local calendar days (oldest first)."""
+
+    current = now or datetime.now(tz)
+    today = current.astimezone(tz).date()
+    start = today - timedelta(days=days - 1)
+    buckets: dict[str, dict[str, Any]] = {}
+    for offset in range(days):
+        day = start + timedelta(days=offset)
+        key = day.isoformat()
+        buckets[key] = {
+            "key": key,
+            "label": day.strftime("%m-%d"),
+            "total": 0,
+            "critical": 0,
+            "warning": 0,
+            "info": 0,
+        }
+    for alert in alerts or []:
+        moment = _parse_iso_datetime(alert.get("created_at"))
+        if moment is None:
+            continue
+        key = moment.astimezone(tz).date().isoformat()
+        bucket = buckets.get(key)
+        if bucket is None:
+            continue
+        bucket["total"] += 1
+        severity = str(alert.get("severity") or "info")
+        if severity in ("critical", "warning"):
+            bucket[severity] += 1
+        else:
+            bucket["info"] += 1
+    rows = list(buckets.values())
+    peak = max((row["total"] for row in rows), default=0)
+    for row in rows:
+        row["height"] = round(row["total"] * 100 / peak) if peak else 0
+    return rows
+
+
 def _build_host_detail(name: str, config, db_path) -> dict[str, Any] | None:
     """Build the ``/api/host/<name>`` payload, or ``None`` when unknown.
 
@@ -1652,6 +1710,11 @@ def _build_host_detail(name: str, config, db_path) -> dict[str, Any] | None:
     )
     detail["diagnostics_summary"] = diagnostics_mod.summarize_diagnostics(
         detail["diagnostics"]
+    )
+    detail["alert_days"] = _host_alert_days(
+        alerts,
+        tz,
+        now=datetime.now(tz),
     )
     return detail
 

@@ -3603,3 +3603,47 @@ html[data-theme="dark"] .settings-summary .summary-flag.is-on {
 .disk-group-count { font-size: 12px; color: var(--text-muted); }
 .disk-group-head.is-collapsed .disk-group-name { color: var(--text-muted); }
 html[data-theme="dark"] .disk-group-collapse:hover { background: #16233a; }
+
+/* -- v0.1.120 主机最近告警分布 -- */
+.host-alert-days {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 6px;
+  align-items: end;
+  margin-bottom: 14px;
+  padding: 10px 2px 6px;
+  border-bottom: 1px solid var(--border);
+}
+.host-alert-day {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 5px;
+  height: 64px;
+}
+.host-alert-day-bar {
+  width: 100%;
+  max-width: 44px;
+  min-height: 2px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  border-radius: 3px 3px 1px 1px;
+  overflow: hidden;
+  background: var(--surface-sunken);
+}
+.host-alert-day.is-empty .host-alert-day-bar { background: var(--surface-sunken); opacity: .55; }
+.host-alert-seg { display: block; min-height: 2px; }
+.host-alert-seg-critical { background: #dc2626; }
+.host-alert-seg-warning { background: #d97706; }
+.host-alert-seg-info { background: #94a3b8; }
+.host-alert-day-label { font-size: 11px; color: var(--text-muted); }
+html[data-theme="dark"] .host-alert-seg-critical { background: #f87171; }
+html[data-theme="dark"] .host-alert-seg-warning { background: #fbbf24; }
+html[data-theme="dark"] .host-alert-seg-info { background: #64748b; }
+html[data-theme="dark"] .host-alert-day-bar { background: #16233a; }
+@media (max-width: 760px) {
+  .host-alert-days { gap: 4px; }
+  .host-alert-day { height: 52px; }
+}
