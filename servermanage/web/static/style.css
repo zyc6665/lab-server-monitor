@@ -3070,3 +3070,68 @@ html[data-theme="dark"] .container-stats-hint.is-error { color: #f87171; }
 @media (max-width: 760px) {
   .container-stats-hint { display: none; }
 }
+
+/* -- v0.1.91 告警时间分布 -- */
+.timeline {
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 78px;
+  padding: 4px 0 0;
+}
+
+.timeline-bar {
+  flex: 1 1 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 1px;
+  min-height: 3px;
+  max-width: 54px;
+  border-radius: 3px 3px 1px 1px;
+  background: var(--surface-sunken);
+  transition: opacity .15s ease;
+}
+
+.timeline-bar.is-empty { opacity: .55; }
+.timeline-bar:hover { opacity: .82; }
+
+.timeline-seg { display: block; min-height: 2px; border-radius: 1px; }
+.timeline-seg-critical { background: #dc2626; }
+.timeline-seg-warning { background: #d97706; }
+.timeline-seg-info { background: #94a3b8; }
+
+.timeline-foot {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin: 12px 0 0;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.timeline-key { display: inline-flex; align-items: center; gap: 5px; }
+.timeline-key::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  background: currentColor;
+}
+.timeline-key-critical { color: #dc2626; }
+.timeline-key-warning { color: #d97706; }
+.timeline-key-info { color: #94a3b8; }
+.timeline-hint { margin-left: auto; }
+
+html[data-theme="dark"] .timeline-bar { background: #16233a; }
+html[data-theme="dark"] .timeline-seg-critical { background: #f87171; }
+html[data-theme="dark"] .timeline-key-critical { color: #f87171; }
+html[data-theme="dark"] .timeline-seg-warning { background: #fbbf24; }
+html[data-theme="dark"] .timeline-key-warning { color: #fbbf24; }
+html[data-theme="dark"] .timeline-seg-info { background: #64748b; }
+
+@media (max-width: 760px) {
+  .timeline { height: 72px; gap: 2px; }
+  .timeline-foot { flex-wrap: wrap; gap: 8px 12px; }
+  .timeline-hint { margin-left: 0; }
+}

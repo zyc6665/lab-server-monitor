@@ -6,6 +6,24 @@
   <h1 class="page-title">告警</h1>
 </div>
 
+<section class="card" id="alert-timeline-card">
+  <div class="section-head">
+    <h2>时间分布</h2>
+    <div class="range-tabs" id="alert-timeline-ranges" role="tablist" aria-label="告警时间分布区间">
+      <button type="button" class="range-tab" data-timeline-range="24h" role="tab" aria-selected="false">24 小时</button>
+      <button type="button" class="range-tab active" data-timeline-range="7d" role="tab" aria-selected="true">7 天</button>
+      <button type="button" class="range-tab" data-timeline-range="30d" role="tab" aria-selected="false">30 天</button>
+    </div>
+  </div>
+  <div class="timeline" id="alert-timeline" role="img" aria-label="按时段统计的告警数量"></div>
+  <p class="timeline-foot">
+    <span class="timeline-key timeline-key-critical">严重</span>
+    <span class="timeline-key timeline-key-warning">警告</span>
+    <span class="timeline-key timeline-key-info">提示</span>
+    <span class="timeline-hint" id="alert-timeline-hint">按当前筛选条件统计</span>
+  </p>
+</section>
+
 <section class="card">
   <div class="section-head">
     <h2>告警列表</h2>

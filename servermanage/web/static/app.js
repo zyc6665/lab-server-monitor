@@ -1571,6 +1571,7 @@
     renderAlertSummary();
     renderAlertPagination(total, pages, start, visible.length);
     updateAlertSelectionSummary();
+    renderAlertTimeline(filteredAlerts());
   }
 
   // -- 概览卡片折叠（记住上次状态） ---------------------------------------
@@ -1706,6 +1707,111 @@
     });
   }
 
+  // ---- v0.1.91 告警时间分布 ----
+  var TIMELINE_RANGES = {
+    '24h': { hours: 24, stepHours: 1, label: '24 小时' },
+    '7d': { hours: 24 * 7, stepHours: 24, label: '7 天' },
+    '30d': { hours: 24 * 30, stepHours: 24, label: '30 天' }
+  };
+  var timelineRange = '7d';
+
+  function timelineBuckets(range) {
+    var spec = TIMELINE_RANGES[range] || TIMELINE_RANGES['24h'];
+    var stepMs = spec.stepHours * 3600 * 1000;
+    var now = Date.now();
+    var end = Math.floor(now / stepMs) * stepMs;
+    var start = end - (spec.hours / spec.stepHours - 1) * stepMs;
+    var buckets = [];
+    for (var t = start; t <= end; t += stepMs) {
+      buckets.push({ start: t, end: t + stepMs, critical: 0, warning: 0, info: 0, total: 0 });
+    }
+    return buckets;
+  }
+
+  function buildAlertTimeline(alerts, range) {
+    var buckets = timelineBuckets(range);
+    if (!buckets.length) { return buckets; }
+    var first = buckets[0].start;
+    var step = buckets[0].end - buckets[0].start;
+    (alerts || []).forEach(function (alert) {
+      var when = Date.parse(alert.created_at || '');
+      if (isNaN(when) || when < first) { return; }
+      var index = Math.floor((when - first) / step);
+      if (index < 0 || index >= buckets.length) { return; }
+      var bucket = buckets[index];
+      var level = alert.severity === 'critical' || alert.severity === 'warning' ? alert.severity : 'info';
+      bucket[level] += 1;
+      bucket.total += 1;
+    });
+    return buckets;
+  }
+
+  function timelineLabel(bucket, range) {
+    var date = new Date(bucket.start);
+    var pad = function (value) { return value < 10 ? '0' + value : String(value); };
+    var day = (date.getMonth() + 1) + '-' + pad(date.getDate());
+    if ((TIMELINE_RANGES[range] || {}).stepHours === 1) {
+      return day + ' ' + pad(date.getHours()) + ':00';
+    }
+    return day;
+  }
+
+  function renderAlertTimeline(alerts) {
+    var container = document.getElementById('alert-timeline');
+    if (!container) { return; }
+    var buckets = buildAlertTimeline(alerts, timelineRange);
+    var max = 1;
+    buckets.forEach(function (bucket) { if (bucket.total > max) { max = bucket.total; } });
+    container.textContent = '';
+    var total = 0;
+    buckets.forEach(function (bucket) {
+      total += bucket.total;
+      var bar = document.createElement('div');
+      bar.className = 'timeline-bar';
+      bar.setAttribute('data-timeline-bar', timelineLabel(bucket, timelineRange));
+      var title = timelineLabel(bucket, timelineRange) + ' · 共 ' + bucket.total + ' 条';
+      if (bucket.critical) { title += ' · 严重 ' + bucket.critical; }
+      if (bucket.warning) { title += ' · 警告 ' + bucket.warning; }
+      if (bucket.info) { title += ' · 提示 ' + bucket.info; }
+      bar.title = title;
+      if (!bucket.total) {
+        bar.classList.add('is-empty');
+      } else {
+        var heightPct = Math.max(6, Math.round((bucket.total / max) * 100));
+        bar.style.height = heightPct + '%';
+        ['critical', 'warning', 'info'].forEach(function (level) {
+          if (!bucket[level]) { return; }
+          var seg = document.createElement('span');
+          seg.className = 'timeline-seg timeline-seg-' + level;
+          seg.style.flexGrow = String(bucket[level]);
+          seg.title = level === 'critical' ? '严重' : (level === 'warning' ? '警告' : '提示');
+          bar.appendChild(seg);
+        });
+      }
+      container.appendChild(bar);
+    });
+    var hint = document.getElementById('alert-timeline-hint');
+    if (hint) {
+      var spec = TIMELINE_RANGES[timelineRange] || TIMELINE_RANGES['24h'];
+      hint.textContent = '最近 ' + spec.label + ' · 共 ' + total + ' 条（按当前筛选条件统计）';
+    }
+  }
+
+  function bindAlertTimeline() {
+    var tabs = document.querySelectorAll('[data-timeline-range]');
+    Array.prototype.forEach.call(tabs, function (tab) {
+      tab.addEventListener('click', function () {
+        timelineRange = tab.getAttribute('data-timeline-range') || '24h';
+        Array.prototype.forEach.call(tabs, function (other) {
+          var active = other === tab;
+          other.classList.toggle('active', active);
+          other.setAttribute('aria-selected', active ? 'true' : 'false');
+        });
+        renderAlertTimeline(filteredAlerts());
+      });
+    });
+  }
+
   function updateAlerts(alerts, counts) {
     if (!Array.isArray(alerts)) { return; }
     updateFocusAlerts(alerts);
@@ -1719,6 +1825,7 @@
       if (!activeIds[alertId]) { delete selectedAlertIds[alertId]; }
     });
     renderAlertRows();
+    renderAlertTimeline(filteredAlerts());
   }
 
   function updateAlertSelectionSummary() {
@@ -2336,6 +2443,7 @@
 
     bindOverviewRanges();
     bindAlertRanges();
+    bindAlertTimeline();
     bindResourceRankTabs();
     refreshAll();
     window.setInterval(refreshAll, REFRESH_MS);
