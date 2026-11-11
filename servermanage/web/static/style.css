@@ -3339,3 +3339,8 @@ html[data-theme="dark"] .trend-hint { color: #93a2bb; }
 @media (max-width: 760px) {
   .trend-hint { margin: 0 0 0 auto; }
 }
+
+/* -- v0.1.101 磁盘健康导出 CSV -- */
+#disk-groups .section-head .disk-export { margin-left: auto; }
+#disk-groups .disk-export { font-size: 12.5px; padding: 6px 12px; }
+html[data-theme="dark"] #disk-groups .disk-export { border-color: var(--border-strong); }
