@@ -5,6 +5,7 @@ from servermanage.collectors import collect_all_hosts, collect_host_report
 from servermanage.commands import (
     NET_STAGE,
     DOCKER_CONTAINERS_STAGE,
+    DOCKER_STATUS_STAGE,
     GPU_PROCESSES_STAGE,
     GPU_SUMMARY_STAGE,
     PID_CONTAINER_STAGE,
@@ -266,6 +267,11 @@ def test_collect_all_hosts_default_pipeline_parses_command_outputs():
             0,
         ),
         command_map[NET_STAGE]: CommandResult("123456 654321\n", "", 0),
+        command_map[DOCKER_STATUS_STAGE]: CommandResult(
+            "train-py\tpytorch/pytorch:2.4-cuda\trunning\tUp 3 days\n",
+            "",
+            0,
+        ),
         command_map["gpu_summary"]: CommandResult(
             "0, NVIDIA RTX 4090, 91, 67, 18200, 24564, GPU-UUID-0\n",
             "",
@@ -454,6 +460,7 @@ def test_collect_all_hosts_marks_real_gpu_stage_failures_as_partial():
         command_map[DOCKER_CONTAINERS_STAGE]: CommandResult("", "docker missing", 127),
         command_map[PID_CONTAINER_STAGE]: CommandResult("", "proc scan unavailable", 1),
         command_map[NET_STAGE]: CommandResult("123456 654321\n", "", 0),
+        command_map[DOCKER_STATUS_STAGE]: CommandResult("", "docker missing", 127),
         command_map["gpu_summary"]: CommandResult("", "nvidia-smi missing", 127),
         command_map["gpu_processes"]: CommandResult("", "nvidia-smi missing", 127),
     }
@@ -467,6 +474,7 @@ def test_collect_all_hosts_marks_real_gpu_stage_failures_as_partial():
     assert reports[0].success is True
     assert {error.stage for error in reports[0].errors} == {
         DOCKER_CONTAINERS_STAGE,
+        DOCKER_STATUS_STAGE,
         PID_CONTAINER_STAGE,
         GPU_SUMMARY_STAGE,
         GPU_PROCESSES_STAGE,

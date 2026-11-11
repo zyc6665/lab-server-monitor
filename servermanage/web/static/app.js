@@ -770,6 +770,13 @@
       ((dh.healthy || 0) + (dh.warning || 0) + (dh.critical || 0));
     foot.appendChild(health);
 
+    if (host.container_count) {
+      var containers = document.createElement('span');
+      containers.className = 'host-card-containers';
+      containers.textContent = '容器 ' + host.container_count;
+      foot.appendChild(containers);
+    }
+
     var time = document.createElement('span');
     time.className = 'host-card-time mono';
     time.textContent = formatStamp(host.collected_at);

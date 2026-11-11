@@ -63,6 +63,7 @@
   <button type="button" class="host-tab" data-host-tab="metrics">指标</button>
   <button type="button" class="host-tab" data-host-tab="storage">存储与磁盘阵列</button>
   <button type="button" class="host-tab" data-host-tab="gpu">GPU</button>
+  <button type="button" class="host-tab" data-host-tab="containers">Docker 容器{% if metrics.containers %} ({{ metrics.containers|length }}){% endif %}</button>
   <button type="button" class="host-tab" data-host-tab="sessions">登录用户</button>
   <button type="button" class="host-tab" data-host-tab="checks">服务可用性</button>
   <button type="button" class="host-tab" data-host-tab="alerts">最近告警{% if detail.alerts|selectattr('status', 'equalto', 'active')|list %} ({{ detail.alerts|selectattr('status', 'equalto', 'active')|list|length }}){% endif %}</button>
@@ -323,6 +324,34 @@
   </div>
   {% else %}
   <p class="empty">这台主机没有检测到 NVIDIA GPU，或未安装 nvidia-smi。</p>
+  {% endif %}
+</section>
+
+<section class="card" id="host-containers" data-host-panel="containers">
+  <div class="section-head">
+    <h2>Docker 容器</h2>
+    <span class="muted">{{ metrics.containers|length if metrics.containers else 0 }} 个运行中</span>
+  </div>
+  {% if metrics.containers %}
+  <div class="table-wrap">
+    <table class="data-table">
+      <thead>
+        <tr><th>名称</th><th>镜像</th><th>状态</th><th>运行情况</th></tr>
+      </thead>
+      <tbody>
+        {% for container in metrics.containers %}
+        <tr>
+          <td class="mono">{{ container.name }}</td>
+          <td class="mono container-image" title="{{ container.image }}">{{ container.image }}</td>
+          <td><span class="status status-{{ 'ok' if container.state == 'running' else 'unknown' }}">{{ container.state or '—' }}</span></td>
+          <td class="muted">{{ container.status or '—' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="empty">这台主机没有运行中的 Docker 容器，或未安装 Docker。</p>
   {% endif %}
 </section>
 

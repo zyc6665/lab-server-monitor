@@ -340,6 +340,16 @@ class GPUProcessRow:
 
 
 @dataclass(frozen=True)
+class ContainerInfo:
+    """One running Docker container as reported by ``docker ps`` (read-only)."""
+
+    name: str
+    image: str = ""
+    state: str = ""
+    status: str = ""
+
+
+@dataclass(frozen=True)
 class HostMetrics:
     hostname: str | None = None
     os_pretty_name: str | None = None
@@ -360,6 +370,7 @@ class HostMetrics:
     gpu_processes: list[GPUProcessRow] = field(default_factory=list)
     net_rx_bytes: int | None = None
     net_tx_bytes: int | None = None
+    containers: list[ContainerInfo] = field(default_factory=list)
 
 
 @dataclass(frozen=True)

@@ -10,6 +10,7 @@ from servermanage.commands import (
     CPU_CORES_STAGE,
     CPU_USAGE_STAGE,
     DISK_STAGE,
+    DOCKER_STATUS_STAGE,
     DOCKER_CONTAINERS_STAGE,
     GPU_PROCESSES_STAGE,
     GPU_SUMMARY_STAGE,
@@ -29,6 +30,7 @@ from servermanage.commands import (
 )
 from servermanage.models import (
     CommandResult,
+    ContainerInfo,
     DiskUsageRow,
     GPUProcessRow,
     GPUSummaryRow,
@@ -268,6 +270,36 @@ def parse_docker_container_names(output: str) -> dict[str, str]:
             continue
         mapping[container_id] = container_name
     return mapping
+
+
+def parse_docker_containers(output: str | None) -> list[ContainerInfo]:
+    """Parse ``docker ps`` overview lines (name, image, state, status).
+
+    The probe uses ``--format`` with tab separators, so a container name that
+    contains spaces still parses correctly.  Malformed lines are skipped rather
+    than guessed, and the list is capped so a busy docker host cannot blow up
+    the snapshot payload.
+    """
+    if not output:
+        return []
+    containers: list[ContainerInfo] = []
+    for raw in output.splitlines():
+        line = raw.strip()
+        if not line:
+            continue
+        parts = line.split("\t")
+        name = parts[0].strip()
+        if not name:
+            continue
+        image = parts[1].strip() if len(parts) > 1 else ""
+        state = parts[2].strip() if len(parts) > 2 else ""
+        status = parts[3].strip() if len(parts) > 3 else ""
+        containers.append(
+            ContainerInfo(name=name, image=image, state=state, status=status)
+        )
+        if len(containers) >= 200:
+            break
+    return containers
 
 
 def parse_pid_container_map(output: str) -> dict[int, str]:
@@ -531,6 +563,9 @@ def parse_host_metrics(results: dict[str, CommandResult], host: HostConfig) -> H
         if pid_to_user
         else parse_process_counts(_stdout_if_ok_any(results, [PROCESS_COUNTS_STAGE, "process_counts_by_user"]))
     )
+    containers = parse_docker_containers(
+        _stdout_if_ok_any(results, [DOCKER_STATUS_STAGE, "docker_status"])
+    )
     net_rx_bytes, net_tx_bytes = parse_net_totals(
         _stdout_if_ok_any(results, [NET_STAGE, "net_dev"])
     )
@@ -559,4 +594,5 @@ def parse_host_metrics(results: dict[str, CommandResult], host: HostConfig) -> H
         ),
         net_rx_bytes=net_rx_bytes,
         net_tx_bytes=net_tx_bytes,
+        containers=containers,
     )

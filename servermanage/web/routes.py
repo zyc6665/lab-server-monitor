@@ -838,6 +838,7 @@ def _host_row(
         "cpu": list((spark or {}).get("cpu") or []),
         "memory": list((spark or {}).get("memory") or []),
     }
+    container_count = len(((snapshot or {}).get("metrics") or {}).get("containers") or [])
     meta = {
         "group": group or "未分组",
         "owner": owner or "",
@@ -862,6 +863,7 @@ def _host_row(
             "disk_health": _disk_health_summary(disk_health),
             "checks": checks,
             "spark": spark_data,
+            "container_count": container_count,
             **meta,
         }
     metrics = snapshot.get("metrics") or {}
@@ -877,6 +879,7 @@ def _host_row(
         "disk_health": _disk_health_summary(disk_health),
         "checks": checks,
         "spark": spark_data,
+        "container_count": container_count,
         **meta,
     }
 

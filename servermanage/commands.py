@@ -16,6 +16,7 @@ TOP_CPU_STAGE = "top_cpu"
 TOP_MEM_STAGE = "top_memory"
 PID_USER_STAGE = "pid_user_map"
 DOCKER_CONTAINERS_STAGE = "docker_containers"
+DOCKER_STATUS_STAGE = "docker_status"
 PID_CONTAINER_STAGE = "pid_container_map"
 GPU_SUMMARY_STAGE = "gpu_summary"
 GPU_PROCESSES_STAGE = "gpu_processes"
@@ -50,6 +51,10 @@ def build_command_map() -> dict[str, str]:
         TOP_MEM_STAGE: "ps -eo user=,pid=,%cpu=,%mem=,etime=,args= --sort=-%mem | head -n 10",
         PID_USER_STAGE: "ps -eo pid=,user=,args=",
         DOCKER_CONTAINERS_STAGE: "docker ps --no-trunc --format '{{.ID}}\t{{.Names}}'",
+        DOCKER_STATUS_STAGE: (
+            "docker ps --no-trunc --format "
+            "'{{.Names}}\t{{.Image}}\t{{.State}}\t{{.Status}}'"
+        ),
         PID_CONTAINER_STAGE: (
             "sh -c 'for proc in /proc/[0-9]*; do "
             "pid=${proc#/proc/}; "
@@ -87,6 +92,7 @@ __all__ = [
     "TOP_MEM_STAGE",
     "PID_USER_STAGE",
     "DOCKER_CONTAINERS_STAGE",
+    "DOCKER_STATUS_STAGE",
     "PID_CONTAINER_STAGE",
     "GPU_SUMMARY_STAGE",
     "GPU_PROCESSES_STAGE",
