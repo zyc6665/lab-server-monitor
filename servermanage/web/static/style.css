@@ -2612,42 +2612,42 @@ html[data-theme="dark"] .kv-thermal .thermal-max.is-critical {
 }
 
 /* -- v0.1.79 告警列表可视化打磨 -- */
-#alert-table tbody tr[data-severity] {
+#alerts-table tbody tr[data-severity] {
   box-shadow: inset 3px 0 0 transparent;
   transition: background-color .15s ease;
 }
-#alert-table tbody tr[data-severity="critical"] {
+#alerts-table tbody tr[data-severity="critical"] {
   box-shadow: inset 3px 0 0 #dc2626;
 }
-#alert-table tbody tr[data-severity="warning"] {
+#alerts-table tbody tr[data-severity="warning"] {
   box-shadow: inset 3px 0 0 #d97706;
 }
-#alert-table tbody tr[data-severity="info"] {
+#alerts-table tbody tr[data-severity="info"] {
   box-shadow: inset 3px 0 0 #94a3b8;
 }
-#alert-table tbody tr[data-status="resolved"] {
+#alerts-table tbody tr[data-status="resolved"] {
   opacity: .62;
 }
-#alert-table tbody tr[data-status="acknowledged"] td.alert-time {
+#alerts-table tbody tr[data-status="acknowledged"] td.alert-time {
   color: var(--text-muted);
 }
-#alert-table td.alert-time {
+#alerts-table td.alert-time {
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
-#alert-table tbody tr:hover {
+#alerts-table tbody tr:hover {
   background: rgba(44, 92, 246, .045);
 }
-html[data-theme="dark"] #alert-table tbody tr[data-severity="critical"] {
+html[data-theme="dark"] #alerts-table tbody tr[data-severity="critical"] {
   box-shadow: inset 3px 0 0 #f87171;
 }
-html[data-theme="dark"] #alert-table tbody tr[data-severity="warning"] {
+html[data-theme="dark"] #alerts-table tbody tr[data-severity="warning"] {
   box-shadow: inset 3px 0 0 #fbbf24;
 }
-html[data-theme="dark"] #alert-table tbody tr[data-severity="info"] {
+html[data-theme="dark"] #alerts-table tbody tr[data-severity="info"] {
   box-shadow: inset 3px 0 0 #64748b;
 }
-html[data-theme="dark"] #alert-table tbody tr:hover {
+html[data-theme="dark"] #alerts-table tbody tr:hover {
   background: rgba(122, 162, 255, .08);
 }
 
@@ -3288,8 +3288,8 @@ html[data-density="compact"] #host-table td {
   padding: 4px 8px;
 }
 
-html[data-density="compact"] #alert-table th,
-html[data-density="compact"] #alert-table td {
+html[data-density="compact"] #alerts-table th,
+html[data-density="compact"] #alerts-table td {
   padding: 5px 9px;
 }
 
@@ -3647,3 +3647,29 @@ html[data-theme="dark"] .host-alert-day-bar { background: #16233a; }
   .host-alert-days { gap: 4px; }
   .host-alert-day { height: 52px; }
 }
+
+/* -- v0.1.121 告警表列显示偏好 -- */
+.col-menu { position: relative; }
+.col-menu > summary { list-style: none; cursor: pointer; }
+.col-menu > summary::-webkit-details-marker { display: none; }
+.col-menu-body {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  min-width: 118px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--card-bg);
+  box-shadow: 0 12px 28px rgba(16, 24, 40, .12);
+  font-size: 12.5px;
+}
+.col-menu-body label { display: flex; align-items: center; gap: 7px; cursor: pointer; }
+#alerts-table.hide-category .col-category,
+#alerts-table.hide-host .col-host,
+#alerts-table.hide-message .col-message { display: none; }
+html[data-theme="dark"] .col-menu-body { background: var(--surface-raised); border-color: #26344c; }

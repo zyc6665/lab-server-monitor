@@ -1484,6 +1484,51 @@
     renderHosts();
   }
 
+  // 告警表的列显示偏好：只影响阅读，不改数据。
+  var ALERT_COLUMNS = ['category', 'host', 'message'];
+  var ALERT_COLUMNS_STORE = 'alerts:columns';
+
+  function readAlertColumns() {
+    try {
+      var parsed = JSON.parse(localStorage.getItem(ALERT_COLUMNS_STORE) || 'null');
+      if (!parsed || typeof parsed !== 'object') { return {}; }
+      return parsed;
+    } catch (err) {
+      return {};
+    }
+  }
+
+  function applyAlertColumns(hidden) {
+    var table = document.getElementById('alerts-table');
+    if (!table) { return; }
+    for (var i = 0; i < ALERT_COLUMNS.length; i += 1) {
+      var name = ALERT_COLUMNS[i];
+      table.classList.toggle('hide-' + name, Boolean(hidden && hidden[name]));
+    }
+  }
+
+  function bindAlertColumns() {
+    var menu = document.getElementById('alert-columns');
+    var table = document.getElementById('alerts-table');
+    if (!menu || !table) { return; }
+    var hidden = readAlertColumns();
+    var boxes = menu.querySelectorAll('[data-alert-col]');
+    for (var i = 0; i < boxes.length; i += 1) {
+      var name = boxes[i].getAttribute('data-alert-col');
+      boxes[i].checked = !hidden[name];
+    }
+    applyAlertColumns(hidden);
+    menu.addEventListener('change', function (event) {
+      var box = event.target.closest('[data-alert-col]');
+      if (!box) { return; }
+      var key = box.getAttribute('data-alert-col');
+      var next = readAlertColumns();
+      if (box.checked) { delete next[key]; } else { next[key] = true; }
+      try { localStorage.setItem(ALERT_COLUMNS_STORE, JSON.stringify(next)); } catch (err) {}
+      applyAlertColumns(next);
+    });
+  }
+
   function buildAlertRow(alert) {
     var tr = document.createElement('tr');
     if (alert.id != null) { tr.setAttribute('data-alert-row', alert.id); }
@@ -1510,9 +1555,11 @@
     tr.appendChild(severityCell);
 
     var categoryCell = textCell(alert.category);
-    categoryCell.classList.add('col-secondary');
+    categoryCell.classList.add('col-secondary', 'col-category');
     tr.appendChild(categoryCell);
-    tr.appendChild(textCell(alert.host_name));
+    var hostCell = textCell(alert.host_name);
+    hostCell.classList.add('col-host');
+    tr.appendChild(hostCell);
 
     var titleCell = document.createElement('td');
     titleCell.className = 'alert-title';
@@ -1520,7 +1567,7 @@
     tr.appendChild(titleCell);
 
     var messageCell = document.createElement('td');
-    messageCell.className = 'alert-message col-wide';
+    messageCell.className = 'alert-message col-wide col-message';
     messageCell.textContent = alert.message || '—';
     if (alert.message) { messageCell.title = String(alert.message); }
     tr.appendChild(messageCell);
@@ -2916,6 +2963,7 @@
     bindAttentionChips();
     bindAlertRanges();
     bindAlertTimeline();
+    bindAlertColumns();
     bindResourceRankTabs();
     refreshAll();
     window.setInterval(refreshAll, REFRESH_MS);

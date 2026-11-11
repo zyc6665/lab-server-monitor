@@ -66,6 +66,14 @@
           <button type="button" class="btn-secondary" id="alert-clear-filters">清除筛选</button>
     <button type="button" class="btn-secondary" id="alert-group-toggle" aria-pressed="false" title="把同一主机的告警折叠成一组">按主机分组</button>
     <button type="button" class="btn-secondary" id="alert-group-expand" hidden title="一次展开或折叠所有主机分组">全部折叠</button>
+    <details class="col-menu" id="alert-columns">
+      <summary class="btn-secondary">列</summary>
+      <div class="col-menu-body">
+        <label><input type="checkbox" data-alert-col="category" checked> 类别</label>
+        <label><input type="checkbox" data-alert-col="host" checked> 主机</label>
+        <label><input type="checkbox" data-alert-col="message" checked> 内容</label>
+      </div>
+    </details>
     <button type="button" class="btn-secondary" id="alert-bulk-ack" disabled>批量确认</button>
   </div>
   <div class="alert-summary" id="alert-summary" aria-label="告警级别统计">
@@ -110,10 +118,10 @@
         <tr>
           <th class="check-col"><input type="checkbox" id="alert-select-all" aria-label="全选当前页活动告警"></th>
           <th>级别</th>
-          <th class="col-secondary">类别</th>
-          <th>主机</th>
+          <th class="col-secondary col-category">类别</th>
+          <th class="col-host">主机</th>
           <th>标题</th>
-          <th>内容</th>
+          <th class="col-message">内容</th>
           <th>时间</th>
           <th>状态</th>
           <th>操作</th>

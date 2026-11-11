@@ -191,7 +191,7 @@ def test_system_health_payload(tmp_path: Path) -> None:
 
     assert response.status_code == 200
     payload = response.get_json()
-    assert payload["version"] == "0.1.120"
+    assert payload["version"] == "0.1.121"
     assert payload["hosts_configured"] == 1
     assert payload["db_path"] == str(db_path)
     assert payload["db_size_bytes"] > 0

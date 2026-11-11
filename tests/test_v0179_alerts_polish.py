@@ -37,12 +37,12 @@ def test_alert_polish_styles_are_wired():
     css = _css()
     tail = css[css.index("v0.1.79 告警列表可视化打磨") :]
     for selector in (
-        '#alert-table tbody tr[data-severity="critical"]',
-        '#alert-table tbody tr[data-severity="warning"]',
-        '#alert-table tbody tr[data-severity="info"]',
-        '#alert-table tbody tr[data-status="resolved"]',
-        "#alert-table td.alert-time",
+        '#alerts-table tbody tr[data-severity="critical"]',
+        '#alerts-table tbody tr[data-severity="warning"]',
+        '#alerts-table tbody tr[data-severity="info"]',
+        '#alerts-table tbody tr[data-status="resolved"]',
+        "#alerts-table td.alert-time",
     ):
         assert selector in tail
     assert "inset 3px 0 0 #dc2626" in tail
-    assert 'html[data-theme="dark"] #alert-table tbody tr[data-severity="critical"]' in tail
+    assert 'html[data-theme="dark"] #alerts-table tbody tr[data-severity="critical"]' in tail

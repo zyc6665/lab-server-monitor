@@ -99,7 +99,7 @@ def test_host_page_offers_a_retry_when_collection_failed() -> None:
 
 def test_alert_table_hides_secondary_columns_on_narrow_screens() -> None:
     markup = _template("alerts.html")
-    assert '<th class="col-secondary">类别</th>' in markup
+    assert 'class="col-secondary col-category">类别</th>' in markup
     assert 'class="alert-message col-wide"' in markup
 
     app = _script("app.js")
