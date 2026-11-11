@@ -3,8 +3,22 @@
 
 {% block content %}
 <section class="auth-card">
+  <div class="auth-brand">
+    <span class="auth-mark" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="3" y="4" width="18" height="7" rx="2"></rect>
+        <rect x="3" y="13" width="18" height="7" rx="2"></rect>
+        <circle cx="7" cy="7.5" r="1"></circle>
+        <circle cx="7" cy="16.5" r="1"></circle>
+      </svg>
+    </span>
+    <div class="auth-brand-text">
+      <strong>服务器监控</strong>
+      <span>实验室服务器轮询监测</span>
+    </div>
+  </div>
   <h1 class="login-title">首次设置</h1>
-  <p class="muted">首次使用需创建管理员账户。密码长度至少 8 位。</p>
+  <p class="auth-hint">创建管理员账户后即可开始监控。密码长度至少 8 位。</p>
   {% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
   <form method="post" action="{{ url_for('setup') }}" class="login-form">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -20,7 +34,8 @@
       <span>确认密码</span>
       <input name="confirm" type="password" autocomplete="new-password" minlength="8" required>
     </label>
-    <button type="submit" class="primary-button">完成设置</button>
+    <button type="submit" class="primary-button auth-submit">完成设置</button>
   </form>
+  <p class="auth-foot">账户信息保存在本机，可随时在设置页修改密码</p>
 </section>
 {% endblock %}

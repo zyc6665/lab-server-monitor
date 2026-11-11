@@ -3,7 +3,21 @@
 
 {% block content %}
 <section class="auth-card">
-  <h1 class="login-title">服务器监控</h1>
+  <div class="auth-brand">
+    <span class="auth-mark" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="3" y="4" width="18" height="7" rx="2"></rect>
+        <rect x="3" y="13" width="18" height="7" rx="2"></rect>
+        <circle cx="7" cy="7.5" r="1"></circle>
+        <circle cx="7" cy="16.5" r="1"></circle>
+      </svg>
+    </span>
+    <div class="auth-brand-text">
+      <strong>服务器监控</strong>
+      <span>实验室服务器轮询监测</span>
+    </div>
+  </div>
+  <h1 class="login-title">登录控制台</h1>
   {% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
   <form method="post" action="{{ url_for('login_submit') }}" class="login-form">
     <label class="field">
@@ -14,7 +28,8 @@
       <span>密码</span>
       <input name="password" type="password" autocomplete="current-password" required>
     </label>
-    <button type="submit" class="primary-button">登录</button>
+    <button type="submit" class="primary-button auth-submit">登录</button>
   </form>
+  <p class="auth-foot">仅限实验室内部使用 · 登录会话 30 天有效</p>
 </section>
 {% endblock %}
