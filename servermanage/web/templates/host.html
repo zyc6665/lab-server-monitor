@@ -170,6 +170,14 @@
         <span class="net-tx">↑ {{ net.tx_bytes_per_second|rate }}</span>
       {% else %}—{% endif %}
     </dd></div>
+    <div class="kv kv-thermal"><dt>温度</dt><dd>
+      {% if metrics.thermal_zones %}
+        {% set hottest = metrics.thermal_zones[0] %}
+        {% set hot_class = 'is-critical' if hottest.celsius >= 85 else ('is-hot' if hottest.celsius >= 70 else '') %}
+        <span class="thermal-max {{ hot_class }}">{{ '%.1f'|format(hottest.celsius) }} °C</span>
+        <span class="thermal-zones">{% for zone in metrics.thermal_zones[:4] %}<span class="thermal-chip" title="{{ zone.label }}">{{ zone.label }} {{ '%.0f'|format(zone.celsius) }}°</span>{% endfor %}{% if metrics.thermal_zones|length > 4 %}<span class="thermal-more">+{{ metrics.thermal_zones|length - 4 }}</span>{% endif %}</span>
+      {% else %}—{% endif %}
+    </dd></div>
   </dl>
 </section>
 

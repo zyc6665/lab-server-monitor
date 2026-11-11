@@ -2567,3 +2567,46 @@ html[data-theme="dark"] .net-throughput .net-rx { color: #7aa2ff; }
 @media (max-width: 760px) { .container-search { min-width: 150px; } }
 
 @media (max-width: 760px) { #host-containers .container-image { max-width: 160px; } }
+
+/* -- v0.1.78 温度概览（只读） -- */
+.kv-thermal .thermal-max {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.kv-thermal .thermal-max.is-hot {
+  color: #d97706;
+}
+.kv-thermal .thermal-max.is-critical {
+  color: #dc2626;
+}
+.kv-thermal .thermal-zones {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-left: 8px;
+}
+.kv-thermal .thermal-chip {
+  font-size: 12px;
+  line-height: 1;
+  padding: 4px 7px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--text-muted);
+  background: var(--surface-sunken);
+  font-variant-numeric: tabular-nums;
+}
+.kv-thermal .thermal-more {
+  font-size: 12px;
+  color: var(--text-muted);
+  align-self: center;
+}
+html[data-theme="dark"] .kv-thermal .thermal-chip {
+  background: #16202f;
+  border-color: #22314a;
+}
+html[data-theme="dark"] .kv-thermal .thermal-max.is-hot {
+  color: #fbbf24;
+}
+html[data-theme="dark"] .kv-thermal .thermal-max.is-critical {
+  color: #f87171;
+}

@@ -340,6 +340,14 @@ class GPUProcessRow:
 
 
 @dataclass(frozen=True)
+class ThermalZone:
+    """One thermal zone reading from ``/sys/class/thermal`` (read-only)."""
+
+    label: str
+    celsius: float
+
+
+@dataclass(frozen=True)
 class ContainerInfo:
     """One running Docker container as reported by ``docker ps`` (read-only)."""
 
@@ -371,6 +379,7 @@ class HostMetrics:
     net_rx_bytes: int | None = None
     net_tx_bytes: int | None = None
     containers: list[ContainerInfo] = field(default_factory=list)
+    thermal_zones: list[ThermalZone] = field(default_factory=list)
 
 
 @dataclass(frozen=True)

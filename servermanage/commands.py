@@ -9,6 +9,7 @@ CPU_USAGE_STAGE = "cpu_usage"
 MEMORY_STAGE = "memory"
 DISK_STAGE = "disk"
 NET_STAGE = "net"
+THERMAL_STAGE = "thermal"
 WHO_STAGE = "who"
 TOTAL_PROCESSES_STAGE = "total_processes"
 PROCESS_COUNTS_STAGE = "process_counts"
@@ -43,6 +44,12 @@ def build_command_map() -> dict[str, str]:
         NET_STAGE: (
             "awk -F'[: ]+' 'NR>2 && $2 != \"lo\" {rx += $3; tx += $11} "
             "END {printf \"%.0f %.0f\\n\", rx, tx}' /proc/net/dev"
+        ),
+        THERMAL_STAGE: (
+            "for f in /sys/class/thermal/thermal_zone*/temp; do "
+            "[ -r \"$f\" ] && printf '%s\t%s\n' "
+            "\"$(cat \"$(dirname \"$f\")/type\" 2>/dev/null)\" \"$(cat \"$f\")\"; "
+            "done 2>/dev/null"
         ),
         WHO_STAGE: "who",
         TOTAL_PROCESSES_STAGE: "ps -e --no-headers | wc -l",
@@ -85,6 +92,7 @@ __all__ = [
     "MEMORY_STAGE",
     "DISK_STAGE",
     "NET_STAGE",
+    "THERMAL_STAGE",
     "WHO_STAGE",
     "TOTAL_PROCESSES_STAGE",
     "PROCESS_COUNTS_STAGE",

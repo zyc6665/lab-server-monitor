@@ -18,6 +18,7 @@ from servermanage.commands import (
     KERNEL_STAGE,
     MEMORY_STAGE,
     NET_STAGE,
+    THERMAL_STAGE,
     OS_STAGE,
     PID_CONTAINER_STAGE,
     PID_USER_STAGE,
@@ -31,6 +32,7 @@ from servermanage.commands import (
 from servermanage.models import (
     CommandResult,
     ContainerInfo,
+    ThermalZone,
     DiskUsageRow,
     GPUProcessRow,
     GPUSummaryRow,
@@ -253,6 +255,36 @@ def parse_process_rows(output: str) -> list[ProcessRow]:
             )
         )
     return rows
+
+
+def parse_thermal_zones(output: str | None) -> list[ThermalZone]:
+    """Parse ``type<TAB>millidegrees`` lines into unique thermal zones."""
+
+    if not output:
+        return []
+    zones: list[ThermalZone] = []
+    seen: set[str] = set()
+    for raw in output.splitlines():
+        line = raw.strip()
+        if not line:
+            continue
+        parts = line.split("	", 1)
+        if len(parts) != 2:
+            continue
+        label = parts[0].strip() or "thermal"
+        value = _to_int(parts[1].strip())
+        if value is None:
+            continue
+        celsius = round(value / 1000.0, 1)
+        if celsius <= 0 or celsius >= 150:
+            continue
+        key = label.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        zones.append(ThermalZone(label=label, celsius=celsius))
+    zones.sort(key=lambda zone: (-zone.celsius, zone.label.lower()))
+    return zones[:20]
 
 
 def parse_docker_container_names(output: str) -> dict[str, str]:
@@ -563,6 +595,9 @@ def parse_host_metrics(results: dict[str, CommandResult], host: HostConfig) -> H
         if pid_to_user
         else parse_process_counts(_stdout_if_ok_any(results, [PROCESS_COUNTS_STAGE, "process_counts_by_user"]))
     )
+    thermal_zones = parse_thermal_zones(
+        _stdout_if_ok_any(results, [THERMAL_STAGE, "thermal"])
+    )
     containers = parse_docker_containers(
         _stdout_if_ok_any(results, [DOCKER_STATUS_STAGE, "docker_status"])
     )
@@ -595,4 +630,5 @@ def parse_host_metrics(results: dict[str, CommandResult], host: HostConfig) -> H
         net_rx_bytes=net_rx_bytes,
         net_tx_bytes=net_tx_bytes,
         containers=containers,
+        thermal_zones=thermal_zones,
     )
