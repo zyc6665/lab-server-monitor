@@ -44,6 +44,7 @@ from flask import (
 )
 
 from servermanage import (
+    availability,
     capacity,
     diagnostics as diagnostics_mod,
     disk_capacity,
@@ -3332,6 +3333,51 @@ def register_routes(app: Flask) -> None:
                 "ok": True,
                 "collected_at": datetime.now(timezone.utc).isoformat(),
                 "containers": rows,
+            }
+        )
+
+    @app.post("/api/host/<name>/checks/run")
+    def api_run_host_checks(name: str):
+        """Run this host's service checks once, on demand (read-only)."""
+        config = _config(app)
+        db_path = _db_path(app)
+        host_config = next((h for h in config.servers if h.name == name), None)
+        if host_config is None:
+            return jsonify({"error": "not_found"}), 404
+        checks = [check for check in (host_config.checks or []) if getattr(check, "enabled", True)]
+        if not checks:
+            return jsonify({"ok": False, "error": "该主机还没有配置服务检查"})
+        try:
+            with SSHClientWrapper(
+                host=host_config,
+                connect_timeout=config.ssh.connect_timeout,
+            ) as ssh:
+                results = availability.run_host_checks(
+                    host_config, ssh, checks, config.ssh.command_timeout
+                )
+        except Exception as exc:  # noqa: BLE001 - report, never leak a traceback
+            LOGGER.exception("on-demand checks failed for %s", name)
+            return jsonify({"ok": False, "error": str(exc)})
+        try:
+            storage.save_host_check_results(name, results, db_path)
+            storage.append_host_check_history(name, results, db_path)
+        except Exception:  # noqa: BLE001 - metrics already computed
+            LOGGER.exception("failed to persist checks for %s", name)
+        return jsonify(
+            {
+                "ok": True,
+                "checked_at": datetime.now(timezone.utc).isoformat(),
+                "checks": [
+                    {
+                        "name": result.name,
+                        "type": result.type,
+                        "target": result.target,
+                        "status": result.status,
+                        "message": result.message,
+                        "latency_ms": result.latency_ms,
+                    }
+                    for result in results
+                ],
             }
         )
 

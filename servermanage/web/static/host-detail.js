@@ -552,6 +552,49 @@
     return value === null || value === undefined ? '—' : value.toFixed(1) + '%';
   }
 
+  function bindChecksRun() {
+    var button = document.getElementById('host-checks-run');
+    var hint = document.getElementById('host-checks-hint');
+    if (!button) { return; }
+    button.addEventListener('click', function () {
+      if (button.disabled) { return; }
+      var label = button.textContent;
+      button.disabled = true;
+      button.textContent = '检查中…';
+      if (hint) { hint.hidden = true; }
+      var request = HOST_NAME
+        ? fetchJson('/api/host/' + encodeURIComponent(HOST_NAME) + '/checks/run', { method: 'POST' })
+        : Promise.reject(new Error('缺少主机信息'));
+      request
+        .then(function (payload) {
+          if (!payload || !payload.ok) {
+            throw new Error((payload && payload.error) || '检查失败');
+          }
+          var rows = payload.checks || [];
+          var bad = rows.filter(function (row) { return row.status !== 'ok'; }).length;
+          if (hint) {
+            hint.hidden = false;
+            hint.textContent = bad
+              ? '已检查 ' + rows.length + ' 项，' + bad + ' 项异常'
+              : '已检查 ' + rows.length + ' 项，全部正常';
+            hint.className = 'checks-hint' + (bad ? ' is-warn' : '');
+          }
+          loadChecks();
+        })
+        .catch(function (error) {
+          if (hint) {
+            hint.hidden = false;
+            hint.textContent = '检查失败：' + error.message;
+            hint.className = 'checks-hint is-error';
+          }
+        })
+        .then(function () {
+          button.disabled = false;
+          button.textContent = label;
+        });
+    });
+  }
+
   function bindContainerStats() {
     var button = document.getElementById('container-stats');
     var hint = document.getElementById('container-stats-hint');
@@ -642,6 +685,7 @@
   bindDiagCopy();
   bindContainerFilter();
   bindContainerStats();
+  bindChecksRun();
   loadHistory('24h');
   loadChecks();
 })();

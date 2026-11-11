@@ -3135,3 +3135,32 @@ html[data-theme="dark"] .timeline-seg-info { background: #64748b; }
   .timeline-foot { flex-wrap: wrap; gap: 8px 12px; }
   .timeline-hint { margin-left: 0; }
 }
+
+/* -- v0.1.92 服务检查立即执行 -- */
+.checks-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.checks-run {
+  padding: 5px 12px;
+  font-size: 12.5px;
+}
+.checks-run[disabled] {
+  opacity: .55;
+  cursor: not-allowed;
+}
+.checks-hint {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.checks-hint.is-warn { color: #b45309; }
+.checks-hint.is-error { color: #b91c1c; }
+.checks-hint[hidden] { display: none !important; }
+html[data-theme="dark"] .checks-hint { color: #94a3b8; }
+html[data-theme="dark"] .checks-hint.is-warn { color: #fbbf24; }
+html[data-theme="dark"] .checks-hint.is-error { color: #f87171; }
+@media (max-width: 760px) {
+  .checks-actions { width: 100%; }
+}

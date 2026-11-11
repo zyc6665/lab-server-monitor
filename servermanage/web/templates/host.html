@@ -245,7 +245,11 @@
 <section class="card" id="host-checks-panel" data-host-panel="checks">
   <div class="section-head">
     <h2>服务可用性</h2>
-    <span class="muted">{{ detail.checks|length if detail.checks else 0 }} 项检查</span>
+    <div class="checks-actions">
+      <span class="muted">{{ detail.checks|length if detail.checks else 0 }} 项检查</span>
+      <button type="button" class="secondary-button checks-run" id="host-checks-run"{% if not detail.checks %} disabled{% endif %}>立即检查</button>
+      <span class="checks-hint" id="host-checks-hint" hidden></span>
+    </div>
   </div>
   <div class="table-wrap" id="host-checks-wrap"{% if not detail.checks %} hidden{% endif %}>
     <table class="data-table" id="host-checks-table">
