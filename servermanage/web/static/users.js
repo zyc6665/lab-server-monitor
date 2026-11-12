@@ -611,10 +611,13 @@
     });
   }
 
-  function refreshUsers() {
+  function refreshUsers(forceUsage) {
     setRefreshBusy(true);
     setRefreshStatus('正在提交刷新任务…');
-    return fetchJson('/api/users/refresh', { method: 'POST' }).then(function (payload) {
+    return fetchJson('/api/users/refresh', {
+      method: 'POST',
+      body: JSON.stringify({ usage: !!forceUsage })
+    }).then(function (payload) {
       if (!payload) { finishRefresh('刷新失败，请稍后重试。'); return null; }
       if (payload.error) { finishRefresh('刷新失败：' + payload.error); return null; }
       if (payload.started === false) { setRefreshStatus('已有采集任务在运行，等待其完成…'); }
@@ -964,7 +967,11 @@
     bindFilters();
     bindAdminDialog();
     var button = document.getElementById('user-refresh');
-    if (button) { button.addEventListener('click', function () { refreshUsers(); }); }
+    if (button) { button.addEventListener('click', function () { refreshUsers(false); }); }
+    var usageButton = document.getElementById('user-refresh-usage');
+    if (usageButton) {
+      usageButton.addEventListener('click', function () { refreshUsers(true); });
+    }
     fetchUsers();
   }
 

@@ -186,8 +186,12 @@ def _monitor_service(app: Flask):
     return service
 
 
-def _request_user_refresh(app: Flask) -> None:
+def _request_user_refresh(app: Flask, *, force_usage: bool = False) -> None:
     """Ask the background service to rescan users after a write operation.
+
+    ``force_usage`` also refreshes the directory sizes, which is what a fresh
+    sudo password or a changed usage interval needs: without it the next size
+    scan could be up to two days away.
 
     Failure is not fatal: the account was already created on the host, and the
     next scheduled scan will pick it up.  We only avoid a stale page.
@@ -197,9 +201,15 @@ def _request_user_refresh(app: Flask) -> None:
     if not callable(refresh):
         return
     try:
-        refresh()
+        refresh(force_usage=force_usage)
+    except TypeError:
+        # Service implementations from older builds take no keyword arguments.
+        try:
+            refresh()
+        except Exception:  # noqa: BLE001 - best-effort refresh only
+            LOGGER.warning("refresh_users() failed", exc_info=True)
     except Exception:  # noqa: BLE001 - best-effort refresh only
-        LOGGER.warning("refresh_users() after provisioning failed", exc_info=True)
+        LOGGER.warning("refresh_users() failed", exc_info=True)
 
 
 # Editable settings sections accepted by ``PUT /api/settings/<section>``.  The
@@ -2504,7 +2514,13 @@ def register_routes(app: Flask) -> None:
         refresh = getattr(service, "refresh_users", None)
         if not callable(refresh):
             return jsonify({"error": "unavailable"}), 503
+        payload = request.get_json(silent=True)
+        force_usage = bool(
+            (payload or {}).get("usage") if isinstance(payload, dict) else False
+        )
         try:
+            result = refresh(force_usage=force_usage)
+        except TypeError:  # pragma: no cover - legacy service without the kwarg
             result = refresh()
         except Exception:  # pragma: no cover - defensive, the caller sees JSON
             LOGGER.exception("refresh_users() failed")
@@ -3027,6 +3043,10 @@ def register_routes(app: Flask) -> None:
         except SettingsError as exc:
             return jsonify({"error": str(exc)}), 400
         _refresh_config(app)
+        if section == "user_monitoring":
+            # Saving the section is the moment a new sudo password or a new
+            # interval takes effect, so refresh sizes right away.
+            _request_user_refresh(app, force_usage=True)
         return jsonify({"ok": True, "restart_required": section == "dashboard"})
 
     @app.get("/api/settings/hosts/collection-status")
@@ -3069,6 +3089,10 @@ def register_routes(app: Flask) -> None:
             return jsonify({"error": str(exc)}), 400
         _refresh_config(app)
         _notify_hosts_imported(app, [name])
+        if payload.get("sudo_password"):
+            # A freshly stored sudo password unblocks the size scan, so do not
+            # wait for the (two day) usage interval to run it.
+            _request_user_refresh(app, force_usage=True)
         return jsonify({"ok": True})
 
     @app.delete("/api/settings/hosts/<name>")
