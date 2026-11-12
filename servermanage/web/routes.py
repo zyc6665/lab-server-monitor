@@ -1207,6 +1207,8 @@ def _build_overview(config, db_path) -> dict[str, Any]:
 # not listed here: "added" is informational and "missing" is expressed by the
 # row ``state`` instead.
 _USER_DIRECTORY_ISSUES = frozenset({"home", "data", "owner"})
+# Growth window shown on the users page (days).
+_USAGE_DELTA_DAYS = 7
 
 
 def _user_row_issues(row: dict[str, Any]) -> list[str]:
@@ -1469,6 +1471,12 @@ def _build_user_rows(
         storage.get_user_baseline(host_name, db_path),
         server,
     )
+    deltas = storage.get_user_usage_deltas(host_name, db_path, days=_USAGE_DELTA_DAYS)
+    for row in rows:
+        info = deltas.get(str(row.get("username") or ""))
+        row["usage_delta_bytes"] = info.get("delta") if info else None
+        row["usage_delta_days"] = _USAGE_DELTA_DAYS if info else None
+        row["usage_delta_since"] = info.get("since") if info else None
     if tz is not None:
         for row in rows:
             for key in ("collected_at", "usage_collected_at", "last_seen_at"):
@@ -1506,6 +1514,12 @@ def _host_user_counts(rows: list[dict[str, Any]]) -> dict[str, Any]:
             (row.get("home_size_bytes") or 0) + (row.get("data_size_bytes") or 0)
             for row in rows
         ),
+        "delta_bytes": sum(
+            row.get("usage_delta_bytes") or 0
+            for row in rows
+            if row.get("usage_delta_bytes") is not None
+        ),
+        "delta_days": _USAGE_DELTA_DAYS,
         "usage_readable": not any(
             row.get("usage_readable") is False for row in present
         ),

@@ -3849,3 +3849,38 @@ html[data-theme="dark"] .usage-hint.is-running {
   background: rgba(122, 162, 255, 0.12);
   border-color: rgba(122, 162, 255, 0.45);
 }
+
+/* -- v0.1.141 占用变化与 TB 显示 -- */
+.usage-delta {
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.usage-delta.is-up {
+  color: #b45309;
+  border-color: rgba(217, 119, 6, 0.45);
+  background: rgba(217, 119, 6, 0.10);
+}
+
+.usage-delta.is-down {
+  color: #15803d;
+  border-color: rgba(22, 163, 74, 0.4);
+  background: rgba(22, 163, 74, 0.10);
+}
+
+html[data-theme="dark"] .usage-delta.is-up {
+  color: #fbbf24;
+  border-color: rgba(251, 191, 36, 0.4);
+  background: rgba(251, 191, 36, 0.12);
+}
+
+html[data-theme="dark"] .usage-delta.is-down {
+  color: #4ade80;
+  border-color: rgba(74, 222, 128, 0.35);
+  background: rgba(74, 222, 128, 0.12);
+}

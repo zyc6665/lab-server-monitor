@@ -75,10 +75,30 @@
     if (value === null || value === undefined || value === '') { return '—'; }
     var num = Number(value);
     if (isNaN(num) || num < 0) { return '—'; }
+    if (num >= 1099511627776) { return (num / 1099511627776).toFixed(2) + ' TB'; }
     if (num >= 1073741824) { return (num / 1073741824).toFixed(1) + ' GB'; }
     if (num >= 1048576) { return (num / 1048576).toFixed(1) + ' MB'; }
     if (num >= 1024) { return (num / 1024).toFixed(1) + ' KB'; }
     return num + ' B';
+  }
+
+  // 占用变化：只有拿到两次以上采样才显示，避免把"还没量过"说成 0。
+  function deltaChip(bytes, days) {
+    if (bytes === null || bytes === undefined) { return null; }
+    var num = Number(bytes);
+    if (isNaN(num)) { return null; }
+    var chip = document.createElement('span');
+    var window_ = days ? '近 ' + days + ' 天 ' : '';
+    if (num === 0) {
+      chip.className = 'usage-delta';
+      chip.textContent = window_ + '无变化';
+      return chip;
+    }
+    var up = num > 0;
+    chip.className = 'usage-delta ' + (up ? 'is-up' : 'is-down');
+    chip.textContent = window_ + (up ? '+' : '−') + formatBytes(Math.abs(num));
+    chip.setAttribute('title', up ? '占用在增加' : '占用在减少');
+    return chip;
   }
 
   function setText(elementId, text) {
@@ -220,6 +240,8 @@
     usage.className = 'mono';
     usage.textContent = formatBytes(host.bytes || 0) + (host.usage_readable === false ? '（部分不可读）' : '');
     foot.appendChild(usage);
+    var hostDelta = deltaChip(host.delta_bytes, host.delta_days);
+    if (hostDelta) { foot.appendChild(hostDelta); }
     var seen = document.createElement('span');
     seen.className = 'muted';
     seen.textContent = host.last_scan_at ? '采集 ' + formatTimestamp(host.last_scan_at) : '尚未采集';
@@ -336,6 +358,13 @@
 
     var foot = document.createElement('div');
     foot.className = 'user-acct-foot';
+    var accountDelta = deltaChip(row.usage_delta_bytes, row.usage_delta_days);
+    if (accountDelta) {
+      if (row.usage_delta_since) {
+        accountDelta.setAttribute('title', '自 ' + formatTimestamp(row.usage_delta_since) + ' 起');
+      }
+      foot.appendChild(accountDelta);
+    }
     var seen = document.createElement('span');
     seen.className = 'muted mono';
     seen.textContent = row.collected_at ? '采集 ' + formatTimestamp(row.collected_at) : '尚未采集';

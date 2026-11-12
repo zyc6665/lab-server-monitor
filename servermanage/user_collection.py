@@ -236,6 +236,12 @@ def _scan_host(
             usage_refreshed=usage_refreshed,
             seed_only=True,
         )
+        storage.append_user_usage_history(
+            host.name, [asdict(account) for account in normalized], db_path, now=now
+        )
+        storage.append_user_usage_history(
+            host.name, [asdict(account) for account in normalized], db_path, now=now
+        )
         return normalized
 
     # Snapshot + baseline + scan state commit atomically; the returned list is
@@ -246,6 +252,12 @@ def _scan_host(
         db_path,
         now=now,
         usage_refreshed=usage_refreshed,
+    )
+    storage.append_user_usage_history(
+        host.name, [asdict(account) for account in normalized], db_path, now=now
+    )
+    storage.append_user_usage_history(
+        host.name, [asdict(account) for account in normalized], db_path, now=now
     )
     inserted_names = set(inserted)
 

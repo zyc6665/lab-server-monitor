@@ -339,6 +339,16 @@ CREATE TABLE IF NOT EXISTS host_user_scan_state (
     last_usage_at TEXT,
     last_error TEXT
 );
+CREATE TABLE IF NOT EXISTS host_user_usage_history (
+    host_name TEXT NOT NULL,
+    username TEXT NOT NULL,
+    collected_at TEXT NOT NULL,
+    home_size_bytes INTEGER,
+    data_size_bytes INTEGER,
+    PRIMARY KEY (host_name, username, collected_at)
+);
+CREATE INDEX IF NOT EXISTS idx_user_usage_history
+    ON host_user_usage_history (host_name, collected_at);
 CREATE TABLE IF NOT EXISTS user_operations (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     created_at TEXT NOT NULL,
@@ -3847,3 +3857,150 @@ def _decode_user_operation(row: Sequence[Any]) -> dict[str, Any]:
     }
 
 
+
+
+def append_user_usage_history(
+    host_name: str,
+    accounts: list[dict],
+    db_path: Path,
+    *,
+    now: datetime | str | None = None,
+    retain_days: int = 180,
+    min_interval_hours: float = 12,
+) -> int:
+    """Record one measurement per account, so growth can be charted later.
+
+    Only accounts that actually have a size are written: an unmeasured account
+    would otherwise show up as a 0 B sample and produce a fake "-x GB" swing on
+    the next round.
+    """
+    db_path = Path(db_path)
+    init_storage(db_path)
+    moment = (
+        _to_iso_utc(now)
+        if now is not None
+        else datetime.now(timezone.utc).isoformat()
+    )
+    candidates = [
+        account
+        for account in accounts
+        if account.get("username")
+        and (
+            account.get("home_size_bytes") is not None
+            or account.get("data_size_bytes") is not None
+        )
+    ]
+    if not candidates:
+        return 0
+
+    cutoff = None
+    if retain_days > 0:
+        cutoff = (
+            datetime.now(timezone.utc) - timedelta(days=retain_days)
+        ).isoformat()
+
+    # Re-measuring an unchanged directory every few minutes would bury the real
+    # changes in noise, so an identical size is only recorded once per
+    # ``min_interval_hours``; a changed size is always recorded.
+    floor = (
+        datetime.now(timezone.utc) - timedelta(hours=max(0, min_interval_hours))
+    ).isoformat()
+    rows: list[tuple] = []
+    conn = sqlite3.connect(db_path)
+    try:
+        for account in candidates:
+            username = str(account["username"])
+            home = account.get("home_size_bytes")
+            data = account.get("data_size_bytes")
+            if min_interval_hours > 0:
+                last = conn.execute(
+                    "SELECT collected_at, home_size_bytes, data_size_bytes"
+                    " FROM host_user_usage_history"
+                    " WHERE host_name = ? AND username = ?"
+                    " ORDER BY collected_at DESC LIMIT 1",
+                    (host_name, username),
+                ).fetchone()
+                if (
+                    last is not None
+                    and last[0] >= floor
+                    and last[1] == home
+                    and last[2] == data
+                ):
+                    continue
+            rows.append((host_name, username, moment, home, data))
+        if not rows:
+            conn.commit()
+            return 0
+        conn.executemany(
+            "INSERT OR REPLACE INTO host_user_usage_history"
+            " (host_name, username, collected_at, home_size_bytes, data_size_bytes)"
+            " VALUES (?, ?, ?, ?, ?)",
+            rows,
+        )
+        if cutoff is not None:
+            conn.execute(
+                "DELETE FROM host_user_usage_history"
+                " WHERE host_name = ? AND collected_at < ?",
+                (host_name, cutoff),
+            )
+        conn.commit()
+    finally:
+        conn.close()
+    return len(rows)
+
+
+def get_user_usage_deltas(
+    host_name: str,
+    db_path: Path,
+    *,
+    days: int = 7,
+    now: datetime | None = None,
+) -> dict[str, dict]:
+    """Return ``username -> delta`` between the oldest and newest sample.
+
+    A single sample has no meaningful change yet, so it yields a delta of
+    ``None``; the caller renders that as "—" instead of a misleading 0 B.
+    """
+    db_path = Path(db_path)
+    if not db_path.exists():
+        return {}
+    moment = now or datetime.now(timezone.utc)
+    since = (moment - timedelta(days=max(1, int(days)))).isoformat()
+
+    conn = sqlite3.connect(db_path)
+    try:
+        cursor = conn.execute(
+            "SELECT username, collected_at, home_size_bytes, data_size_bytes"
+            " FROM host_user_usage_history"
+            " WHERE host_name = ? AND collected_at >= ?"
+            " ORDER BY username, collected_at",
+            (host_name, since),
+        )
+        samples: dict[str, list[tuple[str, int]]] = {}
+        for username, collected_at, home, data in cursor.fetchall():
+            total = int(home or 0) + int(data or 0)
+            samples.setdefault(str(username), []).append((collected_at, total))
+    finally:
+        conn.close()
+
+    deltas: dict[str, dict] = {}
+    for username, points in samples.items():
+        if len(points) < 2:
+            deltas[username] = {
+                "delta": None,
+                "base": points[0][1] if points else None,
+                "current": points[-1][1] if points else None,
+                "since": points[0][0] if points else None,
+                "points": len(points),
+            }
+            continue
+        base = points[0][1]
+        current = points[-1][1]
+        deltas[username] = {
+            "delta": current - base,
+            "base": base,
+            "current": current,
+            "since": points[0][0],
+            "points": len(points),
+        }
+    return deltas

@@ -1,6 +1,6 @@
 {
   "name": "server-monitor-desktop",
-  "version": "0.1.140",
+  "version": "0.1.141",
   "private": true,
   "main": "electron/main.js",
   "scripts": {
