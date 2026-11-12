@@ -165,6 +165,7 @@ def _scan_host(
         usage_due=usage_due,
         command_timeout=config.user_monitoring.command_timeout,
         usage_timeout=config.user_monitoring.usage_timeout_seconds,
+        sudo_available=bool(getattr(host, "sudo_password", None)),
     )
     accounts = list(accounts)
     usage_refreshed = bool(usage_refreshed)

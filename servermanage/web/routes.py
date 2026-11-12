@@ -1258,7 +1258,7 @@ def _usage_hint(row: dict[str, Any], server: Any) -> str:
         return ""
     has_password = bool(getattr(server, "sudo_password", None))
     if not has_password:
-        return "未配置 sudo 密码，无法统计目录占用；可在该主机设置里填写 sudo 密码（或配置免密 sudo）。"
+        return "未配置 sudo 密码，已跳过目录占用统计；可在该主机设置里填写 sudo 密码（或配置免密 sudo）。"
     return "上次统计失败或超时，将在下个统计周期重试。"
 
 

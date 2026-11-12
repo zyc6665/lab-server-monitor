@@ -376,12 +376,16 @@ def collect_host_users(
     usage_due: bool,
     command_timeout: int = 120,
     usage_timeout: int | None = None,
+    sudo_available: bool = True,
 ) -> tuple[list[HostUserAccount], bool, bool]:
     """Collect one host's user snapshot through *runner*.
 
     Returns ``(accounts, usage_readable, usage_refreshed)``.  ``du`` runs only
-    when *usage_due* is true and at least one candidate directory exists; sudo
-    failures are reported through ``usage_readable`` instead of raising.
+    when *usage_due* is true, *sudo_available* is set and at least one candidate
+    directory exists; sudo failures are reported through ``usage_readable``
+    instead of raising.  Hosts without a sudo password skip ``du`` entirely:
+    an unprivileged ``du`` would either walk other people's homes for minutes
+    or hit ``sudo -n`` and time out.
     """
     result = runner.run(build_scan_command(), command_timeout)
     if result.exit_status != 0:
@@ -408,6 +412,21 @@ def collect_host_users(
     usage_sizes: dict[str, int] = {}
 
     if usage_due:
+        if not sudo_available:
+            # Without a stored password we can still succeed when the host has
+            # NOPASSWD sudo.  Probe that cheaply first: `sudo -n true` fails in a
+            # second on a password-protected host, while the real `du` would
+            # block for the whole (long) timeout before giving up.
+            try:
+                probe = runner.run_sudo("true", min(15, usage_timeout or command_timeout))
+            except Exception:  # noqa: BLE001 - probe failure means "no sudo"
+                sudo_available = False
+            else:
+                sudo_available = probe.exit_status == 0
+            if not sudo_available:
+                usage_readable = False
+
+    if usage_due and sudo_available:
         candidate_paths: list[str] = []
         for user in users:
             name = user["username"]
