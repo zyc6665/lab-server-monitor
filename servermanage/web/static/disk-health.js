@@ -68,6 +68,11 @@
       if (matched && el.classList.contains('disk-host')) {
         matchedGroups[groupOf(el)] = true;
       }
+      // 跳转芯片属于导航，分组收起时也要保留，否则想跳进去反而找不到入口。
+      if (el.classList.contains('disk-jump-link')) {
+        el.hidden = !matched;
+        return;
+      }
       var collapsed = el.classList.contains('disk-host') && collapsedGroups.indexOf(groupOf(el)) !== -1;
       el.hidden = !matched || collapsed;
       if (!el.hidden && el.classList.contains('disk-host')) { visibleHosts += 1; }
@@ -125,15 +130,66 @@
     search.addEventListener('search', function () { apply(toggle.checked); });
   }
 
-  // 直接跳到某个主机锚点时，别让筛选把目标藏起来。
-  if (window.location.hash && toggle.checked) {
-    var target = document.getElementById(window.location.hash.replace('#', ''));
-    if (target && target.hidden) {
+  // 分组被收起时点跳转芯片 / 打开带锚点的链接，先把目标所在分组展开，
+  // 这样"跳过去"不会跳到一个看不见的主机。
+  function expandGroupOf(el) {
+    var name = groupOf(el);
+    if (!name) { return false; }
+    if (readGroups().indexOf(name) === -1) { return false; }
+    var head = null;
+    Array.prototype.forEach.call(
+      document.querySelectorAll('[data-disk-group]'),
+      function (candidate) {
+        if (!head && candidate.getAttribute('data-disk-group') === name) { head = candidate; }
+      }
+    );
+    if (head) {
+      setGroupCollapsed(head, false);
+      return true;
+    }
+    return false;
+  }
+
+  function revealTarget(el) {
+    if (!el) { return; }
+    expandGroupOf(el);
+    if (el.hidden && toggle.checked && !isIssue(el)) {
       toggle.checked = false;
       apply(false);
       save(false);
     }
+    if (el.hidden) { apply(toggle.checked); }
   }
+
+  function revealHash() {
+    if (!window.location.hash) { return; }
+    revealTarget(document.getElementById(window.location.hash.replace('#', '')));
+  }
+
+  // 直接跳到某个主机锚点时，别让筛选或折叠把目标藏起来。
+  revealHash();
+
+  // 跳转芯片：拦截默认滚动，先展开分组再滚过去，滚动位置更准。
+  Array.prototype.forEach.call(
+    document.querySelectorAll('.disk-jump-link'),
+    function (link) {
+      link.addEventListener('click', function (event) {
+        var id = (link.getAttribute('href') || '').replace('#', '');
+        var target = id ? document.getElementById(id) : null;
+        if (!target) { return; }
+        event.preventDefault();
+        revealTarget(target);
+        window.requestAnimationFrame(function () {
+          target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        });
+        if (window.history && window.history.replaceState) {
+          window.history.replaceState(null, '', '#' + id);
+        }
+      });
+    }
+  );
+
+  window.addEventListener('hashchange', revealHash);
 
   if (!hosts.length) { toggle.disabled = true; }
 
