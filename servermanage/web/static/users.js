@@ -250,6 +250,13 @@
     return box;
   }
 
+  function renderUsageHint(text) {
+    var hint = document.getElementById('usage-hint');
+    if (!hint) { return; }
+    hint.textContent = text || '';
+    hint.hidden = !text;
+  }
+
   function renderHosts(data) {
     var filters = currentFilters();
     var grid = document.getElementById('user-host-grid');
@@ -266,6 +273,7 @@
       if (!hosts.length) { empty.textContent = '没有符合筛选条件的主机。'; }
     }
     setText('user-host-count', '共 ' + hosts.length + ' 台主机');
+    renderUsageHint(data.usage_hint);
   }
 
   // ---------------------------------------------------------------------------

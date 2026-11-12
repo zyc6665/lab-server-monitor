@@ -3785,3 +3785,23 @@ html[data-theme="dark"] #disk-search-count { color: #7aa2ff; }
   color: var(--text-muted);
 }
 .gpu-proc-table tbody tr:hover td.gpu-proc-cmd { color: var(--text); }
+
+/* -- v0.1.134 占用未统计的原因提示 -- */
+.usage-hint {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border: 1px solid rgba(217, 119, 6, .28);
+  border-radius: 10px;
+  background: rgba(217, 119, 6, .08);
+  color: #92400e;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.usage-hint[hidden] { display: none !important; }
+
+html[data-theme="dark"] .usage-hint {
+  border-color: rgba(251, 191, 36, .3);
+  background: rgba(251, 191, 36, .12);
+  color: #fbbf24;
+}

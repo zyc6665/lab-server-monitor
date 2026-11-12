@@ -1601,10 +1601,25 @@ def _build_users_payload(
             if row.get("data_size_bytes") is not None
         ),
     }
+    blocked = [
+        block["name"]
+        for block in host_blocks
+        if block.get("monitored")
+        and not block.get("sudo_configured")
+        and block.get("accounts")
+    ]
+    usage_hint = ""
+    if blocked:
+        preview = "、".join(blocked[:3])
+        usage_hint = (
+            f"{len(blocked)} 台主机没有 sudo 密码，目录占用无法统计（{preview}）。"
+            "在设置 → 主机里填写 sudo 密码后会立刻开始统计。"
+        )
     return {
         "accounts": filtered,
         "hosts": host_blocks,
         "summary": summary,
+        "usage_hint": usage_hint,
         "write_enabled": bool(config.user_monitoring.write_enabled),
         "filters": {
             "host": host_filter,

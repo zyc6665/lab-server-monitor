@@ -117,3 +117,25 @@ def test_users_page_has_a_usage_button():
     assert "function refreshUsers(forceUsage)" in script
     assert "JSON.stringify({ usage: !!forceUsage })" in script
     assert "refreshUsers(true);" in script
+
+
+def test_users_payload_exposes_usage_hint(tmp_path):
+    client, _monitor, _csrf = _client(tmp_path)
+
+    payload = client.get("/api/users").get_json()
+
+    assert "usage_hint" in payload
+    assert isinstance(payload["usage_hint"], str)
+
+
+def test_usage_hint_banner_is_wired():
+    html = (TEMPLATES / "users.html").read_text(encoding="utf-8")
+    assert 'id="usage-hint"' in html
+
+    script = (STATIC / "users.js").read_text(encoding="utf-8")
+    assert "function renderUsageHint(text)" in script
+    assert "renderUsageHint(data.usage_hint);" in script
+
+    style = (STATIC / "style.css").read_text(encoding="utf-8")
+    assert ".usage-hint {" in style
+    assert '.usage-hint[hidden] { display: none !important; }' in style
