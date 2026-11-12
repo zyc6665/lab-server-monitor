@@ -437,6 +437,7 @@ def parse_nvidia_smi_processes(
                 command=command,
             )
         )
+    rows.sort(key=lambda row: (row.index, -row.memory_used_mb, row.pid))
     return rows
 
 

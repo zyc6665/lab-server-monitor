@@ -427,6 +427,34 @@
       </tbody>
     </table>
   </div>
+  {% set proc_ns = namespace(total=0) %}
+  {% for proc in metrics.gpu_processes or [] %}
+    {% set proc_ns.total = proc_ns.total + proc.memory_used_mb %}
+  {% endfor %}
+  <div class="gpu-proc-head">
+    <h3>占用显存的进程</h3>
+    <span class="muted">{% if metrics.gpu_processes %}共 {{ metrics.gpu_processes|length }} 个 · 合计 {{ proc_ns.total }} MB{% else %}当前没有进程占用显存{% endif %}</span>
+  </div>
+  {% if metrics.gpu_processes %}
+  <div class="table-wrap">
+    <table class="data-table gpu-proc-table">
+      <thead>
+        <tr><th>显卡</th><th>用户</th><th>PID</th><th>显存</th><th>命令</th></tr>
+      </thead>
+      <tbody>
+        {% for proc in metrics.gpu_processes %}
+        <tr data-gpu-proc="{{ proc.pid }}">
+          <td class="mono">#{{ proc.index }}</td>
+          <td>{{ proc.username or '—' }}</td>
+          <td class="mono">{{ proc.pid }}</td>
+          <td class="mono">{{ proc.memory_used_mb }} MB</td>
+          <td class="gpu-proc-cmd" title="{{ proc.command }}">{{ proc.command or '—' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
   {% else %}
   <p class="empty">这台主机没有检测到 NVIDIA GPU，或未安装 nvidia-smi。</p>
   {% endif %}
