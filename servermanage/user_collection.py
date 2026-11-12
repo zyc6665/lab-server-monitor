@@ -161,6 +161,26 @@ def _scan_host(
         or (now - last_usage).total_seconds() >= interval
     )
 
+    previous_snapshot = storage.get_host_user_snapshot(host.name, db_path)
+    previous_by_name = {row["username"]: row for row in previous_snapshot}
+
+    # Accounts measured recently are carried forward instead of being walked
+    # again: a first sweep over tens of terabytes takes several rounds, and each
+    # round should finish the remaining directories rather than start over.
+    fresh_after = now.timestamp() - interval
+    known_usage: dict[str, dict] = {}
+    for name, row in previous_by_name.items():
+        collected = _parse_iso(row.get("usage_collected_at"))
+        if collected is None or collected.timestamp() < fresh_after:
+            continue
+        if row.get("home_size_bytes") is None and row.get("data_size_bytes") is None:
+            continue
+        known_usage[name] = {
+            "home": row.get("home_size_bytes"),
+            "data": row.get("data_size_bytes"),
+            "at": collected,
+        }
+
     accounts, usage_readable, usage_refreshed = scan(
         host,
         runner,
@@ -169,12 +189,11 @@ def _scan_host(
         command_timeout=config.user_monitoring.command_timeout,
         usage_timeout=config.user_monitoring.usage_timeout_seconds,
         sudo_available=bool(getattr(host, "sudo_password", None)),
+        known_usage=known_usage,
     )
     accounts = list(accounts)
     usage_refreshed = bool(usage_refreshed)
 
-    previous_snapshot = storage.get_host_user_snapshot(host.name, db_path)
-    previous_by_name = {row["username"]: row for row in previous_snapshot}
     baseline = storage.get_user_baseline(host.name, db_path)
     # The first *successful* scan seeds the baseline silently.  The stored scan
     # state is the marker: a host that failed earlier has a state row without
@@ -189,17 +208,17 @@ def _scan_host(
 
     normalized: list[HostUserAccount] = []
     for account in accounts:
-        if not usage_refreshed:
-            previous = previous_by_name.get(account.username)
-            if previous is not None:
-                account = replace(
-                    account,
-                    home_size_bytes=previous.get("home_size_bytes"),
-                    data_size_bytes=previous.get("data_size_bytes"),
-                )
-            account = replace(account, usage_collected_at=last_usage)
-        else:
-            account = replace(account, usage_collected_at=now)
+        previous = previous_by_name.get(account.username)
+        if account.home_size_bytes is None and previous is not None:
+            account = replace(account, home_size_bytes=previous.get("home_size_bytes"))
+        if account.data_size_bytes is None and previous is not None:
+            account = replace(account, data_size_bytes=previous.get("data_size_bytes"))
+        if account.usage_collected_at is None:
+            carried = previous.get("usage_collected_at") if previous else None
+            account = replace(
+                account,
+                usage_collected_at=_parse_iso(carried) or (None if last_usage is None else last_usage),
+            )
         account = replace(
             account,
             usage_readable=bool(usage_readable),

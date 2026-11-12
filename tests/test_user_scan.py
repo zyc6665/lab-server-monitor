@@ -574,7 +574,9 @@ def test_collect_host_users_partial_du_failure_keeps_available_sizes():
     assert accounts[0].home_size_bytes == 4096
     assert accounts[0].data_size_bytes is None
     assert usage_readable is True
-    assert usage_refreshed is True
+    # A cut-off sweep is not "refreshed": the next round resumes with the
+    # directories that are still missing instead of walking everything again.
+    assert usage_refreshed is False
 
 
 def test_collect_host_users_without_due_usage_skips_sudo():

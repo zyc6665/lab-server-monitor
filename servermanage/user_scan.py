@@ -377,6 +377,7 @@ def collect_host_users(
     command_timeout: int = 120,
     usage_timeout: int | None = None,
     sudo_available: bool = True,
+    known_usage: dict[str, dict] | None = None,
 ) -> tuple[list[HostUserAccount], bool, bool]:
     """Collect one host's user snapshot through *runner*.
 
@@ -386,7 +387,14 @@ def collect_host_users(
     instead of raising.  Hosts without a sudo password skip ``du`` entirely:
     an unprivileged ``du`` would either walk other people's homes for minutes
     or hit ``sudo -n`` and time out.
+
+    ``known_usage`` maps a username to sizes measured on an earlier round
+    (``{"home": int|None, "data": int|None, "at": datetime|None}``).  Those
+    paths are left out of ``du`` so that a host whose first run was cut off by
+    the timeout keeps making progress instead of re-walking the same huge
+    directories every round.
     """
+    known_usage = known_usage or {}
     result = runner.run(build_scan_command(), command_timeout)
     if result.exit_status != 0:
         raise RuntimeError(
@@ -433,10 +441,13 @@ def collect_host_users(
             home = user["home"]
             home_meta = homes.get(name, {})
             data_meta = data_dirs.get(name, {})
+            known = known_usage.get(name) or {}
             if home_meta.get("exists") and home.startswith("/home/"):
-                candidate_paths.append(home)
+                if known.get("home") is None:
+                    candidate_paths.append(home)
             if data_supported and data_meta.get("exists"):
-                candidate_paths.append(f"/data/{name}")
+                if known.get("data") is None:
+                    candidate_paths.append(f"/data/{name}")
         # Preserve order while dropping duplicates.
         candidate_paths = list(dict.fromkeys(candidate_paths))
 
@@ -466,8 +477,10 @@ def collect_host_users(
                     if parsed:
                         # Partial data is still useful: keep it, and leave the
                         # readable flag alone (missing paths just stay empty).
+                        # Only a full sweep counts as "refreshed" so the next
+                        # round resumes with the accounts still missing.
                         usage_sizes = parsed
-                        usage_refreshed = True
+                        usage_refreshed = set(candidate_paths) <= set(parsed)
                     elif usage_result.exit_status == 0:
                         usage_refreshed = True
                     else:
@@ -491,12 +504,21 @@ def collect_host_users(
         data_meta = data_dirs.get(name, {})
         data_exists = bool(data_supported and data_meta.get("exists"))
 
+        known = known_usage.get(name) or {}
         home_size = None
         if home_exists and home.startswith("/home/"):
             home_size = usage_sizes.get(home)
+            if home_size is None:
+                home_size = known.get("home")
         data_size = None
         if data_exists:
             data_size = usage_sizes.get(f"/data/{name}")
+            if data_size is None:
+                data_size = known.get("data")
+        measured_now = usage_sizes.get(home) is not None or usage_sizes.get(
+            f"/data/{name}"
+        ) is not None
+        usage_at = now if measured_now else known.get("at")
 
         accounts.append(
             HostUserAccount(
@@ -524,7 +546,7 @@ def collect_host_users(
                 data_supported=data_supported,
                 usage_readable=usage_readable,
                 usage_stale=False,
-                usage_collected_at=now if usage_refreshed else None,
+                usage_collected_at=usage_at,
                 collected_at=now,
                 state="present",
             )
