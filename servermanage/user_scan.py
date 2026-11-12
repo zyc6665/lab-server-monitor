@@ -375,6 +375,7 @@ def collect_host_users(
     now: datetime,
     usage_due: bool,
     command_timeout: int = 120,
+    usage_timeout: int | None = None,
 ) -> tuple[list[HostUserAccount], bool, bool]:
     """Collect one host's user snapshot through *runner*.
 
@@ -427,7 +428,9 @@ def collect_host_users(
                 usage_readable = False
             else:
                 try:
-                    usage_result = runner.run_sudo(usage_command, command_timeout)
+                    usage_result = runner.run_sudo(
+                        usage_command, usage_timeout or command_timeout
+                    )
                 except (SudoAuthError, SudoUnavailable):
                     usage_readable = False
                 except Exception:  # noqa: BLE001 - usage failure must not abort scan

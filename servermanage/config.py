@@ -42,6 +42,7 @@ _EXPECTED_STATUS_RE = re.compile(r"^\d{3}(-\d{3})?$")
 _USER_MONITORING_RANGES = {
     "scan_interval_seconds": (300, 86400),
     "usage_interval_seconds": (3600, 604800),
+    "usage_timeout_seconds": (60, 7200),
     "command_timeout": (10, 600),
 }
 _ALERT_RULE_RANGES = {

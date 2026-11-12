@@ -80,6 +80,7 @@ def collect(
     *,
     usage_due: bool = False,
     command_timeout: int = 120,
+    usage_timeout: int | None = None,
     host: HostConfig | None = None,
 ):
     return collect_host_users(
@@ -88,6 +89,7 @@ def collect(
         now=NOW,
         usage_due=usage_due,
         command_timeout=command_timeout,
+        usage_timeout=usage_timeout,
     )
 
 

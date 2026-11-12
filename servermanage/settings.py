@@ -113,6 +113,7 @@ _DEFAULT_DISK_MOUNTS = ["/", "/data"]
 _USER_MONITORING_RANGES = {
     "scan_interval_seconds": (300, 86400),
     "usage_interval_seconds": (3600, 604800),
+    "usage_timeout_seconds": (60, 7200),
     "command_timeout": (10, 600),
 }
 
@@ -428,6 +429,7 @@ class SettingsService:
                 "enabled": config.user_monitoring.enabled,
                 "scan_interval_seconds": config.user_monitoring.scan_interval_seconds,
                 "usage_interval_seconds": config.user_monitoring.usage_interval_seconds,
+                "usage_timeout_seconds": config.user_monitoring.usage_timeout_seconds,
                 "command_timeout": config.user_monitoring.command_timeout,
                 "write_enabled": config.user_monitoring.write_enabled,
             },
@@ -1438,6 +1440,7 @@ class SettingsService:
         labels = {
             "scan_interval_seconds": "账号扫描间隔",
             "usage_interval_seconds": "占用统计间隔",
+            "usage_timeout_seconds": "占用统计超时",
             "command_timeout": "单次命令超时",
         }
         for key, (minimum, maximum) in _USER_MONITORING_RANGES.items():

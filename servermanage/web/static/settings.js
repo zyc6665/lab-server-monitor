@@ -258,6 +258,7 @@
     } else if (sectionName === "user_monitoring") {
       message = numberIn("user_monitoring", "scan_interval_seconds", 300, 86400, "账号扫描间隔");
       if (!message) message = numberIn("user_monitoring", "usage_interval_seconds", 3600, 604800, "目录占用统计间隔");
+      if (!message) message = numberIn("user_monitoring", "usage_timeout_seconds", 60, 7200, "占用统计超时");
       if (!message) message = numberIn("user_monitoring", "command_timeout", 10, 600, "单条命令超时");
     } else if (sectionName === "smtp") {
       message = numberIn("smtp", "port", 1, 65535, "SMTP 端口");

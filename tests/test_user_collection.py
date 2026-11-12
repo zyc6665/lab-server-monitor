@@ -76,7 +76,7 @@ class FakeScan:
         self.calls: list[ScanCall] = []
         self._counts: dict[str, int] = {}
 
-    def __call__(self, host, runner, *, now, usage_due, command_timeout=120):
+    def __call__(self, host, runner, *, now, usage_due, command_timeout=120, usage_timeout=None):
         index = self._counts.get(host.name, 0)
         self._counts[host.name] = index + 1
         self.calls.append(
@@ -574,7 +574,11 @@ def test_usage_due_follows_last_usage_and_force_usage(tmp_path):
         return ([account], True, index != 1)
 
     scan = FakeScan(handler)
-    config = make_config()
+    # 这两条用例验证的是「按间隔触发」的逻辑本身，固定成 6 小时节奏，
+    # 不受默认值（0.1.131 起为两天）变化影响。
+    config = make_config(
+        user_monitoring=UserMonitoringConfig(usage_interval_seconds=21600)
+    )
 
     for offset in (0, 1, 6):
         run_user_scan(
@@ -612,7 +616,10 @@ def test_usage_stale_only_after_one_and_a_half_intervals(tmp_path):
         return ([no_sizes], True, False)
 
     scan = FakeScan(handler)
-    config = make_config()
+    # 固定 6 小时节奏，验证「1.5 个间隔后标记 stale」本身的行为。
+    config = make_config(
+        user_monitoring=UserMonitoringConfig(usage_interval_seconds=21600)
+    )
 
     run_user_scan(config, db, engine, build_runner=recording_builder()[0],
                   scan=scan, now=BASE)
@@ -680,7 +687,7 @@ def test_refresh_users_starts_then_reports_already_running(tmp_path):
     started = threading.Event()
     release = threading.Event()
 
-    def slow_scan(host, runner, *, now, usage_due, command_timeout=120):
+    def slow_scan(host, runner, *, now, usage_due, command_timeout=120, usage_timeout=None):
         started.set()
         assert release.wait(5), "test never released the slow scan"
         return ([make_account()], True, True)
@@ -720,7 +727,7 @@ def test_refresh_users_starts_then_reports_already_running(tmp_path):
 
 
 def test_refresh_users_reports_per_host_scan_failure(tmp_path):
-    def failing_scan(host, runner, *, now, usage_due, command_timeout=120):
+    def failing_scan(host, runner, *, now, usage_due, command_timeout=120, usage_timeout=None):
         raise RuntimeError("scan exploded")
 
     service = MonitorService(

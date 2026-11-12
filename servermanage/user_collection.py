@@ -164,6 +164,7 @@ def _scan_host(
         now=now,
         usage_due=usage_due,
         command_timeout=config.user_monitoring.command_timeout,
+        usage_timeout=config.user_monitoring.usage_timeout_seconds,
     )
     accounts = list(accounts)
     usage_refreshed = bool(usage_refreshed)

@@ -239,7 +239,10 @@ class UserMonitoringConfig:
 
     enabled: bool = True
     scan_interval_seconds: int = 3600
-    usage_interval_seconds: int = 21600
+    usage_interval_seconds: int = 172800
+    #: ``du`` on a multi-TB home/data directory can take many minutes, so the
+    #: usage pass gets its own budget instead of the short scan timeout.
+    usage_timeout_seconds: int = 1800
     command_timeout: int = 120
     #: Master switch for account write operations (create/password/docker/data).
     #: Off by default; every host also needs ``allow_user_write``.

@@ -485,7 +485,8 @@
     <div class="settings-grid">
       <label class="check-row"><input type="checkbox" data-field="enabled" {% if settings.user_monitoring.enabled %}checked{% endif %}> 启用普通账号监控</label>
       <label class="field"><span>账号扫描间隔（秒）</span><input type="number" min="300" max="86400" data-field="scan_interval_seconds" value="{{ settings.user_monitoring.scan_interval_seconds }}"></label>
-      <label class="field"><span>目录占用统计间隔（秒）</span><input type="number" min="3600" max="604800" data-field="usage_interval_seconds" value="{{ settings.user_monitoring.usage_interval_seconds }}"></label>
+      <label class="field"><span>目录占用统计间隔（秒，默认 172800 = 两天）</span><input type="number" min="3600" max="604800" data-field="usage_interval_seconds" value="{{ settings.user_monitoring.usage_interval_seconds }}"></label>
+      <label class="field"><span>占用统计超时（秒，大目录建议 1800 以上）</span><input type="number" min="60" max="7200" data-field="usage_timeout_seconds" value="{{ settings.user_monitoring.usage_timeout_seconds }}"></label>
       <label class="field"><span>单条命令超时（秒）</span><input type="number" min="10" max="600" data-field="command_timeout" value="{{ settings.user_monitoring.command_timeout }}"></label>
       <label class="check-row span-2"><input type="checkbox" data-field="write_enabled" {% if settings.user_monitoring.write_enabled %}checked{% endif %}>
         允许账号写操作（新建账号 / 重置密码 / 加入 docker 组 / 创建 data 目录）</label>
