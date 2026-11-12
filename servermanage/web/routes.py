@@ -1724,6 +1724,9 @@ def _build_host_detail(name: str, config, db_path) -> dict[str, Any] | None:
         "samples": storage.count_recent_samples(db_path, detail["name"], hours=24),
         "expected": max(1, int(24 * 3600 / poll_seconds)),
     }
+    detail["uptime_strip"] = storage.fetch_host_uptime_strip(
+        db_path, detail["name"], hours=24, bucket_minutes=15
+    )
     detail["diagnostics"] = diagnostics_mod.build_host_diagnostics(
         detail,
         poll_interval_seconds=config.app.poll_interval_seconds,

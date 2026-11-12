@@ -3714,3 +3714,45 @@ html[data-theme="dark"] .uptime-chip.is-critical { color: #f87171; background: r
 #host-table.hide-users .col-users,
 #host-table.hide-checks .col-checks,
 #host-table.hide-health .col-health { display: none; }
+
+/* -- v0.1.128 主机采集时间线 -- */
+.uptime-strip {
+  display: flex;
+  gap: 2px;
+  height: 34px;
+  align-items: stretch;
+}
+.uptime-cell {
+  flex: 1 1 0;
+  min-width: 2px;
+  border-radius: 2px;
+  background: #e2e8f0;
+}
+.uptime-cell.is-ok { background: #16a34a; }
+.uptime-cell.is-warn { background: #d97706; }
+.uptime-cell.is-bad { background: #dc2626; }
+.uptime-cell.is-empty { background: #e2e8f0; }
+.uptime-strip-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.uptime-key { display: inline-flex; align-items: center; gap: 5px; }
+.uptime-key i.uptime-cell {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  flex: 0 0 auto;
+  border-radius: 2px;
+}
+html[data-theme="dark"] .uptime-cell.is-ok { background: #22c55e; }
+html[data-theme="dark"] .uptime-cell.is-warn { background: #fbbf24; }
+html[data-theme="dark"] .uptime-cell.is-bad { background: #f87171; }
+html[data-theme="dark"] .uptime-cell.is-empty { background: #26344c; }
+@media (max-width: 760px) {
+  .uptime-strip { height: 26px; gap: 1px; }
+}

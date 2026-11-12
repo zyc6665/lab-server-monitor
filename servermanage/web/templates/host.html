@@ -154,6 +154,28 @@
   {% endif %}
 </section>
 
+<section class="card" id="host-uptime-strip" data-host-panel="overview">
+  <div class="section-head">
+    <h2>采集时间线</h2>
+    <p class="muted">最近 24 小时，每格 15 分钟；灰格表示当时没有采集</p>
+  </div>
+  <div class="uptime-strip" id="uptime-strip" role="img" aria-label="最近 24 小时采集情况">
+    {% for bucket in detail.uptime_strip.buckets %}
+    {% set ratio = (bucket.ok / bucket.total) if bucket.total else None %}
+    <span class="uptime-cell{% if ratio is none %} is-empty{% elif ratio >= 0.99 %} is-ok{% elif ratio >= 0.6 %} is-warn{% else %} is-bad{% endif %}"
+          data-uptime-cell="{{ bucket.index }}"
+          title="{{ bucket.start|stamp }} · {% if bucket.total %}采集 {{ bucket.total }} 次，成功 {{ bucket.ok }} 次{% else %}没有采集{% endif %}"></span>
+    {% endfor %}
+  </div>
+  <div class="uptime-strip-foot">
+    <span>成功 {{ detail.uptime_strip.ok }} / {{ detail.uptime_strip.samples }} 次</span>
+    <span class="uptime-key"><i class="uptime-cell is-ok"></i>正常</span>
+    <span class="uptime-key"><i class="uptime-cell is-warn"></i>部分失败</span>
+    <span class="uptime-key"><i class="uptime-cell is-bad"></i>全部失败</span>
+    <span class="uptime-key"><i class="uptime-cell is-empty"></i>未采集</span>
+  </div>
+</section>
+
 <section class="card" id="host-trend" data-host-panel="overview">
   <div class="section-head">
     <h2>历史趋势</h2>

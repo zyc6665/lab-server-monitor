@@ -1965,6 +1965,69 @@ def fetch_host_sparklines(
     }
 
 
+def fetch_host_uptime_strip(
+    db_path: Path,
+    host_name: str,
+    *,
+    hours: int = 24,
+    bucket_minutes: int = 15,
+    now: datetime | None = None,
+) -> dict:
+    """Return per-bucket collection success for the last *hours* hours.
+
+    Each bucket reports how many samples landed and how many of them
+    succeeded, which is what the host page paints as a heartbeat strip:
+    a gap means the client was not running, a red bucket means collection
+    ran but failed.
+    """
+    db_path = Path(db_path)
+    bucket_minutes = max(1, int(bucket_minutes))
+    hours = max(1, int(hours))
+    now = now or datetime.now(timezone.utc)
+    since = now - timedelta(hours=hours)
+    bucket = timedelta(minutes=bucket_minutes)
+    count = max(1, int((hours * 60) / bucket_minutes))
+    buckets = [
+        {
+            "index": index,
+            "start": (since + bucket * index).isoformat(),
+            "total": 0,
+            "ok": 0,
+        }
+        for index in range(count)
+    ]
+    if db_path.exists():
+        since_iso = _to_iso_utc(since)
+        with sqlite3.connect(db_path) as conn:
+            rows = conn.execute(
+                "SELECT collected_at, success FROM host_metrics_history"
+                " WHERE host_name = ? AND collected_at >= ?"
+                " ORDER BY collected_at",
+                (host_name, since_iso),
+            ).fetchall()
+        for raw, success in rows:
+            try:
+                moment = _parse_collected_at(raw)
+            except (TypeError, ValueError):
+                continue
+            index = int((moment - since).total_seconds() // bucket.total_seconds())
+            if index < 0 or index >= count:
+                continue
+            buckets[index]["total"] += 1
+            if success:
+                buckets[index]["ok"] += 1
+
+    total = sum(item["total"] for item in buckets)
+    ok = sum(item["ok"] for item in buckets)
+    return {
+        "hours": hours,
+        "bucket_minutes": bucket_minutes,
+        "buckets": buckets,
+        "samples": total,
+        "ok": ok,
+    }
+
+
 def fetch_host_network_rates(
     db_path: Path,
     host_name: str,
