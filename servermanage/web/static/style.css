@@ -3756,3 +3756,13 @@ html[data-theme="dark"] .uptime-cell.is-empty { background: #26344c; }
 @media (max-width: 760px) {
   .uptime-strip { height: 26px; gap: 1px; }
 }
+
+/* -- v0.1.129 磁盘页分组内搜索计数 -- */
+#disk-search-count {
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+.disk-group-head .disk-group-count {
+  font-variant-numeric: tabular-nums;
+}
+html[data-theme="dark"] #disk-search-count { color: #7aa2ff; }

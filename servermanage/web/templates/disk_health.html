@@ -44,6 +44,7 @@
     <input type="search" id="disk-search" class="disk-search" placeholder="搜索主机、分组、盘型号或序列号" aria-label="搜索磁盘">
     <span class="muted small" id="disk-filter-empty" hidden>当前没有告警、严重或采集失败的主机。</span>
     <span class="muted small" id="disk-search-empty" hidden>没有匹配的磁盘记录。</span>
+    <span class="muted small" id="disk-search-count" hidden></span>
   </div>
   <nav class="disk-jump" aria-label="按主机跳转">
     {% for host in hosts %}
@@ -59,7 +60,7 @@
   <div class="disk-group-head" data-disk-group="{{ host.group_header }}">
     <button type="button" class="disk-group-collapse" data-disk-group-collapse aria-expanded="true" aria-label="展开或收起分组 {{ host.group_header }}" title="展开 / 收起这个分组"><span class="disk-group-caret">▾</span></button>
     <span class="disk-group-name">{{ host.group_header }}</span>
-    <span class="disk-group-count">{{ host.group_size }} 台主机</span>
+    <span class="disk-group-count" data-group-count data-group-size="{{ host.group_size }}">{{ host.group_size }} 台主机</span>
   </div>
   {% endif %}
   <article class="disk-host" id="disk-{{ host.anchor }}" data-disk-group-member="{{ host.group }}" data-disk-issues="{{ 1 if host.needs_attention else 0 }}" data-disk-search="{{ host.search_text }}">

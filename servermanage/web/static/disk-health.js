@@ -63,10 +63,12 @@
     var collapsedGroups = readGroups();
     var visibleHosts = 0;
     var matchedGroups = {};
+    var groupHits = {};
     items.forEach(function (el) {
       var matched = !((onlyIssues && !isIssue(el)) || !matchesSearch(el, needle));
       if (matched && el.classList.contains('disk-host')) {
         matchedGroups[groupOf(el)] = true;
+        groupHits[groupOf(el)] = (groupHits[groupOf(el)] || 0) + 1;
       }
       // 跳转芯片属于导航，分组收起时也要保留，否则想跳进去反而找不到入口。
       if (el.classList.contains('disk-jump-link')) {
@@ -86,6 +88,26 @@
     );
     if (emptyHint) { emptyHint.hidden = !onlyIssues || visibleHosts > 0; }
     if (searchEmpty) { searchEmpty.hidden = !needle || visibleHosts > 0; }
+    // 搜索时给每个分组标出命中台数，并给一条总数提示，省得逐组点开找。
+    Array.prototype.forEach.call(
+      document.querySelectorAll('[data-group-count]'),
+      function (label) {
+        var head = label.closest('.disk-group-head');
+        var name = head ? (head.getAttribute('data-disk-group') || '') : '';
+        var size = Number(label.getAttribute('data-group-size') || 0) || 0;
+        if (!needle) {
+          label.textContent = size + ' 台主机';
+          return;
+        }
+        var hits = groupHits[name] || 0;
+        label.textContent = hits ? ('命中 ' + hits + ' / ' + size + ' 台') : ('0 / ' + size + ' 台');
+      }
+    );
+    var searchCount = document.getElementById('disk-search-count');
+    if (searchCount) {
+      searchCount.hidden = !needle || visibleHosts === 0;
+      searchCount.textContent = '搜索命中 ' + visibleHosts + ' 台主机';
+    }
   }
 
   function setGroupCollapsed(head, collapsed) {
