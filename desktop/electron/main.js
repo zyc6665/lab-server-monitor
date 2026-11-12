@@ -68,6 +68,15 @@ function appendLog(message) {
   }
 }
 
+// 主进程任何未捕获异常都不应该直接杀掉整个程序：先落盘，再继续服务。
+process.on('uncaughtException', (error) => {
+  appendLog(`UNCAUGHT ${error && error.stack ? error.stack : error}`);
+});
+process.on('unhandledRejection', (reason) => {
+  const message = reason && reason.stack ? reason.stack : reason;
+  appendLog(`UNHANDLED REJECTION ${message}`);
+});
+
 function trayIconPath() {
   return path.join(__dirname, '..', 'build', 'icon.ico');
 }
@@ -298,13 +307,18 @@ async function attemptBackendRecovery() {
     return;
   }
   appendLog('restarting backend after unexpected exit');
-  await backend.start();
-  const runtime = await backend.waitForRuntime();
-  currentRuntimeUrl = runtime.url;
-  recoveryAttempts = 0;
-  appendLog(`backend recovered at ${runtime.url}`);
-  if (mainWindow && !mainWindow.isDestroyed()) {
-    await mainWindow.loadURL(runtime.url);
+  try {
+    await backend.start();
+    const runtime = await backend.waitForRuntime();
+    currentRuntimeUrl = runtime.url;
+    recoveryAttempts = 0;
+    appendLog(`backend recovered at ${runtime.url}`);
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      await mainWindow.loadURL(runtime.url);
+    }
+  } catch (error) {
+    appendLog(`backend recovery attempt failed: ${error && error.message ? error.message : error}`);
+    scheduleBackendRecovery();
   }
 }
 
