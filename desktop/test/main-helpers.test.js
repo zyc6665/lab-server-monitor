@@ -36,11 +36,12 @@ test('trayMenuTemplate rejects missing handlers', () => {
   assert.throws(() => trayMenuTemplate({}), /onShow/);
 });
 
-test('shouldHideOnClose hides only when tray is available and not quitting', () => {
+test('shouldHideOnClose keeps the app alive unless it is really quitting', () => {
   assert.equal(shouldHideOnClose({ trayAvailable: true, quitting: false }), true);
-  assert.equal(shouldHideOnClose({ trayAvailable: false, quitting: false }), false);
-  assert.equal(shouldHideOnClose({ trayAvailable: true, quitting: true }), false);
-  assert.equal(shouldHideOnClose({ trayAvailable: false, quitting: true }), false);
+  // A missing tray icon must not turn "close" into "quit".
+  assert.equal(shouldHideOnClose({ trayAvailable: false, quitting: false }), true);
+  assert.equal(shouldHideOnClose({ quitting: true }), false);
+  assert.equal(shouldHideOnClose(), true);
 });
 
 test('validateDashboardHost accepts loopback and wildcard hosts', () => {

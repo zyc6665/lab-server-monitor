@@ -61,7 +61,8 @@ def test_usage_uses_its_own_timeout():
     assert refreshed is True
     assert readable is True
     assert runner.run_calls[0][1] == 120
-    assert runner.sudo_calls[0][1] == 1800
+    assert runner.sudo_calls[0][1] == 1830
+    assert "timeout -k 10 1800 bash -c" in runner.sudo_calls[0][0]
     assert accounts
 
 
@@ -73,7 +74,8 @@ def test_usage_falls_back_to_command_timeout():
     collect_host_users(
         make_host(), runner, now=NOW, usage_due=True, command_timeout=90
     )
-    assert runner.sudo_calls[0][1] == 90
+    assert runner.sudo_calls[0][1] == 120
+    assert "timeout -k 10 90 bash -c" in runner.sudo_calls[0][0]
 
 
 def test_collection_forwards_configured_timeout(tmp_path, monkeypatch):

@@ -35,14 +35,18 @@ function trayMenuTemplate(handlers = {}) {
 }
 
 /**
- * Closing the window should only hide it (keep running in the tray) when a tray
- * icon exists and the app is not in the middle of quitting.
+ * Closing the window must never stop the monitor: it only hides the window and
+ * keeps the backend running in the tray.  The single exception is a real quit
+ * (tray menu "退出" or Cmd+Q), where `quitting` is already true.
+ *
+ * A missing tray icon is not a reason to exit -- the caller recreates it, and
+ * launching the exe again focuses the existing window.
  *
  * @param {{trayAvailable?: boolean, quitting?: boolean}} options
  * @returns {boolean}
  */
 function shouldHideOnClose(options = {}) {
-  return Boolean(options.trayAvailable) && !options.quitting;
+  return !options.quitting;
 }
 
 function isLoopbackHost(host) {

@@ -441,25 +441,34 @@ def collect_host_users(
         candidate_paths = list(dict.fromkeys(candidate_paths))
 
         if candidate_paths:
+            budget = max(60, int(usage_timeout or command_timeout))
             try:
                 usage_command = build_usage_command(candidate_paths)
             except ValueError:
                 usage_readable = False
             else:
+                # `sudo` execs a single program: wrap the compound script for
+                # bash, and put a hard `timeout` around it.  On timeout `du` has
+                # already printed the paths it finished, so those numbers are
+                # still worth storing instead of losing the whole round.
+                inner = "timeout -k 10 %d bash -c %s" % (budget, shlex.quote(usage_command))
+                wrapped = "bash -lc " + shlex.quote(inner)
                 try:
-                    usage_result = runner.run_sudo(
-                        usage_command, usage_timeout or command_timeout
-                    )
+                    usage_result = runner.run_sudo(wrapped, budget + 30)
                 except (SudoAuthError, SudoUnavailable):
                     usage_readable = False
                 except Exception:  # noqa: BLE001 - usage failure must not abort scan
                     usage_readable = False
                 else:
                     parsed = parse_usage(usage_result.stdout)
-                    # ``du`` exits non-zero when one path fails, but still
-                    # prints the sizes it could read.  Keep those.
-                    if usage_result.exit_status == 0 or parsed:
+                    # ``du`` exits non-zero when a path fails or the timeout
+                    # fires, but the finished lines are still valid.
+                    if parsed:
+                        # Partial data is still useful: keep it, and leave the
+                        # readable flag alone (missing paths just stay empty).
                         usage_sizes = parsed
+                        usage_refreshed = True
+                    elif usage_result.exit_status == 0:
                         usage_refreshed = True
                     else:
                         usage_readable = False

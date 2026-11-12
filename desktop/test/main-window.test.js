@@ -23,8 +23,9 @@ test('main.js recreates the dashboard window from the tray', () => {
   assert.match(source, /currentRuntimeUrl[\s\S]*?mainWindow\.loadURL/);
 });
 
-test('main.js keeps the tray and backend alive when the window is destroyed', () => {
-  assert.match(source, /window-all-closed[\s\S]*?!tray \|\| quitting/);
+test('main.js only quits on window-all-closed when the app is quitting', () => {
+  // Closing the window hides it; monitoring must keep running in the tray.
+  assert.match(source, /window-all-closed[\s\S]*?if \(quitting\)[\s\S]*?ensureTray\(\)/);
 });
 
 test('main.js runs startup cleanup for logs, updates and cache', () => {

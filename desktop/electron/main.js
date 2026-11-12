@@ -140,7 +140,11 @@ function createWindow() {
   win.on('close', (event) => {
     if (shouldHideOnClose({ trayAvailable: Boolean(tray), quitting })) {
       event.preventDefault();
+      // Recreate the tray if it was never created, so the window can always be
+      // restored; the monitor keeps running either way.
+      ensureTray();
       destroyWindow();
+      notifyHiddenOnce();
     }
   });
 
@@ -158,6 +162,31 @@ function createWindow() {
   });
 
   return win;
+}
+
+let hiddenNoticeShown = false;
+
+function notifyHiddenOnce() {
+  if (hiddenNoticeShown || !tray) {
+    return;
+  }
+  hiddenNoticeShown = true;
+  try {
+    tray.displayBalloon({
+      title: APP_TITLE,
+      content: '程序仍在后台运行，双击托盘图标可以重新打开窗口。',
+    });
+  } catch (error) {
+    appendLog(`failed to show tray balloon: ${error.message}`);
+  }
+}
+
+function ensureTray() {
+  if (tray) {
+    return tray;
+  }
+  createTray();
+  return tray;
 }
 
 function createTray() {
@@ -394,10 +423,13 @@ app.on('before-quit', (event) => {
 });
 
 app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin' && (!tray || quitting)) {
-    quitting = true;
+  // Closing the window is not quitting: keep polling and re-create the tray so
+  // the user can reopen the dashboard.
+  if (quitting) {
     app.quit();
+    return;
   }
+  ensureTray();
 });
 
 app.on('activate', () => {
