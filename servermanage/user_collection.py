@@ -8,7 +8,8 @@
 Design rules implemented here (see
 ``docs/plans/2026-11-09-server-user-monitoring-design.md`` §4–§6 and §8):
 
-* hosts are scanned serially; one runner is opened and always closed per host;
+* hosts are scanned in parallel (bounded pool); one runner is opened and always
+  closed per host;
 * the expensive ``du`` pass only runs when the persisted ``last_usage_at`` is
   missing or older than ``usage_interval_seconds`` (or when forced);
 * a host failure records ``last_error`` but keeps its snapshot, baseline and
@@ -25,6 +26,8 @@ with a fake ``scan`` callable.
 from __future__ import annotations
 
 import logging
+import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import asdict, replace
 from datetime import datetime, timezone
 from pathlib import Path
@@ -303,8 +306,9 @@ def run_user_scan(
     hosts_failed = 0
     accounts_total = 0
     errors: dict[str, str] = {}
+    state_lock = threading.Lock()
 
-    for host in hosts:
+    def scan_one(host: HostConfig) -> tuple[str, list | None, str | None]:
         runner: object | None = None
         try:
             runner = runner_factory(host, config.ssh.connect_timeout)
@@ -320,29 +324,47 @@ def run_user_scan(
             )
         except Exception as exc:  # noqa: BLE001 - isolate per-host failures
             LOGGER.exception("User scan failed for host %s", host.name)
-            hosts_failed += 1
-            errors[host.name] = str(exc)
             _persist_failure(host.name, db_path, str(exc))
-        else:
-            hosts_done += 1
-            accounts_total += len(scanned)
+            return host.name, None, str(exc)
         finally:
             if runner is not None:
                 _close_runner(runner)
-            # 每台主机结束后回传一次进度，前端才能看到 1/N … N/N 而不是一直 0/N。
-            if progress is not None:
-                try:
-                    progress(
-                        {
-                            "hosts_total": len(hosts),
-                            "hosts_done": hosts_done,
-                            "hosts_failed": hosts_failed,
-                            "accounts": accounts_total,
-                            "errors": dict(errors),
-                        }
-                    )
-                except Exception:  # noqa: BLE001 - 进度上报不能影响采集
-                    LOGGER.exception("User scan progress callback failed")
+        return host.name, list(scanned), None
+
+    # Hosts are independent machines, so a slow `du` on one must not hold up
+    # the others: scanning in parallel turns a 2.5 hour worst case into one
+    # `du` budget.  Progress is reported under a lock as hosts finish.
+    # Creating the tables up front keeps parallel hosts from racing on DDL.
+    try:
+        storage.init_storage(db_path)
+    except Exception:  # noqa: BLE001 - startup already initialises it normally
+        LOGGER.exception("Could not initialise storage before user scan")
+
+    workers = max(1, min(4, len(hosts)))
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        futures = [pool.submit(scan_one, host) for host in hosts]
+        for future in as_completed(futures):
+            name, scanned, error = future.result()
+            with state_lock:
+                if error is not None:
+                    hosts_failed += 1
+                    errors[name] = error
+                else:
+                    hosts_done += 1
+                    accounts_total += len(scanned or [])
+                if progress is not None:
+                    try:
+                        progress(
+                            {
+                                "hosts_total": len(hosts),
+                                "hosts_done": hosts_done,
+                                "hosts_failed": hosts_failed,
+                                "accounts": accounts_total,
+                                "errors": dict(errors),
+                            }
+                        )
+                    except Exception:  # noqa: BLE001 - 进度上报不能影响采集
+                        LOGGER.exception("User scan progress callback failed")
 
     finished_at = datetime.now(timezone.utc)
 
