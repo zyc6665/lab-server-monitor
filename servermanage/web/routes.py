@@ -863,6 +863,7 @@ def _host_row(
     active_alert_count: int = 0,
     checks: dict[str, int] | None = None,
     spark: dict[str, list[float]] | None = None,
+    collection_uptime: dict[str, int] | None = None,
 ) -> dict[str, Any]:
     if checks is None:
         checks = {"total": 0, "ok": 0, "failed": 0, "unknown": 0}
@@ -898,6 +899,7 @@ def _host_row(
             "spark": spark_data,
             "container_count": container_count,
             "temperature_c": temperature_c,
+            "collection_uptime": collection_uptime,
             **meta,
         }
     metrics = snapshot.get("metrics") or {}
@@ -915,6 +917,7 @@ def _host_row(
         "spark": spark_data,
         "container_count": container_count,
         "temperature_c": temperature_c,
+        "collection_uptime": collection_uptime,
         **meta,
     }
 
@@ -1100,6 +1103,14 @@ def _build_overview(config, db_path) -> dict[str, Any]:
         if group_name not in groups:
             groups.append(group_name)
 
+    # 采集成功率：一次分组查询拿到全队 24 小时入库次数，用来在列表里标出漏采。
+    try:
+        sample_counts = storage.count_recent_samples_by_host(db_path, hours=24, now=now)
+    except Exception:  # noqa: BLE001 - diagnostics must never break the overview
+        LOGGER.exception("Failed to count recent samples")
+        sample_counts = {}
+    expected_polls = max(1, int(24 * 3600 / max(60, int(config.app.poll_interval_seconds or 600))))
+
     names: list[str] = []
     for server in config.servers:
         if server.name not in names:
@@ -1145,6 +1156,10 @@ def _build_overview(config, db_path) -> dict[str, Any]:
                     storage.get_host_check_results(host_name, db_path)
                 ),
                 spark=sparklines.get(host_name),
+                collection_uptime={
+                    "samples": sample_counts.get(host_name, 0),
+                    "expected": expected_polls,
+                },
             )
         )
 

@@ -3683,3 +3683,25 @@ html[data-theme="dark"] .col-menu-body { background: var(--surface-raised); bord
 #overview-trend .trend-export:hover { color: var(--accent); }
 #overview-trend .trend-export[hidden] { display: none !important; }
 html[data-theme="dark"] #overview-trend .trend-export:hover { color: #7aa2ff; }
+
+/* -- v0.1.126 概览采集成功率徽标 -- */
+.uptime-chip {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 11px;
+  line-height: 1.6;
+  font-variant-numeric: tabular-nums;
+  color: #92400e;
+  background: rgba(217, 119, 6, 0.12);
+  border: 1px solid rgba(217, 119, 6, 0.28);
+}
+.uptime-chip.is-critical {
+  color: #b91c1c;
+  background: rgba(220, 38, 38, 0.12);
+  border-color: rgba(220, 38, 38, 0.3);
+}
+html[data-theme="dark"] .uptime-chip { color: #fbbf24; background: rgba(251, 191, 36, 0.12); }
+html[data-theme="dark"] .uptime-chip.is-critical { color: #f87171; background: rgba(248, 113, 113, 0.12); }

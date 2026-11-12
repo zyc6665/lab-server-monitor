@@ -133,6 +133,21 @@
   }
 
   // v0.1.81：温度小徽标（≥70℃ 琥珀、≥85℃ 红），无数据时不渲染。
+  // 采集成功率低于 90% 才显示，正常时不打扰视线。
+  function uptimeChip(uptime) {
+    if (!uptime) { return null; }
+    var expected = Number(uptime.expected) || 0;
+    if (expected <= 0) { return null; }
+    var samples = Number(uptime.samples) || 0;
+    var ratio = Math.min(1, samples / expected);
+    if (ratio >= 0.9) { return null; }
+    var chip = document.createElement('span');
+    chip.className = 'uptime-chip ' + (ratio < 0.6 ? 'is-critical' : 'is-warn');
+    chip.textContent = '采集 ' + Math.round(ratio * 100) + '%';
+    chip.title = '最近 24 小时应采 ' + expected + ' 次，实际 ' + samples + ' 次';
+    return chip;
+  }
+
   function temperatureChip(value) {
     if (value === null || value === undefined || value === '') { return null; }
     var num = Number(value);
@@ -837,6 +852,8 @@
     nameCell.appendChild(link);
     var rowTemp = temperatureChip(host.temperature_c);
     if (rowTemp) { nameCell.appendChild(rowTemp); }
+    var rowUptime = uptimeChip(host.collection_uptime);
+    if (rowUptime) { nameCell.appendChild(rowUptime); }
     tr.appendChild(nameCell);
 
     tr.appendChild(textCell(host.host, 'mono'));
@@ -1048,6 +1065,8 @@
     head.appendChild(booleanBadge(!!host.online));
     var cardTemp = temperatureChip(host.temperature_c);
     if (cardTemp) { head.appendChild(cardTemp); }
+    var cardUptime = uptimeChip(host.collection_uptime);
+    if (cardUptime) { head.appendChild(cardUptime); }
     var cardAttention = attentionChip(host);
     if (cardAttention) { head.appendChild(cardAttention); }
     if (host.silenced) {

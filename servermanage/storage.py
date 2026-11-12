@@ -1862,6 +1862,33 @@ def get_host_check_history(
     return {name: statuses[-limit:] for name, statuses in grouped.items()}
 
 
+def count_recent_samples_by_host(
+    db_path: Path,
+    *,
+    hours: int = 24,
+    now: datetime | None = None,
+) -> dict[str, int]:
+    """Count recent snapshots for every host in one query.
+
+    The overview draws a whole fleet at a time, so a per-host query would be
+    five round trips instead of one grouped aggregate.
+    """
+
+    db_path = Path(db_path)
+    if not db_path.exists():
+        return {}
+
+    now = now or datetime.now(timezone.utc)
+    since = _to_iso_utc(now - timedelta(hours=max(1, int(hours))))
+    with sqlite3.connect(db_path) as conn:
+        rows = conn.execute(
+            "SELECT host_name, COUNT(*) FROM host_metrics_history "
+            "WHERE collected_at >= ? GROUP BY host_name",
+            (since,),
+        ).fetchall()
+    return {str(row[0]): int(row[1]) for row in rows}
+
+
 def count_recent_samples(
     db_path: Path,
     host_name: str,
