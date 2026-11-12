@@ -1,4 +1,4 @@
-"""v0.1.131：占用统计单独超时 + 默认两天一次的采样节奏。"""
+"""v0.1.131：占用统计单独超时 + 默认三天一次的采样节奏。"""
 
 from __future__ import annotations
 
@@ -29,7 +29,7 @@ def _scan_stdout(home: str = "/home/alice") -> str:
 
 def test_defaults_are_two_days_and_thirty_minutes():
     config = UserMonitoringConfig()
-    assert config.usage_interval_seconds == 172800
+    assert config.usage_interval_seconds == 259200
     assert config.usage_timeout_seconds == 1800
     assert config.command_timeout == 120
 
@@ -37,7 +37,7 @@ def test_defaults_are_two_days_and_thirty_minutes():
 def test_yaml_accepts_and_defaults_timeout():
     mapping = {
         "servers": [],
-        "user_monitoring": {"usage_timeout_seconds": 3600, "usage_interval_seconds": 172800},
+        "user_monitoring": {"usage_timeout_seconds": 3600, "usage_interval_seconds": 259200},
     }
     config = load_config_from_mapping(mapping, allow_empty_servers=True)
     assert config.user_monitoring.usage_timeout_seconds == 3600
@@ -147,14 +147,14 @@ def test_settings_roundtrip_usage_timeout(tmp_path):
     headers = {"X-CSRF-Token": csrf}
     response = client.put(
         "/api/settings/user_monitoring",
-        json={"usage_timeout_seconds": 3600, "usage_interval_seconds": 172800},
+        json={"usage_timeout_seconds": 3600, "usage_interval_seconds": 259200},
         headers=headers,
     )
     assert response.status_code == 200, response.get_data(as_text=True)
     payload = client.get("/api/settings").get_json()
     monitoring = payload["user_monitoring"]
     assert monitoring["usage_timeout_seconds"] == 3600
-    assert monitoring["usage_interval_seconds"] == 172800
+    assert monitoring["usage_interval_seconds"] == 259200
 
 
 def test_settings_rejects_absurd_usage_timeout(tmp_path):

@@ -575,7 +575,7 @@ def test_usage_due_follows_last_usage_and_force_usage(tmp_path):
 
     scan = FakeScan(handler)
     # 这两条用例验证的是「按间隔触发」的逻辑本身，固定成 6 小时节奏，
-    # 不受默认值（0.1.131 起为两天）变化影响。
+    # 不受默认值（0.1.142 起为三天）变化影响。
     config = make_config(
         user_monitoring=UserMonitoringConfig(usage_interval_seconds=21600)
     )

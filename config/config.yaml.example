@@ -161,7 +161,7 @@ storage:
 user_monitoring:
   enabled: true
   scan_interval_seconds: 3600         # 账号/组/目录扫描间隔（300..86400）
-  usage_interval_seconds: 172800      # 目录占用统计间隔（3600..604800，默认两天）
+  usage_interval_seconds: 259200      # 目录占用统计间隔（3600..604800，默认三天）
   # du 大目录很慢：占用统计单独给足超时（秒），默认 1800
   usage_timeout_seconds: 1800
   command_timeout: 120                # 单条远端命令超时秒数（10..600）

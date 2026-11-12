@@ -68,7 +68,7 @@ def test_user_monitoring_config_defaults():
     cfg = UserMonitoringConfig()
     assert cfg.enabled is True
     assert cfg.scan_interval_seconds == 3600
-    assert cfg.usage_interval_seconds == 172800
+    assert cfg.usage_interval_seconds == 259200
     assert cfg.command_timeout == 120
 
 
@@ -181,7 +181,7 @@ def test_global_user_monitoring_partial_override_keeps_defaults():
     )
     assert cfg.user_monitoring.enabled is False
     assert cfg.user_monitoring.scan_interval_seconds == 3600
-    assert cfg.user_monitoring.usage_interval_seconds == 172800
+    assert cfg.user_monitoring.usage_interval_seconds == 259200
     assert cfg.user_monitoring.command_timeout == 120
 
 

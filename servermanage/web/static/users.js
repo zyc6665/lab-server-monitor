@@ -201,6 +201,120 @@
   // 主机汇总
   // ---------------------------------------------------------------------------
 
+  // ---------------------------------------------------------------------------
+  // 占用趋势：30 天小图与增长榜
+  // ---------------------------------------------------------------------------
+
+  function sparkline(points, options) {
+    var opts = options || {};
+    var width = opts.width || 132;
+    var height = opts.height || 30;
+    var values = (points || []).map(function (point) {
+      return Number(point.total || 0);
+    });
+    if (values.length < 2) { return null; }
+    var min = Math.min.apply(null, values);
+    var max = Math.max.apply(null, values);
+    var span = max - min || 1;
+    var stepX = width / (values.length - 1);
+    var coords = values.map(function (value, index) {
+      var x = (index * stepX).toFixed(1);
+      var y = (height - 3 - ((value - min) / span) * (height - 6)).toFixed(1);
+      return x + ',' + y;
+    });
+    var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('class', 'usage-spark');
+    svg.setAttribute('viewBox', '0 0 ' + width + ' ' + height);
+    svg.setAttribute('width', String(width));
+    svg.setAttribute('height', String(height));
+    svg.setAttribute('role', 'img');
+    var first = values[0];
+    var last = values[values.length - 1];
+    var change = last - first;
+    var sign = change > 0 ? '+' : (change < 0 ? '−' : '');
+    svg.setAttribute('aria-label', '近 30 天占用 ' + sign + formatBytes(Math.abs(change)));
+    var area = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
+    area.setAttribute('class', 'usage-spark-area');
+    area.setAttribute('points', '0,' + height + ' ' + coords.join(' ') + ' ' + width + ',' + height);
+    svg.appendChild(area);
+    var line = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
+    line.setAttribute('class', 'usage-spark-line' + (change < 0 ? ' is-down' : ''));
+    line.setAttribute('points', coords.join(' '));
+    svg.appendChild(line);
+    var title = document.createElementNS('http://www.w3.org/2000/svg', 'title');
+    title.textContent = '近 30 天从 ' + formatBytes(first) + ' 到 ' + formatBytes(last)
+      + '（' + sign + formatBytes(Math.abs(change)) + '）';
+    svg.appendChild(title);
+    return svg;
+  }
+
+  function fillTrends(hostName, accounts) {
+    var nodes = document.querySelectorAll('[data-trend-host]');
+    Array.prototype.forEach.call(nodes, function (node) {
+      var account = node.getAttribute('data-trend-account') || '';
+      var points = accounts && accounts[account];
+      var chart = sparkline(points, { width: 132, height: 30 });
+      while (node.firstChild) { node.removeChild(node.firstChild); }
+      if (!chart) { node.hidden = true; return; }
+      node.hidden = false;
+      node.appendChild(chart);
+      node.setAttribute('title', '近 30 天占用变化');
+    });
+  }
+
+  function loadTrends(hostName) {
+    var accountHost = hostName || activeHost;
+    if (!accountHost) { return Promise.resolve(); }
+    return fetchJson('/api/users/history?host=' + encodeURIComponent(accountHost) + '&days=30')
+      .then(function (payload) {
+        fillTrends(accountHost, payload && payload.accounts);
+      })
+      .catch(function () {
+        Array.prototype.forEach.call(document.querySelectorAll('[data-trend-host]'), function (node) {
+          node.hidden = true;
+        });
+      });
+  }
+
+  function renderTopGrowth() {
+    var list = document.getElementById('user-top-list');
+    var card = document.getElementById('user-top-card');
+    if (!list || !card) { return Promise.resolve(); }
+    return fetchJson('/api/users/top?days=7&limit=8')
+      .then(function (payload) {
+        var items = (payload && payload.items) || [];
+        while (list.firstChild) { list.removeChild(list.firstChild); }
+        card.hidden = items.length === 0;
+        items.forEach(function (item, index) {
+          var row = document.createElement('li');
+          row.className = 'user-top-row';
+          var rank = document.createElement('span');
+          rank.className = 'user-top-rank mono';
+          rank.textContent = String(index + 1);
+          row.appendChild(rank);
+          var who = document.createElement('span');
+          who.className = 'user-top-who';
+          var account = document.createElement('strong');
+          account.textContent = item.account || '—';
+          who.appendChild(account);
+          var hostLabel = document.createElement('span');
+          hostLabel.className = 'muted small';
+          hostLabel.textContent = item.host || '';
+          who.appendChild(hostLabel);
+          row.appendChild(who);
+          var chip = deltaChip(item.delta, 7);
+          if (chip) { row.appendChild(chip); }
+          var total = document.createElement('span');
+          total.className = 'user-top-total mono muted';
+          total.textContent = formatBytes(item.current || 0);
+          row.appendChild(total);
+          list.appendChild(row);
+        });
+        return items.length;
+      })
+      .catch(function () { card.hidden = true; });
+  }
+
   function buildHostCard(host) {
     var card = document.createElement('button');
     card.type = 'button';
@@ -356,6 +470,13 @@
     dirs.appendChild(dirItem('数据目录', directoryText(row, 'data'), row.state !== 'missing' && row.data_supported !== false && !row.data_exists));
     item.appendChild(dirs);
 
+    var trend = document.createElement('div');
+    trend.className = 'user-acct-trend';
+    trend.hidden = true;
+    trend.setAttribute('data-trend-host', row.host_name || '');
+    trend.setAttribute('data-trend-account', row.username || '');
+    item.appendChild(trend);
+
     var foot = document.createElement('div');
     foot.className = 'user-acct-foot';
     var accountDelta = deltaChip(row.usage_delta_bytes, row.usage_delta_days);
@@ -508,6 +629,7 @@
           : '这台主机还没有采集到普通账号，可点击“立即刷新”触发一次只读采集。';
       }
     }
+    if (rows.length) { loadTrends(activeHost); }
   }
 
   function setEntryFilter(value) {
@@ -522,6 +644,7 @@
   }
 
   function selectHost(name) {
+    setTimeout(function () { loadTrends(name); }, 0);
     activeHost = name || '';
     if (activeHost) { entryFilter = 'all'; }
     syncUrl();
@@ -1006,6 +1129,7 @@
   }
 
   function init() {
+    renderTopGrowth();
     if (!document.getElementById('user-host-grid')) { return; }
     try {
       activeHost = new URLSearchParams(window.location.search).get('host') || '';

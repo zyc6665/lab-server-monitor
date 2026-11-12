@@ -239,7 +239,7 @@ class UserMonitoringConfig:
 
     enabled: bool = True
     scan_interval_seconds: int = 3600
-    usage_interval_seconds: int = 172800
+    usage_interval_seconds: int = 259200
     #: ``du`` on a multi-TB home/data directory can take many minutes, so the
     #: usage pass gets its own budget instead of the short scan timeout.
     usage_timeout_seconds: int = 1800

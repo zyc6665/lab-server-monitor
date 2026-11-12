@@ -2582,6 +2582,35 @@ def register_routes(app: Flask) -> None:
             result = {"ok": True}
         return jsonify(result), 200
 
+    @app.get("/api/users/history")
+    def api_users_history():
+        """Per-account usage history used by the 30-day sparkline."""
+        host_name = (request.args.get("host") or "").strip()
+        if not host_name:
+            return jsonify({"error": "host_required"}), 400
+        try:
+            days = max(1, min(90, int(request.args.get("days") or 30)))
+        except (TypeError, ValueError):
+            return jsonify({"error": "invalid_days"}), 400
+        series = storage.get_user_usage_series(
+            host_name, _db_path(app), days=days
+        )
+        return jsonify({"host": host_name, "days": days, "accounts": series})
+
+    @app.get("/api/users/top")
+    def api_users_top():
+        """Rank accounts by usage growth across all monitored hosts."""
+        try:
+            days = max(1, min(90, int(request.args.get("days") or 7)))
+        except (TypeError, ValueError):
+            return jsonify({"error": "invalid_days"}), 400
+        try:
+            limit = max(1, min(20, int(request.args.get("limit") or 8)))
+        except (TypeError, ValueError):
+            return jsonify({"error": "invalid_limit"}), 400
+        items = storage.top_user_growth(_db_path(app), days=days, limit=limit)
+        return jsonify({"days": days, "items": items})
+
     @app.get("/api/users/refresh-status")
     def api_users_refresh_status():
         """Poll the background user scan without ever failing the page."""

@@ -3884,3 +3884,75 @@ html[data-theme="dark"] .usage-delta.is-down {
   border-color: rgba(74, 222, 128, 0.35);
   background: rgba(74, 222, 128, 0.12);
 }
+
+/* -- v0.1.142 占用趋势小图与增长榜 -- */
+.user-top-card { margin-bottom: 16px; }
+
+.user-top-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.user-top-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 2px;
+  border-bottom: 1px solid var(--border);
+}
+
+.user-top-row:last-child { border-bottom: none; }
+
+.user-top-rank {
+  width: 22px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.user-top-who {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.user-top-who strong {
+  font-size: 13.5px;
+  font-weight: 600;
+}
+
+.user-top-total {
+  min-width: 78px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.user-acct-trend {
+  margin: 6px 0 2px;
+}
+
+.user-acct-trend[hidden] { display: none !important; }
+
+.usage-spark { display: block; overflow: visible; }
+
+.usage-spark-line {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 1.6;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.usage-spark-line.is-down { stroke: #16a34a; }
+
+.usage-spark-area {
+  fill: color-mix(in srgb, var(--accent) 14%, transparent);
+  stroke: none;
+}
+
+html[data-theme="dark"] .usage-spark-line { stroke: #7aa2ff; }
+html[data-theme="dark"] .usage-spark-line.is-down { stroke: #4ade80; }
+html[data-theme="dark"] .usage-spark-area { fill: rgba(122, 162, 255, 0.16); }

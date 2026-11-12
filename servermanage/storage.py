@@ -5,6 +5,7 @@ import logging
 import sqlite3
 import time as _time
 from collections.abc import Mapping, Sequence
+from contextlib import closing
 from datetime import date, datetime, time, timedelta, timezone, tzinfo
 from pathlib import Path
 
@@ -3947,6 +3948,118 @@ def append_user_usage_history(
     finally:
         conn.close()
     return len(rows)
+
+
+def get_user_usage_series(
+    host_name: str,
+    db_path: Path | str,
+    *,
+    days: int = 30,
+    now: datetime | None = None,
+    max_points: int = 36,
+) -> dict[str, list[dict[str, Any]]]:
+    """Return down-sampled usage history per account for the last ``days`` days."""
+    path = Path(db_path)
+    if not path.exists():
+        return {}
+    reference = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
+    cutoff = (reference - timedelta(days=days)).isoformat()
+    series: dict[str, list[dict[str, Any]]] = {}
+    with closing(sqlite3.connect(path, timeout=30)) as conn:
+        conn.row_factory = sqlite3.Row
+        try:
+            rows = conn.execute(
+                """
+                SELECT username, collected_at, home_size_bytes, data_size_bytes
+                FROM host_user_usage_history
+                WHERE host_name = ? AND collected_at >= ?
+                ORDER BY username, collected_at
+                """,
+                (host_name, cutoff),
+            ).fetchall()
+        except sqlite3.OperationalError:
+            return {}
+    for row in rows:
+        home = row["home_size_bytes"]
+        data = row["data_size_bytes"]
+        if home is None and data is None:
+            continue
+        series.setdefault(row["username"], []).append(
+            {
+                "at": row["collected_at"],
+                "home": home,
+                "data": data,
+                "total": (home or 0) + (data or 0),
+            }
+        )
+    if max_points <= 0:
+        return series
+    for name, points in series.items():
+        if len(points) <= max_points:
+            continue
+        step = (len(points) - 1) / (max_points - 1)
+        picked = [points[round(index * step)] for index in range(max_points)]
+        picked[0] = points[0]
+        picked[-1] = points[-1]
+        series[name] = picked
+    return series
+
+
+def top_user_growth(
+    db_path: Path | str,
+    *,
+    days: int = 7,
+    limit: int = 8,
+    now: datetime | None = None,
+) -> list[dict[str, Any]]:
+    """Rank accounts by total usage growth inside the window."""
+    path = Path(db_path)
+    if not path.exists() or limit <= 0:
+        return []
+    reference = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
+    cutoff = (reference - timedelta(days=days)).isoformat()
+    with closing(sqlite3.connect(path, timeout=30)) as conn:
+        conn.row_factory = sqlite3.Row
+        try:
+            rows = conn.execute(
+                """
+                SELECT host_name, username, collected_at,
+                       home_size_bytes, data_size_bytes
+                FROM host_user_usage_history
+                WHERE collected_at >= ?
+                ORDER BY host_name, username, collected_at
+                """,
+                (cutoff,),
+            ).fetchall()
+        except sqlite3.OperationalError:
+            return []
+    buckets: dict[tuple[str, str], list[sqlite3.Row]] = {}
+    for row in rows:
+        if row["home_size_bytes"] is None and row["data_size_bytes"] is None:
+            continue
+        buckets.setdefault((row["host_name"], row["username"]), []).append(row)
+    items: list[dict[str, Any]] = []
+    for (host_name, username), points in buckets.items():
+        if len(points) < 2:
+            continue
+        first, last = points[0], points[-1]
+        base = (first["home_size_bytes"] or 0) + (first["data_size_bytes"] or 0)
+        current = (last["home_size_bytes"] or 0) + (last["data_size_bytes"] or 0)
+        delta = current - base
+        if delta <= 0:
+            continue
+        items.append(
+            {
+                "host": host_name,
+                "account": username,
+                "delta": delta,
+                "base": base,
+                "current": current,
+                "since": first["collected_at"],
+            }
+        )
+    items.sort(key=lambda item: item["delta"], reverse=True)
+    return items[:limit]
 
 
 def get_user_usage_deltas(
