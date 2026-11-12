@@ -285,6 +285,38 @@ def _account_row(detail: dict[str, Any]) -> dict[str, str] | None:
     )
 
 
+def _collection_row(detail: dict[str, Any]) -> dict[str, str] | None:
+    uptime = detail.get("collection_uptime") or {}
+    expected = int(uptime.get("expected") or 0)
+    if expected <= 0:
+        return None
+    samples = int(uptime.get("samples") or 0)
+    ratio = samples / expected if expected else 1.0
+    percent = round(ratio * 100)
+    if ratio >= 0.9:
+        return _row(
+            "uptime",
+            LEVEL_OK,
+            "采集成功率正常",
+            f"最近 24 小时应采 {expected} 次，实际 {samples} 次（{percent}%）。",
+        )
+    if ratio >= 0.6:
+        return _row(
+            "uptime",
+            LEVEL_WARN,
+            "采集有缺失",
+            f"最近 24 小时应采 {expected} 次，实际 {samples} 次（{percent}%）。",
+            "检查网络抖动、SSH 超时或主机是否偶尔休眠。",
+        )
+    return _row(
+        "uptime",
+        LEVEL_CRIT,
+        "采集大量失败",
+        f"最近 24 小时应采 {expected} 次，只成功 {samples} 次（{percent}%）。",
+        "确认主机在线与 SSH 凭据，必要时手动执行一次采集看报错。",
+    )
+
+
 def build_host_diagnostics(
     detail: dict[str, Any],
     *,
@@ -299,6 +331,7 @@ def build_host_diagnostics(
         rows.extend(_usage_rows(detail.get("metrics") or {}))
         for extra in (
             _temperature_row(detail),
+            _collection_row(detail),
             _check_row(detail),
             _disk_health_row(detail),
             _account_row(detail),

@@ -1862,6 +1862,33 @@ def get_host_check_history(
     return {name: statuses[-limit:] for name, statuses in grouped.items()}
 
 
+def count_recent_samples(
+    db_path: Path,
+    host_name: str,
+    *,
+    hours: int = 24,
+    now: datetime | None = None,
+) -> int:
+    """Count how many collection snapshots a host wrote in the last *hours*.
+
+    Used for the "采集成功率" diagnostic: comparing it with the number of
+    expected polls tells the operator how often a host actually answered.
+    """
+
+    db_path = Path(db_path)
+    if not db_path.exists():
+        return 0
+
+    now = now or datetime.now(timezone.utc)
+    since = _to_iso_utc(now - timedelta(hours=max(1, int(hours))))
+    with sqlite3.connect(db_path) as conn:
+        row = conn.execute(
+            "SELECT COUNT(*) FROM host_metrics_history WHERE host_name = ? AND collected_at >= ?",
+            (host_name, since),
+        ).fetchone()
+    return int(row[0] or 0) if row else 0
+
+
 def fetch_host_sparklines(
     db_path: Path,
     *,
