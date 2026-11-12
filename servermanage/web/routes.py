@@ -46,6 +46,7 @@ from flask import (
 from servermanage import (
     availability,
     capacity,
+    compute as compute_mod,
     diagnostics as diagnostics_mod,
     disk_capacity,
     host_import,
@@ -3744,6 +3745,24 @@ def register_routes(app: Flask) -> None:
     @app.get("/users")
     def users_page():
         return render_template("users.html", active_page="users")
+
+    @app.get("/compute")
+    def compute_page():
+        config = _config(app)
+        summary = compute_mod.build_compute_summary(
+            storage.get_all_host_snapshots(_db_path(app)),
+            servers=config.servers,
+        )
+        return render_template("compute.html", active_page="compute", summary=summary)
+
+    @app.get("/api/compute")
+    def api_compute():
+        config = _config(app)
+        summary = compute_mod.build_compute_summary(
+            storage.get_all_host_snapshots(_db_path(app)),
+            servers=config.servers,
+        )
+        return jsonify(summary)
 
     @app.get("/my")
     def my_page():

@@ -1,0 +1,125 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>算力概览</h1>
+    <p class="muted">按卡型与主机汇总的 GPU 规模，数据取自最近一次轮询快照。</p>
+  </div>
+  <a class="secondary-button" href="/hosts">查看主机列表</a>
+</div>
+
+<section class="stat-grid compute-summary">
+  <div class="stat-card">
+    <span class="stat-label">GPU 卡数</span>
+    <strong class="stat-value">{{ summary.totals.cards }}</strong>
+    <span class="stat-hint">{{ summary.models|length }} 种型号</span>
+  </div>
+  <div class="stat-card">
+    <span class="stat-label">显存合计</span>
+    <strong class="stat-value">{{ summary.totals.vram_gb }} GB</strong>
+    <span class="stat-hint">已用 {{ summary.totals.used_gb }} GB（{{ summary.totals.vram_pct }}%）</span>
+  </div>
+  <div class="stat-card">
+    <span class="stat-label">FP16/BF16 峰值</span>
+    <strong class="stat-value">{{ summary.totals.pf16 }} PFLOPS</strong>
+    <span class="stat-hint">理论密集算力</span>
+  </div>
+  <div class="stat-card">
+    <span class="stat-label">空闲主机</span>
+    <strong class="stat-value">{{ summary.idle_hosts|length }}</strong>
+    <span class="stat-hint">利用率 ≤5% 且显存 <10%</span>
+  </div>
+</section>
+
+{% if summary.models %}
+<section class="card compute-models">
+  <div class="section-head">
+    <h2>按卡型</h2>
+    <span class="muted small">算力与带宽为单卡理论值 × 卡数</span>
+  </div>
+  <div class="table-wrap">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>型号</th>
+          <th>定位</th>
+          <th class="num">卡数</th>
+          <th class="num">显存</th>
+          <th class="num">已用</th>
+          <th class="num">FP16 峰值</th>
+          <th class="num">带宽</th>
+          <th>所在主机</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for model in summary.models %}
+        <tr data-compute-model="{{ model.key }}">
+          <td>{{ model.label }}</td>
+          <td><span class="tier-badge tier-{{ model.tier }}">{{ model.tier_label }}</span></td>
+          <td class="num">{{ model.cards }}</td>
+          <td class="num">{{ model.vram_gb }} GB</td>
+          <td class="num">{{ model.used_gb }} GB</td>
+          <td class="num">{{ model.tflops }} TFLOPS</td>
+          <td class="num">{{ model.bandwidth_gbs|round(0)|int }} GB/s</td>
+          <td class="muted small">{{ model.hosts|join('、') }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="card compute-hosts">
+  <div class="section-head">
+    <h2>按主机</h2>
+    <span class="muted small">条为显存占用，数字为此刻的 GPU 平均利用率</span>
+  </div>
+  <div class="table-wrap">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>主机</th>
+          <th>分组</th>
+          <th class="num">卡数</th>
+          <th>显存占用</th>
+          <th class="num">利用率</th>
+          <th class="num">FP16 峰值</th>
+          <th>采集时间</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for host in summary.hosts %}
+        <tr data-compute-host="{{ host.name }}"{% if host.idle %} class="is-idle"{% endif %}>
+          <td>
+            <a href="{{ url_for('host_page', name=host.name) }}">{{ host.name }}</a>
+            <span class="muted small">{{ host.address }}</span>
+          </td>
+          <td class="muted small">{{ host.group }}</td>
+          <td class="num">{{ host.cards }}</td>
+          <td>
+            <div class="vram-bar" title="{{ host.used_gb }} / {{ host.vram_gb }} GB">
+              <span style="width: {{ host.vram_pct }}%"></span>
+            </div>
+            <span class="muted small">{{ host.used_gb }} / {{ host.vram_gb }} GB（{{ host.vram_pct }}%）</span>
+          </td>
+          <td class="num">{{ host.util_avg }}%</td>
+          <td class="num">{{ host.tflops }} TFLOPS</td>
+          <td class="muted small">{{ host.collected_at|stamp }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% else %}
+<section class="card">
+  <p class="empty">还没有 GPU 数据。等一次采集完成后再回来看看。</p>
+</section>
+{% endif %}
+
+<ul class="compute-notes muted small">
+  {% for note in summary.notes %}
+  <li>{{ note }}</li>
+  {% endfor %}
+</ul>
+{% endblock %}

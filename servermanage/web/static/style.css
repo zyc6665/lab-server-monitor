@@ -3805,3 +3805,35 @@ html[data-theme="dark"] .usage-hint {
   background: rgba(251, 191, 36, .12);
   color: #fbbf24;
 }
+
+/* -- v0.1.135 算力概览 -- */
+.compute-summary { margin-bottom: 16px; }
+.compute-models, .compute-hosts { margin-bottom: 16px; }
+.compute-models .num, .compute-hosts .num { text-align: right; font-variant-numeric: tabular-nums; }
+.tier-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  background: var(--surface-sunken);
+}
+.tier-badge.tier-training { color: #1d4ed8; border-color: rgba(29, 78, 216, .3); background: rgba(29, 78, 216, .08); }
+.tier-badge.tier-universal { color: #0f766e; border-color: rgba(15, 118, 110, .3); background: rgba(15, 118, 110, .08); }
+.tier-badge.tier-legacy { color: #92400e; border-color: rgba(217, 119, 6, .3); background: rgba(217, 119, 6, .08); }
+.vram-bar {
+  height: 6px;
+  width: 160px;
+  border-radius: 999px;
+  background: var(--surface-sunken);
+  overflow: hidden;
+  margin-bottom: 4px;
+}
+.vram-bar > span { display: block; height: 100%; background: var(--accent); }
+tr.is-idle .vram-bar > span { background: var(--border-strong, #cbd5e1); }
+tr.is-idle td:first-child a { color: var(--text-muted); }
+.compute-notes { margin: 4px 0 0; padding-left: 18px; line-height: 1.7; }
+html[data-theme="dark"] .tier-badge.tier-training { color: #93b4ff; border-color: rgba(147, 180, 255, .3); background: rgba(122, 162, 255, .12); }
+html[data-theme="dark"] .tier-badge.tier-universal { color: #5eead4; border-color: rgba(94, 234, 212, .3); background: rgba(94, 234, 212, .1); }
+html[data-theme="dark"] .tier-badge.tier-legacy { color: #fbbf24; border-color: rgba(251, 191, 36, .3); background: rgba(251, 191, 36, .1); }
