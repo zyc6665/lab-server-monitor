@@ -606,6 +606,46 @@
     button.addEventListener('click', exportOverviewHistory);
   }
 
+  // 主机表的列显示偏好：窄屏或只想看指标时，把地址/分组/负责人等收起来。
+  var HOST_COLUMNS = ['address', 'group', 'owner', 'users', 'checks', 'health'];
+  var HOST_COLUMNS_STORE = 'overview:columns';
+
+  function readHostColumns() {
+    try {
+      var parsed = JSON.parse(localStorage.getItem(HOST_COLUMNS_STORE) || 'null');
+      if (!parsed || typeof parsed !== 'object') { return {}; }
+      return parsed;
+    } catch (err) {
+      return {};
+    }
+  }
+
+  function applyHostColumns(hidden) {
+    var table = document.getElementById('host-table');
+    if (!table) { return; }
+    HOST_COLUMNS.forEach(function (name) {
+      table.classList.toggle('hide-' + name, !!hidden[name]);
+    });
+  }
+
+  function bindHostColumns() {
+    var menu = document.getElementById('host-columns');
+    var table = document.getElementById('host-table');
+    if (!menu || !table) { return; }
+    var hidden = readHostColumns();
+    var boxes = menu.querySelectorAll('[data-host-col]');
+    Array.prototype.forEach.call(boxes, function (box) {
+      var name = box.getAttribute('data-host-col');
+      box.checked = !hidden[name];
+      box.addEventListener('change', function () {
+        hidden[name] = !box.checked;
+        applyHostColumns(hidden);
+        try { localStorage.setItem(HOST_COLUMNS_STORE, JSON.stringify(hidden)); } catch (err) {}
+      });
+    });
+    applyHostColumns(hidden);
+  }
+
   // 重点关注里点主机名，直接把下方主机列表筛到这一台，不再手动输关键字。
   function bindFocusHosts() {
     var list = document.getElementById('focus-alert-list');
@@ -856,9 +896,9 @@
     if (rowUptime) { nameCell.appendChild(rowUptime); }
     tr.appendChild(nameCell);
 
-    tr.appendChild(textCell(host.host, 'mono'));
-    tr.appendChild(textCell(host.group || '未分组'));
-    tr.appendChild(textCell(host.owner));
+    tr.appendChild(textCell(host.host, 'mono col-secondary col-address'));
+    tr.appendChild(textCell(host.group || '未分组', 'col-secondary col-group'));
+    tr.appendChild(textCell(host.owner, 'col-secondary col-owner'));
 
     var statusCell = document.createElement('td');
     statusCell.appendChild(booleanBadge(!!host.online));
@@ -882,11 +922,11 @@
     tr.appendChild(percentCell(host.memory_percent, spark.memory));
     tr.appendChild(percentCell(host.disk_percent));
     tr.appendChild(percentCell(host.gpu_memory_percent));
-    tr.appendChild(textCell(host.logged_in_user_count == null ? '—' : host.logged_in_user_count));
+    tr.appendChild(textCell(host.logged_in_user_count == null ? '—' : host.logged_in_user_count, 'col-secondary col-users'));
 
     var checks = host.checks || {};
     var checkCell = document.createElement('td');
-    checkCell.className = 'check-cell';
+    checkCell.className = 'check-cell col-secondary col-checks';
     var checkBadge = document.createElement('span');
     if (checks.total) {
       var checkClass = 'check-summary';
@@ -902,6 +942,7 @@
     tr.appendChild(checkCell);
 
     var healthCell = document.createElement('td');
+    healthCell.className = 'col-secondary col-health';
     var dh = host.disk_health || {};
     var health = document.createElement('span');
     health.className = 'health health-' + (dh.status || 'unknown');
@@ -3058,6 +3099,7 @@
 
     bindOverviewRanges();
     bindOverviewExport();
+    bindHostColumns();
     bindFocusHosts();
     bindAttentionChips();
     bindAlertRanges();

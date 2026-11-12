@@ -3705,3 +3705,12 @@ html[data-theme="dark"] #overview-trend .trend-export:hover { color: #7aa2ff; }
 }
 html[data-theme="dark"] .uptime-chip { color: #fbbf24; background: rgba(251, 191, 36, 0.12); }
 html[data-theme="dark"] .uptime-chip.is-critical { color: #f87171; background: rgba(248, 113, 113, 0.12); }
+
+/* -- v0.1.127 概览主机表列显示偏好 -- */
+#host-filter .col-menu { margin-left: auto; }
+#host-table.hide-address .col-address,
+#host-table.hide-group .col-group,
+#host-table.hide-owner .col-owner,
+#host-table.hide-users .col-users,
+#host-table.hide-checks .col-checks,
+#host-table.hide-health .col-health { display: none; }

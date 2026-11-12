@@ -167,6 +167,17 @@
     <input type="search" id="filter-keyword" placeholder="名称 / 地址 / 负责人" />
   </label>
   <span class="muted" id="filter-count"></span>
+  <details class="col-menu" id="host-columns">
+    <summary class="btn-secondary">列</summary>
+    <div class="col-menu-body">
+      <label><input type="checkbox" data-host-col="address" checked /> 地址</label>
+      <label><input type="checkbox" data-host-col="group" checked /> 分组</label>
+      <label><input type="checkbox" data-host-col="owner" checked /> 负责人</label>
+      <label><input type="checkbox" data-host-col="users" checked /> 登录用户</label>
+      <label><input type="checkbox" data-host-col="checks" checked /> 检查</label>
+      <label><input type="checkbox" data-host-col="health" checked /> 磁盘健康</label>
+    </div>
+  </details>
   <button type="button" class="btn-link filter-clear" id="filter-clear" hidden>清除筛选</button>
 </section>
 
@@ -219,17 +230,17 @@
       <thead>
         <tr>
           <th data-sort-key="name">名称</th>
-          <th data-sort-key="host">地址</th>
-          <th data-sort-key="group">分组</th>
-          <th data-sort-key="owner">负责人</th>
+          <th data-sort-key="host" class="col-secondary col-address">地址</th>
+          <th data-sort-key="group" class="col-secondary col-group">分组</th>
+          <th data-sort-key="owner" class="col-secondary col-owner">负责人</th>
           <th data-sort-key="status">状态</th>
           <th data-sort-key="cpu">CPU</th>
           <th data-sort-key="memory">内存</th>
           <th data-sort-key="disk">磁盘</th>
           <th data-sort-key="gpu">GPU 显存</th>
-          <th data-sort-key="users">登录用户</th>
-          <th data-sort-key="checks">检查</th>
-          <th data-sort-key="health">磁盘健康</th>
+          <th data-sort-key="users" class="col-secondary col-users">登录用户</th>
+          <th data-sort-key="checks" class="col-secondary col-checks">检查</th>
+          <th data-sort-key="health" class="col-secondary col-health">磁盘健康</th>
           <th data-sort-key="collected">采集时间</th>
           <th>操作</th>
         </tr>
@@ -244,9 +255,9 @@
             data-alert-count="{{ host.active_alert_count }}"
             data-search="{{ (host.name ~ ' ' ~ (host.host or '') ~ ' ' ~ host.group ~ ' ' ~ host.owner ~ ' ' ~ host.location)|lower }}">
           <td><a href="{{ url_for('host_page', name=host.name) }}">{{ host.name }}</a></td>
-          <td class="mono">{{ host.host or '—' }}</td>
-          <td>{{ host.group or '—' }}</td>
-          <td>{{ host.owner or '—' }}</td>
+          <td class="mono col-secondary col-address">{{ host.host or '—' }}</td>
+          <td class="col-secondary col-group">{{ host.group or '—' }}</td>
+          <td class="col-secondary col-owner">{{ host.owner or '—' }}</td>
           <td>
             <span class="badge {{ 'badge-online' if host.online else 'badge-offline' }}">
               {{ '在线' if host.online else '离线' }}
@@ -259,9 +270,9 @@
           <td class="pct-cell">{{ pctbar(host.memory_percent) }}</td>
           <td class="pct-cell">{{ pctbar(host.disk_percent) }}</td>
           <td class="pct-cell">{{ pctbar(host.gpu_memory_percent) }}</td>
-          <td>{{ host.logged_in_user_count }}</td>
-          <td class="check-cell">{{ checkbadge(host.checks) }}</td>
-          <td>
+          <td class="col-secondary col-users">{{ host.logged_in_user_count }}</td>
+          <td class="check-cell col-secondary col-checks">{{ checkbadge(host.checks) }}</td>
+          <td class="col-secondary col-health">
             <span class="health health-{{ host.disk_health.status }}">{{ host.disk_health.status }}</span>
             <span class="health-counts">健康 {{ host.disk_health.healthy }} · 告警 {{ host.disk_health.warning }} · 严重 {{ host.disk_health.critical }}</span>
           </td>
