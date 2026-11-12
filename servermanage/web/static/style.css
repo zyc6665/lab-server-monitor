@@ -3837,3 +3837,15 @@ tr.is-idle td:first-child a { color: var(--text-muted); }
 html[data-theme="dark"] .tier-badge.tier-training { color: #93b4ff; border-color: rgba(147, 180, 255, .3); background: rgba(122, 162, 255, .12); }
 html[data-theme="dark"] .tier-badge.tier-universal { color: #5eead4; border-color: rgba(94, 234, 212, .3); background: rgba(94, 234, 212, .1); }
 html[data-theme="dark"] .tier-badge.tier-legacy { color: #fbbf24; border-color: rgba(251, 191, 36, .3); background: rgba(251, 191, 36, .1); }
+
+/* -- v0.1.139 统计中的占用提示 -- */
+.usage-hint.is-running {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  color: var(--text);
+}
+
+html[data-theme="dark"] .usage-hint.is-running {
+  background: rgba(122, 162, 255, 0.12);
+  border-color: rgba(122, 162, 255, 0.45);
+}

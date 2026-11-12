@@ -250,11 +250,22 @@
     return box;
   }
 
-  function renderUsageHint(text) {
+  function renderUsageHint(text, scan) {
     var hint = document.getElementById('usage-hint');
     if (!hint) { return; }
-    hint.textContent = text || '';
-    hint.hidden = !text;
+    var running = !!(scan && scan.running);
+    var message = text || '';
+    if (running) {
+      var total = scan.hosts_total || 0;
+      var done = scan.hosts_done || 0;
+      var progress = total ? done + '/' + total + ' 台主机' : '';
+      message = '正在统计 /home、/data 占用'
+        + (progress ? '（已完成 ' + progress + '）' : '')
+        + '，首次统计大目录需要几十分钟，结果会逐台出现。';
+    }
+    hint.textContent = message;
+    hint.hidden = !message;
+    hint.classList.toggle('is-running', running);
   }
 
   function renderHosts(data) {
@@ -273,7 +284,7 @@
       if (!hosts.length) { empty.textContent = '没有符合筛选条件的主机。'; }
     }
     setText('user-host-count', '共 ' + hosts.length + ' 台主机');
-    renderUsageHint(data.usage_hint);
+    renderUsageHint(data.usage_hint, data.usage_scan);
   }
 
   // ---------------------------------------------------------------------------

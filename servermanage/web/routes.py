@@ -34,6 +34,7 @@ from typing import Any
 from flask import (
     Flask,
     Response,
+    current_app,
     jsonify,
     redirect,
     render_template,
@@ -1257,6 +1258,27 @@ def _user_usage_readable(row: dict[str, Any]) -> bool:
     )
 
 
+def _usage_scan_state(app: Any) -> dict[str, Any]:
+    """Describe the running usage scan so the page can show progress."""
+    service = _monitor_service(app)
+    status = getattr(service, "user_scan_status", None)
+    if not callable(status):
+        return {"running": False}
+    try:
+        payload = status()
+    except Exception:  # pragma: no cover - status must never break the page
+        LOGGER.exception("user_scan_status() failed")
+        return {"running": False}
+    if not isinstance(payload, dict):
+        return {"running": False}
+    return {
+        "running": bool(payload.get("running")),
+        "hosts_done": int(payload.get("hosts_done") or 0),
+        "hosts_total": int(payload.get("hosts_total") or 0),
+        "started_at": payload.get("started_at"),
+    }
+
+
 def _usage_hint(row: dict[str, Any], server: Any) -> str:
     """Explain why directory sizes are missing, so the fix is obvious.
 
@@ -1621,6 +1643,7 @@ def _build_users_payload(
         "hosts": host_blocks,
         "summary": summary,
         "usage_hint": usage_hint,
+        "usage_scan": _usage_scan_state(current_app._get_current_object()),
         "write_enabled": bool(config.user_monitoring.write_enabled),
         "filters": {
             "host": host_filter,

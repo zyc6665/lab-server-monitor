@@ -133,8 +133,8 @@ def test_usage_hint_banner_is_wired():
     assert 'id="usage-hint"' in html
 
     script = (STATIC / "users.js").read_text(encoding="utf-8")
-    assert "function renderUsageHint(text)" in script
-    assert "renderUsageHint(data.usage_hint);" in script
+    assert "function renderUsageHint(text, scan)" in script
+    assert "renderUsageHint(data.usage_hint, data.usage_scan);" in script
 
     style = (STATIC / "style.css").read_text(encoding="utf-8")
     assert ".usage-hint {" in style
