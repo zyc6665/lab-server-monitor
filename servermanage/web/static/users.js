@@ -387,6 +387,11 @@
     counts.appendChild(metric('目录异常', String(host.directory_issues || 0), host.directory_issues ? 'is-warn' : ''));
     card.appendChild(counts);
 
+    var trend = document.createElement('span');
+    trend.className = 'user-host-trend';
+    trend.setAttribute('data-trend-host', host.name);
+    card.appendChild(trend);
+
     var foot = document.createElement('div');
     foot.className = 'user-host-foot';
     var usage = document.createElement('span');
@@ -457,7 +462,21 @@
     });
     if (grid) {
       while (grid.firstChild) { grid.removeChild(grid.firstChild); }
-      hosts.forEach(function (host) { grid.appendChild(buildHostCard(host)); });
+      var totals = data.usage_totals || {};
+      hosts.forEach(function (host) {
+        var card = buildHostCard(host);
+        grid.appendChild(card);
+        var trend = card.querySelector('[data-trend-host]');
+        if (!trend) { return; }
+        var points = totals[host.name] || [];
+        var chart = sparkline(points, { width: 120, height: 26 });
+        if (chart) {
+          trend.appendChild(chart);
+        } else if (points.length === 1) {
+          trend.textContent = '仅 1 次采样';
+          trend.classList.add('is-pending');
+        }
+      });
     }
     if (empty) {
       empty.hidden = hosts.length > 0;

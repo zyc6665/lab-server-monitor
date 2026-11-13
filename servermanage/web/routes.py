@@ -1656,8 +1656,19 @@ def _build_users_payload(
             f"{len(blocked)} 台主机没有 sudo 密码，目录占用无法统计（{preview}）。"
             "在设置 → 主机里填写 sudo 密码后会立刻开始统计。"
         )
+    totals: dict[str, list[dict[str, Any]]] = {}
+    for block in host_blocks:
+        try:
+            series = storage.get_user_usage_series(
+                block.get("name", ""), db_path, days=30
+            )
+        except Exception:  # pragma: no cover - history is best effort
+            series = {}
+        totals[block.get("name", "")] = _aggregate_series(series)
+
     return {
         "accounts": filtered,
+        "usage_totals": totals,
         "hosts": host_blocks,
         "summary": summary,
         "usage_hint": usage_hint,
@@ -2122,6 +2133,18 @@ def _build_fleet_report(config: Any, db_path: Path, generated_at: datetime) -> s
         lines.append("")
     lines.append("（报告由服务器轮询监测工具自动生成）")
     return "\n".join(lines) + "\n"
+
+
+def _aggregate_series(series: dict[str, list[dict[str, Any]]]) -> list[dict[str, Any]]:
+    """Sum every account's points into one per-timestamp series for a host."""
+    buckets: dict[str, float] = {}
+    for points in (series or {}).values():
+        for point in points or []:
+            stamp = point.get("at")
+            if not stamp:
+                continue
+            buckets[stamp] = buckets.get(stamp, 0) + float(point.get("total") or 0)
+    return [{"at": stamp, "total": total} for stamp, total in sorted(buckets.items())]
 
 
 def register_routes(app: Flask) -> None:

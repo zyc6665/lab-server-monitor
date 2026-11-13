@@ -4009,3 +4009,23 @@ html[data-theme="dark"] .user-acct-scan.is-active {
   background: rgba(122, 162, 255, 0.16);
   border-color: rgba(122, 162, 255, 0.55);
 }
+
+/* -- v0.1.144 主机卡 30 天占用趋势 -- */
+.user-host-trend {
+    display: inline-flex;
+    align-items: center;
+    min-height: 26px;
+}
+
+.user-host-trend.is-pending {
+    color: var(--text-muted);
+    font-size: 11.5px;
+}
+
+.user-host-trend .usage-spark {
+    display: block;
+}
+
+html[data-theme="dark"] .user-host-trend.is-pending {
+    color: #94a3b8;
+}
