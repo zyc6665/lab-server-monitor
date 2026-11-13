@@ -3956,3 +3956,56 @@ html[data-theme="dark"] .usage-delta.is-down {
 html[data-theme="dark"] .usage-spark-line { stroke: #7aa2ff; }
 html[data-theme="dark"] .usage-spark-line.is-down { stroke: #4ade80; }
 html[data-theme="dark"] .usage-spark-area { fill: rgba(122, 162, 255, 0.16); }
+
+/* -- v0.1.143 占用统计中的账号标记 -- */
+.usage-spark-text {
+  font-size: 12px;
+  color: var(--warning, #b45309);
+  font-variant-numeric: tabular-nums;
+}
+
+.usage-spark-text.is-down {
+  color: #16a34a;
+}
+
+.user-acct-scan {
+  font-size: 11.5px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px dashed var(--border);
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.user-acct-scan.is-active {
+  border-style: solid;
+  border-color: var(--accent);
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  animation: user-scan-pulse 1.6s ease-in-out infinite;
+}
+
+.user-acct.is-scanning {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent);
+}
+
+.user-acct.is-queued {
+  border-style: dashed;
+}
+
+@keyframes user-scan-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .user-acct-scan.is-active { animation: none; }
+}
+
+html[data-theme="dark"] .usage-spark-text { color: #fbbf24; }
+html[data-theme="dark"] .usage-spark-text.is-down { color: #4ade80; }
+html[data-theme="dark"] .user-acct-scan.is-active {
+  background: rgba(122, 162, 255, 0.16);
+  border-color: rgba(122, 162, 255, 0.55);
+}

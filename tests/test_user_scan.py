@@ -542,7 +542,7 @@ def test_collect_host_users_usage_success_fills_sizes():
     ]
     # paramiko waits a little longer than the inner `timeout`, so the
     # partial `du` output can still be read before the channel times out.
-    assert runner.sudo_calls[0][1] == 150
+    assert runner.sudo_calls[0][1] == 135
     assert "timeout -k 10 120 bash -c" in runner.sudo_calls[0][0]
 
 

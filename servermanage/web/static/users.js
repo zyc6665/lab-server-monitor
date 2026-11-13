@@ -258,7 +258,46 @@
       if (!chart) { node.hidden = true; return; }
       node.hidden = false;
       node.appendChild(chart);
-      node.setAttribute('title', '近 30 天占用变化');
+      var first = Number(points[0].total || 0);
+      var last = Number(points[points.length - 1].total || 0);
+      var change = last - first;
+      var label = document.createElement('span');
+      label.className = 'usage-spark-text' + (change < 0 ? ' is-down' : '');
+      label.textContent = (change > 0 ? '+' : (change < 0 ? '−' : '±'))
+        + formatBytes(Math.abs(change));
+      node.appendChild(label);
+      node.setAttribute(
+        'title',
+        '近 30 天：' + formatBytes(first) + ' → ' + formatBytes(last)
+      );
+    });
+  }
+
+  var lastScan = null;
+  var lastScanHint = '';
+
+  function markScanningAccounts(scan) {
+    var cards = document.querySelectorAll('.user-acct[data-account]');
+    Array.prototype.forEach.call(cards, function (card) {
+      var existing = card.querySelector('.user-acct-scan');
+      if (existing) { existing.parentNode.removeChild(existing); }
+      card.classList.remove('is-scanning', 'is-queued');
+      if (!scan || !scan.running) { return; }
+      var account = card.getAttribute('data-account') || '';
+      var pending = card.getAttribute('data-usage-pending') === '1';
+      if (!pending && scan.current_account !== account) { return; }
+      var badge = document.createElement('span');
+      if (scan.current_account === account) {
+        badge.className = 'user-acct-scan is-active';
+        badge.textContent = '正在统计占用…';
+        card.classList.add('is-scanning');
+      } else {
+        badge.className = 'user-acct-scan';
+        badge.textContent = '等待统计';
+        card.classList.add('is-queued');
+      }
+      var head = card.querySelector('.user-acct-head');
+      if (head) { head.appendChild(badge); }
     });
   }
 
@@ -395,8 +434,13 @@
       var total = scan.hosts_total || 0;
       var done = scan.hosts_done || 0;
       var progress = total ? done + '/' + total + ' 台主机' : '';
+      var current = scan.current_account
+        ? '（当前：' + (scan.current_host ? scan.current_host + ' 的 ' : '')
+          + scan.current_account + '）'
+        : '';
       message = '正在统计 /home、/data 占用'
-        + (progress ? '（已完成 ' + progress + '）' : '')
+        + current
+        + (progress ? '，已完成 ' + progress : '')
         + '，首次统计大目录需要几十分钟，结果会逐台出现。';
     }
     hint.textContent = message;
@@ -420,7 +464,10 @@
       if (!hosts.length) { empty.textContent = '没有符合筛选条件的主机。'; }
     }
     setText('user-host-count', '共 ' + hosts.length + ' 台主机');
-    renderUsageHint(data.usage_hint, data.usage_scan);
+    lastScan = data.usage_scan || null;
+    lastScanHint = data.usage_hint || '';
+    renderUsageHint(lastScanHint, lastScan);
+    markScanningAccounts(lastScan);
   }
 
   // ---------------------------------------------------------------------------
@@ -430,6 +477,10 @@
   function buildAccountCard(row) {
     var item = document.createElement('article');
     item.className = 'user-acct';
+    item.setAttribute('data-account', row.username || '');
+    if (row.home_size_bytes == null && row.data_size_bytes == null) {
+      item.setAttribute('data-usage-pending', '1');
+    }
     if (row.state === 'missing') { item.className += ' user-row-missing'; }
     else if (row.issues && row.issues.length) { item.className += ' has-issues'; }
 
@@ -579,6 +630,8 @@
   }
 
   function renderDetail(data) {
+    if (data.usage_scan) { lastScan = data.usage_scan; }
+    if (data.usage_hint) { lastScanHint = data.usage_hint; }
     var host = hostByName(activeHost);
     var filters = currentFilters();
     var rows = (data.accounts || []).filter(function (row) {
@@ -630,6 +683,8 @@
       }
     }
     if (rows.length) { loadTrends(activeHost); }
+    renderUsageHint(lastScanHint, lastScan);
+    markScanningAccounts(lastScan);
   }
 
   function setEntryFilter(value) {

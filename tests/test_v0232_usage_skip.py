@@ -57,7 +57,7 @@ def test_with_sudo_password_sizes_are_collected():
     accounts, readable, refreshed = collect(runner, usage_timeout=1800)
 
     assert len(runner.sudo_calls) == 1
-    assert runner.sudo_calls[0][1] == 1830
+    assert runner.sudo_calls[0][1] == 1815
     assert readable is True
     assert refreshed is True
     assert accounts[0].home_size_bytes == 1024

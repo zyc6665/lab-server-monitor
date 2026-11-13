@@ -76,7 +76,9 @@ class FakeScan:
         self.calls: list[ScanCall] = []
         self._counts: dict[str, int] = {}
 
-    def __call__(self, host, runner, *, now, usage_due, command_timeout=120, usage_timeout=None, sudo_available=True, known_usage=None):
+    def __call__(self, host, runner, *, now, usage_due, command_timeout=120, usage_timeout=None, sudo_available=True, known_usage=None, usage_progress=None):
+        if usage_progress is not None:
+            usage_progress('alice', 0, 1)
         index = self._counts.get(host.name, 0)
         self._counts[host.name] = index + 1
         self.calls.append(
@@ -687,7 +689,7 @@ def test_refresh_users_starts_then_reports_already_running(tmp_path):
     started = threading.Event()
     release = threading.Event()
 
-    def slow_scan(host, runner, *, now, usage_due, command_timeout=120, usage_timeout=None, sudo_available=True, known_usage=None):
+    def slow_scan(host, runner, *, now, usage_due, command_timeout=120, usage_timeout=None, sudo_available=True, known_usage=None, usage_progress=None):
         started.set()
         assert release.wait(5), "test never released the slow scan"
         return ([make_account()], True, True)
@@ -727,7 +729,7 @@ def test_refresh_users_starts_then_reports_already_running(tmp_path):
 
 
 def test_refresh_users_reports_per_host_scan_failure(tmp_path):
-    def failing_scan(host, runner, *, now, usage_due, command_timeout=120, usage_timeout=None, sudo_available=True, known_usage=None):
+    def failing_scan(host, runner, *, now, usage_due, command_timeout=120, usage_timeout=None, sudo_available=True, known_usage=None, usage_progress=None):
         raise RuntimeError("scan exploded")
 
     service = MonitorService(

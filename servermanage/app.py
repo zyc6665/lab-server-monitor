@@ -359,6 +359,10 @@ class MonitorService:
             "hosts_done": 0,
             "hosts_total": 0,
             "accounts": 0,
+            "current_host": None,
+            "current_account": None,
+            "accounts_done": 0,
+            "accounts_total": 0,
             "errors": {},
         }
         self._running = False
@@ -916,6 +920,10 @@ class MonitorService:
                 "hosts_done": 0,
                 "hosts_total": hosts_total,
                 "accounts": 0,
+                "current_host": None,
+                "current_account": None,
+                "accounts_done": 0,
+                "accounts_total": 0,
                 "errors": {},
             }
 

@@ -13,7 +13,7 @@ def test_payload_exposes_running_usage_scan():
 
 def test_frontend_announces_running_scan():
     js = (STATIC / "users.js").read_text(encoding="utf-8")
-    assert "renderUsageHint(data.usage_hint, data.usage_scan);" in js
+    assert "renderUsageHint(lastScanHint, lastScan);" in js
     assert "正在统计 /home、/data 占用" in js
     assert "hint.classList.toggle('is-running', running);" in js
 

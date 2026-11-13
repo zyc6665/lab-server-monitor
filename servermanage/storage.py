@@ -3894,17 +3894,19 @@ def append_user_usage_history(
     if not candidates:
         return 0
 
+    # Everything below is anchored on the measurement instant, not the wall
+    # clock: a caller replaying history (or a test pinning ``now``) must get the
+    # same de-duplication result months later.
+    anchor = datetime.fromisoformat(moment)
     cutoff = None
     if retain_days > 0:
-        cutoff = (
-            datetime.now(timezone.utc) - timedelta(days=retain_days)
-        ).isoformat()
+        cutoff = (anchor - timedelta(days=retain_days)).isoformat()
 
     # Re-measuring an unchanged directory every few minutes would bury the real
     # changes in noise, so an identical size is only recorded once per
     # ``min_interval_hours``; a changed size is always recorded.
     floor = (
-        datetime.now(timezone.utc) - timedelta(hours=max(0, min_interval_hours))
+        anchor - timedelta(hours=max(0, min_interval_hours))
     ).isoformat()
     rows: list[tuple] = []
     conn = sqlite3.connect(db_path)

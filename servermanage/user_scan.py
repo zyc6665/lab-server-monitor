@@ -16,8 +16,9 @@ from __future__ import annotations
 import posixpath
 import re
 import shlex
+import time
 from datetime import datetime
-from typing import Protocol
+from typing import Callable, Protocol
 
 from .models import CommandResult, HostConfig, HostUserAccount
 from .ssh_client import SudoAuthError, SudoUnavailable
@@ -378,6 +379,7 @@ def collect_host_users(
     usage_timeout: int | None = None,
     sudo_available: bool = True,
     known_usage: dict[str, dict] | None = None,
+    usage_progress: "Callable[[str, int, int], None] | None" = None,
 ) -> tuple[list[HostUserAccount], bool, bool]:
     """Collect one host's user snapshot through *runner*.
 
@@ -435,56 +437,77 @@ def collect_host_users(
                 usage_readable = False
 
     if usage_due and sudo_available:
-        candidate_paths: list[str] = []
+        # Measure one account at a time so the page can show which user is
+        # being walked right now, and so an account that takes minutes never
+        # hides the progress of the ones behind it.  The whole round shares
+        # one budget: when it is gone the remaining accounts simply wait for
+        # the next round (partial results are stored).
+        plan: list[tuple[str, list[str]]] = []
         for user in users:
             name = user["username"]
             home = user["home"]
             home_meta = homes.get(name, {})
             data_meta = data_dirs.get(name, {})
             known = known_usage.get(name) or {}
+            paths: list[str] = []
             if home_meta.get("exists") and home.startswith("/home/"):
                 if known.get("home") is None:
-                    candidate_paths.append(home)
+                    paths.append(home)
             if data_supported and data_meta.get("exists"):
                 if known.get("data") is None:
-                    candidate_paths.append(f"/data/{name}")
-        # Preserve order while dropping duplicates.
-        candidate_paths = list(dict.fromkeys(candidate_paths))
+                    paths.append(f"/data/{name}")
+            if paths:
+                plan.append((name, list(dict.fromkeys(paths))))
 
-        if candidate_paths:
+        if plan:
             budget = max(60, int(usage_timeout or command_timeout))
-            try:
-                usage_command = build_usage_command(candidate_paths)
-            except ValueError:
-                usage_readable = False
-            else:
+            deadline = time.monotonic() + budget
+            total = len(plan)
+            measured: set[str] = set()
+            for index, (name, paths) in enumerate(plan):
+                remaining = deadline - time.monotonic()
+                if remaining <= 5:
+                    break
+                if usage_progress is not None:
+                    try:
+                        usage_progress(name, index, total)
+                    except Exception:  # noqa: BLE001 - progress is best effort
+                        pass
+                try:
+                    usage_command = build_usage_command(paths)
+                except ValueError:
+                    usage_readable = False
+                    continue
                 # `sudo` execs a single program: wrap the compound script for
-                # bash, and put a hard `timeout` around it.  On timeout `du` has
-                # already printed the paths it finished, so those numbers are
-                # still worth storing instead of losing the whole round.
-                inner = "timeout -k 10 %d bash -c %s" % (budget, shlex.quote(usage_command))
+                # bash, and cap this account with `timeout`.  `du` prints a
+                # path as soon as that path is done, so a cut-off account still
+                # contributes the directories it finished.
+                span = max(10, int(remaining))
+                inner = "timeout -k 10 %d bash -c %s" % (
+                    span,
+                    shlex.quote(usage_command),
+                )
                 wrapped = "bash -lc " + shlex.quote(inner)
                 try:
-                    usage_result = runner.run_sudo(wrapped, budget + 30)
+                    usage_result = runner.run_sudo(wrapped, span + 15)
                 except (SudoAuthError, SudoUnavailable):
                     usage_readable = False
+                    break
                 except Exception:  # noqa: BLE001 - usage failure must not abort scan
                     usage_readable = False
-                else:
-                    parsed = parse_usage(usage_result.stdout)
-                    # ``du`` exits non-zero when a path fails or the timeout
-                    # fires, but the finished lines are still valid.
-                    if parsed:
-                        # Partial data is still useful: keep it, and leave the
-                        # readable flag alone (missing paths just stay empty).
-                        # Only a full sweep counts as "refreshed" so the next
-                        # round resumes with the accounts still missing.
-                        usage_sizes = parsed
-                        usage_refreshed = set(candidate_paths) <= set(parsed)
-                    elif usage_result.exit_status == 0:
-                        usage_refreshed = True
-                    else:
-                        usage_readable = False
+                    break
+                parsed = parse_usage(usage_result.stdout)
+                if parsed:
+                    usage_sizes.update(parsed)
+                    measured.update(parsed)
+                elif usage_result.exit_status != 0:
+                    # A timed-out or failed account must not mark the host as
+                    # unreadable: the next round retries just this account.
+                    continue
+
+            usage_refreshed = set(measured) >= {
+                path for _name, paths in plan for path in paths
+            }
 
     accounts: list[HostUserAccount] = []
     for user in users:

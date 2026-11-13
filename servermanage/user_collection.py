@@ -146,6 +146,7 @@ def _scan_host(
     now: datetime,
     *,
     force_usage: bool,
+    progress: "Callable[[dict], None] | None" = None,
 ) -> list[HostUserAccount]:
     """Scan one host, persist the result and reconcile its user alerts.
 
@@ -181,6 +182,18 @@ def _scan_host(
             "at": collected,
         }
 
+    def report_usage(username: str, done: int, total: int) -> None:
+        if progress is None:
+            return
+        progress(
+            {
+                "current_host": host.name,
+                "current_account": username,
+                "accounts_done": done,
+                "accounts_total": total,
+            }
+        )
+
     accounts, usage_readable, usage_refreshed = scan(
         host,
         runner,
@@ -190,6 +203,7 @@ def _scan_host(
         usage_timeout=config.user_monitoring.usage_timeout_seconds,
         sudo_available=bool(getattr(host, "sudo_password", None)),
         known_usage=known_usage,
+        usage_progress=report_usage,
     )
     accounts = list(accounts)
     usage_refreshed = bool(usage_refreshed)
@@ -239,9 +253,6 @@ def _scan_host(
         storage.append_user_usage_history(
             host.name, [asdict(account) for account in normalized], db_path, now=now
         )
-        storage.append_user_usage_history(
-            host.name, [asdict(account) for account in normalized], db_path, now=now
-        )
         return normalized
 
     # Snapshot + baseline + scan state commit atomically; the returned list is
@@ -252,9 +263,6 @@ def _scan_host(
         db_path,
         now=now,
         usage_refreshed=usage_refreshed,
-    )
-    storage.append_user_usage_history(
-        host.name, [asdict(account) for account in normalized], db_path, now=now
     )
     storage.append_user_usage_history(
         host.name, [asdict(account) for account in normalized], db_path, now=now
@@ -352,6 +360,7 @@ def run_user_scan(
                 scan,
                 moment,
                 force_usage=force_usage,
+                progress=progress,
             )
         except Exception as exc:  # noqa: BLE001 - isolate per-host failures
             LOGGER.exception("User scan failed for host %s", host.name)
