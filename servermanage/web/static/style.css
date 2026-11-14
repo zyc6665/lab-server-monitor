@@ -2980,6 +2980,29 @@ html[data-theme="dark"] .badge-warning {
 }
 
 /* -- v0.1.87 重点关注按主机去重 -- */
+/* -- v0.1.163 重点关注按级别筛选 -- */
+.focus-severity {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 2px 0 10px;
+}
+.focus-severity[hidden] { display: none !important; }
+.focus-sev {
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 12px;
+  text-decoration: none;
+  border: 1px solid var(--border);
+  color: var(--text);
+  background: var(--surface-sunken);
+}
+.focus-sev:hover { border-color: var(--border-strong); }
+.focus-sev-critical { color: #b91c1c; border-color: rgba(220, 38, 38, .35); }
+.focus-sev-warning { color: #b45309; border-color: rgba(217, 119, 6, .35); }
+html[data-theme="dark"] .focus-sev-critical { color: #f87171; }
+html[data-theme="dark"] .focus-sev-warning { color: #fbbf24; }
+
 .focus-hint {
   margin: 0 0 8px;
   font-size: 12px;

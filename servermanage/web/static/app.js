@@ -1802,9 +1802,40 @@
     return picks.slice(0, 5);
   }
 
+  function renderFocusSeverity(alerts) {
+    var box = document.getElementById('focus-severity');
+    if (!box) { return; }
+    while (box.firstChild) { box.removeChild(box.firstChild); }
+    var counts = { critical: 0, warning: 0, info: 0 };
+    (alerts || []).forEach(function (alert) {
+      var level = alert && alert.severity;
+      if (counts[level] === undefined) { level = 'info'; }
+      counts[level] += 1;
+    });
+    var levels = [
+      ['critical', '严重'],
+      ['warning', '警告'],
+      ['info', '提示']
+    ];
+    var shown = 0;
+    levels.forEach(function (pair) {
+      var level = pair[0];
+      if (!counts[level]) { return; }
+      var chip = document.createElement('a');
+      chip.className = 'focus-sev focus-sev-' + level;
+      chip.href = '/alerts?status=active&severity=' + level;
+      chip.title = '只看' + pair[1] + '级别的活动告警';
+      chip.textContent = pair[1] + ' ' + counts[level];
+      box.appendChild(chip);
+      shown += 1;
+    });
+    box.hidden = shown === 0;
+  }
+
   function updateFocusAlerts(alerts) {
     var list = document.getElementById('focus-alert-list');
     if (!list) { return; }
+    renderFocusSeverity(alerts);
     var visible = pickFocusAlerts(alerts || []);
     while (list.firstChild) { list.removeChild(list.firstChild); }
     for (var i = 0; i < visible.length; i += 1) {
