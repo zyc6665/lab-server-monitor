@@ -4410,3 +4410,7 @@ html[data-theme="dark"] .alert-more { background: #141c2b; border-color: #2b3a52
 #host-table .col-resizer:hover {
   background: linear-gradient(to right, transparent 3px, var(--accent) 3px, var(--accent) 4px, transparent 4px);
 }
+
+/* -- v0.1.190 告警确认就地更新 -- */
+#alerts-table td.alert-state[data-state="acknowledged"] { color: var(--text-muted); }
+#alerts-table tr.alert-row-leaving { opacity: 0; transition: opacity 200ms ease-out; }

@@ -2014,7 +2014,9 @@
     var timeCell = textCell(formatRelative(alert.created_at), 'mono alert-time');
     if (alert.created_at) { timeCell.title = formatStamp(alert.created_at); }
     tr.appendChild(timeCell);
-    tr.appendChild(textCell(alert.status));
+    var stateCell = textCell(STATUS_TEXT[alert.status] || alert.status || '—', 'alert-state');
+    stateCell.setAttribute('data-state', alert.status || 'active');
+    tr.appendChild(stateCell);
 
     var actionCell = document.createElement('td');
     actionCell.className = 'alert-actions';
@@ -3201,6 +3203,46 @@
       document.getElementById('alerts-body') !== null;
   }
 
+  function applyAckInPlace(button, alertId) {
+    var row = button.closest('tr');
+    if (!row) { return; }
+    row.setAttribute('data-status', 'acknowledged');
+    var stateCell = row.querySelector('td.alert-state');
+    if (stateCell) {
+      stateCell.textContent = STATUS_TEXT.acknowledged;
+      stateCell.setAttribute('data-state', 'acknowledged');
+    }
+    var checkbox = row.querySelector('input.alert-select');
+    if (checkbox) { checkbox.remove(); }
+    delete selectedAlertIds[alertId];
+    var cell = row.querySelector('td.alert-actions');
+    if (cell) {
+      while (cell.firstChild) { cell.removeChild(cell.firstChild); }
+      var dash = document.createElement('span');
+      dash.className = 'muted';
+      dash.textContent = '—';
+      cell.appendChild(dash);
+    }
+    setCount('alert-status-count-active', -1);
+    setCount('alert-status-count-acknowledged', 1);
+    updateAlertSelectionSummary();
+    if (alertStatus === 'active') { dropAlertRow(row); }
+  }
+
+  function setCount(elementId, delta) {
+    var node = document.getElementById(elementId);
+    if (!node) { return; }
+    var current = Number(node.textContent) || 0;
+    node.textContent = Math.max(0, current + delta);
+  }
+
+  function dropAlertRow(row) {
+    row.classList.add('alert-row-leaving');
+    window.setTimeout(function () {
+      if (row.parentNode) { row.parentNode.removeChild(row); }
+    }, 220);
+  }
+
   function ackAlert(button) {
     var alertId = button.getAttribute('data-alert-id');
     if (!alertId) { return; }
@@ -3209,7 +3251,7 @@
       .then(function (result) {
         if (result === null) { return; }
         showToast('告警已确认', 'success');
-        return refreshAlerts();
+        applyAckInPlace(button, alertId);
       })
       .catch(function () {
         button.disabled = false;
