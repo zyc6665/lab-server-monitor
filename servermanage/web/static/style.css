@@ -992,6 +992,23 @@ html[data-theme="dark"] .theme-icon-sun { display: inline; }
 
 .data-table thead th { position: sticky; top: 0; z-index: 1; }
 
+/* -- v0.1.157 主机表首列吸附 -- */
+#host-table th:first-child,
+#host-table td:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  background: var(--card-bg);
+}
+#host-table thead th:first-child { z-index: 3; }
+#host-table td:first-child { box-shadow: 1px 0 0 var(--border); }
+#host-table thead th:first-child { box-shadow: 1px 0 0 var(--border); }
+html[data-theme="dark"] #host-table th:first-child,
+html[data-theme="dark"] #host-table td:first-child { background: var(--card-bg); }
+@media (max-width: 900px) {
+  #host-table td:first-child { max-width: 150px; overflow: hidden; text-overflow: ellipsis; }
+}
+
 html[data-theme="dark"] {
   --bg: #0d1524;
   --card-bg: #162033;
