@@ -957,6 +957,7 @@
     tr.setAttribute('data-silenced', host.silenced ? '1' : '0');
     tr.setAttribute('data-alert-count', host.active_alert_count || 0);
     tr.setAttribute('data-attention', hostAttentionReasons(host).length);
+    tr.setAttribute('data-uptime', uptimeRatio(host.collection_uptime));
     tr.setAttribute(
       'data-search',
       [host.name, host.host, host.group || '未分组', host.owner, host.location]
@@ -1171,6 +1172,7 @@
     card.setAttribute('data-group', host.group || '未分组');
     card.setAttribute('data-owner', host.owner || '');
     card.setAttribute('data-online', host.online ? '1' : '0');
+    card.setAttribute('data-uptime', uptimeRatio(host.collection_uptime));
     card.setAttribute('data-silenced', host.silenced ? '1' : '0');
     card.setAttribute('data-alert-count', host.active_alert_count || 0);
     card.setAttribute('data-attention', hostAttentionReasons(host).length);
@@ -1284,6 +1286,11 @@
     }
   }
 
+  function uptimeRatio(uptime) {
+    if (!uptime || !uptime.expected) { return -1; }
+    return Math.min(1, Math.max(0, Number(uptime.samples || 0) / Number(uptime.expected)));
+  }
+
   function hostRowMatches(tr, group, status, keyword) {
     if (group && tr.getAttribute('data-group') !== group) { return false; }
     if (status === 'online' && tr.getAttribute('data-online') !== '1') { return false; }
@@ -1291,6 +1298,10 @@
     if (status === 'alert' && Number(tr.getAttribute('data-alert-count') || 0) <= 0) { return false; }
     if (status === 'attention' && Number(tr.getAttribute('data-attention') || 0) <= 0) { return false; }
     if (status === 'silenced' && tr.getAttribute('data-silenced') !== '1') { return false; }
+    if (status === 'stale') {
+      var uptime = Number(tr.getAttribute('data-uptime'));
+      if (!(uptime >= 0 && uptime < 0.9)) { return false; }
+    }
     if (keyword) {
       var haystack = (tr.getAttribute('data-search') || tr.textContent || '').toLowerCase();
       if (haystack.indexOf(keyword) === -1) { return false; }
