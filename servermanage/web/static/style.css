@@ -2802,6 +2802,13 @@ html[data-theme="dark"] .auth-card .field input:focus { background: #16202f; }
   border-color: rgba(44, 92, 246, .45);
   background: rgba(44, 92, 246, .08);
 }
+/* -- v0.1.156 告警分组行的键盘可达性 -- */
+.alert-group:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+.alert-group:focus-visible > td.alert-group-cell { background: var(--surface-sunken); }
+
 .alert-group > td.alert-group-cell {
   display: flex;
   align-items: center;

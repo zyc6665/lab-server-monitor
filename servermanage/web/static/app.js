@@ -2111,6 +2111,8 @@
 
     tr.appendChild(cell);
     tr.tabIndex = 0;
+    tr.setAttribute('role', 'button');
+    tr.setAttribute('aria-label', group.host + ' 分组，' + group.alerts.length + ' 条告警');
     tr.setAttribute('aria-expanded', collapsedHosts[group.host] ? 'false' : 'true');
     return tr;
   }
@@ -3109,14 +3111,30 @@
         toggleAllGroups(filteredAlerts(true));
       });
     }
+    function toggleAlertGroup(hostKey, keepFocus) {
+      collapsedHosts[hostKey] = !collapsedHosts[hostKey];
+      renderAlertRows();
+      if (!keepFocus) { return; }
+      var again = document.querySelector('[data-alert-group="' + hostKey + '"]');
+      if (again && again.focus) { again.focus(); }
+    }
+
     document.addEventListener('click', function (event) {
       var row = event.target && event.target.closest
         ? event.target.closest('[data-alert-group]')
         : null;
       if (!row) { return; }
-      var hostKey = row.getAttribute('data-alert-group');
-      collapsedHosts[hostKey] = !collapsedHosts[hostKey];
-      renderAlertRows();
+      toggleAlertGroup(row.getAttribute('data-alert-group'), false);
+    });
+
+    document.addEventListener('keydown', function (event) {
+      if (event.key !== 'Enter' && event.key !== ' ' && event.key !== 'Spacebar') { return; }
+      var row = event.target && event.target.closest
+        ? event.target.closest('[data-alert-group]')
+        : null;
+      if (!row) { return; }
+      event.preventDefault();
+      toggleAlertGroup(row.getAttribute('data-alert-group'), true);
     });
     readAlertGrouping();
     if (alertSeverityFilter) {
