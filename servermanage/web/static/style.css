@@ -4480,3 +4480,6 @@ tr[data-disk-row] { cursor: zoom-in; }
 }
 .disk-drive-body dt { color: var(--text-muted); }
 .disk-drive-body dd { margin: 0; font-variant-numeric: tabular-nums; }
+
+/* -- v0.1.198 趋势数据导出 -- */
+#trend-export { margin-left: 6px; font-size: 12.5px; }

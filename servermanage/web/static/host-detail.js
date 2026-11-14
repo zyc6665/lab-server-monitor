@@ -195,10 +195,55 @@
     });
   }
 
+  var historyPoints = [];
+  var historyRange = '24h';
+
+
+  function csvCell(value) {
+    var text = value === null || value === undefined ? '' : String(value);
+    if (text.indexOf(',') >= 0 || text.indexOf('"') >= 0 || text.indexOf('\n') >= 0) {
+      return '"' + text.replace(/"/g, '""') + '"';
+    }
+    return text;
+  }
+
+  function trendCsv() {
+    var keys = Object.keys(TITLES);
+    var head = ['时间'].concat(keys.map(function (key) { return TITLES[key]; }));
+    var lines = [head.join(',')];
+    historyPoints.forEach(function (point) {
+      var row = [csvCell(stampOf(point.t))];
+      keys.forEach(function (key) { row.push(csvCell(trendText(point[key], key))); });
+      lines.push(row.join(','));
+    });
+    return lines.join('\r\n');
+  }
+
+  function exportTrend() {
+    if (!historyPoints.length) { return; }
+    var text = '\ufeff' + trendCsv();
+    var blob = new Blob([text], { type: 'text/csv;charset=utf-8' });
+    var url = URL.createObjectURL(blob);
+    var link = document.createElement('a');
+    link.href = url;
+    link.download = HOST_NAME + '-trend-' + historyRange + '-' + new Date().toISOString().slice(0, 10) + '.csv';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  }
+
+  function bindTrendExport() {
+    var button = document.getElementById('trend-export');
+    if (button) { button.addEventListener('click', exportTrend); }
+  }
+
   function loadHistory(rangeKey) {
+    historyRange = rangeKey;
     var url = '/api/host/' + encodeURIComponent(HOST_NAME) + '/history?range=' + encodeURIComponent(rangeKey);
     fetchJson(url).then(function (payload) {
       var points = (payload && payload.points) || [];
+      historyPoints = points;
       var empty = document.getElementById('trend-empty');
       if (empty) { empty.hidden = points.length > 0; }
       var stamps = points.map(function (point) { return stampOf(point.t); });
@@ -932,6 +977,7 @@
   bindRanges();
   bindActions();
   bindCollectNow();
+  bindTrendExport();
   bindCheckFilter();
   bindDiagCopy();
   bindContainerFilter();
