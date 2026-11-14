@@ -2598,6 +2598,25 @@
     }
   }
 
+  function bindAlertMore() {
+    var toggle = document.getElementById('alert-more-toggle');
+    var panel = document.getElementById('alert-more');
+    if (!toggle || !panel) { return; }
+    function apply(open) {
+      panel.hidden = !open;
+      toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+      toggle.classList.toggle('active', open);
+    }
+    var active = ['alert-host-filter', 'alert-category-filter', 'alert-range-filter', 'alert-sort'].some(function (id) {
+      var el = document.getElementById(id);
+      return el && el.value && el.value !== 'desc';
+    });
+    apply(active);
+    toggle.addEventListener('click', function () {
+      apply(panel.hidden);
+    });
+  }
+
   function bindAlertTimeline() {
     var tabs = document.querySelectorAll('[data-timeline-range]');
     Array.prototype.forEach.call(tabs, function (tab) {
@@ -3537,6 +3556,7 @@
     bindAttentionChips();
     bindAlertRanges();
     bindAlertTimeline();
+    bindAlertMore();
     bindAlertColumns();
   bindAlertCopy();
     bindResourceRankTabs();

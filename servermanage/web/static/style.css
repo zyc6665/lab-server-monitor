@@ -4368,3 +4368,19 @@ html[data-theme="dark"] .status-offline { color: #f87171; }
 
 /* -- v0.1.184 概览趋势悬停读数 -- */
 #overview-trend svg { cursor: crosshair; }
+
+/* -- v0.1.185 告警筛选收进「更多筛选」 -- */
+.alert-more-toggle.active { border-color: var(--accent); color: var(--accent); }
+.alert-more {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin: 8px 0 0;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-sunken);
+}
+.alert-more[hidden] { display: none !important; }
+html[data-theme="dark"] .alert-more { background: #141c2b; border-color: #2b3a52; }

@@ -36,25 +36,28 @@
   </div>
   <div class="alert-toolbar">
     <input id="alert-search" type="search" class="alert-search" placeholder="搜索主机 / 标题 / 内容" aria-label="搜索告警" value="{{ request.args.get('q', '') }}">
-    <select id="alert-host-filter" class="alert-severity-filter" aria-label="告警主机筛选">
-      <option value="">全部主机</option>
-      {% for host_name in hosts %}
-      <option value="{{ host_name }}"{% if request.args.get('host') == host_name %} selected{% endif %}>{{ host_name }}</option>
-      {% endfor %}
-    </select>
-    <select id="alert-category-filter" class="alert-severity-filter" aria-label="告警类别筛选">
-      <option value="">全部类别</option>
-    </select>
-    <select id="alert-range-filter" class="alert-severity-filter" aria-label="告警时间范围">
-      <option value=""{% if not alert_range %} selected{% endif %}>全部时间</option>
-      <option value="24h"{% if alert_range == '24h' %} selected{% endif %}>最近 24 小时</option>
-      <option value="7d"{% if alert_range == '7d' %} selected{% endif %}>最近 7 天</option>
-      <option value="30d"{% if alert_range == '30d' %} selected{% endif %}>最近 30 天</option>
-    </select>
-    <select id="alert-sort" class="alert-severity-filter" aria-label="告警排序">
-      <option value="desc"{% if request.args.get('sort') != 'asc' %} selected{% endif %}>最新优先</option>
-      <option value="asc"{% if request.args.get('sort') == 'asc' %} selected{% endif %}>最早优先</option>
-    </select>
+    <button type="button" class="btn-secondary alert-more-toggle" id="alert-more-toggle" aria-expanded="false" aria-controls="alert-more" title="主机、类别、时间与排序">更多筛选</button>
+    <div class="alert-more" id="alert-more" hidden>
+      <select id="alert-host-filter" class="alert-severity-filter" aria-label="告警主机筛选">
+        <option value="">全部主机</option>
+        {% for host_name in hosts %}
+        <option value="{{ host_name }}"{% if request.args.get('host') == host_name %} selected{% endif %}>{{ host_name }}</option>
+        {% endfor %}
+      </select>
+      <select id="alert-category-filter" class="alert-severity-filter" aria-label="告警类别筛选">
+        <option value="">全部类别</option>
+      </select>
+      <select id="alert-range-filter" class="alert-severity-filter" aria-label="告警时间范围">
+        <option value=""{% if not alert_range %} selected{% endif %}>全部时间</option>
+        <option value="24h"{% if alert_range == '24h' %} selected{% endif %}>最近 24 小时</option>
+        <option value="7d"{% if alert_range == '7d' %} selected{% endif %}>最近 7 天</option>
+        <option value="30d"{% if alert_range == '30d' %} selected{% endif %}>最近 30 天</option>
+      </select>
+      <select id="alert-sort" class="alert-severity-filter" aria-label="告警排序">
+        <option value="desc"{% if request.args.get('sort') != 'asc' %} selected{% endif %}>最新优先</option>
+        <option value="asc"{% if request.args.get('sort') == 'asc' %} selected{% endif %}>最早优先</option>
+      </select>
+    </div>
     <button type="button" class="btn-secondary" id="alert-copy">复制列表</button>
     <button type="button" class="btn-secondary" id="alert-export">导出 CSV</button>
     <button type="button" class="btn-secondary" id="alert-clear-filters">清除筛选</button>
