@@ -84,6 +84,10 @@
         el.hidden = !matched;
         return;
       }
+      // 导出 CSV 只认筛选结果，不认分组折叠：收起分组只是为了少滚动，不该丢数据。
+      if (el.classList.contains('disk-host')) {
+        el.setAttribute('data-disk-match', matched ? '1' : '0');
+      }
       var collapsed = el.classList.contains('disk-host') && collapsedGroups.indexOf(groupOf(el)) !== -1;
       el.hidden = !matched || collapsed;
       if (!el.hidden && el.classList.contains('disk-host')) { visibleHosts += 1; }
@@ -366,7 +370,7 @@
     var lines = [];
     var hostBlocks = Array.prototype.slice.call(document.querySelectorAll('.disk-host'));
     hostBlocks.forEach(function (block) {
-      if (block.hidden) { return; }
+      if (block.getAttribute('data-disk-match') === '0') { return; }
       var nameNode = block.querySelector('.disk-host-id a');
       var hostName = nameNode ? (nameNode.textContent || '').trim() : '';
       var table = block.querySelector('table.disk-table');

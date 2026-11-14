@@ -27,10 +27,13 @@ def test_script_builds_and_downloads_csv():
     assert "已导出 " in script
 
 
-def test_export_skips_hidden_hosts():
+def test_export_skips_filtered_hosts():
+    """v0.1.187：导出跟随筛选，但不跟分组折叠——收起分组只为少滚动，不该丢数据。"""
+
     script = (STATIC / "disk-health.js").read_text(encoding="utf-8")
     body = script.split("function collectCsv()")[1].split("function exportCsv")[0]
-    assert "if (block.hidden) { return; }" in body
+    assert "if (block.getAttribute('data-disk-match') === '0') { return; }" in body
+    assert "if (block.hidden) { return; }" not in body
     assert "querySelectorAll('tbody tr')" in body
 
 
