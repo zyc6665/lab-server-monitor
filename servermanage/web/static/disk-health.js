@@ -4,6 +4,7 @@
   'use strict';
 
   var STORAGE_KEY = 'disk:onlyIssues';
+  var HEAT_KEY = 'disk:heat';
 
   var toggle = document.getElementById('disk-only-issues');
   if (!toggle) { return; }
@@ -58,14 +59,22 @@
 
   // 三个条件叠加：只看异常 + 关键字 + 分组折叠，谁筛掉了都要同步隐藏跳转芯片；
   // 分组标题在该组没有任何匹配主机时也一起隐藏。
+  function heatLimit() {
+    var select = document.getElementById('disk-heat');
+    var value = Number((select && select.value) || 0) || 0;
+    return isNaN(value) ? 0 : value;
+  }
+
   function apply(onlyIssues) {
     var needle = keyword();
+    var limit = heatLimit();
     var collapsedGroups = readGroups();
     var visibleHosts = 0;
     var matchedGroups = {};
     var groupHits = {};
     items.forEach(function (el) {
-      var matched = !((onlyIssues && !isIssue(el)) || !matchesSearch(el, needle));
+      var heat = Number(el.getAttribute('data-disk-heat') || 0) || 0;
+      var matched = !((onlyIssues && !isIssue(el)) || !matchesSearch(el, needle) || (limit > 0 && heat < limit));
       if (matched && el.classList.contains('disk-host')) {
         matchedGroups[groupOf(el)] = true;
         groupHits[groupOf(el)] = (groupHits[groupOf(el)] || 0) + 1;
@@ -88,6 +97,11 @@
     );
     if (emptyHint) { emptyHint.hidden = !onlyIssues || visibleHosts > 0; }
     if (searchEmpty) { searchEmpty.hidden = !needle || visibleHosts > 0; }
+    var heatEmpty = document.getElementById('disk-heat-empty');
+    if (heatEmpty) {
+      heatEmpty.hidden = !(limit > 0) || visibleHosts > 0;
+      heatEmpty.textContent = '没有达到 ' + limit + ' °C 的主机。';
+    }
     // 搜索时给每个分组标出命中台数，并给一条总数提示，省得逐组点开找。
     Array.prototype.forEach.call(
       document.querySelectorAll('[data-group-count]'),
@@ -137,6 +151,31 @@
     } catch (error) {
       /* 隐私模式写不进去就算了，不影响本次筛选。 */
     }
+  }
+
+  function readHeat() {
+    var select = document.getElementById('disk-heat');
+    if (!select) { return ''; }
+    try {
+      var saved = window.localStorage.getItem(HEAT_KEY) || '';
+      if (['60', '70', '80'].indexOf(saved) !== -1) { select.value = saved; return saved; }
+    } catch (error) {
+      /* 忽略 */
+    }
+    return select.value === '0' ? '' : select.value;
+  }
+
+  function saveHeat(value) {
+    try { window.localStorage.setItem(HEAT_KEY, value); } catch (error) { /* 忽略 */ }
+  }
+
+  var heat = document.getElementById('disk-heat');
+  readHeat();
+  if (heat) {
+    heat.addEventListener('change', function () {
+      saveHeat(heat.value === '0' ? '' : heat.value);
+      apply(toggle.checked);
+    });
   }
 
   toggle.checked = read();

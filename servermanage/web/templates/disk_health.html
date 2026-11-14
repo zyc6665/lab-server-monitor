@@ -44,14 +44,23 @@
       <input type="checkbox" id="disk-only-issues">
       <span>只看异常主机</span>
     </label>
+    <label class="filter-field disk-heat">温度
+      <select id="disk-heat" aria-label="只看达到温度的磁盘主机">
+        <option value="0">全部</option>
+        <option value="60">≥60 °C</option>
+        <option value="70">≥70 °C</option>
+        <option value="80">≥80 °C</option>
+      </select>
+    </label>
     <input type="search" id="disk-search" class="disk-search" placeholder="搜索主机、分组、盘型号或序列号" aria-label="搜索磁盘">
     <span class="muted small" id="disk-filter-empty" hidden>当前没有告警、严重或采集失败的主机。</span>
     <span class="muted small" id="disk-search-empty" hidden>没有匹配的磁盘记录。</span>
     <span class="muted small" id="disk-search-count" hidden></span>
+    <span class="muted small" id="disk-heat-empty" hidden>没有达到该温度的主机。</span>
   </div>
   <nav class="disk-jump" aria-label="按主机跳转">
     {% for host in hosts %}
-    <a class="disk-jump-link" href="#disk-{{ host.anchor }}" data-disk-issues="{{ 1 if host.needs_attention else 0 }}" data-disk-search="{{ host.name|lower }}">
+    <a class="disk-jump-link" href="#disk-{{ host.anchor }}" data-disk-issues="{{ 1 if host.needs_attention else 0 }}" data-disk-search="{{ host.name|lower }}" data-disk-heat="{{ host.temperature_max or 0 }}">
       <span class="disk-jump-name">{{ host.name }}</span>
       <span class="disk-jump-count">{{ host.pd_count }}</span>
       {% if host.critical %}<span class="disk-jump-flag disk-jump-critical">{{ host.critical }}</span>{% elif host.warning %}<span class="disk-jump-flag disk-jump-warning">{{ host.warning }}</span>{% endif %}
@@ -70,7 +79,7 @@
     {% endif %}
   </div>
   {% endif %}
-  <article class="disk-host" id="disk-{{ host.anchor }}" data-disk-group-member="{{ host.group }}" data-disk-issues="{{ 1 if host.needs_attention else 0 }}" data-disk-search="{{ host.search_text }}">
+  <article class="disk-host" id="disk-{{ host.anchor }}" data-disk-group-member="{{ host.group }}" data-disk-issues="{{ 1 if host.needs_attention else 0 }}" data-disk-search="{{ host.search_text }}" data-disk-heat="{{ host.temperature_max or 0 }}">
     <header class="disk-host-head">
       <div class="disk-host-id">
         <button type="button" class="disk-collapse" data-disk-collapse aria-expanded="true" aria-label="展开或收起 {{ host.name }} 的盘位明细" title="展开 / 收起盘位明细"><span class="disk-caret">▾</span></button>

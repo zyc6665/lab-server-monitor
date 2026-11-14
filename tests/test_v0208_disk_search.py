@@ -86,14 +86,14 @@ def test_host_block_carries_lowercase_search_text(tmp_path: Path):
 
 def test_jump_links_are_searchable(tmp_path: Path):
     html = _client(tmp_path).get("/disk-health").get_data(as_text=True)
-    assert '<a class="disk-jump-link" href="#disk-a100-zyc" data-disk-issues="0" data-disk-search="a100-zyc">' in html
+    assert 'href="#disk-a100-zyc" data-disk-issues="0" data-disk-search="a100-zyc"' in html
 
 
 def test_script_combines_both_filters():
     script = (STATIC / "disk-health.js").read_text(encoding="utf-8")
     assert "function matchesSearch(el, needle)" in script
     assert "data-disk-search" in script
-    assert "var matched = !((onlyIssues && !isIssue(el)) || !matchesSearch(el, needle));" in script
+    assert "var matched = !((onlyIssues && !isIssue(el)) || !matchesSearch(el, needle) || (limit > 0 && heat < limit));" in script
     assert "el.hidden = !matched || collapsed;" in script
     assert "search.addEventListener('input'" in script
     assert "searchEmpty.hidden = !needle || visibleHosts > 0;" in script
