@@ -3009,6 +3009,31 @@
     });
   }
 
+  function bindSummaryCards() {
+    var cards = document.querySelectorAll('[data-stat-filter]');
+    if (!cards.length) { return; }
+    var statusEl = document.getElementById('filter-status');
+    var table = document.getElementById('host-table');
+    function pick(card) {
+      if (!statusEl) { return; }
+      var value = card.getAttribute('data-stat-filter');
+      statusEl.value = statusEl.value === value ? '' : value;
+      applyHostFilters();
+      if (table && table.scrollIntoView) {
+        table.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }
+    Array.prototype.forEach.call(cards, function (card) {
+      card.addEventListener('click', function () { pick(card); });
+      card.addEventListener('keydown', function (event) {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          pick(card);
+        }
+      });
+    });
+  }
+
   function init() {
     startConnectionWatch();
     if (!hasDashboard()) { return; }
@@ -3064,6 +3089,7 @@
     var keywordFilter = document.getElementById('filter-keyword');
     if (groupFilter) { groupFilter.addEventListener('change', applyHostFilters); }
     if (statusFilter) { statusFilter.addEventListener('change', applyHostFilters); }
+    bindSummaryCards();
     if (keywordFilter) { keywordFilter.addEventListener('input', applyHostFilters); }
     var clearFilterButton = document.getElementById('filter-clear');
     if (clearFilterButton) {
