@@ -1110,6 +1110,50 @@
     loadSilences();
   }
 
+  // -- host table filter -------------------------------------------------
+  var hostFilterInput = qs("#host-filter");
+  var hostSortSelect = qs("#host-sort");
+  var hostFilterCount = qs("#host-filter-count");
+
+  function applyHostTable() {
+    var body = qs("#host-settings-table tbody");
+    if (!body) { return; }
+    var rows = Array.prototype.slice.call(body.querySelectorAll("tr[data-host-name]"));
+    if (!rows.length) { return; }
+    var keyword = (hostFilterInput ? hostFilterInput.value : "").trim().toLowerCase();
+    var mode = hostSortSelect ? hostSortSelect.value : "name";
+    var visible = 0;
+    rows.forEach(function (row) {
+      var haystack = row.getAttribute("data-host-search") || "";
+      var hit = !keyword || haystack.indexOf(keyword) >= 0;
+      row.hidden = !hit;
+      if (hit) { visible += 1; }
+    });
+    rows.sort(function (a, b) {
+      if (mode === "group") {
+        var ga = a.getAttribute("data-host-group") || "￿";
+        var gb = b.getAttribute("data-host-group") || "￿";
+        if (ga !== gb) { return ga.localeCompare(gb, "zh-CN"); }
+      }
+      return (a.getAttribute("data-host-name") || "").localeCompare(
+        b.getAttribute("data-host-name") || "", "zh-CN"
+      );
+    });
+    rows.forEach(function (row) { body.appendChild(row); });
+    if (hostFilterCount) {
+      hostFilterCount.textContent = keyword
+        ? "匹配 " + visible + " / " + rows.length + " 台主机"
+        : "共 " + rows.length + " 台主机";
+    }
+  }
+
+  if (hostFilterInput) {
+    hostFilterInput.addEventListener("input", applyHostTable);
+    hostFilterInput.addEventListener("search", applyHostTable);
+  }
+  if (hostSortSelect) { hostSortSelect.addEventListener("change", applyHostTable); }
+  applyHostTable();
+
   // -- logs ---------------------------------------------------------------
   var logsOutput = qs("#logs-output");
   function refreshLogs() {

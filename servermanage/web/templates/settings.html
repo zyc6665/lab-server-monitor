@@ -127,6 +127,15 @@
       <span class="form-status" id="host-collection-status"></span>
     </div>
 
+    <div class="host-filter-bar">
+      <input type="search" id="host-filter" placeholder="搜索名称 / 地址 / 用户 / 分组 / 负责人" autocomplete="off">
+      <select id="host-sort" aria-label="主机排序">
+        <option value="name">按名称</option>
+        <option value="group">按分组</option>
+      </select>
+      <span class="muted small" id="host-filter-count"></span>
+    </div>
+
     <div class="table-wrap">
       <table class="data-table" id="host-settings-table">
         <thead>
@@ -134,7 +143,9 @@
         </thead>
         <tbody>
           {% for host in settings.hosts %}
-          <tr>
+          <tr data-host-name="{{ host.name }}"
+              data-host-group="{{ host.group or '' }}"
+              data-host-search="{{ (host.name ~ ' ' ~ host.host ~ ' ' ~ host.username ~ ' ' ~ (host.group or '') ~ ' ' ~ host.owner)|lower }}">
             <td class="mono">{{ host.name }}</td>
             <td class="mono">{{ host.host }}</td>
             <td>{{ host.port }}</td>

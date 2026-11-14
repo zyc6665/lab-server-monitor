@@ -3851,6 +3851,18 @@ tr.is-idle td:first-child a { color: var(--text-muted); }
 }
 .compute-users a.user-link:hover { border-bottom-style: solid; }
 
+/* -- v0.1.152 设置页主机列表过滤 -- */
+.host-filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 6px 0 10px;
+}
+.host-filter-bar input[type="search"] { min-width: 260px; }
+.host-filter-bar select { max-width: 160px; }
+.host-filter-bar .muted { margin-left: auto; font-variant-numeric: tabular-nums; }
+
 /* -- v0.1.150 概览显存徽标与主机名链接 -- */
 .gpu-chip {
   display: inline-block;
