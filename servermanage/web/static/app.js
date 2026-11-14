@@ -1732,7 +1732,10 @@
     var messageCell = document.createElement('td');
     messageCell.className = 'alert-message col-wide col-message';
     messageCell.textContent = alert.message || '—';
-    if (alert.message) { messageCell.title = String(alert.message); }
+    if (alert.message) {
+      messageCell.title = String(alert.message);
+      if (String(alert.message).length > 48) { messageCell.classList.add('is-clamped'); }
+    }
     tr.appendChild(messageCell);
 
     var timeCell = textCell(formatRelative(alert.created_at), 'mono alert-time');
