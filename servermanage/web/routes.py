@@ -798,11 +798,15 @@ def _metrics_payload(
     metrics: dict[str, Any],
     disk_mounts: list[str] | None = None,
 ) -> dict[str, Any]:
+    load = metrics.get("load_average") or {}
     return {
         "cpu_percent": _as_float(metrics.get("cpu_usage_percent")),
         "memory_percent": _memory_percent(metrics),
         "disk_percent": _disk_percent(metrics, disk_mounts),
         "gpu_memory_percent": _gpu_memory_percent(metrics),
+        "load_1": _as_float(load.get("load_1") if isinstance(load, dict) else None),
+        "cpu_cores": int(metrics.get("cpu_core_count") or 0),
+        "uptime": str(metrics.get("uptime") or ""),
     }
 
 

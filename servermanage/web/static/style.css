@@ -4414,3 +4414,14 @@ html[data-theme="dark"] .alert-more { background: #141c2b; border-color: #2b3a52
 /* -- v0.1.190 告警确认就地更新 -- */
 #alerts-table td.alert-state[data-state="acknowledged"] { color: var(--text-muted); }
 #alerts-table tr.alert-row-leaving { opacity: 0; transition: opacity 200ms ease-out; }
+
+/* -- v0.1.191 概览卡片补充负载与运行时长 -- */
+.host-card-load,
+.host-card-uptime {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.host-card-load { color: var(--text); }
+html[data-theme="dark"] .host-card-load { color: var(--text); }

@@ -1338,6 +1338,20 @@
 
     var foot = document.createElement('div');
     foot.className = 'host-card-foot';
+    if (host.load_1 !== null && host.load_1 !== undefined) {
+      var loadChip = document.createElement('span');
+      loadChip.className = 'host-card-load';
+      loadChip.textContent = '负载 ' + Number(host.load_1).toFixed(2);
+      if (host.cpu_cores) { loadChip.title = host.cpu_cores + ' 核，负载 ' + host.load_1; }
+      foot.appendChild(loadChip);
+    }
+    if (host.uptime) {
+      var uptimeChipNode = document.createElement('span');
+      uptimeChipNode.className = 'host-card-uptime';
+      uptimeChipNode.textContent = '运行 ' + String(host.uptime).split(',')[0];
+      uptimeChipNode.title = '系统运行时长 ' + host.uptime;
+      foot.appendChild(uptimeChipNode);
+    }
     var checks = host.checks || {};
     var checkSpan;
     if (checks.total) {
