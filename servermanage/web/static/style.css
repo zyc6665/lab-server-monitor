@@ -4365,3 +4365,6 @@ html[data-theme="dark"] .status-offline { color: #f87171; }
 
 /* -- v0.1.183 趋势图悬停读数 -- */
 .trend-block svg { cursor: crosshair; }
+
+/* -- v0.1.184 概览趋势悬停读数 -- */
+#overview-trend svg { cursor: crosshair; }

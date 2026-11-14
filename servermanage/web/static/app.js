@@ -477,7 +477,21 @@
     return coords;
   }
 
-  function drawOverviewTrend(svg, values, key, previous) {
+  function overviewPathIndexed(values, min, max, width, height, padX, padY) {
+    var span = Math.max(1, values.length - 1);
+    var coords = [];
+    values.forEach(function (value, index) {
+      if (value === null || value === undefined || isNaN(Number(value))) { return; }
+      coords.push([
+        padX + (width - padX * 2) * (index / span),
+        height - padY - (height - padY * 2) * ((Number(value) - min) / (max - min)),
+        index
+      ]);
+    });
+    return coords;
+  }
+
+  function drawOverviewTrend(svg, values, key, previous, labels) {
     if (!svg) { return; }
     while (svg.firstChild) { svg.removeChild(svg.firstChild); }
     var numbers = overviewNumbers(values);
@@ -493,7 +507,8 @@
     var scale = numbers.concat(history.length >= 2 ? history : []);
     var min = Math.min.apply(null, scale), max = Math.max.apply(null, scale);
     if (max - min < 1) { max = min + 1; }
-    var points = overviewPath(values, min, max, width, height, padX, padY);
+    var indexed = overviewPathIndexed(values, min, max, width, height, padX, padY);
+    var points = indexed.map(function (point) { return [point[0], point[1]]; });
     [0, 0.5, 1].forEach(function (fraction) {
       var y = padY + (height - padY * 2) * fraction;
       svg.appendChild(overviewSvgEl('line', {
@@ -521,6 +536,54 @@
     }));
     var last = points[points.length - 1];
     svg.appendChild(overviewSvgEl('circle', { cx: last[0], cy: last[1], r: '2.8', fill: OVERVIEW_COLORS[key] }));
+    bindOverviewHover(svg, indexed, values, key, labels || []);
+  }
+
+  function overviewTrendText(value, key) {
+    if (value === null || value === undefined || isNaN(Number(value))) { return ''; }
+    var num = Number(value);
+    return key === 'load_1' ? num.toFixed(2) : formatPercent(num);
+  }
+
+  function bindOverviewHover(svg, indexed, values, key, labels) {
+    if (!indexed.length) { return; }
+    var width = 300, height = 84;
+    var cross = overviewSvgEl('line', {
+      x1: 0, x2: 0, y1: 8, y2: height - 8, stroke: '#b8c2d4',
+      'stroke-width': '1', 'stroke-dasharray': '3 3', opacity: '0'
+    });
+    var dot = overviewSvgEl('circle', { cx: 0, cy: 0, r: '3', fill: OVERVIEW_COLORS[key], opacity: '0' });
+    var label = overviewSvgEl('text', {
+      x: width - 8, y: height - 4, 'text-anchor': 'end',
+      fill: '#5b6472', 'font-size': '9', opacity: '0'
+    });
+    svg.appendChild(cross);
+    svg.appendChild(dot);
+    svg.appendChild(label);
+    svg.addEventListener('mousemove', function (event) {
+      var rect = svg.getBoundingClientRect();
+      if (!rect.width) { return; }
+      var x = (event.clientX - rect.left) / rect.width * width;
+      var best = 0;
+      for (var i = 1; i < indexed.length; i += 1) {
+        if (Math.abs(indexed[i][0] - x) < Math.abs(indexed[best][0] - x)) { best = i; }
+      }
+      var point = indexed[best];
+      var stamp = labels[point[2]] || '';
+      cross.setAttribute('x1', point[0]);
+      cross.setAttribute('x2', point[0]);
+      cross.setAttribute('opacity', '0.9');
+      dot.setAttribute('cx', point[0]);
+      dot.setAttribute('cy', point[1]);
+      dot.setAttribute('opacity', '1');
+      label.textContent = (stamp ? stamp + ' · ' : '') + overviewTrendText(values[point[2]], key);
+      label.setAttribute('opacity', '1');
+    });
+    svg.addEventListener('mouseleave', function () {
+      cross.setAttribute('opacity', '0');
+      dot.setAttribute('opacity', '0');
+      label.setAttribute('opacity', '0');
+    });
   }
 
   var OVERVIEW_TREND_KEYS = ['cpu', 'memory', 'disk', 'gpu_util', 'load_1'];
@@ -581,7 +644,8 @@
           document.querySelector('[data-overview-trend="' + key + '"]'),
           points.map(function (point) { return point[key]; }),
           key,
-          previous.map(function (point) { return point[key]; })
+          previous.map(function (point) { return point[key]; }),
+          points.map(overviewPointLabel)
         );
       });
       overviewHistory = { range: rangeKey, points: points, previous: previous };
