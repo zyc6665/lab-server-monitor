@@ -16,6 +16,28 @@
   var payloadState = null;
   var activeHost = '';
   var entryFilter = 'all';
+  var FILTER_STORE = 'users:filters';
+
+  function readFilters() {
+    try {
+      var raw = JSON.parse(localStorage.getItem(FILTER_STORE) || 'null');
+      if (raw && typeof raw.status === 'string') {
+        return { status: raw.status, entry: raw.entry || 'all' };
+      }
+    } catch (err) { /* 忽略损坏的存储 */ }
+    return { status: '', entry: 'all' };
+  }
+
+  function saveFilters() {
+    var status = document.getElementById('user-status-filter');
+    try {
+      localStorage.setItem(FILTER_STORE, JSON.stringify({
+        status: status ? status.value : '',
+        entry: entryFilter
+      }));
+    } catch (err) { /* 存不了就算了，不影响筛选 */ }
+  }
+
   var currentPlan = null;
 
   function csrfToken() {
@@ -979,7 +1001,20 @@
       });
     }
     var status = document.getElementById('user-status-filter');
-    if (status) { status.addEventListener('change', function () { fetchUsers(); }); }
+    if (status) {
+      var saved = readFilters();
+      if (saved.status) { status.value = saved.status; }
+      if (saved.entry) { entryFilter = saved.entry; }
+      Array.prototype.forEach.call(document.querySelectorAll('.user-chip'), function (chip) {
+        var active = chip.getAttribute('data-user-state') === entryFilter;
+        chip.className = 'user-chip' + (active ? ' active' : '');
+        chip.setAttribute('aria-pressed', active ? 'true' : 'false');
+      });
+      status.addEventListener('change', function () {
+        saveFilters();
+        fetchUsers();
+      });
+    }
     var search = document.getElementById('user-search');
     if (search) {
       var timer = null;
@@ -994,6 +1029,7 @@
     Array.prototype.forEach.call(chips, function (chip) {
       chip.addEventListener('click', function () {
         setEntryFilter(chip.getAttribute('data-user-state') || 'all');
+        saveFilters();
       });
     });
   }
