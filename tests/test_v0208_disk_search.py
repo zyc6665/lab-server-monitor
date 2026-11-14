@@ -93,7 +93,7 @@ def test_script_combines_both_filters():
     script = (STATIC / "disk-health.js").read_text(encoding="utf-8")
     assert "function matchesSearch(el, needle)" in script
     assert "data-disk-search" in script
-    assert "var matched = !((onlyIssues && !isIssue(el)) || !matchesSearch(el, needle) || (limit > 0 && heat < limit));" in script
+    assert "var matched = !((onlyIssues && !isIssue(el)) || !matchesSearch(el, needle) || (limit > 0 && heat < limit) || (onlyBad && !hasBadRow));" in script
     assert "el.hidden = !matched || collapsed;" in script
     assert "search.addEventListener('input'" in script
     assert "searchEmpty.hidden = !needle || visibleHosts > 0;" in script

@@ -65,16 +65,52 @@
     return isNaN(value) ? 0 : value;
   }
 
+  var BAD_KEY = 'disk:onlyBad';
+
+  function readOnlyBad() {
+    try {
+      return window.localStorage.getItem(BAD_KEY) === '1';
+    } catch (err) {
+      return false;
+    }
+  }
+
+  function saveOnlyBad(value) {
+    try {
+      window.localStorage.setItem(BAD_KEY, value ? '1' : '0');
+    } catch (err) { /* 隐私模式忽略 */ }
+  }
+
+  function rowIsBad(row) {
+    var health = (row.getAttribute('data-health') || '').toLowerCase();
+    var media = Number(row.getAttribute('data-media') || 0) || 0;
+    return (health && health !== 'ok' && health !== 'healthy') || media > 0;
+  }
+
   function apply(onlyIssues) {
     var needle = keyword();
     var limit = heatLimit();
+    var onlyBad = readOnlyBad();
     var collapsedGroups = readGroups();
     var visibleHosts = 0;
     var matchedGroups = {};
     var groupHits = {};
     items.forEach(function (el) {
       var heat = Number(el.getAttribute('data-disk-heat') || 0) || 0;
-      var matched = !((onlyIssues && !isIssue(el)) || !matchesSearch(el, needle) || (limit > 0 && heat < limit));
+      var hasBadRow = true;
+      if (onlyBad && el.classList.contains('disk-host')) {
+        hasBadRow = false;
+        Array.prototype.forEach.call(el.querySelectorAll('tbody tr[data-disk-row]'), function (row) {
+          var bad = rowIsBad(row);
+          row.hidden = !bad;
+          if (bad) { hasBadRow = true; }
+        });
+      } else if (el.classList.contains('disk-host')) {
+        Array.prototype.forEach.call(el.querySelectorAll('tbody tr[data-disk-row]'), function (row) {
+          row.hidden = false;
+        });
+      }
+      var matched = !((onlyIssues && !isIssue(el)) || !matchesSearch(el, needle) || (limit > 0 && heat < limit) || (onlyBad && !hasBadRow));
       if (matched && el.classList.contains('disk-host')) {
         matchedGroups[groupOf(el)] = true;
         groupHits[groupOf(el)] = (groupHits[groupOf(el)] || 0) + 1;
@@ -99,7 +135,12 @@
         head.hidden = !matchedGroups[name];
       }
     );
-    if (emptyHint) { emptyHint.hidden = !onlyIssues || visibleHosts > 0; }
+    if (emptyHint) {
+      emptyHint.hidden = !(onlyIssues || onlyBad) || visibleHosts > 0;
+      emptyHint.textContent = onlyBad
+        ? '当前没有异常盘（介质错误 / Predictive / 健康状态均正常）。'
+        : '当前没有告警、严重或采集失败的主机。';
+    }
     if (searchEmpty) { searchEmpty.hidden = !needle || visibleHosts > 0; }
     var heatEmpty = document.getElementById('disk-heat-empty');
     if (heatEmpty) {
@@ -183,6 +224,14 @@
   }
 
   toggle.checked = read();
+  var badToggle = document.getElementById('disk-only-bad');
+  if (badToggle) {
+    badToggle.checked = readOnlyBad();
+    badToggle.addEventListener('change', function () {
+      saveOnlyBad(badToggle.checked);
+      apply(toggle.checked);
+    });
+  }
   apply(toggle.checked);
 
   toggle.addEventListener('change', function () {
