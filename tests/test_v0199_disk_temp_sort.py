@@ -72,7 +72,8 @@ def test_drives_are_ordered_by_temperature(tmp_path: Path):
 
     section = html[html.index('id="disk-a100-zyc"') :]
     cells = re.findall(r'<td class="mono disk-temp[^"]*"[^>]*>\s*(.*?)\s*</td>', section, re.S)
-    temps = [" ".join(cell.split()) for cell in cells]
+    # 单元格里现在还有热度小柱，比较时只取文本
+    temps = [" ".join(re.sub(r"<[^>]+>", "", cell).split()) for cell in cells]
     assert temps == ["72 °C", "55 °C", "31 °C", "—"], temps
 
 

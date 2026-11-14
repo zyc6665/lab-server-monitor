@@ -109,7 +109,7 @@
             <td>{% if d.smart_alert is not none %}{{ '是' if d.smart_alert else '否' }}{% else %}—{% endif %}</td>
             <td>{{ d.shield_counter if d.shield_counter is not none else '—' }}</td>
             {% set temp = d.temperature_c %}
-            <td class="mono disk-temp{% if temp is not none and temp >= 65 %} is-critical{% elif temp is not none and temp >= 55 %} is-hot{% endif %}"{% if temp is not none %} title="盘温阈值：55 °C 起偏热，65 °C 起需关注"{% endif %}>{% if temp is not none %}{{ temp }} °C{% else %}—{% endif %}</td>
+            <td class="mono disk-temp{% if temp is not none and temp >= 65 %} is-critical{% elif temp is not none and temp >= 55 %} is-hot{% endif %}"{% if temp is not none %} title="盘温阈值：55 °C 起偏热，65 °C 起需关注"{% endif %}>{% if temp is not none %}{{ temp }} °C{% set pct = [[(temp - 25) * 100 // 40, 0]|max, 100]|min %}<span class="temp-bar" aria-hidden="true"><span class="temp-bar-fill" style="width: {{ pct }}%"></span></span>{% else %}—{% endif %}</td>
             <td><span class="health health-{{ d.health }}">{{ d.health }}</span></td>
           </tr>
           {% endfor %}

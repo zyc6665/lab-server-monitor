@@ -4301,3 +4301,23 @@ html[data-theme="dark"] .settings-tab.is-dirty::after { background: #fbbf24; }
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
+
+/* -- v0.1.170 磁盘温度柱状条 -- */
+.temp-bar {
+  display: inline-block;
+  width: 46px;
+  height: 4px;
+  margin-left: 6px;
+  vertical-align: middle;
+  background: var(--surface-sunken);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.temp-bar-fill {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  border-radius: 2px;
+}
+.disk-temp.is-hot .temp-bar-fill { background: #d97706; }
+.disk-temp.is-critical .temp-bar-fill { background: #dc2626; }
