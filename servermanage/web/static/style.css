@@ -3843,6 +3843,13 @@ tr.is-idle td:first-child a { color: var(--text-muted); }
   color: var(--text-muted);
 }
 .compute-users tr:hover td.compute-cmd { color: var(--text); }
+.compute-users tr:target { background: rgba(44, 92, 246, 0.08); }
+.compute-users a.user-link {
+  color: var(--accent);
+  text-decoration: none;
+  border-bottom: 1px dashed rgba(44, 92, 246, 0.45);
+}
+.compute-users a.user-link:hover { border-bottom-style: solid; }
 
 /* -- v0.1.150 概览显存徽标与主机名链接 -- */
 .gpu-chip {
@@ -3883,6 +3890,12 @@ html[data-theme="dark"] .usage-hint.is-running {
 
 /* -- v0.1.141 占用变化与 TB 显示 -- */
 /* -- v0.1.149 用户页显示 GPU 显存占用 -- */
+a.usage-gpu {
+  text-decoration: none;
+  border-bottom: 1px dashed rgba(44, 92, 246, 0.45);
+}
+a.usage-gpu:hover { border-bottom-style: solid; }
+
 .usage-gpu {
   display: inline-flex;
   align-items: center;

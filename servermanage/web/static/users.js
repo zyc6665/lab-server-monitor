@@ -83,14 +83,15 @@
   }
 
   // 占用变化：只有拿到两次以上采样才显示，避免把"还没量过"说成 0。
-  function gpuChip(memoryMb, procs) {
+  function gpuChip(memoryMb, procs, user) {
     if (!memoryMb) { return null; }
-    var chip = document.createElement('span');
+    var chip = document.createElement('a');
     chip.className = 'usage-gpu';
+    chip.setAttribute('href', '/compute' + (user ? '#gpu-user-' + encodeURIComponent(user) : ''));
     var gb = memoryMb / 1024;
     chip.textContent = '显存 ' + (gb >= 1 ? gb.toFixed(1) + ' GB' : Math.round(memoryMb) + ' MB')
       + (procs ? ' · ' + procs + ' 进程' : '');
-    chip.title = '来自最近一次 nvidia-smi 快照，表示该账号当前占用的显存';
+    chip.title = '来自最近一次 nvidia-smi 快照；点击查看算力概览里的占用明细';
     return chip;
   }
 
@@ -567,7 +568,7 @@
 
     var foot = document.createElement('div');
     foot.className = 'user-acct-foot';
-    var gpu = gpuChip(row.gpu_memory_mb, row.gpu_process_count);
+    var gpu = gpuChip(row.gpu_memory_mb, row.gpu_process_count, row.username);
     if (gpu) { foot.appendChild(gpu); }
     var accountDelta = deltaChip(row.usage_delta_bytes, row.usage_delta_days);
     if (accountDelta) {
@@ -1222,6 +1223,18 @@
     });
   }
 
+  function applyKeywordFromUrl() {
+    var incoming = '';
+    try {
+      incoming = new URLSearchParams(window.location.search).get('q') || '';
+    } catch (err) {
+      incoming = '';
+    }
+    var search = document.getElementById('user-search');
+    if (!search || !incoming) { return; }
+    search.value = incoming;
+  }
+
   function init() {
     renderTopGrowth();
     if (!document.getElementById('user-host-grid')) { return; }
@@ -1231,6 +1244,7 @@
       activeHost = '';
     }
     bindFilters();
+    applyKeywordFromUrl();
     bindAdminDialog();
     var button = document.getElementById('user-refresh');
     if (button) { button.addEventListener('click', function () { refreshUsers(false); }); }

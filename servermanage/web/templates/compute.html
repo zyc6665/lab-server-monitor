@@ -90,8 +90,8 @@
       </thead>
       <tbody>
         {% for user in summary.users %}
-        <tr data-compute-user="{{ user.user }}">
-          <td class="mono">{{ user.user }}</td>
+        <tr data-compute-user="{{ user.user }}" id="gpu-user-{{ user.user }}">
+          <td class="mono"><a class="user-link" href="/users?host={{ user.hosts[0]|urlencode }}&amp;q={{ user.user|urlencode }}">{{ user.user }}</a></td>
           <td class="num mono">{{ '%.1f'|format(user.memory_gb) }} GB</td>
           <td class="num mono">{{ '%.1f'|format(user.share) }}%</td>
           <td class="num mono">{{ user.cards }}</td>

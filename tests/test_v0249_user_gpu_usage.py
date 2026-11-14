@@ -67,10 +67,10 @@ def test_host_counts_roll_up_gpu_memory():
 
 def test_frontend_renders_gpu_chip():
     js = (STATIC / "users.js").read_text(encoding="utf-8")
-    assert "function gpuChip(memoryMb, procs)" in js
+    assert "function gpuChip(memoryMb, procs, user)" in js
     assert "chip.className = 'usage-gpu';" in js
     assert "显存 " in js and " 进程" in js
-    assert js.count("gpuChip(row.gpu_memory_mb, row.gpu_process_count)") == 1
+    assert js.count("gpuChip(row.gpu_memory_mb, row.gpu_process_count, row.username)") == 1
     assert "host.gpu_memory_mb" in js
 
     css = (STATIC / "style.css").read_text(encoding="utf-8")
