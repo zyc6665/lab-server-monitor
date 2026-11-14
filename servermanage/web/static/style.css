@@ -4286,3 +4286,11 @@ html[data-theme="dark"] .settings-tab.is-dirty::after { background: #fbbf24; }
 }
 .host-tab-link:hover { color: var(--accent); }
 
+/* -- v0.1.168 整体趋势可按主机过滤 -- */
+.trend-host {
+  min-width: 150px;
+  max-width: 220px;
+  padding: 4px 8px;
+  font-size: 12.5px;
+}
+

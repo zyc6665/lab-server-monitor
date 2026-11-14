@@ -534,9 +534,39 @@
   // 最近一次拉到的趋势数据，导出 CSV 时直接复用，不再请求接口。
   var overviewHistory = { range: '24h', points: [], previous: [] };
 
+  function currentTrendHost() {
+    var select = document.getElementById('overview-trend-host');
+    return select ? select.value : '';
+  }
+
+  function populateTrendHosts(hosts) {
+    var select = document.getElementById('overview-trend-host');
+    if (!select) { return; }
+    var keep = select.value;
+    while (select.options.length > 1) { select.remove(1); }
+    (hosts || []).forEach(function (host) {
+      var name = host && host.name ? host.name : '';
+      if (!name) { return; }
+      var option = document.createElement('option');
+      option.value = name;
+      option.textContent = name;
+      select.appendChild(option);
+    });
+    if (keep) {
+      var stillThere = false;
+      Array.prototype.forEach.call(select.options, function (option) {
+        if (option.value === keep) { stillThere = true; }
+      });
+      select.value = stillThere ? keep : '';
+    }
+  }
+
   function loadOverviewHistory(rangeKey) {
     if (!document.getElementById('overview-trend')) { return; }
-    fetchJson('/api/overview/history?compare=1&range=' + encodeURIComponent(rangeKey)).then(function (payload) {
+    var host = currentTrendHost();
+    var url = '/api/overview/history?compare=1&range=' + encodeURIComponent(rangeKey)
+      + (host ? '&host=' + encodeURIComponent(host) : '');
+    fetchJson(url).then(function (payload) {
       var points = (payload && payload.points) || [];
       var previous = (payload && payload.previous) || [];
       var empty = document.getElementById('overview-trend-empty');
@@ -683,6 +713,12 @@
       });
     });
     loadOverviewHistory('24h');
+    var trendHostSelect = document.getElementById('overview-trend-host');
+    if (trendHostSelect) {
+      trendHostSelect.addEventListener('change', function () {
+        loadOverviewHistory(overviewHistory.range || '24h');
+      });
+    }
   }
 
   var ALERT_TREND_COLORS = { critical: '#dc2626', warning: '#f59e0b', info: '#3b82f6' };
@@ -1399,6 +1435,7 @@
     hostsLoaded = true;
     renderHosts();
     renderResourceRanking();
+    populateTrendHosts(hosts);
   }
 
   // 概览/主机列表的快捷采集：提交后轮询单台状态，完成时刷新表格。

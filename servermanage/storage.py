@@ -1004,8 +1004,9 @@ def fetch_overview_history(
     tz: tzinfo = timezone.utc,
     now: datetime | None = None,
     offset_days: int = 0,
+    host: str | None = None,
 ) -> list[dict[str, object]]:
-    """Return fleet-wide average chart points for the overview page.
+    """Return fleet-wide (or single-host) average chart points for the overview page.
 
     ``offset_days`` shifts the window backwards, which is how the overview
     chart draws the previous period for comparison.
@@ -1022,6 +1023,8 @@ def fetch_overview_history(
         current = current.replace(tzinfo=timezone.utc)
     if offset_days:
         current = current - timedelta(days=offset_days)
+
+    host_clause = "AND host_name = ?" if host else ""
 
     if range_key == "24h":
         cutoff = (current - timedelta(hours=24)).astimezone(timezone.utc).isoformat()
@@ -1041,10 +1044,15 @@ def fetch_overview_history(
                        AVG(load_1) AS load_1
                   FROM host_metrics_history
                  WHERE success = 1 AND collected_at >= ? AND collected_at <= ?
+                   {host_clause}
                  GROUP BY collected_at
                  ORDER BY collected_at ASC
-                """,
-                (cutoff, ceiling),
+                """.format(host_clause=host_clause),
+                (
+                    (cutoff, ceiling, host)
+                    if host
+                    else (cutoff, ceiling)
+                ),
             ).fetchall()
         return [
             {
@@ -1076,10 +1084,15 @@ def fetch_overview_history(
                    SUM(sample_count) AS sample_count
               FROM host_daily_summary
              WHERE tz = ? AND day >= ? AND day <= ?
+                   {host_clause}
              GROUP BY day
              ORDER BY day ASC
-            """,
-            (_tz_key(tz), start_day, end_day),
+            """.format(host_clause=host_clause),
+            (
+                (_tz_key(tz), start_day, end_day, host)
+                if host
+                else (_tz_key(tz), start_day, end_day)
+            ),
         ).fetchall()
     points = []
     for row in rows:

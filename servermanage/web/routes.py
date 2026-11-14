@@ -2597,6 +2597,7 @@ def register_routes(app: Flask) -> None:
             _db_path(app),
             range_key=range_key,
             tz=tz,
+            host=(request.args.get("host") or "").strip() or None,
         )
         payload: dict[str, Any] = {"range": range_key, "points": points}
         if request.args.get("compare") in ("1", "true", "yes"):
