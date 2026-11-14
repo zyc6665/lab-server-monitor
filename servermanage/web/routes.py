@@ -4028,6 +4028,17 @@ def register_routes(app: Flask) -> None:
         host_rows.sort(
             key=lambda row: (severity_rank.get(row["status"], 9), row["name"].lower())
         )
+        # 每个分组的合计：几台主机、多少块盘健康/告警/严重。
+        group_stats: dict[str, dict[str, int]] = {}
+        for row in host_rows:
+            bucket = group_stats.setdefault(
+                row["group"], {"hosts": 0, "healthy": 0, "warning": 0, "critical": 0}
+            )
+            bucket["hosts"] += 1
+            bucket["healthy"] += row["healthy"]
+            bucket["warning"] += row["warning"]
+            bucket["critical"] += row["critical"]
+
         # 主机多于一个分组时，在每组第一台前面插一条分组头，方便按组查看。
         grouped_names = {row["group"] for row in host_rows}
         show_group_headers = len(grouped_names) > 1
@@ -4060,6 +4071,7 @@ def register_routes(app: Flask) -> None:
             drives=drives,
             totals=totals,
             temperature_stats=temperature_stats,
+            group_stats=group_stats,
         )
 
     @app.get("/alerts")

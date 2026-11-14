@@ -61,6 +61,10 @@
     <button type="button" class="disk-group-collapse" data-disk-group-collapse aria-expanded="true" aria-label="展开或收起分组 {{ host.group_header }}" title="展开 / 收起这个分组"><span class="disk-group-caret">▾</span></button>
     <span class="disk-group-name">{{ host.group_header }}</span>
     <span class="disk-group-count" data-group-count data-group-size="{{ host.group_size }}">{{ host.group_size }} 台主机</span>
+    {% set stats = group_stats.get(host.group_header) if group_stats else none %}
+    {% if stats %}
+    <span class="disk-group-health"><b>{{ stats.healthy }}</b> 健康{% if stats.warning %} · <b class="is-warn">{{ stats.warning }}</b> 告警{% endif %}{% if stats.critical %} · <b class="is-crit">{{ stats.critical }}</b> 严重{% endif %}</span>
+    {% endif %}
   </div>
   {% endif %}
   <article class="disk-host" id="disk-{{ host.anchor }}" data-disk-group-member="{{ host.group }}" data-disk-issues="{{ 1 if host.needs_attention else 0 }}" data-disk-search="{{ host.search_text }}">

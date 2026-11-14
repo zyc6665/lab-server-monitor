@@ -3652,6 +3652,18 @@ html[data-theme="dark"] .settings-summary .summary-flag.is-on {
 .disk-group-collapse:hover { background: var(--surface-sunken); color: var(--text); }
 .disk-group-collapse:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(44, 92, 246, .22); }
 .disk-group-name { font-size: 13px; font-weight: 600; }
+/* -- v0.1.159 磁盘分组显示合计 -- */
+.disk-group-health {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.disk-group-health b { font-weight: 600; color: var(--text); }
+.disk-group-health b.is-warn { color: #b45309; }
+.disk-group-health b.is-crit { color: #b91c1c; }
+html[data-theme="dark"] .disk-group-health b.is-warn { color: #fbbf24; }
+html[data-theme="dark"] .disk-group-health b.is-crit { color: #f87171; }
+
 .disk-group-count { font-size: 12px; color: var(--text-muted); }
 .disk-group-head.is-collapsed .disk-group-name { color: var(--text-muted); }
 html[data-theme="dark"] .disk-group-collapse:hover { background: #16233a; }

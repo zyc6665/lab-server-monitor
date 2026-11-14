@@ -143,7 +143,7 @@
     if (ratio >= 0.9) { return null; }
     var chip = document.createElement('span');
     chip.className = 'uptime-chip ' + (ratio < 0.6 ? 'is-critical' : 'is-warn');
-    chip.textContent = '采集 ' + Math.round(ratio * 100) + '%';
+    chip.textContent = '采集率 ' + Math.round(ratio * 100) + '%';
     chip.title = '最近 24 小时应采 ' + expected + ' 次，实际 ' + samples + ' 次';
     return chip;
   }
