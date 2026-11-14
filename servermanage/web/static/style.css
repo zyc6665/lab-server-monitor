@@ -742,6 +742,14 @@ html[data-theme="dark"] #alert-page-size { background: #141c2b; color: #e6edf7; 
 
 
 /* -- settings page tabs ------------------------------------------------- */
+/* -- v0.1.164 设置页显示上次保存 -- */
+.save-log {
+  margin: 6px 0 0;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.save-log[hidden] { display: none !important; }
+
 .settings-tabs {
   position: sticky;
   top: 0;

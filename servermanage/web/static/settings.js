@@ -221,11 +221,70 @@
     }
   }
 
+  var SAVE_LOG_KEY = "settings:saved-log";
+  var SECTION_TITLES = {
+    monitoring: "监控与存储",
+    hosts: "主机与 SSH",
+    alerts: "告警",
+    user_monitoring: "服务器用户",
+    disk_health: "磁盘健康",
+    smtp: "邮件服务器",
+    report: "报告",
+    dashboard: "看板与安全",
+    logs: "运行日志",
+    health: "系统状态"
+  };
+
+  function readSaveLog() {
+    try {
+      var raw = JSON.parse(window.localStorage.getItem(SAVE_LOG_KEY) || "[]");
+      return Array.isArray(raw) ? raw : [];
+    } catch (err) {
+      return [];
+    }
+  }
+
+  function pad2(value) {
+    return (value < 10 ? "0" : "") + value;
+  }
+
+  function renderSaveLog() {
+    var box = document.getElementById("settings-save-log");
+    if (!box) return;
+    var entries = readSaveLog();
+    if (!entries.length) {
+      box.hidden = true;
+      box.textContent = "";
+      return;
+    }
+    var parts = entries.slice(0, 3).map(function (entry) {
+      var when = new Date(entry.at);
+      var stamp = isNaN(when.getTime())
+        ? ""
+        : pad2(when.getMonth() + 1) + "-" + pad2(when.getDate()) + " " + pad2(when.getHours()) + ":" + pad2(when.getMinutes());
+      return (SECTION_TITLES[entry.section] || entry.section) + " " + stamp;
+    });
+    box.textContent = "上次保存：" + parts.join(" · ");
+    box.hidden = false;
+  }
+
+  function recordSave(sectionName) {
+    try {
+      var entries = readSaveLog().filter(function (entry) { return entry.section !== sectionName; });
+      entries.unshift({ section: sectionName, at: new Date().toISOString() });
+      window.localStorage.setItem(SAVE_LOG_KEY, JSON.stringify(entries.slice(0, 6)));
+    } catch (err) {
+      return;
+    }
+    renderSaveLog();
+  }
+
   function markSaved(sectionName, message) {
     var button = qs('[data-save="' + sectionName + '"]');
     if (!button) return;
     button.classList.remove("is-dirty");
     markTabDirty(sectionName, false);
+    recordSave(sectionName);
     var hint = saveHint(button);
     if (!hint) return;
     hint.textContent = message;
@@ -1178,6 +1237,8 @@
       ? "运行地址 " + runtime.url + (runtime.pid ? "（PID " + runtime.pid + "）" : "")
       : "未检测到运行状态";
   }
+
+  renderSaveLog();
 
   // Fill any values that were not rendered server-side (e.g. list edits).
   fillSection("monitoring", initial.monitoring);

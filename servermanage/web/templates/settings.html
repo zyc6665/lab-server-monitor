@@ -8,6 +8,7 @@
 <div id="settings-root" data-csrf="{{ csrf_token() }}">
   <div class="page-head">
     <h1 class="page-title">设置</h1>
+    <p class="save-log muted small" id="settings-save-log" hidden></p>
     {% if not settings.writable %}
     <span class="readonly-banner">只读：当前平台不支持在线保存敏感配置（请在 Windows 本机运行）。</span>
     {% endif %}
