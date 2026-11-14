@@ -470,6 +470,36 @@
         list[index].scrollIntoView({ block: 'nearest', inline: 'center' });
       }
     }
+    function bindTabLink() {
+      var button = document.getElementById('host-tab-link');
+      if (!button) { return; }
+      var reset = function () { button.textContent = '复制链接'; };
+      button.addEventListener('click', function () {
+        var base = window.location.origin + window.location.pathname;
+        var url = base + '#tab-' + currentKey();
+        var done = function () {
+          button.textContent = '已复制';
+          setTimeout(reset, 1600);
+        };
+        var failed = function () {
+          button.textContent = '复制失败';
+          setTimeout(reset, 1600);
+        };
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(url).then(done, failed);
+          return;
+        }
+        var area = document.createElement('textarea');
+        area.value = url;
+        document.body.appendChild(area);
+        area.select();
+        var ok = false;
+        try { ok = document.execCommand('copy'); } catch (err) { ok = false; }
+        document.body.removeChild(area);
+        if (ok) { done(); } else { failed(); }
+      });
+    }
+
     var TAB_STORE = 'host:tab:' + (HOST_NAME || '');
     function rememberTab(key) {
       try { window.localStorage.setItem(TAB_STORE, key); } catch (err) { /* 隐私模式忽略 */ }
@@ -566,6 +596,7 @@
       }
     }
     window.addEventListener('hashchange', fromHash);
+    bindTabLink();
     var initialHash = (window.location.hash || '').replace('#', '');
     if (!initialHash) {
       var remembered = storedTab();

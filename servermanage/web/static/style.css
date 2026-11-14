@@ -4277,3 +4277,12 @@ html[data-theme="dark"] .settings-tab.is-dirty::after { background: #fbbf24; }
   .panel-enter { animation: none; }
 }
 [data-theme="dark"] .panel-enter { animation-duration: 180ms; }
+
+/* -- v0.1.167 主机详情复制分区链接 -- */
+.host-tab-link {
+  margin-left: auto;
+  color: var(--text-muted);
+  border-style: dashed;
+}
+.host-tab-link:hover { color: var(--accent); }
+
