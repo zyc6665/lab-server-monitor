@@ -555,3 +555,45 @@
 
     bind();
 })();
+
+// -- v0.1.197 单块磁盘详情（纯前端，只读） --
+(function () {
+    var dialog = document.getElementById('disk-drive-dialog');
+    if (!dialog) { return; }
+
+    function show(row) {
+        var table = row.closest('table');
+        var heads = table ? table.querySelectorAll('thead th') : [];
+        var cells = row.children;
+        var body = document.getElementById('disk-drive-body');
+        var title = document.getElementById('disk-drive-title');
+        if (!body || !title) { return; }
+        body.textContent = '';
+        for (var i = 0; i < cells.length; i += 1) {
+            var label = heads[i] ? heads[i].textContent.trim() : '';
+            if (!label) { continue; }
+            var dt = document.createElement('dt');
+            dt.textContent = label;
+            var dd = document.createElement('dd');
+            dd.textContent = cells[i].textContent.trim() || '—';
+            body.appendChild(dt);
+            body.appendChild(dd);
+        }
+        var host = row.closest('.disk-host');
+        var hostLink = host ? host.querySelector('.disk-host-id a') : null;
+        var hostName = hostLink ? hostLink.textContent.trim() : '';
+        title.textContent = '磁盘详情 · ' + (hostName ? hostName + ' · ' : '') + 'Slot ' + (row.getAttribute('data-slot') || '—');
+        if (!dialog.open) { dialog.showModal(); }
+    }
+
+    document.addEventListener('click', function (event) {
+        var row = event.target.closest('tr[data-disk-row]');
+        if (!row) { return; }
+        if (event.target.closest('a, button')) { return; }
+        show(row);
+    });
+
+    dialog.addEventListener('click', function (event) {
+        if (event.target === dialog) { dialog.close(); }
+    });
+})();

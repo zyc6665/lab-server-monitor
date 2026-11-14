@@ -151,6 +151,15 @@
   {% else %}
   <p class="empty">还没有磁盘健康数据。请先在设置中配置磁盘健康采集，等待首次磁盘轮询完成。</p>
   {% endif %}
+  <dialog class="disk-drive-dialog" id="disk-drive-dialog">
+    <form method="dialog" class="disk-drive-head">
+      <strong id="disk-drive-title">磁盘详情</strong>
+      <button class="btn-link" value="close" aria-label="关闭">关闭</button>
+    </form>
+    <dl class="disk-drive-body" id="disk-drive-body"></dl>
+    <p class="muted small">数据来自最近一次 storcli 采集，仅供查看。</p>
+  </dialog>
+
 </section>
 {% endblock %}
 
