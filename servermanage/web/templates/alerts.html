@@ -55,6 +55,7 @@
       <option value="desc"{% if request.args.get('sort') != 'asc' %} selected{% endif %}>最新优先</option>
       <option value="asc"{% if request.args.get('sort') == 'asc' %} selected{% endif %}>最早优先</option>
     </select>
+    <button type="button" class="btn-secondary" id="alert-copy">复制列表</button>
     <button type="button" class="btn-secondary" id="alert-export">导出 CSV</button>
     <button type="button" class="btn-secondary" id="alert-clear-filters">清除筛选</button>
     <button type="button" class="chip-clear" id="alert-bucket-chip" hidden></button>

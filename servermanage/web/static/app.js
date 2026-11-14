@@ -2612,6 +2612,63 @@
     });
   }
 
+  var SEVERITY_TEXT = { critical: '严重', warning: '警告', info: '提示' };
+  var STATUS_TEXT = { active: '活动', acknowledged: '已确认', resolved: '已解决' };
+
+  function alertListText() {
+    var rows = filteredAlerts();
+    if (!rows.length) { return ''; }
+    var lines = [];
+    var parts = [];
+    if (alertKeyword) { parts.push('关键字「' + alertKeyword + '」'); }
+    if (alertSeverity) { parts.push('级别 ' + (SEVERITY_TEXT[alertSeverity] || alertSeverity)); }
+    if (alertHost) { parts.push('主机 ' + alertHost); }
+    if (alertStatus) { parts.push('状态 ' + (STATUS_TEXT[alertStatus] || alertStatus)); }
+    lines.push('告警列表 · 共 ' + rows.length + ' 条' + (parts.length ? '（' + parts.join('，') + '）' : ''));
+    rows.slice(0, 50).forEach(function (alert) {
+      lines.push('- [' + (SEVERITY_TEXT[alert.severity] || alert.severity || '提示') + '] '
+        + formatStamp(alert.created_at) + ' · ' + (alert.host_name || '—')
+        + ' · ' + (alert.title || '')
+        + (alert.message ? '：' + alert.message : ''));
+    });
+    if (rows.length > 50) { lines.push('… 其余 ' + (rows.length - 50) + ' 条未列出'); }
+    return lines.join('\n');
+  }
+
+  function copyAlertList(button) {
+    var text = alertListText();
+    if (!text) { showToast('没有可复制的告警', 'error'); return; }
+    function done() {
+      button.textContent = '已复制';
+      window.setTimeout(function () { button.textContent = '复制列表'; }, 1600);
+    }
+    function failed() {
+      button.textContent = '复制失败';
+      window.setTimeout(function () { button.textContent = '复制列表'; }, 1600);
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done, failed);
+      return;
+    }
+    var area = document.createElement('textarea');
+    area.value = text;
+    area.setAttribute('readonly', 'readonly');
+    area.style.position = 'fixed';
+    area.style.opacity = '0';
+    document.body.appendChild(area);
+    area.select();
+    var ok = false;
+    try { ok = document.execCommand('copy'); } catch (err) { ok = false; }
+    document.body.removeChild(area);
+    if (ok) { done(); } else { failed(); }
+  }
+
+  function bindAlertCopy() {
+    var button = document.getElementById('alert-copy');
+    if (!button) { return; }
+    button.addEventListener('click', function () { copyAlertList(button); });
+  }
+
   function exportAlertsCsv() {
     var rows = filteredAlerts();
     if (!rows.length) { showToast('没有可导出的告警', 'error'); return; }
@@ -3357,6 +3414,7 @@
     bindAlertRanges();
     bindAlertTimeline();
     bindAlertColumns();
+  bindAlertCopy();
     bindResourceRankTabs();
     refreshAll();
     window.setInterval(refreshAll, REFRESH_MS);
