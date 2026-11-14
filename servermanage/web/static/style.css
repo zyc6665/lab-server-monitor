@@ -4029,3 +4029,17 @@ html[data-theme="dark"] .user-acct-scan.is-active {
 html[data-theme="dark"] .user-host-trend.is-pending {
     color: #94a3b8;
 }
+
+/* -- v0.1.145 设置分区未保存标记 -- */
+.settings-tab { position: relative; }
+.settings-tab.is-dirty::after {
+  content: "";
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--warning, #d97706);
+}
+html[data-theme="dark"] .settings-tab.is-dirty::after { background: #fbbf24; }

@@ -20,7 +20,7 @@ SHANGHAI = ZoneInfo("Asia/Shanghai")
 
 def _seed(db_path: Path, days: int, start_cpu: float = 10.0) -> None:
     init_storage(db_path)
-    now = datetime(2026, 11, 11, 12, 0, tzinfo=timezone.utc)
+    now = datetime.now(timezone.utc)
     rows = []
     for offset in range(days):
         day = (now.astimezone(SHANGHAI).date() - timedelta(days=offset)).isoformat()
@@ -125,7 +125,7 @@ def test_api_accepts_ninety_days(tmp_path: Path):
     client = _client(tmp_path)
     payload = client.get("/api/overview/history?range=90d&compare=1").get_json()
     assert payload["range"] == "90d"
-    # 接口按真实“今天”取窗口，种子从 11-11 往前 95 天，窗口内至少 88 天
+    # 接口按真实“今天”取窗口，种子也从今天往前铺，确保窗口内天数稳定
     assert 88 <= len(payload["points"]) <= 90
     assert isinstance(payload["previous"], list)
 

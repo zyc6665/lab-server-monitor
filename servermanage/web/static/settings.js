@@ -185,10 +185,35 @@
     return hint;
   }
 
+  var TAB_OF_SECTION = {
+    monitoring: "monitoring",
+    hosts: "hosts",
+    ssh: "hosts",
+    "view-mode": "hosts",
+    alerts: "alerts",
+    silences: "alerts",
+    smtp: "smtp",
+    report: "report",
+    user_monitoring: "user_monitoring",
+    disk_health: "disk_health",
+    dashboard: "dashboard",
+    logs: "logs",
+    health: "health"
+  };
+
+  function markTabDirty(sectionName, dirty) {
+    var tab = TAB_OF_SECTION[sectionName];
+    if (!tab) return;
+    var button = qs('[data-settings-tab="' + tab + '"]');
+    if (!button) return;
+    button.classList.toggle("is-dirty", !!dirty);
+  }
+
   function markDirty(sectionName) {
     var button = qs('[data-save="' + sectionName + '"]');
     if (!button) return;
     button.classList.add("is-dirty");
+    markTabDirty(sectionName, true);
     var hint = saveHint(button);
     if (hint) {
       hint.textContent = "有未保存修改";
@@ -200,6 +225,7 @@
     var button = qs('[data-save="' + sectionName + '"]');
     if (!button) return;
     button.classList.remove("is-dirty");
+    markTabDirty(sectionName, false);
     var hint = saveHint(button);
     if (!hint) return;
     hint.textContent = message;
