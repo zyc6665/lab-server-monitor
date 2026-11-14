@@ -583,7 +583,13 @@
     var card = document.getElementById('host-diagnostics');
     if (!card) return '';
     var hostName = card.getAttribute('data-host-name') || '';
-    var lines = ['主机健康诊断 · ' + hostName + ' · ' + stamp(new Date().toISOString())];
+    var address = card.getAttribute('data-host-address') || '';
+    var status = card.getAttribute('data-host-status') || '';
+    var attention = parseInt(card.getAttribute('data-attention') || '0', 10) || 0;
+    var verdict = attention > 0 ? attention + ' 项需关注' : '全部正常';
+    var where = address ? hostName + '（' + address + '）' : hostName;
+    if (status && status !== 'online') { verdict += ' · 主机' + status; }
+    var lines = ['主机健康诊断 · ' + where + ' · ' + verdict + ' · ' + stamp(new Date().toISOString())];
     var items = card.querySelectorAll('.diag-item');
     for (var i = 0; i < items.length; i += 1) {
       var item = items[i];
@@ -616,8 +622,13 @@
         button.textContent = '已复制';
         setTimeout(function () { button.textContent = original; }, 1600);
       };
+      var failed = function () {
+        var original = button.textContent;
+        button.textContent = '复制失败';
+        setTimeout(function () { button.textContent = original; }, 1600);
+      };
       if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(text).then(done, done);
+        navigator.clipboard.writeText(text).then(done, failed);
       } else {
         var area = document.createElement('textarea');
         area.value = text;

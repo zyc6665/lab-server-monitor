@@ -122,7 +122,7 @@
   {% endif %}
 </section>
 
-<section class="card" id="host-diagnostics" data-host-panel="overview" data-host-name="{{ detail.name }}">
+<section class="card" id="host-diagnostics" data-host-panel="overview" data-host-name="{{ detail.name }}" data-host-address="{{ detail.host or '' }}" data-host-status="{{ detail.status }}" data-attention="{{ (detail.diagnostics_summary or {}).get('attention', 0) }}">
   <div class="section-head">
     <h2>健康诊断</h2>
     <div class="diag-head-actions">
