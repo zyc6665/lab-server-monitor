@@ -118,6 +118,14 @@
       <button type="button" class="user-chip active" data-user-state="all" aria-pressed="true">全部 <span id="chip-count-all">0</span></button>
       <button type="button" class="user-chip" data-user-state="issue" aria-pressed="false">异常 <span id="chip-count-issue">0</span></button>
       <button type="button" class="user-chip" data-user-state="missing" aria-pressed="false">缺失 <span id="chip-count-missing">0</span></button>
+      <label class="filter-field account-sort">排序
+        <select id="user-account-sort">
+          <option value="name">名称</option>
+          <option value="usage">占用</option>
+          <option value="gpu">显存</option>
+          <option value="growth">变化</option>
+        </select>
+      </label>
     </div>
     <div class="user-acct-list" id="user-acct-list"></div>
     <p class="empty" id="user-detail-empty" hidden>这台主机上没有符合条件的账号。</p>

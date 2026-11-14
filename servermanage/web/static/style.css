@@ -4332,3 +4332,7 @@ a.check-summary:focus-visible { outline: 2px solid var(--accent); outline-offset
 
 /* -- v0.1.174 主机详情跳到告警列表 -- */
 #host-alerts-all { margin-left: auto; font-size: 12.5px; }
+
+/* -- v0.1.175 账号列表排序 -- */
+.account-sort { margin-left: auto; }
+.account-sort select { min-width: 110px; }

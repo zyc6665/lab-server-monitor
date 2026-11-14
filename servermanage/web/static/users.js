@@ -732,6 +732,41 @@
     return matchesKeyword(haystack, keyword);
   }
 
+  var ACCOUNT_SORT_STORE = 'users:account-sort';
+
+  function readAccountSort() {
+    var value = '';
+    try { value = localStorage.getItem(ACCOUNT_SORT_STORE) || ''; } catch (err) { value = ''; }
+    return ['name', 'usage', 'gpu', 'growth'].indexOf(value) === -1 ? 'name' : value;
+  }
+
+  function saveAccountSort(mode) {
+    try { localStorage.setItem(ACCOUNT_SORT_STORE, mode); } catch (err) { /* 忽略 */ }
+  }
+
+  function accountSortValue(row, mode) {
+    if (mode === 'usage') { return (row.home_size_bytes || 0) + (row.data_size_bytes || 0); }
+    if (mode === 'gpu') { return row.gpu_memory_mb || 0; }
+    if (mode === 'growth') { return row.usage_delta_bytes || 0; }
+    return 0;
+  }
+
+  function sortAccounts(rows, mode) {
+    var list = rows.slice();
+    if (mode === 'name') {
+      list.sort(function (a, b) {
+        return String(a.username || '').localeCompare(String(b.username || ''), 'zh-CN');
+      });
+      return list;
+    }
+    list.sort(function (a, b) {
+      var diff = accountSortValue(b, mode) - accountSortValue(a, mode);
+      if (diff) { return diff; }
+      return String(a.username || '').localeCompare(String(b.username || ''), 'zh-CN');
+    });
+    return list;
+  }
+
   function renderDetail(data) {
     if (data.usage_scan) { lastScan = data.usage_scan; }
     if (data.usage_hint) { lastScanHint = data.usage_hint; }
@@ -741,6 +776,8 @@
       if (row.host_name !== activeHost) { return false; }
       return accountMatches(row, filters.keyword, filters.status, entryFilter);
     });
+
+    rows = sortAccounts(rows, readAccountSort());
 
     var title = document.getElementById('user-detail-title');
     if (title) { title.textContent = activeHost; }
@@ -992,6 +1029,15 @@
   }
 
   function bindFilters() {
+    var accountSort = document.getElementById('user-account-sort');
+    if (accountSort) {
+      accountSort.value = readAccountSort();
+      accountSort.addEventListener('change', function () {
+        saveAccountSort(accountSort.value);
+        fetchUsers();
+      });
+    }
+
     var sort = document.getElementById('user-sort');
     if (sort) {
       sort.value = readSort();
