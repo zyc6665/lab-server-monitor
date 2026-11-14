@@ -991,6 +991,14 @@ html[data-theme="dark"] .theme-icon-sun { display: inline; }
 [data-host-panel][hidden] { display: none !important; }
 
 .data-table thead th { position: sticky; top: 0; z-index: 1; }
+/* -- v0.1.158 主机表磁盘列更清楚 -- */
+#host-table .health-counts { display: none; }
+@media (min-width: 1320px) {
+  #host-table .health-counts { display: inline; margin-left: 6px; }
+}
+#host-table th[data-sort-key="disk"],
+#host-table th[data-sort-key="health"] { white-space: nowrap; }
+
 
 /* -- v0.1.157 主机表首列吸附 -- */
 #host-table th:first-child,

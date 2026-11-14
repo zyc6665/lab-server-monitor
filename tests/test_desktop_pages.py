@@ -323,7 +323,7 @@ def test_overview_keeps_filter_bar_and_host_columns(client):
     assert 'id="filter-group"' in html
     assert 'id="filter-status"' in html
     assert 'id="filter-keyword"' in html
-    for column in ("名称", "地址", "分组", "负责人", "状态", "CPU", "内存", "磁盘"):
+    for column in ("名称", "地址", "分组", "负责人", "状态", "CPU", "内存", "磁盘使用率"):
         assert f">{column}</th>" in html
 
 

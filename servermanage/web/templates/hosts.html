@@ -66,8 +66,8 @@
       <thead>
         <tr>
           <th data-sort-key="name">名称</th><th data-sort-key="host">地址</th><th data-sort-key="group">分组</th><th data-sort-key="owner">负责人</th><th data-sort-key="status">状态</th>
-          <th data-sort-key="cpu">CPU</th><th data-sort-key="memory">内存</th><th data-sort-key="disk">磁盘</th><th data-sort-key="gpu">GPU 显存</th><th data-sort-key="users">登录用户</th>
-          <th data-sort-key="checks">检查</th><th data-sort-key="health">磁盘健康</th><th data-sort-key="collected">采集时间</th><th>操作</th>
+          <th data-sort-key="cpu">CPU</th><th data-sort-key="memory">内存</th><th data-sort-key="disk" title="根分区等挂载点里最高的使用率">磁盘使用率</th><th data-sort-key="gpu">GPU 显存</th><th data-sort-key="users">登录用户</th>
+          <th data-sort-key="checks">检查</th><th data-sort-key="health" title="storcli 读到的物理盘与阵列健康">阵列健康</th><th data-sort-key="collected">采集时间</th><th>操作</th>
         </tr>
       </thead>
       <tbody id="host-table-body">
