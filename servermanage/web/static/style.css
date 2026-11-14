@@ -4043,3 +4043,28 @@ html[data-theme="dark"] .user-host-trend.is-pending {
   background: var(--warning, #d97706);
 }
 html[data-theme="dark"] .settings-tab.is-dirty::after { background: #fbbf24; }
+
+/* -- v0.1.146 告警页筛选与操作分区 -- */
+.alert-viewbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 12px 0 2px;
+}
+.alert-viewbar .alert-summary {
+  margin: 0;
+}
+.alert-viewbar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+@media (max-width: 900px) {
+  .alert-viewbar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}

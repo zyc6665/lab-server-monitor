@@ -66,13 +66,13 @@ def test_autostart_task_runs_exe_with_start_hidden() -> None:
 
 def test_pyproject_version_is_1_5_1() -> None:
     data = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
-    assert data["project"]["version"] == "0.1.145"
+    assert data["project"]["version"] == "0.1.146"
 
 
 def test_user_guide_covers_v14_desktop_workflow() -> None:
     text = read_text("使用说明.txt")
 
-    assert "0.1.145" in text
+    assert "0.1.146" in text
     assert "/setup" in text, "首次启动说明必须提到 /setup 初始化管理员"
     assert "托盘" in text, "必须说明关闭窗口隐藏到托盘的行为"
     assert "SSH 终端" in text

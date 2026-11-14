@@ -2961,6 +2961,11 @@
     }
     if (alertSeverityFilter && alertSeverityFilter.value) {
       alertSeverity = alertSeverityFilter.value;
+    } else if (!alertSeverity && window.URLSearchParams) {
+      var severityParam = new URLSearchParams(window.location.search).get('severity');
+      if (severityParam === 'critical' || severityParam === 'warning' || severityParam === 'info') {
+        alertSeverity = severityParam;
+      }
     }
     if (alertHostFilter && alertHostFilter.value) {
       alertHost = alertHostFilter.value;

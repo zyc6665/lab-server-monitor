@@ -542,7 +542,7 @@ def test_alerts_page_has_status_filters_and_ack(client):
 def test_alerts_page_supports_query_and_severity_deep_links(client):
     html = _page(client, "/alerts?q=cpu&severity=critical&host=gpu-01&range=7d&sort=asc")
     assert 'value="cpu"' in html
-    assert 'value="critical" selected' in html
+    assert 'class="alert-stat stat-critical active"' in html  # 级别改由统计芯片呈现
     assert 'value="gpu-01" selected' in html
     assert 'value="7d" selected' in html
     assert 'value="asc" selected' in html
