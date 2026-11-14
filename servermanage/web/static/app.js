@@ -2853,6 +2853,54 @@
     updateAlertSelectionSummary();
   }
 
+  function applyBulkAckInPlace(ids) {
+    var acked = 0;
+    ids.forEach(function (alertId) {
+      for (var i = 0; i < lastAlerts.length; i += 1) {
+        if (String(lastAlerts[i].id) === String(alertId)) {
+          lastAlerts[i].status = 'acknowledged';
+          acked += 1;
+        }
+      }
+      var row = document.querySelector('tr[data-alert-row="' + alertId + '"]');
+      if (!row) { return; }
+      row.setAttribute('data-status', 'acknowledged');
+      var stateCell = row.querySelector('td.alert-state');
+      if (stateCell) {
+        stateCell.textContent = STATUS_TEXT.acknowledged;
+        stateCell.setAttribute('data-state', 'acknowledged');
+      }
+      var checkbox = row.querySelector('input.alert-select');
+      if (checkbox) { checkbox.remove(); }
+      var cell = row.querySelector('td.alert-actions');
+      if (cell) {
+        while (cell.firstChild) { cell.removeChild(cell.firstChild); }
+        var dash = document.createElement('span');
+        dash.className = 'muted';
+        dash.textContent = '—';
+        cell.appendChild(dash);
+      }
+      if (alertStatus === 'active') { dropAlertRow(row); }
+    });
+    selectedAlertIds = {};
+    if (alertStatus) {
+      // 视图在按状态过滤时，确认过的条目不再属于当前数据集
+      lastAlerts = lastAlerts.filter(function (alert) {
+        return ids.map(String).indexOf(String(alert.id)) < 0;
+      });
+    }
+    setCount('alert-status-count-active', -acked);
+    setCount('alert-status-count-acknowledged', acked);
+    var matched = filteredAlerts().length;
+    var suffix = matched !== lastAlerts.length ? '（匹配 ' + matched + ' 条）' : '';
+    setText('alert-count', '共 ' + lastAlerts.length + ' 条' + suffix);
+    updateAlertSelectionSummary();
+    var button = document.getElementById('alert-bulk-ack');
+    if (button) { button.disabled = true; }
+    renderAlertSummary();
+    renderAlertTimeline(filteredAlerts(true));
+  }
+
   function bulkAckSelected() {
     var ids = Object.keys(selectedAlertIds);
     if (!ids.length) { return; }
@@ -2861,9 +2909,8 @@
     Promise.all(ids.map(function (alertId) {
       return fetchJson('/api/alerts/' + encodeURIComponent(alertId) + '/ack', { method: 'POST' });
     })).then(function () {
-      selectedAlertIds = {};
       showToast('已确认 ' + ids.length + ' 条告警', 'success');
-      return refreshAlerts();
+      applyBulkAckInPlace(ids);
     }).catch(function () {
       showToast('批量确认失败，请重试', 'error');
       if (button) { button.disabled = false; }
