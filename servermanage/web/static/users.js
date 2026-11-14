@@ -472,13 +472,51 @@
     hint.classList.toggle('is-running', running);
   }
 
+  var SORT_STORE = 'users:sort';
+
+  function readSort() {
+    try {
+      var value = window.localStorage.getItem(SORT_STORE) || 'name';
+      return ['name', 'usage', 'growth', 'gpu'].indexOf(value) === -1 ? 'name' : value;
+    } catch (error) {
+      return 'name';
+    }
+  }
+
+  function saveSort(value) {
+    try { window.localStorage.setItem(SORT_STORE, value); } catch (error) { /* 忽略 */ }
+  }
+
+  function sortHosts(list, mode) {
+    var rows = list.slice();
+    if (mode === 'name') {
+      rows.sort(function (a, b) { return String(a.name).localeCompare(String(b.name), 'zh-CN'); });
+      return rows;
+    }
+    var key = mode === 'gpu' ? 'gpu_memory_mb' : (mode === 'growth' ? 'delta_bytes' : 'bytes');
+    rows.sort(function (a, b) {
+      var diff = (Number(b[key]) || 0) - (Number(a[key]) || 0);
+      if (diff !== 0) { return diff; }
+      return String(a.name).localeCompare(String(b.name), 'zh-CN');
+    });
+    return rows;
+  }
+
+  function currentSortMode() {
+    var select = document.getElementById('user-sort');
+    return select ? select.value : readSort();
+  }
+
   function renderHosts(data) {
     var filters = currentFilters();
     var grid = document.getElementById('user-host-grid');
     var empty = document.getElementById('user-hosts-empty');
-    var hosts = (data.hosts || []).filter(function (host) {
-      return hostMatches(host, filters.keyword, filters.status);
-    });
+    var hosts = sortHosts(
+      (data.hosts || []).filter(function (host) {
+        return hostMatches(host, filters.keyword, filters.status);
+      }),
+      currentSortMode()
+    );
     if (grid) {
       while (grid.firstChild) { grid.removeChild(grid.firstChild); }
       var totals = data.usage_totals || {};
@@ -926,6 +964,14 @@
   }
 
   function bindFilters() {
+    var sort = document.getElementById('user-sort');
+    if (sort) {
+      sort.value = readSort();
+      sort.addEventListener('change', function () {
+        saveSort(sort.value);
+        fetchUsers();
+      });
+    }
     var status = document.getElementById('user-status-filter');
     if (status) { status.addEventListener('change', function () { fetchUsers(); }); }
     var search = document.getElementById('user-search');

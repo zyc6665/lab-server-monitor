@@ -76,6 +76,14 @@
           <option value="error">仅错误</option>
         </select>
       </label>
+      <label class="filter-field">排序
+        <select id="user-sort">
+          <option value="name">按名称</option>
+          <option value="usage">占用从大到小</option>
+          <option value="growth">增长从大到小</option>
+          <option value="gpu">显存从大到小</option>
+        </select>
+      </label>
       <button type="button" class="primary-button" id="user-refresh">立即刷新</button>
       <button type="button" class="secondary-button" id="user-refresh-usage"
         title="重新统计 /home、/data 占用，大目录可能需要几分钟">统计占用</button>

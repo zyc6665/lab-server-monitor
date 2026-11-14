@@ -1304,6 +1304,9 @@ html[data-theme="dark"] .capacity-risk-warning .capacity-trend { color: #fbbf24;
 
 /* Toolbar: host / keyword / status filters plus the manual refresh action. */
 .user-toolbar-card { margin-bottom: 16px; }
+/* -- v0.1.161 用户页主机排序 -- */
+#user-sort { min-width: 140px; }
+
 .user-toolbar {
   display: flex;
   flex-wrap: wrap;
