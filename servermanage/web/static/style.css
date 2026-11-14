@@ -3903,6 +3903,15 @@ a.host-link:hover { color: var(--accent); border-bottom-color: var(--accent); }
 [data-theme="dark"] .gpu-chip.is-hot { background: rgba(251, 191, 36, 0.16); color: #fbbf24; }
 [data-theme="dark"] .gpu-chip.is-critical { background: rgba(248, 113, 113, 0.16); color: #f87171; }
 
+/* -- v0.1.155 系统自检的重新检查与复制 -- */
+.check-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.check-actions .btn-link { font-size: 12.5px; }
+
 .compute-notes { margin: 4px 0 0; padding-left: 18px; line-height: 1.7; }
 html[data-theme="dark"] .tier-badge.tier-training { color: #93b4ff; border-color: rgba(147, 180, 255, .3); background: rgba(122, 162, 255, .12); }
 html[data-theme="dark"] .tier-badge.tier-universal { color: #5eead4; border-color: rgba(94, 234, 212, .3); background: rgba(94, 234, 212, .1); }

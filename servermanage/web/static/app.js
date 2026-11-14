@@ -2661,7 +2661,70 @@
     });
   }
 
+  var lastSystemChecks = null;
+
+  function systemChecksText() {
+    if (!lastSystemChecks || !lastSystemChecks.diagnostics) { return ''; }
+    var diagnostics = lastSystemChecks.diagnostics;
+    var overall = diagnostics.status === 'error' ? '存在异常'
+      : (diagnostics.status === 'warning' ? '有提醒' : '全部正常');
+    var lines = ['系统自检 · ' + overall + ' · ' + formatStamp(new Date().toISOString())];
+    (diagnostics.checks || []).forEach(function (check) {
+      var state = check.status === 'error' ? '异常'
+        : (check.status === 'warning' ? '提醒' : '正常');
+      lines.push('- [' + state + '] ' + (check.label || check.key || '') + '：' + (check.message || ''));
+    });
+    return lines.join('\n');
+  }
+
+  function copyText(text) {
+    if (!text) { return Promise.reject(new Error('empty')); }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      return navigator.clipboard.writeText(text);
+    }
+    return new Promise(function (resolve, reject) {
+      var area = document.createElement('textarea');
+      area.value = text;
+      area.setAttribute('readonly', 'readonly');
+      area.style.position = 'fixed';
+      area.style.opacity = '0';
+      document.body.appendChild(area);
+      area.select();
+      var ok = false;
+      try { ok = document.execCommand('copy'); } catch (err) { ok = false; }
+      document.body.removeChild(area);
+      if (ok) { resolve(); } else { reject(new Error('copy_failed')); }
+    });
+  }
+
+  function bindSystemCheckActions() {
+    var refresh = document.getElementById('system-check-refresh');
+    var copy = document.getElementById('system-check-copy');
+    if (refresh) {
+      refresh.addEventListener('click', function () {
+        refresh.disabled = true;
+        refresh.textContent = '检查中…';
+        refreshSystemChecks().then(function () {
+          refresh.disabled = false;
+          refresh.textContent = '重新检查';
+        });
+      });
+    }
+    if (copy) {
+      copy.addEventListener('click', function () {
+        copyText(systemChecksText()).then(function () {
+          copy.textContent = '已复制';
+          setTimeout(function () { copy.textContent = '复制结果'; }, 1600);
+        }).catch(function () {
+          copy.textContent = '复制失败';
+          setTimeout(function () { copy.textContent = '复制结果'; }, 1600);
+        });
+      });
+    }
+  }
+
   function renderSystemChecks(payload) {
+    lastSystemChecks = payload || null;
     var list = document.getElementById('system-check-list');
     var summary = document.getElementById('system-check-summary');
     if (!list || !summary) { return; }
@@ -3130,6 +3193,7 @@
     if (alertExport) { alertExport.addEventListener('click', exportAlertsCsv); }
 
     bindOverviewRanges();
+    bindSystemCheckActions();
     bindOverviewExport();
     bindHostColumns();
     bindFocusHosts();

@@ -72,7 +72,11 @@
 <section class="card system-check-card" id="system-check">
   <div class="section-head">
     <h2>系统自检</h2>
-    <span class="check-summary" id="system-check-summary">正在检查…</span>
+    <div class="check-actions">
+      <span class="check-summary" id="system-check-summary">正在检查…</span>
+      <button type="button" class="btn-link" id="system-check-refresh">重新检查</button>
+      <button type="button" class="btn-link" id="system-check-copy">复制结果</button>
+    </div>
   </div>
   <div class="system-check-list" id="system-check-list">
     <p class="empty">{% if hosts %}正在读取系统状态…{% else %}添加主机后显示自检结果{% endif %}</p>
