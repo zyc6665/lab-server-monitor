@@ -453,15 +453,59 @@
         if (active) { index = position; }
       });
       Array.prototype.forEach.call(panels, function (panel) {
-        panel.hidden = panel.getAttribute('data-host-panel') !== key;
+        var show = panel.getAttribute('data-host-panel') === key;
+        panel.hidden = !show;
+        // 换分区时轻轻淡入，避免内容“跳”出来；隐藏的面板不保留动画类。
+        panel.classList.remove('panel-enter');
+        if (show) {
+          void panel.offsetWidth;
+          panel.classList.add('panel-enter');
+        }
       });
       if (focus && list[index]) { list[index].focus(); }
+      rememberTab(key);
       // 窄屏时标签条是横向滚动的，把当前分区滚到可见范围中间。
       var bar = list[index] ? list[index].parentNode : null;
       if (bar && list[index] && bar.scrollWidth > bar.clientWidth + 4) {
         list[index].scrollIntoView({ block: 'nearest', inline: 'center' });
       }
     }
+    var TAB_STORE = 'host:tab:' + (HOST_NAME || '');
+    function rememberTab(key) {
+      try { window.localStorage.setItem(TAB_STORE, key); } catch (err) { /* 隐私模式忽略 */ }
+    }
+    function storedTab() {
+      try { return window.localStorage.getItem(TAB_STORE) || ''; } catch (err) { return ''; }
+    }
+    function scrollParent(el) {
+      var node = el.parentElement;
+      while (node && node !== document.body) {
+        var style = window.getComputedStyle(node);
+        if (/(auto|scroll)/.test(style.overflowY) && node.scrollHeight > node.clientHeight) {
+          return node;
+        }
+        node = node.parentElement;
+      }
+      return document.scrollingElement || document.documentElement;
+    }
+
+    function scrollToTabs() {
+      // 从页面中部切分区时，新分区的内容在视口上方，看不到开头。
+      // 把分区顶端对齐到吸顶标签条下方，切换到哪儿就从哪儿读起。
+      var bar = document.getElementById('host-tabbar');
+      if (!bar) { return; }
+      var panel = null;
+      for (var i = 0; i < panels.length; i += 1) {
+        if (!panels[i].hidden) { panel = panels[i]; break; }
+      }
+      if (!panel) { return; }
+      var barBottom = bar.getBoundingClientRect().bottom;
+      var panelTop = panel.getBoundingClientRect().top;
+      if (panelTop >= barBottom + 4) { return; }
+      var scroller = scrollParent(panel);
+      scroller.scrollBy({ top: panelTop - barBottom - 8, behavior: 'smooth' });
+    }
+
     function currentKey() {
       for (var i = 0; i < list.length; i += 1) {
         if (list[i].classList.contains('active')) { return list[i].getAttribute('data-host-tab'); }
@@ -485,6 +529,7 @@
       tab.addEventListener('click', function () {
         var key = tab.getAttribute('data-host-tab') || 'overview';
         activate(key, false);
+        scrollToTabs();
         if (window.history && window.history.replaceState) {
           window.history.replaceState(null, '', '#tab-' + key);
         }
@@ -521,6 +566,16 @@
       }
     }
     window.addEventListener('hashchange', fromHash);
+    var initialHash = (window.location.hash || '').replace('#', '');
+    if (!initialHash) {
+      var remembered = storedTab();
+      for (var t = 0; t < list.length; t += 1) {
+        if (list[t].getAttribute('data-host-tab') === remembered) {
+          activate(remembered, false);
+          return;
+        }
+      }
+    }
     fromHash();
   }
 

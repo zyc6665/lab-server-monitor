@@ -4068,3 +4068,16 @@ html[data-theme="dark"] .settings-tab.is-dirty::after { background: #fbbf24; }
     flex-direction: column;
   }
 }
+
+/* -- v0.1.147 主机详情分区切换手感 -- */
+.panel-enter {
+  animation: host-panel-in 160ms ease-out;
+}
+@keyframes host-panel-in {
+  from { opacity: 0; transform: translateY(3px); }
+  to { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .panel-enter { animation: none; }
+}
+[data-theme="dark"] .panel-enter { animation-duration: 180ms; }
