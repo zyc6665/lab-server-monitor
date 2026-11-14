@@ -1213,6 +1213,48 @@
   if (hostSortSelect) { hostSortSelect.addEventListener("change", applyHostTable); }
   applyHostTable();
 
+  // -- host status column ------------------------------------------------
+  function shortStamp(value) {
+    if (!value) { return ""; }
+    var date = new Date(value);
+    if (isNaN(date.getTime())) { return ""; }
+    function pad(n) { return (n < 10 ? "0" : "") + n; }
+    return pad(date.getMonth() + 1) + "-" + pad(date.getDate()) + " " + pad(date.getHours()) + ":" + pad(date.getMinutes());
+  }
+
+  function loadHostStatuses() {
+    var cells = document.querySelectorAll("[data-host-status]");
+    if (!cells.length) { return; }
+    api("GET", "/api/overview").then(function (data) {
+      var byName = {};
+      ((data && data.hosts) || []).forEach(function (row) { byName[row.name] = row; });
+      Array.prototype.forEach.call(cells, function (cell) {
+        var row = byName[cell.getAttribute("data-host-status")];
+        cell.textContent = "";
+        var chip = document.createElement("span");
+        if (!row) {
+          chip.className = "status-chip status-unknown";
+          chip.textContent = "未采集";
+          cell.appendChild(chip);
+          return;
+        }
+        var status = row.status === "online" ? "online" : "offline";
+        chip.className = "status-chip status-" + status;
+        chip.textContent = status === "online" ? "在线" : "离线";
+        cell.appendChild(chip);
+        if (row.last_collected_at) {
+          var when = document.createElement("span");
+          when.className = "host-status-time";
+          when.textContent = shortStamp(row.last_collected_at);
+          when.title = "最近采集 " + row.last_collected_at;
+          cell.appendChild(when);
+        }
+      });
+    }).catch(function () { /* 概览接口失败时保留占位，不影响编辑 */ });
+  }
+
+  loadHostStatuses();
+
   // -- logs ---------------------------------------------------------------
   var logsOutput = qs("#logs-output");
   function refreshLogs() {

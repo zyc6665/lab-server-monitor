@@ -258,7 +258,7 @@ def test_host_form_contains_sudo_and_check_editor(client):
         assert f'data-host-field="{name}"' in html
 
     # The new 检查 column must widen the empty-state colspan.
-    assert 'colspan="10"' in html
+    assert 'colspan="11"' in html
     assert "<th>检查</th>" in html
 
 

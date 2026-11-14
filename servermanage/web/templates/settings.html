@@ -140,7 +140,7 @@
     <div class="table-wrap">
       <table class="data-table" id="host-settings-table">
         <thead>
-          <tr><th>名称</th><th>地址</th><th>端口</th><th>用户</th><th>认证</th><th>分组</th><th>负责人</th><th>容量目录</th><th>检查</th><th>操作</th></tr>
+          <tr><th>名称</th><th>状态</th><th>地址</th><th>端口</th><th>用户</th><th>认证</th><th>分组</th><th>负责人</th><th>容量目录</th><th>检查</th><th>操作</th></tr>
         </thead>
         <tbody>
           {% for host in settings.hosts %}
@@ -148,6 +148,7 @@
               data-host-group="{{ host.group or '' }}"
               data-host-search="{{ (host.name ~ ' ' ~ host.host ~ ' ' ~ host.username ~ ' ' ~ (host.group or '') ~ ' ' ~ host.owner)|lower }}">
             <td class="mono">{{ host.name }}</td>
+            <td class="host-status-cell" data-host-status="{{ host.name }}">—</td>
             <td class="mono">{{ host.host }}</td>
             <td>{{ host.port }}</td>
             <td>{{ host.username }}</td>
@@ -164,7 +165,7 @@
           </tr>
           {% endfor %}
           {% if not settings.hosts %}
-          <tr><td colspan="10" class="empty-cell">还没有主机，请点击“新增主机”或“批量导入”。</td></tr>
+          <tr><td colspan="11" class="empty-cell">还没有主机，请点击“新增主机”或“批量导入”。</td></tr>
           {% endif %}
         </tbody>
       </table>
