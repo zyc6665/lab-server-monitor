@@ -3862,6 +3862,29 @@ html[data-theme="dark"] .usage-hint.is-running {
 }
 
 /* -- v0.1.141 占用变化与 TB 显示 -- */
+/* -- v0.1.149 用户页显示 GPU 显存占用 -- */
+.usage-gpu {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  color: #1d4ed8;
+  background: rgba(37, 99, 235, 0.1);
+  border: 1px solid rgba(37, 99, 235, 0.18);
+}
+.user-host-gpu {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+[data-theme="dark"] .usage-gpu {
+  color: #93b4ff;
+  background: rgba(122, 162, 255, 0.14);
+  border-color: rgba(122, 162, 255, 0.24);
+}
+
 .usage-delta {
   font-variant-numeric: tabular-nums;
   font-size: 12px;

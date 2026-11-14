@@ -1462,6 +1462,27 @@ def _build_my_summary(config, db_path, *, tz=None) -> dict[str, Any]:
 
 
 
+def _gpu_usage_by_user(host_name: str, db_path) -> dict[str, dict[str, Any]]:
+    """Sum GPU memory per Linux account for one host, from the latest snapshot.
+
+    Uses the ``nvidia-smi`` process list that the poller already collects, so this
+    adds no extra work on the server. Returns ``{username: {"mb", "procs"}}``.
+    """
+    snapshot = storage.get_host_snapshot(host_name, db_path)
+    metrics = (snapshot or {}).get("metrics") or {}
+    usage: dict[str, dict[str, Any]] = {}
+    for proc in metrics.get("gpu_processes") or []:
+        if not isinstance(proc, dict):
+            continue
+        who = str(proc.get("username") or "").strip()
+        if not who:
+            continue
+        bucket = usage.setdefault(who, {"mb": 0.0, "procs": 0})
+        bucket["mb"] += float(proc.get("memory_used_mb") or 0)
+        bucket["procs"] += 1
+    return usage
+
+
 def _build_user_rows(
     host_name: str,
     db_path,
@@ -1476,11 +1497,15 @@ def _build_user_rows(
         server,
     )
     deltas = storage.get_user_usage_deltas(host_name, db_path, days=_USAGE_DELTA_DAYS)
+    gpu_usage = _gpu_usage_by_user(host_name, db_path)
     for row in rows:
         info = deltas.get(str(row.get("username") or ""))
         row["usage_delta_bytes"] = info.get("delta") if info else None
         row["usage_delta_days"] = _USAGE_DELTA_DAYS if info else None
         row["usage_delta_since"] = info.get("since") if info else None
+        gpu = gpu_usage.get(str(row.get("username") or ""))
+        row["gpu_memory_mb"] = round(gpu["mb"], 1) if gpu else None
+        row["gpu_process_count"] = gpu["procs"] if gpu else 0
     if tz is not None:
         for row in rows:
             for key in ("collected_at", "usage_collected_at", "last_seen_at"):
@@ -1504,6 +1529,10 @@ def _host_user_counts(rows: list[dict[str, Any]]) -> dict[str, Any]:
         "directory_issues": sum(
             1 for row in rows if _USER_DIRECTORY_ISSUES.intersection(row.get("issues", []))
         ),
+        "gpu_memory_mb": round(
+            sum(row.get("gpu_memory_mb") or 0 for row in rows), 1
+        ),
+        "gpu_processes": sum(row.get("gpu_process_count") or 0 for row in rows),
         "home_bytes": sum(
             row.get("home_size_bytes") or 0
             for row in rows

@@ -83,6 +83,17 @@
   }
 
   // 占用变化：只有拿到两次以上采样才显示，避免把"还没量过"说成 0。
+  function gpuChip(memoryMb, procs) {
+    if (!memoryMb) { return null; }
+    var chip = document.createElement('span');
+    chip.className = 'usage-gpu';
+    var gb = memoryMb / 1024;
+    chip.textContent = '显存 ' + (gb >= 1 ? gb.toFixed(1) + ' GB' : Math.round(memoryMb) + ' MB')
+      + (procs ? ' · ' + procs + ' 进程' : '');
+    chip.title = '来自最近一次 nvidia-smi 快照，表示该账号当前占用的显存';
+    return chip;
+  }
+
   function deltaChip(bytes, days) {
     if (bytes === null || bytes === undefined) { return null; }
     var num = Number(bytes);
@@ -400,6 +411,13 @@
     foot.appendChild(usage);
     var hostDelta = deltaChip(host.delta_bytes, host.delta_days);
     if (hostDelta) { foot.appendChild(hostDelta); }
+    if (host.gpu_memory_mb) {
+      var hostGpu = document.createElement('span');
+      hostGpu.className = 'user-host-gpu';
+      hostGpu.textContent = '显存 ' + (host.gpu_memory_mb / 1024).toFixed(1) + ' GB';
+      hostGpu.title = '该主机上所有账号当前占用的显存合计';
+      foot.appendChild(hostGpu);
+    }
     var seen = document.createElement('span');
     seen.className = 'muted';
     seen.textContent = host.last_scan_at ? '采集 ' + formatTimestamp(host.last_scan_at) : '尚未采集';
@@ -549,6 +567,8 @@
 
     var foot = document.createElement('div');
     foot.className = 'user-acct-foot';
+    var gpu = gpuChip(row.gpu_memory_mb, row.gpu_process_count);
+    if (gpu) { foot.appendChild(gpu); }
     var accountDelta = deltaChip(row.usage_delta_bytes, row.usage_delta_days);
     if (accountDelta) {
       if (row.usage_delta_since) {
