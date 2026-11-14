@@ -388,6 +388,14 @@
     </div>
     <div class="form-actions">
       <button type="button" class="secondary-button" id="logs-refresh-button">刷新日志</button>
+      <input type="search" class="logs-filter" id="logs-filter" placeholder="过滤关键字，如 timeout、a100" aria-label="过滤日志">
+      <select class="logs-level" id="logs-level" aria-label="按级别过滤">
+        <option value="">全部级别</option>
+        <option value="ERROR">错误</option>
+        <option value="WARNING">警告</option>
+        <option value="INFO">信息</option>
+      </select>
+      <span class="muted small" id="logs-count"></span>
       <span class="form-status" id="logs-status"></span>
     </div>
     <pre class="logs-output" id="logs-output"></pre>

@@ -1257,19 +1257,44 @@
 
   // -- logs ---------------------------------------------------------------
   var logsOutput = qs("#logs-output");
+  var lastLogText = "";
+
+  function renderLogs() {
+    if (!logsOutput) { return; }
+    var filter = qs("#logs-filter");
+    var levelSelect = qs("#logs-level");
+    var count = qs("#logs-count");
+    var keyword = ((filter && filter.value) || "").trim().toLowerCase();
+    var level = (levelSelect && levelSelect.value) || "";
+    var lines = lastLogText ? lastLogText.split("\n") : [];
+    var matched = lines.filter(function (line) {
+      if (level && line.indexOf(level) < 0) { return false; }
+      if (keyword && line.toLowerCase().indexOf(keyword) < 0) { return false; }
+      return true;
+    });
+    logsOutput.textContent = matched.length ? matched.join("\n") : "（没有匹配的日志行）";
+    if (count) {
+      count.textContent = lines.length ? "显示 " + matched.length + " / " + lines.length + " 行" : "";
+    }
+  }
+
   function refreshLogs() {
     var logsStatus = qs("#logs-status");
     status(logsStatus, "正在加载…");
     api("GET", "/api/logs?lines=300")
       .then(function (payload) {
-        var text = (payload && (payload.text || payload.lines)) || "";
-        logsOutput.textContent = text || "（暂无日志）";
+        lastLogText = (payload && (payload.text || payload.lines)) || "";
+        renderLogs();
         status(logsStatus, "已加载 " + ((payload && payload.line_count) || 0) + " 行", false);
       })
       .catch(function (error) { status(logsStatus, error.message, true); });
   }
   if (logsOutput) {
     qs("#logs-refresh-button").addEventListener("click", refreshLogs);
+    var logsFilter = qs("#logs-filter");
+    var logsLevel = qs("#logs-level");
+    if (logsFilter) { logsFilter.addEventListener("input", renderLogs); }
+    if (logsLevel) { logsLevel.addEventListener("change", renderLogs); }
     refreshLogs();
   }
   var runtimeInfo = qs("#runtime-info");

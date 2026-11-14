@@ -4442,3 +4442,8 @@ html[data-theme="dark"] #disk-groups .disk-group-head { background: var(--card-b
 @media (prefers-reduced-motion: no-preference) {
   #disk-groups .disk-group-head { transition: box-shadow 120ms ease-out; }
 }
+
+/* -- v0.1.193 运行日志过滤 -- */
+.logs-filter { min-width: 220px; }
+.logs-level { max-width: 130px; }
+#logs-count { font-variant-numeric: tabular-nums; }
