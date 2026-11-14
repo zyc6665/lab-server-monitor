@@ -69,6 +69,43 @@
   </div>
 </section>
 
+{% if summary.users %}
+<section class="card compute-users">
+  <div class="section-head">
+    <h2>按用户占用</h2>
+    <span class="muted small">当前持有显存的进程，按显存合计排序</span>
+  </div>
+  <div class="table-wrap">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>用户</th>
+          <th class="num">显存</th>
+          <th class="num">占比</th>
+          <th class="num">卡数</th>
+          <th class="num">进程</th>
+          <th>主机</th>
+          <th>命令</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for user in summary.users %}
+        <tr data-compute-user="{{ user.user }}">
+          <td class="mono">{{ user.user }}</td>
+          <td class="num mono">{{ '%.1f'|format(user.memory_gb) }} GB</td>
+          <td class="num mono">{{ '%.1f'|format(user.share) }}%</td>
+          <td class="num mono">{{ user.cards }}</td>
+          <td class="num mono">{{ user.processes }}</td>
+          <td class="muted">{{ user.hosts|join('、') }}</td>
+          <td class="compute-cmd" title="{{ user.command }}">{{ user.command }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endif %}
+
 <section class="card compute-hosts">
   <div class="section-head">
     <h2>按主机</h2>

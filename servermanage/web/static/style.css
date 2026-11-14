@@ -3833,6 +3833,17 @@ html[data-theme="dark"] .usage-hint {
 .vram-bar > span { display: block; height: 100%; background: var(--accent); }
 tr.is-idle .vram-bar > span { background: var(--border-strong, #cbd5e1); }
 tr.is-idle td:first-child a { color: var(--text-muted); }
+/* -- v0.1.148 算力概览按用户占用 -- */
+.compute-users td.compute-cmd {
+  max-width: 420px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+.compute-users tr:hover td.compute-cmd { color: var(--text); }
+
 .compute-notes { margin: 4px 0 0; padding-left: 18px; line-height: 1.7; }
 html[data-theme="dark"] .tier-badge.tier-training { color: #93b4ff; border-color: rgba(147, 180, 255, .3); background: rgba(122, 162, 255, .12); }
 html[data-theme="dark"] .tier-badge.tier-universal { color: #5eead4; border-color: rgba(94, 234, 212, .3); background: rgba(94, 234, 212, .1); }

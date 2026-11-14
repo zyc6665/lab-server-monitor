@@ -98,6 +98,7 @@ def build_compute_summary(
 
     hosts: list[dict[str, Any]] = []
     models: dict[str, dict[str, Any]] = {}
+    users: dict[str, dict[str, Any]] = {}
 
     for snapshot in snapshots:
         name = snapshot.get("host_name") or ""
@@ -157,6 +158,32 @@ def build_compute_summary(
             if name not in fleet_bucket["hosts"]:
                 fleet_bucket["hosts"].append(name)
 
+        for proc in metrics.get("gpu_processes") or []:
+            if not isinstance(proc, dict):
+                continue
+            who = str(proc.get("username") or "").strip() or "unknown"
+            mem = _number(proc.get("memory_used_mb")) or 0.0
+            bucket = users.setdefault(
+                who,
+                {
+                    "user": who,
+                    "memory_mb": 0.0,
+                    "processes": 0,
+                    "cards": set(),
+                    "hosts": [],
+                    "command": "",
+                    "peak_mb": 0.0,
+                },
+            )
+            bucket["memory_mb"] += mem
+            bucket["processes"] += 1
+            bucket["cards"].add((name, proc.get("index")))
+            if name not in bucket["hosts"]:
+                bucket["hosts"].append(name)
+            if mem > bucket["peak_mb"]:
+                bucket["peak_mb"] = mem
+                bucket["command"] = str(proc.get("command") or "")
+
         util_avg = round(sum(util) / len(util), 1) if util else 0.0
         vram_pct = round(used_mb / vram_mb * 100, 1) if vram_mb else 0.0
         info = labels.get(name, {})
@@ -193,6 +220,19 @@ def build_compute_summary(
     totals["pf16"] = round(totals["tflops"] / 1000, 2)
     totals["bandwidth_gbs"] = sum(item["bandwidth_gbs"] for item in models.values())
 
+    used_total = sum(item["memory_mb"] for item in users.values())
+    user_rows = []
+    for item in users.values():
+        row = dict(item)
+        row["cards"] = len(item["cards"])
+        row["memory_gb"] = round(row.pop("memory_mb") / GB, 1)
+        row["peak_gb"] = round(row.pop("peak_mb") / GB, 1)
+        row["share"] = (
+            round(item["memory_mb"] / used_total * 100, 1) if used_total else 0.0
+        )
+        user_rows.append(row)
+    user_rows.sort(key=lambda item: (-item["memory_gb"], item["user"]))
+
     model_rows = []
     for item in models.values():
         item = dict(item)
@@ -210,6 +250,7 @@ def build_compute_summary(
         "totals": totals,
         "models": model_rows,
         "hosts": hosts,
+        "users": user_rows,
         "idle_hosts": idle,
         "notes": [
             "算力为厂商公布的 FP16/BF16 密集（非稀疏）理论峰值，实际利用率通常 35%–55%。",
