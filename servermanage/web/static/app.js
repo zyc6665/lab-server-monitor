@@ -1521,7 +1521,8 @@
     }
   }
 
-  function renderHosts() {
+  function renderHosts(hosts) {
+    applyTableWidths('host-table', HOST_WIDTHS_KEY);
     if (!hostsLoaded) { return; }
     var tbody = document.getElementById('host-table-body');
     var table = document.getElementById('host-table');
@@ -1815,11 +1816,11 @@
     }
   }
 
-  var ALERT_WIDTHS_KEY = 'alerts:colwidths';
+  var HOST_WIDTHS_KEY = 'overview:colwidths';
 
-  function readAlertWidths() {
+  function readTableWidths(key) {
     try {
-      var raw = window.localStorage.getItem(ALERT_WIDTHS_KEY);
+      var raw = window.localStorage.getItem(key);
       var parsed = raw ? JSON.parse(raw) : null;
       return Array.isArray(parsed) ? parsed : [];
     } catch (err) {
@@ -1827,10 +1828,10 @@
     }
   }
 
-  function applyAlertWidths() {
-    var table = document.getElementById('alerts-table');
+  function applyTableWidths(tableId, key) {
+    var table = document.getElementById(tableId);
     if (!table) { return; }
-    var widths = readAlertWidths();
+    var widths = readTableWidths(key);
     var heads = table.querySelectorAll('thead th');
     table.style.tableLayout = widths.length ? 'fixed' : '';
     for (var i = 0; i < heads.length; i += 1) {
@@ -1839,8 +1840,8 @@
     }
   }
 
-  function bindAlertResizers() {
-    var table = document.getElementById('alerts-table');
+  function bindTableResizers(tableId, key) {
+    var table = document.getElementById(tableId);
     if (!table) { return; }
     var heads = table.querySelectorAll('thead th');
     Array.prototype.forEach.call(heads, function (head, index) {
@@ -1862,19 +1863,28 @@
         function onUp() {
           document.removeEventListener('mousemove', onMove);
           document.removeEventListener('mouseup', onUp);
-          var widths = readAlertWidths();
-          var headsNow = table.querySelectorAll('thead th');
           var next = [];
+          var headsNow = table.querySelectorAll('thead th');
           for (var i = 0; i < headsNow.length; i += 1) {
             next.push(Math.round(headsNow[i].getBoundingClientRect().width));
           }
-          try { window.localStorage.setItem(ALERT_WIDTHS_KEY, JSON.stringify(next)); } catch (err) { /* ignore */ }
-          applyAlertWidths();
+          try { window.localStorage.setItem(key, JSON.stringify(next)); } catch (err) { /* ignore */ }
+          applyTableWidths(tableId, key);
         }
         document.addEventListener('mousemove', onMove);
         document.addEventListener('mouseup', onUp);
       });
     });
+  }
+
+  var ALERT_WIDTHS_KEY = 'alerts:colwidths';
+
+  function applyAlertWidths() {
+    applyTableWidths('alerts-table', ALERT_WIDTHS_KEY);
+  }
+
+  function bindAlertResizers() {
+    bindTableResizers('alerts-table', ALERT_WIDTHS_KEY);
   }
 
   function applyAlertColumns(hidden) {
@@ -3622,6 +3632,8 @@
     bindAlertMore();
     bindAlertResizers();
     applyAlertWidths();
+    bindTableResizers('host-table', HOST_WIDTHS_KEY);
+    applyTableWidths('host-table', HOST_WIDTHS_KEY);
     bindAlertColumns();
   bindAlertCopy();
     bindResourceRankTabs();

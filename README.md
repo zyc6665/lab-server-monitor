@@ -1,3 +1,13 @@
+## v0.1.188 主机表列宽可拖拽
+
+- 概览/主机页的主机表也能拖列宽了：表头右缘按住拖动，松手记住（`overview:colwidths`）。
+- 首列（主机名）仍吸附在左侧，拖宽后横向滚动也不会被盖住。
+- 与告警表共用一套实现：`bindTableResizers(tableId, key)` / `applyTableWidths(tableId, key)`，告警表行为不变（`alerts:colwidths`）。
+- 重新渲染（轮询刷新、切换卡片/表格视图）不会把拖过的宽度冲掉。
+
+校验：1650 passed / 1 skipped，Node 81 passed。
+实测：13 个拖拽把手；拖第 6 列 +50px，宽度 90 → 140，`table-layout: fixed`，首列表头仍是 `position: sticky`。
+
 ## v0.1.187 磁盘 CSV 按筛选导出
 
 - 磁盘健康页导出 CSV 时以**当前筛选**为准（关键字、只看异常、最高盘温），不再跟着「分组折叠」丢主机。
