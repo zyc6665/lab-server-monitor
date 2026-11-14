@@ -335,6 +335,8 @@
   <div class="section-head">
     <h2>最近告警</h2>
     <span class="muted">{{ detail.alerts|length if detail.alerts else 0 }} 条</span>
+    <a class="btn-link" id="host-alerts-all"
+       href="{{ url_for('alerts_page', host=detail.name, status='all') }}">查看全部</a>
   </div>
   {% if detail.alerts %}
   <div class="host-alert-days" aria-label="最近 7 天告警分布">
