@@ -597,6 +597,32 @@
   // 最近一次拉到的趋势数据，导出 CSV 时直接复用，不再请求接口。
   var overviewHistory = { range: '24h', points: [], previous: [] };
 
+  var TREND_PREF_KEY = 'overview:trend';
+  var TREND_RANGES = ['24h', '7d', '30d', '90d'];
+  var trendHostPref = '';
+
+  function readTrendPref() {
+    try {
+      var raw = window.localStorage.getItem(TREND_PREF_KEY);
+      var parsed = raw ? JSON.parse(raw) : null;
+      if (!parsed || typeof parsed !== 'object') { return null; }
+      var range = TREND_RANGES.indexOf(parsed.range) >= 0 ? parsed.range : '24h';
+      var host = typeof parsed.host === 'string' ? parsed.host : '';
+      return { range: range, host: host };
+    } catch (err) {
+      return null;
+    }
+  }
+
+  function saveTrendPref() {
+    try {
+      window.localStorage.setItem(TREND_PREF_KEY, JSON.stringify({
+        range: overviewHistory.range || '24h',
+        host: currentTrendHost(),
+      }));
+    } catch (err) { /* 隐私模式下忽略 */ }
+  }
+
   function currentTrendHost() {
     var select = document.getElementById('overview-trend-host');
     return select ? select.value : '';
@@ -615,6 +641,11 @@
       option.textContent = name;
       select.appendChild(option);
     });
+    if (!keep && trendHostPref) {
+      Array.prototype.forEach.call(select.options, function (option) {
+        if (option.value === trendHostPref) { keep = trendHostPref; }
+      });
+    }
     if (keep) {
       var stillThere = false;
       Array.prototype.forEach.call(select.options, function (option) {
@@ -649,6 +680,7 @@
         );
       });
       overviewHistory = { range: rangeKey, points: points, previous: previous };
+      saveTrendPref();
       var exportButton = document.getElementById('overview-trend-export');
       if (exportButton) { exportButton.hidden = points.length === 0; }
     }).catch(function () {});
@@ -776,7 +808,13 @@
         loadOverviewHistory(tab.getAttribute('data-overview-range'));
       });
     });
-    loadOverviewHistory('24h');
+    var pref = readTrendPref();
+    var initialRange = pref && pref.range ? pref.range : '24h';
+    trendHostPref = pref && pref.host ? pref.host : '';
+    Array.prototype.forEach.call(tabs, function (tab) {
+      tab.classList.toggle('active', tab.getAttribute('data-overview-range') === initialRange);
+    });
+    loadOverviewHistory(initialRange);
     var trendHostSelect = document.getElementById('overview-trend-host');
     if (trendHostSelect) {
       trendHostSelect.addEventListener('change', function () {
