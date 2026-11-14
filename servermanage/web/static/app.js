@@ -982,14 +982,18 @@
     var checks = host.checks || {};
     var checkCell = document.createElement('td');
     checkCell.className = 'check-cell col-secondary col-checks';
-    var checkBadge = document.createElement('span');
+    var checkBadge;
     if (checks.total) {
       var checkClass = 'check-summary';
       if (checks.failed) { checkClass += ' check-failed'; }
       else if (checks.unknown) { checkClass += ' check-unknown'; }
+      checkBadge = document.createElement('a');
       checkBadge.className = checkClass;
+      checkBadge.href = '/host/' + encodeURIComponent(host.name || '') + '#tab-checks';
+      checkBadge.title = '查看这台的服务器检查明细';
       checkBadge.textContent = (checks.ok || 0) + '/' + checks.total;
     } else {
+      checkBadge = document.createElement('span');
       checkBadge.className = 'check-summary check-empty';
       checkBadge.textContent = '—';
     }
@@ -1194,11 +1198,15 @@
     var foot = document.createElement('div');
     foot.className = 'host-card-foot';
     var checks = host.checks || {};
-    var checkSpan = document.createElement('span');
+    var checkSpan;
     if (checks.total) {
+      checkSpan = document.createElement('a');
       checkSpan.className = 'check-summary' + (checks.failed ? ' check-failed' : (checks.unknown ? ' check-unknown' : ''));
+      checkSpan.href = '/host/' + encodeURIComponent(host.name || '') + '#tab-checks';
+      checkSpan.title = '查看这台的服务器检查明细';
       checkSpan.textContent = '检查 ' + (checks.ok || 0) + '/' + checks.total;
     } else {
+      checkSpan = document.createElement('span');
       checkSpan.className = 'check-summary check-empty';
       checkSpan.textContent = '检查 —';
     }
