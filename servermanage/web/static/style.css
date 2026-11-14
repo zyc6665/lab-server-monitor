@@ -4362,3 +4362,6 @@ html[data-theme="dark"] .status-offline { color: #f87171; }
 /* -- v0.1.180 主机表整行可点 -- */
 #host-table tbody tr[data-host] { cursor: pointer; }
 #host-table tbody tr[data-host]:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+/* -- v0.1.183 趋势图悬停读数 -- */
+.trend-block svg { cursor: crosshair; }

@@ -102,7 +102,15 @@
     return fmt(num);
   }
 
-  function drawTrend(svg, values, key) {
+  function stampOf(value) {
+    if (!value) { return ''; }
+    var date = new Date(value);
+    if (isNaN(date.getTime())) { return String(value); }
+    function pad(n) { return n < 10 ? '0' + n : String(n); }
+    return pad(date.getMonth() + 1) + '-' + pad(date.getDate()) + ' ' + pad(date.getHours()) + ':' + pad(date.getMinutes());
+  }
+
+  function drawTrend(svg, values, key, stamps) {
     if (!svg) { return; }
     while (svg.firstChild) { svg.removeChild(svg.firstChild); }
     var numbers = values.filter(function (v) { return v !== null && v !== undefined && !isNaN(Number(v)); }).map(Number);
@@ -118,7 +126,7 @@
       if (value === null || value === undefined || isNaN(Number(value))) { return; }
       var x = padX + (width - padX * 2) * (index / Math.max(1, values.length - 1));
       var y = height - padY - (height - padY * 2) * ((Number(value) - min) / (max - min));
-      points.push([x, y]);
+      points.push([x, y, index]);
     });
     // horizontal guide lines
     [0, 0.5, 1].forEach(function (fraction) {
@@ -142,6 +150,49 @@
     svg.appendChild(makeSvgEl('text', {
       x: padX, y: 12, fill: '#8a94a6', 'font-size': '9'
     })).textContent = '最低 ' + trendText(min, key) + ' · 最高 ' + trendText(max, key);
+    bindTrendHover(svg, points, values, key, stamps || []);
+  }
+
+  function bindTrendHover(svg, points, values, key, stamps) {
+    if (!points.length) { return; }
+    var width = 300, height = 84;
+    var cross = makeSvgEl('line', {
+      x1: 0, x2: 0, y1: 8, y2: height - 8,
+      stroke: '#b8c2d4', 'stroke-width': '1', 'stroke-dasharray': '3 3', opacity: '0'
+    });
+    var dot = makeSvgEl('circle', { cx: 0, cy: 0, r: '3', fill: COLORS[key], opacity: '0' });
+    var label = makeSvgEl('text', {
+      x: width - 8, y: height - 4, 'text-anchor': 'end',
+      fill: '#5b6472', 'font-size': '9', opacity: '0'
+    });
+    svg.appendChild(cross);
+    svg.appendChild(dot);
+    svg.appendChild(label);
+    svg.addEventListener('mousemove', function (event) {
+      var rect = svg.getBoundingClientRect();
+      if (!rect.width) { return; }
+      var x = (event.clientX - rect.left) / rect.width * width;
+      var best = 0;
+      for (var i = 1; i < points.length; i += 1) {
+        if (Math.abs(points[i][0] - x) < Math.abs(points[best][0] - x)) { best = i; }
+      }
+      var point = points[best];
+      var stamp = stamps[point[2]] || '';
+      var value = values[point[2]];
+      cross.setAttribute('x1', point[0]);
+      cross.setAttribute('x2', point[0]);
+      cross.setAttribute('opacity', '0.9');
+      dot.setAttribute('cx', point[0]);
+      dot.setAttribute('cy', point[1]);
+      dot.setAttribute('opacity', '1');
+      label.textContent = (stamp ? stamp + ' · ' : '') + trendText(value, key);
+      label.setAttribute('opacity', '1');
+    });
+    svg.addEventListener('mouseleave', function () {
+      cross.setAttribute('opacity', '0');
+      dot.setAttribute('opacity', '0');
+      label.setAttribute('opacity', '0');
+    });
   }
 
   function loadHistory(rangeKey) {
@@ -150,10 +201,11 @@
       var points = (payload && payload.points) || [];
       var empty = document.getElementById('trend-empty');
       if (empty) { empty.hidden = points.length > 0; }
+      var stamps = points.map(function (point) { return stampOf(point.t); });
       Object.keys(TITLES).forEach(function (key) {
         var svg = document.querySelector('[data-trend="' + key + '"]');
         var values = points.map(function (point) { return point[key]; });
-        drawTrend(svg, values, key);
+        drawTrend(svg, values, key, stamps);
       });
     }).catch(function () {
       var empty = document.getElementById('trend-empty');
