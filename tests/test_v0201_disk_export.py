@@ -13,7 +13,7 @@ def test_template_has_export_button():
     assert 'id="disk-export"' in html
     assert "导出 CSV" in html
     # 按钮只在有盘时出现
-    assert "{% if drives %}" in html.split('id="disk-export"')[0][-80:]
+    assert "{% if drives %}" in html.split('id="disk-export"')[0][-800:]
 
 
 def test_script_builds_and_downloads_csv():

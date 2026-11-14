@@ -33,7 +33,17 @@
       温度 最高 {{ temperature_stats.max }} °C · 平均 {{ temperature_stats.average }} °C{% if temperature_stats.hot %} · <span class="disk-temp-summary-hot">{{ temperature_stats.hot }} 块 ≥55 °C</span>{% endif %}
     </span>
     {% endif %}
-    {% if drives %}<button type="button" class="btn-secondary disk-export" id="disk-export" title="导出当前筛选结果，不受分组折叠影响">导出 CSV</button>{% endif %}
+    {% if drives %}<details class="col-menu disk-col-menu" id="disk-columns">
+        <summary class="btn-secondary">列</summary>
+        <div class="col-menu-body">
+          <label><input type="checkbox" data-disk-col="media" checked> 介质错误</label>
+          <label><input type="checkbox" data-disk-col="errors" checked> 其他错误</label>
+          <label><input type="checkbox" data-disk-col="predictive" checked> Predictive</label>
+          <label><input type="checkbox" data-disk-col="smart" checked> SMART</label>
+          <label><input type="checkbox" data-disk-col="shield" checked> Shield</label>
+        </div>
+      </details>
+      <button type="button" class="btn-secondary disk-export" id="disk-export" title="导出当前筛选结果，不受分组折叠影响">导出 CSV</button>{% endif %}
   </div>
   {% if not has_groups %}
   <p class="group-hint">还没有配置分组：在<a href="/settings#hosts">设置 → 主机与 SSH</a>里填上分组，磁盘页会按组折叠并显示合计。</p>
@@ -99,7 +109,7 @@
     {% if host.drives %}
     <div class="table-wrap">
       <table class="data-table disk-table">
-        <thead><tr><th>控制器</th><th>Enclosure</th><th class="sortable" data-disk-sort="slot">Slot</th><th>型号</th><th>序列号</th><th>状态</th><th class="sortable" data-disk-sort="media">介质错误</th><th>其他错误</th><th>Predictive</th><th>SMART</th><th>Shield</th><th class="sortable" data-disk-sort="temp">温度</th><th class="sortable" data-disk-sort="health">健康</th></tr></thead>
+        <thead><tr><th>控制器</th><th>Enclosure</th><th class="sortable" data-disk-sort="slot">Slot</th><th>型号</th><th>序列号</th><th>状态</th><th class="sortable col-media" data-disk-sort="media">介质错误</th><th class="col-errors">其他错误</th><th class="col-predictive">Predictive</th><th class="col-smart">SMART</th><th class="col-shield">Shield</th><th class="sortable" data-disk-sort="temp">温度</th><th class="sortable" data-disk-sort="health">健康</th></tr></thead>
         <tbody>
           {% for d in host.drives %}
           <tr data-disk-row data-slot="{{ d.slot if d.slot is not none else '' }}"
@@ -112,11 +122,11 @@
             <td>{{ d.model or '—' }}</td>
             <td class="mono">{{ d.serial or '—' }}</td>
             <td>{{ d.state or '—' }}</td>
-            <td>{{ d.media_errors if d.media_errors is not none else '—' }}</td>
-            <td>{{ d.other_errors if d.other_errors is not none else '—' }}</td>
-            <td>{{ d.predictive_failures if d.predictive_failures is not none else '—' }}</td>
-            <td>{% if d.smart_alert is not none %}{{ '是' if d.smart_alert else '否' }}{% else %}—{% endif %}</td>
-            <td>{{ d.shield_counter if d.shield_counter is not none else '—' }}</td>
+            <td class="col-media">{{ d.media_errors if d.media_errors is not none else '—' }}</td>
+            <td class="col-errors">{{ d.other_errors if d.other_errors is not none else '—' }}</td>
+            <td class="col-predictive">{{ d.predictive_failures if d.predictive_failures is not none else '—' }}</td>
+            <td class="col-smart">{% if d.smart_alert is not none %}{{ '是' if d.smart_alert else '否' }}{% else %}—{% endif %}</td>
+            <td class="col-shield">{{ d.shield_counter if d.shield_counter is not none else '—' }}</td>
             {% set temp = d.temperature_c %}
             <td class="mono disk-temp{% if temp is not none and temp >= 65 %} is-critical{% elif temp is not none and temp >= 55 %} is-hot{% endif %}"{% if temp is not none %} title="盘温阈值：55 °C 起偏热，65 °C 起需关注"{% endif %}>{% if temp is not none %}{{ temp }} °C{% set pct = [[(temp - 25) * 100 // 40, 0]|max, 100]|min %}<span class="temp-bar" aria-hidden="true"><span class="temp-bar-fill" style="width: {{ pct }}%"></span></span>{% else %}—{% endif %}</td>
             <td><span class="health health-{{ d.health }}">{{ d.health }}</span></td>

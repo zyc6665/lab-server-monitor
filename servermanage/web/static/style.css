@@ -4447,3 +4447,11 @@ html[data-theme="dark"] #disk-groups .disk-group-head { background: var(--card-b
 .logs-filter { min-width: 220px; }
 .logs-level { max-width: 130px; }
 #logs-count { font-variant-numeric: tabular-nums; }
+
+/* -- v0.1.195 磁盘表列显示偏好 -- */
+.disk-col-menu { margin-left: auto; }
+table.disk-table.hide-media .col-media,
+table.disk-table.hide-errors .col-errors,
+table.disk-table.hide-predictive .col-predictive,
+table.disk-table.hide-smart .col-smart,
+table.disk-table.hide-shield .col-shield { display: none; }

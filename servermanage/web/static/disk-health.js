@@ -461,3 +461,48 @@
 
   apply();
 })();
+
+// -- v0.1.195 磁盘表列显示偏好（纯前端，只读） --
+(function () {
+    var STORE = 'disk:columns';
+    var KEYS = ['media', 'errors', 'predictive', 'smart', 'shield'];
+
+    function read() {
+        try {
+            var raw = window.localStorage.getItem(STORE);
+            var parsed = raw ? JSON.parse(raw) : null;
+            return parsed && typeof parsed === 'object' ? parsed : {};
+        } catch (err) {
+            return {};
+        }
+    }
+
+    function apply(hidden) {
+        Array.prototype.forEach.call(document.querySelectorAll('table.disk-table'), function (table) {
+            KEYS.forEach(function (key) {
+                table.classList.toggle('hide-' + key, Boolean(hidden[key]));
+            });
+        });
+    }
+
+    function bind() {
+        var box = document.getElementById('disk-columns');
+        if (!box) { return; }
+        var hidden = read();
+        Array.prototype.forEach.call(box.querySelectorAll('[data-disk-col]'), function (input) {
+            var key = input.getAttribute('data-disk-col');
+            input.checked = !hidden[key];
+        });
+        apply(hidden);
+        box.addEventListener('change', function (event) {
+            var input = event.target.closest('[data-disk-col]');
+            if (!input) { return; }
+            var next = read();
+            next[input.getAttribute('data-disk-col')] = !input.checked;
+            try { window.localStorage.setItem(STORE, JSON.stringify(next)); } catch (err) { /* ignore */ }
+            apply(next);
+        });
+    }
+
+    bind();
+})();
