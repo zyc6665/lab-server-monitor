@@ -22,7 +22,7 @@ def test_popover_lists_reasons():
     script = _script()
     assert "function openAttentionPopover(button)" in script
     assert "var reasons = (button.title || '').split(' · ').filter(Boolean);" in script
-    assert "item.textContent = reason;" in script
+    assert "link.textContent = reason;" in script
 
 
 def test_popover_closes_on_outside_click_and_escape():

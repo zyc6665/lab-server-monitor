@@ -3606,6 +3606,9 @@ html[data-theme="dark"] .uptime-cell.is-low { color: #fbbf24; }
 .attention-pop-head { font-weight: 600; margin-bottom: 6px; }
 .attention-pop ul { margin: 0; padding-left: 16px; color: var(--text-muted); }
 .attention-pop li + li { margin-top: 3px; }
+.attention-pop .attention-link { color: var(--text); text-decoration: none; border-bottom: 1px dashed transparent; }
+.attention-pop .attention-link:hover { color: var(--accent); border-bottom-color: currentColor; }
+.attention-pop .attention-link:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 html[data-theme="dark"] .attention-pop { background: var(--surface-raised); border-color: #26344c; }
 
 /* -- v0.1.115 设置页配置摘要 -- */

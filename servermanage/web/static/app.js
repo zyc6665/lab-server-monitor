@@ -868,6 +868,14 @@
     if (pop) { pop.hidden = true; }
   }
 
+  function attentionAnchor(reason) {
+    if (reason.indexOf('服务检查') !== -1) { return 'tab-checks'; }
+    if (reason.indexOf('块盘') !== -1) { return 'tab-storage'; }
+    if (reason.indexOf('活动告警') !== -1) { return 'tab-alerts'; }
+    if (reason.indexOf('GPU') !== -1) { return 'tab-gpu'; }
+    return 'tab-overview';
+  }
+
   function openAttentionPopover(button) {
     var pop = attentionPopover();
     var hostName = button.getAttribute('data-attention-host') || '';
@@ -880,7 +888,11 @@
     var list = document.createElement('ul');
     reasons.forEach(function (reason) {
       var item = document.createElement('li');
-      item.textContent = reason;
+      var link = document.createElement('a');
+      link.className = 'attention-link';
+      link.href = '/host/' + encodeURIComponent(hostName) + '#' + attentionAnchor(reason);
+      link.textContent = reason;
+      item.appendChild(link);
       list.appendChild(item);
     });
     pop.appendChild(list);
