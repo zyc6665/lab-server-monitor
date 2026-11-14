@@ -1210,6 +1210,7 @@ def _build_overview(config, db_path) -> dict[str, Any]:
         "meta": {
             "groups": groups,
             "silenced_count": silenced_count,
+            "has_groups": any(server.group and server.group != "未分组" for server in config.servers),
         },
         "hosts": hosts,
         "capacity": capacity.build_capacity_forecasts(
@@ -4072,6 +4073,7 @@ def register_routes(app: Flask) -> None:
             totals=totals,
             temperature_stats=temperature_stats,
             group_stats=group_stats,
+            has_groups=any(server.group and server.group != "未分组" for server in config.servers),
         )
 
     @app.get("/alerts")

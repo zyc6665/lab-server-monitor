@@ -157,6 +157,9 @@
       {% endfor %}
     </select>
   </label>
+  {% if not meta.has_groups %}
+  <p class="group-hint">还没有配置分组：在<a href="/settings#hosts">设置 → 主机与 SSH</a>里给主机填上分组，就能按组筛选和汇总。</p>
+  {% endif %}
   <label class="filter-field">状态
     <select id="filter-status">
       <option value="">全部</option>

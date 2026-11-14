@@ -35,6 +35,9 @@
     {% endif %}
     {% if drives %}<button type="button" class="btn-secondary disk-export" id="disk-export">导出 CSV</button>{% endif %}
   </div>
+  {% if not has_groups %}
+  <p class="group-hint">还没有配置分组：在<a href="/settings#hosts">设置 → 主机与 SSH</a>里填上分组，磁盘页会按组折叠并显示合计。</p>
+  {% endif %}
   {% if hosts %}
   <div class="disk-filter">
     <label class="disk-filter-toggle">
