@@ -167,6 +167,7 @@
       searchCount.hidden = !needle || visibleHosts === 0;
       searchCount.textContent = '搜索命中 ' + visibleHosts + ' 台主机';
     }
+    updateGroupsToggle();
   }
 
   function setGroupCollapsed(head, collapsed) {
@@ -180,6 +181,8 @@
     var caret = head.querySelector('.disk-group-caret');
     if (caret) { caret.textContent = collapsed ? '▸' : '▾'; }
     apply(toggle.checked);
+    apply(toggle.checked);
+    updateGroupsToggle();
   }
 
   function read() {
@@ -214,12 +217,52 @@
     try { window.localStorage.setItem(HEAT_KEY, value); } catch (error) { /* 忽略 */ }
   }
 
+  function groupHeads() {
+    return Array.prototype.slice.call(document.querySelectorAll('.disk-group-head'));
+  }
+
+  function updateGroupsToggle() {
+    var button = document.getElementById('disk-groups-toggle');
+    if (!button) { return; }
+    var heads = groupHeads();
+    button.hidden = heads.length === 0;
+    if (!heads.length) { return; }
+    var collapsed = heads.filter(function (head) { return head.classList.contains('is-collapsed'); });
+    button.textContent = collapsed.length === heads.length ? '全部展开' : '全部折叠';
+  }
+
+  function setAllGroupsCollapsed(collapsed) {
+    var heads = groupHeads();
+    var names = heads.map(function (head) { return head.getAttribute('data-disk-group') || ''; });
+    saveGroups(collapsed ? names.filter(Boolean) : []);
+    heads.forEach(function (head) {
+      head.classList.toggle('is-collapsed', collapsed);
+      var button = head.querySelector('[data-disk-group-collapse]');
+      if (button) { button.setAttribute('aria-expanded', collapsed ? 'false' : 'true'); }
+      var node = head.querySelector('.disk-group-caret');
+      if (node) { node.textContent = collapsed ? '▸' : '▾'; }
+    });
+    apply(toggle.checked);
+    updateGroupsToggle();
+  }
+
   var heat = document.getElementById('disk-heat');
   readHeat();
   if (heat) {
     heat.addEventListener('change', function () {
       saveHeat(heat.value === '0' ? '' : heat.value);
       apply(toggle.checked);
+    });
+  }
+
+  var groupsToggle = document.getElementById('disk-groups-toggle');
+  if (groupsToggle) {
+    groupsToggle.addEventListener('click', function () {
+      var heads = groupHeads();
+      var allCollapsed = heads.length > 0 && heads.every(function (head) {
+        return head.classList.contains('is-collapsed');
+      });
+      setAllGroupsCollapsed(!allCollapsed);
     });
   }
 
