@@ -422,6 +422,9 @@
     var seen = document.createElement('span');
     seen.className = 'muted';
     seen.textContent = host.last_scan_at ? '采集 ' + formatTimestamp(host.last_scan_at) : '尚未采集';
+    if (host.last_usage_at) {
+      seen.textContent += ' · 占用 ' + formatTimestamp(host.last_usage_at);
+    }
     foot.appendChild(seen);
     card.appendChild(foot);
 
@@ -726,6 +729,9 @@
       parts.push(hostStatusText(host.status));
       parts.push('账号 ' + (host.accounts || 0));
       if (host.last_scan_at) { parts.push('采集 ' + formatTimestamp(host.last_scan_at)); }
+      parts.push(host.last_usage_at
+        ? '占用统计 ' + formatTimestamp(host.last_usage_at)
+        : '占用未统计');
       meta.textContent = parts.join(' · ');
     }
     var link = document.getElementById('user-detail-host-link');
