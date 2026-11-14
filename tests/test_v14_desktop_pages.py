@@ -147,7 +147,7 @@ def test_v19_theme_and_overview_focus_panel(tmp_path):
     assert 'id="resource-rank"' in overview
     assert 'data-rank-metric="cpu"' in overview
     assert "theme.js" in overview
-    assert "v0.1.171 桌面客户端" in overview
+    assert "v0.1.172 桌面客户端" in overview
 
     app_js = client.get("/static/app.js").get_data(as_text=True)
     assert "bindAlertRanges" in app_js

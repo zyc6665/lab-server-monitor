@@ -3034,6 +3034,35 @@
     });
   }
 
+  function bindSearchShortcut() {
+    // "/" 聚焦当前页的搜索框，Esc 清空并保留焦点。
+    var ids = ['alert-search', 'user-search', 'host-filter'];
+    document.addEventListener('keydown', function (event) {
+      if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey) { return; }
+      var target = event.target || {};
+      var tag = (target.tagName || '').toLowerCase();
+      var typing = tag === 'input' || tag === 'textarea' || tag === 'select' || target.isContentEditable;
+
+      if (event.key === '/' && !typing) {
+        var box = null;
+        for (var i = 0; i < ids.length && !box; i += 1) {
+          box = document.getElementById(ids[i]);
+        }
+        if (!box) { return; }
+        event.preventDefault();
+        box.focus();
+        if (box.select) { box.select(); }
+        return;
+      }
+
+      if (event.key === 'Escape' && tag === 'input' && ids.indexOf(target.id) !== -1) {
+        if (!target.value) { return; }
+        target.value = '';
+        target.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+    });
+  }
+
   function init() {
     startConnectionWatch();
     if (!hasDashboard()) { return; }
@@ -3043,6 +3072,7 @@
     bindHostView();
     bindDensity();
     restoreHostSort();
+    bindSearchShortcut();
 
     // 供全局命令面板调用当前页面的快捷操作。
     window.serverMonitorActions = {
