@@ -4355,3 +4355,7 @@ html[data-theme="dark"] .status-offline { color: #f87171; }
 
 /* -- v0.1.179 侧栏显示数据更新时间 -- */
 .sidebar-freshness { display: block; margin-top: 2px; font-size: 11px; color: var(--text-muted); }
+
+/* -- v0.1.180 主机表整行可点 -- */
+#host-table tbody tr[data-host] { cursor: pointer; }
+#host-table tbody tr[data-host]:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }

@@ -923,9 +923,34 @@
     return chip;
   }
 
+  function bindHostRowNavigation() {
+    var table = document.getElementById('host-table');
+    if (!table || table.getAttribute('data-row-nav') === '1') { return; }
+    table.setAttribute('data-row-nav', '1');
+    table.addEventListener('click', function (event) {
+      if (event.defaultPrevented || event.button !== 0) { return; }
+      if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) { return; }
+      if (event.target.closest('a, button, input, select, textarea, label')) { return; }
+      var row = event.target.closest('tr[data-host]');
+      if (!row) { return; }
+      window.location.href = '/host/' + encodeURIComponent(row.getAttribute('data-host'));
+    });
+    table.addEventListener('keydown', function (event) {
+      if (event.key !== 'Enter') { return; }
+      var row = event.target.closest('tr[data-host]');
+      if (!row) { return; }
+      event.preventDefault();
+      window.location.href = '/host/' + encodeURIComponent(row.getAttribute('data-host'));
+    });
+  }
+
   function buildHostRow(host) {
     var tr = document.createElement('tr');
-    if (host.name) { tr.setAttribute('data-host', host.name); }
+    if (host.name) {
+      tr.setAttribute('data-host', host.name);
+      tr.setAttribute('tabindex', '0');
+      tr.setAttribute('title', '点击打开 ' + host.name + ' 的详情');
+    }
     tr.setAttribute('data-group', host.group || '未分组');
     tr.setAttribute('data-owner', host.owner || '');
     tr.setAttribute('data-online', host.online ? '1' : '0');
@@ -3421,6 +3446,7 @@
     bindOverviewExport();
     bindHostColumns();
     bindFocusHosts();
+    bindHostRowNavigation();
     bindAttentionChips();
     bindAlertRanges();
     bindAlertTimeline();
