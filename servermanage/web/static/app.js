@@ -270,7 +270,8 @@
     cpu: 'CPU',
     memory: '内存',
     disk: '磁盘',
-    gpu: 'GPU 显存'
+    gpu: 'GPU 显存',
+    temp: '温度'
   };
 
   function resourceRankValue(host, metric) {
@@ -280,6 +281,7 @@
     else if (metric === 'memory') { value = host.memory_percent; }
     else if (metric === 'disk') { value = host.disk_percent; }
     else if (metric === 'gpu') { value = host.gpu_memory_percent; }
+    else if (metric === 'temp') { value = host.temperature_c; }
     if (value === null || value === undefined || value === '') { return null; }
     var num = Number(value);
     return isNaN(num) ? null : num;
@@ -318,13 +320,17 @@
       meter.className = 'rank-meter';
       var fill = document.createElement('span');
       fill.className = 'rank-meter-fill';
-      if (item.value >= 90) { fill.className += ' is-hot'; }
-      else if (item.value >= 75) { fill.className += ' is-warn'; }
+      var hotLine = resourceRankMetric === 'temp' ? 85 : 90;
+      var warnLine = resourceRankMetric === 'temp' ? 70 : 75;
+      if (item.value >= hotLine) { fill.className += ' is-hot'; }
+      else if (item.value >= warnLine) { fill.className += ' is-warn'; }
       fill.style.width = Math.max(0, Math.min(100, item.value)) + '%';
       meter.appendChild(fill);
       var number = document.createElement('span');
       number.className = 'rank-value';
-      number.textContent = formatPercent(item.value);
+      number.textContent = resourceRankMetric === 'temp'
+        ? Math.round(item.value) + ' °C'
+        : formatPercent(item.value);
       row.appendChild(name);
       row.appendChild(group);
       row.appendChild(meter);
