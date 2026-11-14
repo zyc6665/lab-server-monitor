@@ -4384,3 +4384,15 @@ html[data-theme="dark"] .status-offline { color: #f87171; }
 }
 .alert-more[hidden] { display: none !important; }
 html[data-theme="dark"] .alert-more { background: #141c2b; border-color: #2b3a52; }
+
+/* -- v0.1.186 告警表列宽可拖拽 -- */
+#alerts-table .col-resizer {
+  position: absolute;
+  top: 0;
+  right: -3px;
+  bottom: 0;
+  width: 7px;
+  cursor: col-resize;
+  background: transparent;
+}
+#alerts-table .col-resizer:hover { background: linear-gradient(to right, transparent 3px, var(--accent) 3px, var(--accent) 4px, transparent 4px); }
