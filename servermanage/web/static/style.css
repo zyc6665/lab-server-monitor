@@ -4352,3 +4352,6 @@ html[data-theme="dark"] .status-offline { color: #f87171; }
 
 /* -- v0.1.178 复制告警列表 -- */
 #alert-copy { white-space: nowrap; }
+
+/* -- v0.1.179 侧栏显示数据更新时间 -- */
+.sidebar-freshness { display: block; margin-top: 2px; font-size: 11px; color: var(--text-muted); }

@@ -2712,6 +2712,15 @@
     if (skeleton) { skeleton.hidden = true; }
   }
 
+  function markFreshness() {
+    var el = document.getElementById('data-freshness');
+    if (!el) { return; }
+    var now = new Date();
+    var pad = function (value) { return value < 10 ? '0' + value : '' + value; };
+    el.textContent = '更新于 ' + pad(now.getHours()) + ':' + pad(now.getMinutes()) + ':' + pad(now.getSeconds());
+    el.setAttribute('data-updated-at', now.toISOString());
+  }
+
   function refreshOverview() {
     return fetchJson('/api/overview').then(function (data) {
       if (!data) {
@@ -2722,6 +2731,7 @@
       hideLoadBanner('host-load-banner');
       updateSummary(data.summary, data.hosts);
       updateHosts(data.hosts);
+      markFreshness();
       renderCapacityForecast(data.capacity || []);
     }).catch(function () {
       hideSkeleton('host-skeleton');
@@ -2796,6 +2806,7 @@
       }
       hideLoadBanner('alert-load-banner');
       updateAlerts(data.alerts, data.counts);
+      markFreshness();
     }).catch(function () {
       hideSkeleton('alert-skeleton');
       showLoadBanner('alert-load-banner', '告警数据加载失败，点击重试或检查后台服务是否在运行。');
