@@ -4425,3 +4425,20 @@ html[data-theme="dark"] .alert-more { background: #141c2b; border-color: #2b3a52
 }
 .host-card-load { color: var(--text); }
 html[data-theme="dark"] .host-card-load { color: var(--text); }
+
+/* -- v0.1.192 磁盘分组标题吸顶 -- */
+#disk-groups .disk-group-head {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  margin: 0 -6px 6px;
+  padding: 8px 6px;
+  border-radius: 8px;
+  background: var(--card-bg);
+  box-shadow: 0 1px 0 var(--border);
+}
+#disk-groups .disk-group-head.is-collapsed { box-shadow: 0 1px 0 var(--border); }
+html[data-theme="dark"] #disk-groups .disk-group-head { background: var(--card-bg); }
+@media (prefers-reduced-motion: no-preference) {
+  #disk-groups .disk-group-head { transition: box-shadow 120ms ease-out; }
+}
