@@ -73,7 +73,8 @@ def test_page_lists_users_and_style_truncates_commands():
     assert "按用户占用" in html
     assert 'data-compute-user="{{ user.user }}"' in html
     assert "{{ '%.1f'|format(user.share) }}%" in html
-    assert "{{ user.hosts|join('、') }}" in html
+    assert '{% for host_name in user.hosts %}' in html
+    assert "url_for('host_page', name=host_name)" in html
 
     css = (STATIC / "style.css").read_text(encoding="utf-8")
     assert "/* -- v0.1.148 算力概览按用户占用 -- */" in css

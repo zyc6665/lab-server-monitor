@@ -856,6 +856,28 @@ def _hottest_temperature(metrics: dict[str, Any]) -> float | None:
     return round(max(values), 1)
 
 
+def _gpu_memory_totals(metrics: dict[str, Any]) -> tuple[float, float] | None:
+    """Used and total GPU memory (MB) across every card of a host."""
+
+    used = 0.0
+    total = 0.0
+    for row in metrics.get("gpu_summary") or []:
+        try:
+            total += float(row.get("memory_total_mb") or 0)
+            used += float(row.get("memory_used_mb") or 0)
+        except (TypeError, ValueError):
+            continue
+    if total <= 0:
+        return None
+    return round(used, 1), round(total, 1)
+
+
+def _gpu_payload(totals: tuple[float, float] | None) -> dict[str, float] | None:
+    if not totals:
+        return None
+    return {"used_mb": totals[0], "total_mb": totals[1]}
+
+
 def _host_row(
     *,
     name: str,
@@ -885,6 +907,7 @@ def _host_row(
     }
     container_count = len(((snapshot or {}).get("metrics") or {}).get("containers") or [])
     temperature_c = _hottest_temperature((snapshot or {}).get("metrics") or {})
+    gpu_totals = _gpu_memory_totals((snapshot or {}).get("metrics") or {})
     meta = {
         "group": group or "未分组",
         "owner": owner or "",
@@ -911,6 +934,7 @@ def _host_row(
             "spark": spark_data,
             "container_count": container_count,
             "temperature_c": temperature_c,
+            "gpu_memory": _gpu_payload(gpu_totals),
             "collection_uptime": collection_uptime,
             **meta,
         }
@@ -929,6 +953,7 @@ def _host_row(
         "spark": spark_data,
         "container_count": container_count,
         "temperature_c": temperature_c,
+        "gpu_memory": _gpu_payload(gpu_totals),
         "collection_uptime": collection_uptime,
         **meta,
     }

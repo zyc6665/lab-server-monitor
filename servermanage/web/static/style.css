@@ -3844,6 +3844,26 @@ tr.is-idle td:first-child a { color: var(--text-muted); }
 }
 .compute-users tr:hover td.compute-cmd { color: var(--text); }
 
+/* -- v0.1.150 概览显存徽标与主机名链接 -- */
+.gpu-chip {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: rgba(44, 92, 246, 0.1);
+  color: #1d4ed8;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.gpu-chip.is-hot { background: rgba(217, 119, 6, 0.14); color: #92400e; }
+.gpu-chip.is-critical { background: rgba(220, 38, 38, 0.14); color: #b91c1c; }
+a.host-link { color: inherit; text-decoration: none; border-bottom: 1px dotted var(--border-strong); }
+a.host-link:hover { color: var(--accent); border-bottom-color: var(--accent); }
+#alerts-table td.col-host { white-space: nowrap; }
+[data-theme="dark"] .gpu-chip { background: rgba(122, 162, 255, 0.14); color: #93b4ff; }
+[data-theme="dark"] .gpu-chip.is-hot { background: rgba(251, 191, 36, 0.16); color: #fbbf24; }
+[data-theme="dark"] .gpu-chip.is-critical { background: rgba(248, 113, 113, 0.16); color: #f87171; }
+
 .compute-notes { margin: 4px 0 0; padding-left: 18px; line-height: 1.7; }
 html[data-theme="dark"] .tier-badge.tier-training { color: #93b4ff; border-color: rgba(147, 180, 255, .3); background: rgba(122, 162, 255, .12); }
 html[data-theme="dark"] .tier-badge.tier-universal { color: #5eead4; border-color: rgba(94, 234, 212, .3); background: rgba(94, 234, 212, .1); }

@@ -870,6 +870,17 @@
     });
   }
 
+  function gpuMemoryChip(memory) {
+    if (!memory || !memory.total_mb) { return null; }
+    var pct = (memory.used_mb / memory.total_mb) * 100;
+    var chip = document.createElement('span');
+    chip.className = 'gpu-chip' + (pct >= 90 ? ' is-critical' : (pct >= 70 ? ' is-hot' : ''));
+    chip.textContent = '显存 ' + Math.round(pct) + '%';
+    chip.title = '已用 ' + (memory.used_mb / 1024).toFixed(1) + ' GB / 共 '
+      + (memory.total_mb / 1024).toFixed(1) + ' GB';
+    return chip;
+  }
+
   function buildHostRow(host) {
     var tr = document.createElement('tr');
     if (host.name) { tr.setAttribute('data-host', host.name); }
@@ -890,6 +901,8 @@
     link.href = '/host/' + encodeURIComponent(host.name || '');
     link.textContent = host.name || '—';
     nameCell.appendChild(link);
+    var rowGpu = gpuMemoryChip(host.gpu_memory);
+    if (rowGpu) { nameCell.appendChild(rowGpu); }
     var rowTemp = temperatureChip(host.temperature_c);
     if (rowTemp) { nameCell.appendChild(rowTemp); }
     var rowUptime = uptimeChip(host.collection_uptime);
@@ -1104,6 +1117,8 @@
     link.textContent = host.name || '—';
     head.appendChild(link);
     head.appendChild(booleanBadge(!!host.online));
+    var cardGpu = gpuMemoryChip(host.gpu_memory);
+    if (cardGpu) { head.appendChild(cardGpu); }
     var cardTemp = temperatureChip(host.temperature_c);
     if (cardTemp) { head.appendChild(cardTemp); }
     var cardUptime = uptimeChip(host.collection_uptime);
@@ -1696,8 +1711,17 @@
     var categoryCell = textCell(alert.category);
     categoryCell.classList.add('col-secondary', 'col-category');
     tr.appendChild(categoryCell);
-    var hostCell = textCell(alert.host_name);
-    hostCell.classList.add('col-host');
+    var hostCell = document.createElement('td');
+    hostCell.className = 'mono col-host';
+    if (alert.host_name) {
+      var hostLink = document.createElement('a');
+      hostLink.className = 'host-link';
+      hostLink.setAttribute('href', '/host/' + encodeURIComponent(alert.host_name));
+      hostLink.textContent = alert.host_name;
+      hostCell.appendChild(hostLink);
+    } else {
+      hostCell.textContent = '—';
+    }
     tr.appendChild(hostCell);
 
     var titleCell = document.createElement('td');

@@ -96,7 +96,9 @@
           <td class="num mono">{{ '%.1f'|format(user.share) }}%</td>
           <td class="num mono">{{ user.cards }}</td>
           <td class="num mono">{{ user.processes }}</td>
-          <td class="muted">{{ user.hosts|join('、') }}</td>
+          <td class="muted">
+            {% for host_name in user.hosts %}<a class="muted" href="{{ url_for('host_page', name=host_name) }}">{{ host_name }}</a>{% if not loop.last %}、{% endif %}{% endfor %}
+          </td>
           <td class="compute-cmd" title="{{ user.command }}">{{ user.command }}</td>
         </tr>
         {% endfor %}

@@ -36,7 +36,7 @@ def test_headers_carry_column_classes():
 def test_rows_carry_column_classes():
     script = _script()
     assert "categoryCell.classList.add('col-secondary', 'col-category');" in script
-    assert "hostCell.classList.add('col-host');" in script
+    assert "hostCell.className = 'mono col-host';" in script
     assert "'alert-message col-wide col-message'" in script
 
 
