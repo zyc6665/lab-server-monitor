@@ -365,3 +365,56 @@
     window.setTimeout(function () { button.textContent = original; }, 2400);
   }
 })();
+
+// -- v0.1.154 磁盘表按列排序（纯前端，只读） --
+(function () {
+  var STORE = 'disk:sort';
+  var HEALTH_RANK = { ok: 0, warning: 1, error: 2, critical: 3 };
+  var state = { key: '', dir: 1 };
+  try {
+    var saved = JSON.parse(localStorage.getItem(STORE) || 'null');
+    if (saved && saved.key) { state = { key: saved.key, dir: saved.dir === -1 ? -1 : 1 }; }
+  } catch (err) { state = { key: '', dir: 1 }; }
+
+  function valueOf(row, key) {
+    var raw = row.getAttribute('data-' + key) || '';
+    if (key === 'health') { return HEALTH_RANK[raw] === undefined ? 9 : HEALTH_RANK[raw]; }
+    var num = parseFloat(raw);
+    return isNaN(num) ? null : num;
+  }
+
+  function apply() {
+    Array.prototype.forEach.call(document.querySelectorAll('[data-disk-sort]'), function (th) {
+      if (th.getAttribute('data-disk-sort') === state.key) {
+        th.setAttribute('aria-sort', state.dir === 1 ? 'ascending' : 'descending');
+      } else {
+        th.removeAttribute('aria-sort');
+      }
+    });
+    if (!state.key) { return; }
+    Array.prototype.forEach.call(document.querySelectorAll('table.disk-table tbody'), function (body) {
+      var rows = Array.prototype.slice.call(body.querySelectorAll('[data-disk-row]'));
+      rows.sort(function (a, b) {
+        var va = valueOf(a, state.key);
+        var vb = valueOf(b, state.key);
+        if (va === null && vb === null) { return 0; }
+        if (va === null) { return 1; }
+        if (vb === null) { return -1; }
+        return (va - vb) * state.dir;
+      });
+      rows.forEach(function (row) { body.appendChild(row); });
+    });
+  }
+
+  Array.prototype.forEach.call(document.querySelectorAll('[data-disk-sort]'), function (th) {
+    th.addEventListener('click', function () {
+      var key = th.getAttribute('data-disk-sort');
+      state.dir = state.key === key && state.dir === 1 ? -1 : 1;
+      state.key = key;
+      try { localStorage.setItem(STORE, JSON.stringify(state)); } catch (err) { /* 忽略 */ }
+      apply();
+    });
+  });
+
+  apply();
+})();

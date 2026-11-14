@@ -83,10 +83,13 @@
     {% if host.drives %}
     <div class="table-wrap">
       <table class="data-table disk-table">
-        <thead><tr><th>控制器</th><th>Enclosure</th><th>Slot</th><th>型号</th><th>序列号</th><th>状态</th><th>介质错误</th><th>其他错误</th><th>Predictive</th><th>SMART</th><th>Shield</th><th>温度</th><th>健康</th></tr></thead>
+        <thead><tr><th>控制器</th><th>Enclosure</th><th class="sortable" data-disk-sort="slot">Slot</th><th>型号</th><th>序列号</th><th>状态</th><th class="sortable" data-disk-sort="media">介质错误</th><th>其他错误</th><th>Predictive</th><th>SMART</th><th>Shield</th><th class="sortable" data-disk-sort="temp">温度</th><th class="sortable" data-disk-sort="health">健康</th></tr></thead>
         <tbody>
           {% for d in host.drives %}
-          <tr>
+          <tr data-disk-row data-slot="{{ d.slot if d.slot is not none else '' }}"
+              data-media="{{ d.media_errors if d.media_errors is not none else '' }}"
+              data-temp="{{ d.temperature_c if d.temperature_c is not none else '' }}"
+              data-health="{{ d.health }}">
             <td>{{ d.controller }}</td>
             <td>{{ d.enclosure }}</td>
             <td>{{ d.slot }}</td>

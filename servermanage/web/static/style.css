@@ -2411,6 +2411,22 @@ html[data-theme="dark"] .container::-webkit-scrollbar-thumb { background: rgba(2
 }
 .disk-host-counts { font-variant-numeric: tabular-nums; }
 .disk-host-counts b { color: var(--text); font-weight: 600; }
+/* -- v0.1.154 磁盘表可按列排序 -- */
+.disk-table th.sortable {
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+.disk-table th.sortable:hover { color: var(--text); }
+.disk-table th.sortable::after {
+  content: '95';
+  margin-left: 4px;
+  font-size: 10px;
+  opacity: .35;
+}
+.disk-table th[aria-sort="ascending"]::after { content: '91'; opacity: .85; }
+.disk-table th[aria-sort="descending"]::after { content: '93'; opacity: .85; }
+
 .disk-table { font-size: 12.5px; }
 .disk-table th,
 .disk-table td { padding: 8px 10px; }
