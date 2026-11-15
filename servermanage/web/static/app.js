@@ -1192,8 +1192,14 @@
     healthCell.appendChild(counts);
     tr.appendChild(healthCell);
 
-    var collectedCell = textCell(formatStamp(host.collected_at), 'mono');
-    if (host.collected_at) { collectedCell.title = String(host.collected_at); }
+    // 采集时间显示相对时长，悬停看绝对时间：一眼判断数据是否过期。
+    var collectedCell = textCell(
+      host.collected_at ? formatRelative(host.collected_at) : '—',
+      'mono col-collected'
+    );
+    if (host.collected_at) {
+      collectedCell.title = formatStamp(host.collected_at) + '（' + String(host.collected_at) + '）';
+    }
     tr.appendChild(collectedCell);
 
     // 操作列：快捷采集 + 终端入口。用 DOM API + textContent 构建，避免把主机名当 HTML。
@@ -1429,8 +1435,10 @@
 
     var time = document.createElement('span');
     time.className = 'host-card-time mono';
-    time.textContent = formatStamp(host.collected_at);
-    if (host.collected_at) { time.title = String(host.collected_at); }
+    time.textContent = host.collected_at ? formatRelative(host.collected_at) : '—';
+    if (host.collected_at) {
+      time.title = formatStamp(host.collected_at) + '（' + String(host.collected_at) + '）';
+    }
     foot.appendChild(time);
     card.appendChild(foot);
 

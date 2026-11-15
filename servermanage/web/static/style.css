@@ -4525,3 +4525,7 @@ html[data-theme="dark"] .disk-legend-critical { color: #f87171; background: rgba
 
 /* -- v0.1.205 用户页复制占用汇总 -- */
 #user-copy-summary { font-size: 12.5px; }
+
+/* -- v0.1.206 采集时间显示相对时长 -- */
+#host-table td.col-collected { white-space: nowrap; }
+.host-card-foot .muted { white-space: nowrap; }
