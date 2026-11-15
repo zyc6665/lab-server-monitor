@@ -2705,7 +2705,8 @@
   var TIMELINE_RANGES = {
     '24h': { hours: 24, stepHours: 1, label: '24 小时' },
     '7d': { hours: 24 * 7, stepHours: 24, label: '7 天' },
-    '30d': { hours: 24 * 30, stepHours: 24, label: '30 天' }
+    '30d': { hours: 24 * 30, stepHours: 24, label: '30 天' },
+    '90d': { hours: 24 * 90, stepHours: 24, label: '90 天' }
   };
   var timelineRange = '7d';
   var alertBucket = 0;

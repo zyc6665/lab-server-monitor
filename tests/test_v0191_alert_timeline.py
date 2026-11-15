@@ -13,7 +13,7 @@ def test_timeline_card_markup():
     assert 'id="alert-timeline-card"' in html
     assert 'id="alert-timeline"' in html
     assert 'id="alert-timeline-ranges"' in html
-    assert html.count("data-timeline-range=") == 3
+    assert html.count("data-timeline-range=") == 4
     assert "24 小时" in html and "7 天" in html and "30 天" in html
     assert "timeline-key-critical" in html
     assert "timeline-key-warning" in html
