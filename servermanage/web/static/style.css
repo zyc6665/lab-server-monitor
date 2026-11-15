@@ -4513,3 +4513,12 @@ html[data-theme="dark"] .alert-count-badge { background: rgba(248, 113, 113, .18
 /* -- v0.1.203 趋势对比上一周期可关闭 -- */
 .trend-compare { display: inline-flex; align-items: center; gap: 5px; font-size: 12.5px; color: var(--text-muted); }
 .trend-compare input { margin: 0; }
+
+/* -- v0.1.204 磁盘温度色阶图例 -- */
+.disk-legend { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin: 8px 0 0; font-size: 12px; }
+.disk-legend-bar { width: 46px; height: 4px; border-radius: 2px; background: linear-gradient(90deg, var(--accent), #d97706, #dc2626); }
+.disk-legend-chip { padding: 1px 7px; border-radius: 999px; font-size: 11.5px; }
+.disk-legend-hot { color: #b45309; background: rgba(217, 119, 6, .12); }
+.disk-legend-critical { color: #b91c1c; background: rgba(220, 38, 38, .12); }
+html[data-theme="dark"] .disk-legend-hot { color: #fbbf24; background: rgba(251, 191, 36, .14); }
+html[data-theme="dark"] .disk-legend-critical { color: #f87171; background: rgba(248, 113, 113, .14); }
