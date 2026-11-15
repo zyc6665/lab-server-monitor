@@ -238,12 +238,34 @@
     if (button) { button.addEventListener('click', exportTrend); }
   }
 
+  // v0.1.211：概览卡片展示「较 24 小时前」的变化，数据来自同一份历史接口。
+  function renderStatDeltas(points) {
+    var keys = ['cpu', 'memory', 'disk'];
+    keys.forEach(function (key) {
+      var box = document.querySelector('[data-stat-delta="' + key + '"]');
+      if (!box) { return; }
+      var series = (points || [])
+        .map(function (point) { return Number(point && point[key]); })
+        .filter(function (value) { return !isNaN(value); });
+      if (series.length < 2) { box.hidden = true; return; }
+      var delta = series[series.length - 1] - series[0];
+      box.hidden = false;
+      box.classList.toggle('is-up', delta > 0.05);
+      box.classList.toggle('is-down', delta < -0.05);
+      box.textContent = Math.abs(delta) < 0.05
+        ? '较 24 小时前 持平'
+        : '较 24 小时前 ' + (delta > 0 ? '+' : '') + delta.toFixed(1) + '%';
+      box.title = series[0].toFixed(1) + '% → ' + series[series.length - 1].toFixed(1) + '%';
+    });
+  }
+
   function loadHistory(rangeKey) {
     historyRange = rangeKey;
     var url = '/api/host/' + encodeURIComponent(HOST_NAME) + '/history?range=' + encodeURIComponent(rangeKey);
     fetchJson(url).then(function (payload) {
       var points = (payload && payload.points) || [];
       historyPoints = points;
+      if (historyRange === '24h') { renderStatDeltas(points); }
       var empty = document.getElementById('trend-empty');
       if (empty) { empty.hidden = points.length > 0; }
       var stamps = points.map(function (point) { return stampOf(point.t); });

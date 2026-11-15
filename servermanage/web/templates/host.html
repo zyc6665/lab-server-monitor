@@ -82,6 +82,7 @@
     <div class="stat-body">
       <div class="stat-label">CPU 使用率</div>
       <div class="stat-value">{{ pct(metrics.cpu_usage_percent) }}</div>
+      <div class="stat-delta" data-stat-delta="cpu" hidden></div>
       <div class="stat-foot">{{ metrics.cpu_core_count or '—' }} 核心</div>
     </div>
   </article>
@@ -89,6 +90,7 @@
     <div class="stat-body">
       <div class="stat-label">内存使用率</div>
       <div class="stat-value">{% if mem and mem.total_mb %}{{ '%.1f'|format(mem.used_mb / mem.total_mb * 100) }}%{% else %}—{% endif %}</div>
+      <div class="stat-delta" data-stat-delta="memory" hidden></div>
       <div class="stat-foot">{% if mem %}{{ mem.used_mb }} / {{ mem.total_mb }} MB{% else %}—{% endif %}</div>
     </div>
   </article>
@@ -96,6 +98,7 @@
     <div class="stat-body">
       <div class="stat-label">根目录磁盘</div>
       <div class="stat-value">{{ pct(ns.root_disk) }}</div>
+      <div class="stat-delta" data-stat-delta="disk" hidden></div>
       <div class="stat-foot">GPU 利用率 {{ pct(ns.gpu) }}</div>
     </div>
   </article>
