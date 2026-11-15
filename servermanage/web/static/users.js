@@ -625,6 +625,13 @@
     sudoWrap.appendChild(triBadge(row.in_sudo));
     groups.appendChild(sudoWrap);
     head.appendChild(groups);
+    var copyButton = document.createElement('button');
+    copyButton.type = 'button';
+    copyButton.className = 'btn-link user-acct-copy';
+    copyButton.textContent = '复制';
+    copyButton.title = '复制这个账号的基本信息（含占用与显存）';
+    copyButton.addEventListener('click', function () { copyAccountInfo(copyButton, row); });
+    head.appendChild(copyButton);
     item.appendChild(head);
 
     var meta = document.createElement('div');
@@ -943,6 +950,62 @@
       params.push('status=' + encodeURIComponent(filters.status));
     }
     return params.length ? '?' + params.join('&') : '';
+  }
+
+  // -- v0.1.218 复制单个账号的信息 --
+  function copyTextToClipboard(text, done, failed) {
+    if (!text) { return; }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done, failed);
+      return;
+    }
+    var area = document.createElement('textarea');
+    area.value = text;
+    area.setAttribute('readonly', 'readonly');
+    area.style.position = 'fixed';
+    area.style.opacity = '0';
+    document.body.appendChild(area);
+    area.select();
+    try { document.execCommand('copy') ? done() : failed(); }
+    catch (err) { failed(); }
+    document.body.removeChild(area);
+  }
+
+  function accountInfoText(row) {
+    if (!row) { return ''; }
+    var lines = [];
+    lines.push('账号：' + (row.username || ''));
+    lines.push('主机：' + (row.host_name || ''));
+    lines.push('UID / GID：' + numberText(row.uid) + ' / ' + numberText(row.gid));
+    lines.push('主组：' + (row.primary_group || '—'));
+    lines.push('附加组：' + ((row.groups || []).length ? row.groups.join(', ') : '—'));
+    lines.push('家目录：' + directoryText(row, 'home'));
+    lines.push('/data：' + directoryText(row, 'data'));
+    if (row.gpu_memory_mb) {
+      lines.push('显存：' + (row.gpu_memory_mb / 1024).toFixed(1) + ' GB · ' + (row.gpu_process_count || 0) + ' 进程');
+    }
+    if (row.usage_delta_bytes !== null && row.usage_delta_bytes !== undefined) {
+      var delta = Number(row.usage_delta_bytes);
+      var sign = delta > 0 ? '+' : delta < 0 ? '-' : '';
+      lines.push('近 ' + (row.usage_delta_days || 7) + ' 天变化：' + sign + formatBytes(Math.abs(delta)));
+    }
+    if (row.collected_at) { lines.push('最近采集：' + formatTimestamp(row.collected_at)); }
+    if (row.usage_collected_at) { lines.push('占用统计：' + formatTimestamp(row.usage_collected_at)); }
+    lines.push('状态：' + statusBadgeText(row));
+    return lines.join('\r\n');
+  }
+
+  function copyAccountInfo(button, row) {
+    var original = button.textContent;
+    function done() {
+      button.textContent = '已复制';
+      window.setTimeout(function () { button.textContent = original; }, 1600);
+    }
+    function failed() {
+      button.textContent = '复制失败';
+      window.setTimeout(function () { button.textContent = original; }, 1600);
+    }
+    copyTextToClipboard(accountInfoText(row), done, failed);
   }
 
   // -- v0.1.205 复制占用汇总 --
