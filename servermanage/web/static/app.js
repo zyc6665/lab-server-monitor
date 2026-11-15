@@ -1684,7 +1684,73 @@
     applyHostFilters();
   }
 
+  // -- v0.1.220 概览分组汇总 --
+  function renderGroupSummary(hosts) {
+    var box = document.getElementById('group-summary');
+    var grid = document.getElementById('group-summary-grid');
+    if (!box || !grid) { return; }
+    var groups = {};
+    (hosts || []).forEach(function (host) {
+      var name = (host.group || '').trim() || '未分组';
+      var bucket = groups[name] || { name: name, total: 0, online: 0, alerts: 0, cpu: 0 };
+      bucket.total += 1;
+      if (host.status === 'online') { bucket.online += 1; }
+      bucket.alerts += Number(host.active_alert_count || 0);
+      bucket.cpu = Math.max(bucket.cpu, Number(host.cpu_percent || 0));
+      groups[name] = bucket;
+    });
+    var names = Object.keys(groups);
+    var real = names.filter(function (name) { return name !== '未分组'; });
+    if (!names.length || (!real.length && names.length === 1)) {
+      box.hidden = true;
+      grid.textContent = '';
+      return;
+    }
+    box.hidden = false;
+    grid.textContent = '';
+    names.sort(function (a, b) {
+      if (a === '未分组') { return 1; }
+      if (b === '未分组') { return -1; }
+      return a.localeCompare(b, 'zh-CN');
+    }).forEach(function (name) {
+      var bucket = groups[name];
+      var button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'group-summary-item';
+      button.setAttribute('data-group-summary', name);
+      var title = document.createElement('span');
+      title.className = 'group-summary-name';
+      title.textContent = name;
+      var meta = document.createElement('span');
+      meta.className = 'group-summary-meta';
+      meta.textContent = bucket.total + ' 台 · 在线 ' + bucket.online + ' · 告警 ' + bucket.alerts;
+      var cpu = document.createElement('span');
+      cpu.className = 'group-summary-cpu' + (bucket.cpu >= 90 ? ' is-critical' : bucket.cpu >= 75 ? ' is-hot' : '');
+      cpu.textContent = Math.round(bucket.cpu) + '%';
+      cpu.title = '这一组里最高的 CPU 使用率';
+      button.appendChild(title);
+      button.appendChild(meta);
+      button.appendChild(cpu);
+      if (name === '未分组') {
+        button.title = '未分组的主机不单独筛选';
+        button.disabled = true;
+        button.classList.add('is-static');
+      } else {
+        button.addEventListener('click', function () {
+          var select = document.getElementById('filter-group');
+          if (!select) { return; }
+          select.value = name;
+          applyHostFilters();
+          var table = document.getElementById('host-table');
+          if (table) { table.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+        });
+      }
+      grid.appendChild(button);
+    });
+  }
+
   function updateHosts(hosts) {
+    renderGroupSummary(hosts);
     if (!Array.isArray(hosts)) { return; }
     lastHosts = hosts.slice();
     hostsLoaded = true;
