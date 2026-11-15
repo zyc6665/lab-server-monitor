@@ -4486,3 +4486,22 @@ tr[data-disk-row] { cursor: zoom-in; }
 
 /* -- v0.1.199 磁盘分组一键折叠 -- */
 .disk-groups-toggle { font-size: 12.5px; padding: 3px 10px; }
+
+/* -- v0.1.201 主机表增加告警列 -- */
+#host-table td.col-alerts, #host-table th.col-alerts { text-align: right; width: 64px; }
+.alert-count-badge {
+  display: inline-block;
+  min-width: 20px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: rgba(220, 38, 38, .12);
+  color: #b91c1c;
+  font-size: 11.5px;
+  font-weight: 600;
+  text-align: center;
+  text-decoration: none;
+  font-variant-numeric: tabular-nums;
+}
+.alert-count-badge:hover { background: rgba(220, 38, 38, .2); }
+.alert-count-empty { color: var(--text-muted); }
+html[data-theme="dark"] .alert-count-badge { background: rgba(248, 113, 113, .18); color: #fca5a5; }

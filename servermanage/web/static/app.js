@@ -1112,6 +1112,24 @@
     }
     tr.appendChild(statusCell);
 
+    var alertCell = document.createElement('td');
+    alertCell.className = 'col-alerts';
+    var alertTotal = Number(host.active_alert_count || 0);
+    if (alertTotal > 0) {
+      var alertLink = document.createElement('a');
+      alertLink.className = 'alert-count-badge';
+      alertLink.href = '/alerts?host=' + encodeURIComponent(host.name || '') + '&status=active';
+      alertLink.title = '查看这台的 ' + alertTotal + ' 条活动告警';
+      alertLink.textContent = String(alertTotal);
+      alertCell.appendChild(alertLink);
+    } else {
+      var alertNone = document.createElement('span');
+      alertNone.className = 'alert-count-empty';
+      alertNone.textContent = '—';
+      alertCell.appendChild(alertNone);
+    }
+    tr.appendChild(alertCell);
+
     var spark = host.spark || {};
     tr.appendChild(percentCell(host.cpu_percent, spark.cpu));
     tr.appendChild(percentCell(host.memory_percent, spark.memory));
@@ -1310,6 +1328,15 @@
     if (cardTemp) { head.appendChild(cardTemp); }
     var cardUptime = uptimeChip(host.collection_uptime);
     if (cardUptime) { head.appendChild(cardUptime); }
+    var cardAlerts = Number(host.active_alert_count || 0);
+    if (cardAlerts > 0) {
+      var cardAlertLink = document.createElement('a');
+      cardAlertLink.className = 'alert-count-badge';
+      cardAlertLink.href = '/alerts?host=' + encodeURIComponent(host.name || '') + '&status=active';
+      cardAlertLink.title = '查看这台的 ' + cardAlerts + ' 条活动告警';
+      cardAlertLink.textContent = String(cardAlerts);
+      head.appendChild(cardAlertLink);
+    }
     var cardAttention = attentionChip(host);
     if (cardAttention) { head.appendChild(cardAttention); }
     if (host.silenced) {
@@ -1531,6 +1558,7 @@
     if (key === 'gpu') { return Number(host.gpu_memory_percent); }
     if (key === 'users') { return Number(host.logged_in_user_count); }
     if (key === 'status') { return host.online ? 1 : 0; }
+    if (key === 'alerts') { return Number(host.active_alert_count || 0); }
     if (key === 'health') {
       var status = (host.disk_health || {}).status || '';
       return status === 'critical' ? 3 : (status === 'warning' ? 2 : (status === 'ok' ? 1 : 0));
