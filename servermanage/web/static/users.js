@@ -308,6 +308,7 @@
   }
 
   var lastScan = null;
+  var lastPayload = null;
   var lastScanHint = '';
 
   function markScanningAccounts(scan) {
@@ -533,6 +534,7 @@
   }
 
   function renderHosts(data) {
+    lastPayload = data;
     var filters = currentFilters();
     var grid = document.getElementById('user-host-grid');
     var empty = document.getElementById('user-hosts-empty');
@@ -923,6 +925,60 @@
       params.push('status=' + encodeURIComponent(filters.status));
     }
     return params.length ? '?' + params.join('&') : '';
+  }
+
+  // -- v0.1.205 复制占用汇总 --
+  function usageSummaryText(data) {
+    if (!data || !data.hosts) { return ''; }
+    var lines = ['主机\t账号\t占用\t显存\t近 7 天变化\t占用统计'];
+    (data.hosts || []).forEach(function (host) {
+      var delta = host.delta_bytes === null || host.delta_bytes === undefined
+        ? '—'
+        : (Number(host.delta_bytes) > 0 ? '+' : Number(host.delta_bytes) < 0 ? '-' : '') + formatBytes(Math.abs(Number(host.delta_bytes)));
+      lines.push([
+        host.name,
+        String(host.accounts || 0),
+        formatBytes(host.bytes || 0),
+        host.gpu_memory_mb ? (host.gpu_memory_mb / 1024).toFixed(1) + ' GB' : '—',
+        delta,
+        host.last_usage_at ? formatTimestamp(host.last_usage_at) : '未统计',
+      ].join('\t'));
+    });
+    return lines.join('\r\n');
+  }
+
+  function copyUsageSummary(button) {
+    var text = usageSummaryText(lastPayload);
+    if (!text) { return; }
+    var original = button.textContent;
+    function done() {
+      button.textContent = '已复制';
+      window.setTimeout(function () { button.textContent = original; }, 1600);
+    }
+    function failed() {
+      button.textContent = '复制失败';
+      window.setTimeout(function () { button.textContent = original; }, 1600);
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done, failed);
+      return;
+    }
+    var area = document.createElement('textarea');
+    area.value = text;
+    area.setAttribute('readonly', 'readonly');
+    area.style.position = 'fixed';
+    area.style.opacity = '0';
+    document.body.appendChild(area);
+    area.select();
+    try { document.execCommand('copy') ? done() : failed(); }
+    catch (err) { failed(); }
+    document.body.removeChild(area);
+  }
+
+  function bindCopySummary() {
+    var button = document.getElementById('user-copy-summary');
+    if (!button) { return; }
+    button.addEventListener('click', function () { copyUsageSummary(button); });
   }
 
   function fetchUsers() {
@@ -1370,6 +1426,7 @@
   }
 
   function init() {
+    bindCopySummary();
     renderTopGrowth();
     if (!document.getElementById('user-host-grid')) { return; }
     try {

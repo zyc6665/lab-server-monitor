@@ -4522,3 +4522,6 @@ html[data-theme="dark"] .alert-count-badge { background: rgba(248, 113, 113, .18
 .disk-legend-critical { color: #b91c1c; background: rgba(220, 38, 38, .12); }
 html[data-theme="dark"] .disk-legend-hot { color: #fbbf24; background: rgba(251, 191, 36, .14); }
 html[data-theme="dark"] .disk-legend-critical { color: #f87171; background: rgba(248, 113, 113, .14); }
+
+/* -- v0.1.205 用户页复制占用汇总 -- */
+#user-copy-summary { font-size: 12.5px; }
