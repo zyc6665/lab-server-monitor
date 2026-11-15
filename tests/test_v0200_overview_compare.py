@@ -112,7 +112,7 @@ def test_api_without_compare_keeps_old_shape(tmp_path: Path):
 def test_frontend_draws_dashed_comparison():
     script = (STATIC / "app.js").read_text(encoding="utf-8")
     assert "function overviewPath(" in script
-    assert "compare=1&range=" in script
+    assert "(trendCompare ? '&compare=1' : '')" in script
     assert "'stroke-dasharray': '4 4'" in script
     template = (TEMPLATES / "overview.html").read_text(encoding="utf-8")
     assert 'id="overview-trend-hint"' in template

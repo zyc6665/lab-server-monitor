@@ -596,6 +596,24 @@
   };
   // 最近一次拉到的趋势数据，导出 CSV 时直接复用，不再请求接口。
   var overviewHistory = { range: '24h', points: [], previous: [] };
+  var TREND_COMPARE_KEY = 'overview:compare';
+  var trendCompare = true;
+
+  function readTrendCompare() {
+    try {
+      return window.localStorage.getItem(TREND_COMPARE_KEY) !== '0';
+    } catch (err) {
+      return true;
+    }
+  }
+
+  function saveTrendCompare() {
+    try {
+      window.localStorage.setItem(TREND_COMPARE_KEY, trendCompare ? '1' : '0');
+    } catch (err) {
+      return;
+    }
+  }
 
   var TREND_PREF_KEY = 'overview:trend';
   var TREND_RANGES = ['24h', '7d', '30d', '90d'];
@@ -658,11 +676,12 @@
   function loadOverviewHistory(rangeKey) {
     if (!document.getElementById('overview-trend')) { return; }
     var host = currentTrendHost();
-    var url = '/api/overview/history?compare=1&range=' + encodeURIComponent(rangeKey)
+    var url = '/api/overview/history?range=' + encodeURIComponent(rangeKey)
+      + (trendCompare ? '&compare=1' : '')
       + (host ? '&host=' + encodeURIComponent(host) : '');
     fetchJson(url).then(function (payload) {
       var points = (payload && payload.points) || [];
-      var previous = (payload && payload.previous) || [];
+      var previous = trendCompare ? ((payload && payload.previous) || []) : [];
       var empty = document.getElementById('overview-trend-empty');
       if (empty) { empty.hidden = points.length > 0; }
       var hint = document.getElementById('overview-trend-hint');
@@ -3790,6 +3809,16 @@
     if (alertExport) { alertExport.addEventListener('click', exportAlertsCsv); }
 
     bindOverviewRanges();
+    trendCompare = readTrendCompare();
+    var compareBox = document.getElementById('overview-compare');
+    if (compareBox) {
+      compareBox.checked = trendCompare;
+      compareBox.addEventListener('change', function () {
+        trendCompare = !!compareBox.checked;
+        saveTrendCompare();
+        loadOverviewHistory(overviewHistory.range || '24h');
+      });
+    }
     bindSystemCheckActions();
     bindOverviewExport();
     bindHostColumns();

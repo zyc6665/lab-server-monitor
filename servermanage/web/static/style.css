@@ -4509,3 +4509,7 @@ html[data-theme="dark"] .alert-count-badge { background: rgba(248, 113, 113, .18
 /* -- v0.1.202 保存记录可清除 -- */
 .save-log { display: flex; align-items: center; flex-wrap: wrap; gap: 2px; }
 .save-log-clear { margin-left: 8px; font-size: 12px; }
+
+/* -- v0.1.203 趋势对比上一周期可关闭 -- */
+.trend-compare { display: inline-flex; align-items: center; gap: 5px; font-size: 12.5px; color: var(--text-muted); }
+.trend-compare input { margin: 0; }
