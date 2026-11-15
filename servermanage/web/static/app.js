@@ -3510,6 +3510,28 @@
     });
   }
 
+  // v0.1.208：按 ? 打开快捷键帮助，也可点侧栏按钮。
+  function bindShortcutHelp() {
+    var dialog = document.getElementById('shortcut-help');
+    if (!dialog) { return; }
+    function open() {
+      if (dialog.open) { return; }
+      if (typeof dialog.showModal === 'function') { dialog.showModal(); } else { dialog.setAttribute('open', 'open'); }
+    }
+    var trigger = document.getElementById('shortcut-help-open');
+    if (trigger) { trigger.addEventListener('click', open); }
+    document.addEventListener('keydown', function (event) {
+      if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey) { return; }
+      var target = event.target || {};
+      var tag = (target.tagName || '').toLowerCase();
+      if (tag === 'input' || tag === 'textarea' || tag === 'select' || target.isContentEditable) { return; }
+      if (event.key === '?' || (event.key === '/' && event.shiftKey)) {
+        event.preventDefault();
+        open();
+      }
+    });
+  }
+
   function bindSearchShortcut() {
     // "/" 聚焦当前页的搜索框，Esc 清空并保留焦点。
     var ids = ['alert-search', 'user-search', 'host-filter'];
@@ -3549,6 +3571,7 @@
     bindDensity();
     restoreHostSort();
     bindSearchShortcut();
+    bindShortcutHelp();
 
     // 供全局命令面板调用当前页面的快捷操作。
     window.serverMonitorActions = {
