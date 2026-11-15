@@ -609,6 +609,8 @@
     var dialog = document.getElementById('disk-drive-dialog');
     if (!dialog) { return; }
 
+    var lastDrive = null;
+
     function show(row) {
         var table = row.closest('table');
         var heads = table ? table.querySelectorAll('thead th') : [];
@@ -617,6 +619,7 @@
         var title = document.getElementById('disk-drive-title');
         if (!body || !title) { return; }
         body.textContent = '';
+        var lines = [];
         for (var i = 0; i < cells.length; i += 1) {
             var label = heads[i] ? heads[i].textContent.trim() : '';
             if (!label) { continue; }
@@ -626,12 +629,48 @@
             dd.textContent = cells[i].textContent.trim() || '—';
             body.appendChild(dt);
             body.appendChild(dd);
+            lines.push(label + '\t' + (dd.textContent || ''));
         }
         var host = row.closest('.disk-host');
         var hostLink = host ? host.querySelector('.disk-host-id a') : null;
         var hostName = hostLink ? hostLink.textContent.trim() : '';
         title.textContent = '磁盘详情 · ' + (hostName ? hostName + ' · ' : '') + 'Slot ' + (row.getAttribute('data-slot') || '—');
+        lastDrive = { title: title.textContent, lines: lines };
         if (!dialog.open) { dialog.showModal(); }
+    }
+
+    function copyDrive(button) {
+        if (!lastDrive) { return; }
+        var text = lastDrive.title + '\n' + lastDrive.lines.join('\n');
+        function done() {
+            button.textContent = '已复制';
+            setTimeout(function () { button.textContent = '复制'; }, 1600);
+        }
+        function failed() {
+            button.textContent = '复制失败';
+            setTimeout(function () { button.textContent = '复制'; }, 1600);
+        }
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text).then(done, function () { fallback(); });
+            return;
+        }
+        fallback();
+        function fallback() {
+            try {
+                var area = document.createElement('textarea');
+                area.value = text;
+                document.body.appendChild(area);
+                area.select();
+                var ok = document.execCommand('copy');
+                document.body.removeChild(area);
+                if (ok) { done(); } else { failed(); }
+            } catch (error) { failed(); }
+        }
+    }
+
+    var copyButton = document.getElementById('disk-drive-copy');
+    if (copyButton) {
+        copyButton.addEventListener('click', function () { copyDrive(copyButton); });
     }
 
     document.addEventListener('click', function (event) {
