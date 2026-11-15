@@ -4584,3 +4584,14 @@ html[data-theme="dark"] .disk-legend-critical { color: #f87171; background: rgba
 html[data-theme="dark"] .stat-delta.is-up { color: #fbbf24; }
 html[data-theme="dark"] .stat-delta.is-down { color: #4ade80; }
 
+/* -- v0.1.215 磁盘分组标题显示最热盘 -- */
+.disk-group-temp {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.disk-group-temp.is-hot { color: #b45309; }
+.disk-group-temp.is-critical { color: #b91c1c; }
+html[data-theme="dark"] .disk-group-temp.is-hot { color: #fbbf24; }
+html[data-theme="dark"] .disk-group-temp.is-critical { color: #f87171; }
+

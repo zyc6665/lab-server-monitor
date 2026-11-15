@@ -4040,12 +4040,18 @@ def register_routes(app: Flask) -> None:
         group_stats: dict[str, dict[str, int]] = {}
         for row in host_rows:
             bucket = group_stats.setdefault(
-                row["group"], {"hosts": 0, "healthy": 0, "warning": 0, "critical": 0}
+                row["group"],
+                {"hosts": 0, "healthy": 0, "warning": 0, "critical": 0, "max_temp": None},
             )
             bucket["hosts"] += 1
             bucket["healthy"] += row["healthy"]
             bucket["warning"] += row["warning"]
             bucket["critical"] += row["critical"]
+            temp = row.get("temperature_max")
+            if isinstance(temp, (int, float)) and (
+                bucket["max_temp"] is None or temp > bucket["max_temp"]
+            ):
+                bucket["max_temp"] = float(temp)
 
         # 主机多于一个分组时，在每组第一台前面插一条分组头，方便按组查看。
         grouped_names = {row["group"] for row in host_rows}

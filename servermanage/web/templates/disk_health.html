@@ -99,6 +99,7 @@
     <span class="disk-group-count" data-group-count data-group-size="{{ host.group_size }}">{{ host.group_size }} 台主机</span>
     {% set stats = group_stats.get(host.group_header) if group_stats else none %}
     {% if stats %}
+    {% if stats.max_temp is not none %}<span class="disk-group-temp{{ ' is-hot' if stats.max_temp >= 55 else (' is-critical' if stats.max_temp >= 65 else '') }}" title="这个分组里最高的单盘温度">最高 {{ '%.0f'|format(stats.max_temp) }} °C</span>{% endif %}
     <span class="disk-group-health"><b>{{ stats.healthy }}</b> 健康{% if stats.warning %} · <b class="is-warn">{{ stats.warning }}</b> 告警{% endif %}{% if stats.critical %} · <b class="is-crit">{{ stats.critical }}</b> 严重{% endif %}</span>
     {% endif %}
   </div>
