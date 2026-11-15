@@ -18,6 +18,6 @@ def test_payload_exposes_last_usage_at():
 
 def test_host_card_shows_usage_time():
     js = USERS_JS.read_text(encoding="utf-8")
-    assert "'占用统计 ' + formatTimestamp(host.last_usage_at)" in js
+    assert "'占用统计 ' + relativeTime(host.last_usage_at)" in js
     assert ": '占用未统计');" in js
-    assert "' · 占用 ' + formatTimestamp(host.last_usage_at)" in js
+    assert "' · 占用 ' + relativeTime(host.last_usage_at)" in js

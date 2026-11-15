@@ -80,6 +80,23 @@
   }
 
   // 后端返回的是带时区偏移的 ISO 字符串，这里显式转成本地时间展示。
+  // v0.1.207：相对时长（刚刚 / N 分钟前），与概览页一致，超过 7 天回落绝对时间。
+  function relativeTime(value) {
+    if (!value) { return ''; }
+    var date = new Date(String(value));
+    if (isNaN(date.getTime())) { return String(value); }
+    var seconds = Math.round((Date.now() - date.getTime()) / 1000);
+    if (seconds < 0) { seconds = 0; }
+    if (seconds < 45) { return '刚刚'; }
+    var minutes = Math.round(seconds / 60);
+    if (minutes < 60) { return minutes + ' 分钟前'; }
+    var hours = Math.round(minutes / 60);
+    if (hours < 24) { return hours + ' 小时前'; }
+    var days = Math.round(hours / 24);
+    if (days <= 7) { return days + ' 天前'; }
+    return formatTimestamp(value);
+  }
+
   function formatTimestamp(value) {
     if (!value) { return '—'; }
     var text = String(value);
@@ -444,9 +461,10 @@
     }
     var seen = document.createElement('span');
     seen.className = 'muted';
-    seen.textContent = host.last_scan_at ? '采集 ' + formatTimestamp(host.last_scan_at) : '尚未采集';
+    seen.textContent = host.last_scan_at ? '采集 ' + relativeTime(host.last_scan_at) : '尚未采集';
+    if (host.last_scan_at) { seen.title = '上次采集：' + formatTimestamp(host.last_scan_at); }
     if (host.last_usage_at) {
-      seen.textContent += ' · 占用 ' + formatTimestamp(host.last_usage_at);
+      seen.textContent += ' · 占用 ' + relativeTime(host.last_usage_at);
     }
     foot.appendChild(seen);
     card.appendChild(foot);
@@ -789,9 +807,9 @@
       if (host.address) { parts.push(host.address); }
       parts.push(hostStatusText(host.status));
       parts.push('账号 ' + (host.accounts || 0));
-      if (host.last_scan_at) { parts.push('采集 ' + formatTimestamp(host.last_scan_at)); }
+      if (host.last_scan_at) { parts.push('采集 ' + relativeTime(host.last_scan_at)); }
       parts.push(host.last_usage_at
-        ? '占用统计 ' + formatTimestamp(host.last_usage_at)
+        ? '占用统计 ' + relativeTime(host.last_usage_at)
         : '占用未统计');
       meta.textContent = parts.join(' · ');
     }
