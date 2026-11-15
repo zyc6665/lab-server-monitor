@@ -4609,3 +4609,16 @@ html[data-theme="dark"] .disk-group-temp.is-critical { color: #f87171; }
 }
 html[data-theme="dark"] .user-acct-head .user-acct-copy { color: #94a3b8; }
 html[data-theme="dark"] .user-acct-head .user-acct-copy:hover { color: #7aa2ff; }
+
+/* -- v0.1.219 空态可清除筛选 -- */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 34px 16px;
+  text-align: center;
+}
+.empty-state[hidden] { display: none !important; }
+.empty-state .empty-state-text { margin: 0; color: var(--text-muted); font-size: 13px; }
+.empty-state .btn-link { font-size: 12.5px; }

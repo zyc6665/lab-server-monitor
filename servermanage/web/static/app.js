@@ -1585,11 +1585,23 @@
     if (totalCount > 0) {
       var table = document.getElementById('host-table');
       var empty = document.getElementById('empty-state');
+      var emptyText = document.getElementById('empty-state-text');
+      var emptyClear = document.getElementById('empty-state-clear');
+      var filtering = Boolean(group || status || keyword);
       if (table) { table.hidden = rowsVisible === 0; }
-      if (empty) {
-        empty.hidden = visible !== 0;
-        empty.textContent = visible === 0 ? '没有符合筛选条件的主机' : '暂无数据';
+      if (empty) { empty.hidden = visible !== 0; }
+      if (emptyText) {
+        if (!filtering) {
+          emptyText.textContent = '暂无主机数据';
+        } else {
+          var picked = [];
+          if (group) { picked.push('分组「' + group + '」'); }
+          if (status) { picked.push('状态「' + status + '」'); }
+          if (keyword) { picked.push('关键字「' + keyword + '」'); }
+          emptyText.textContent = '没有符合条件的主机：' + picked.join('、');
+        }
       }
+      if (emptyClear) { emptyClear.hidden = !filtering; }
     }
   }
 
@@ -3656,14 +3668,15 @@
     bindSummaryCards();
     if (keywordFilter) { keywordFilter.addEventListener('input', applyHostFilters); }
     var clearFilterButton = document.getElementById('filter-clear');
-    if (clearFilterButton) {
-      clearFilterButton.addEventListener('click', function () {
-        if (groupFilter) { groupFilter.value = ''; }
-        if (statusFilter) { statusFilter.value = ''; }
-        if (keywordFilter) { keywordFilter.value = ''; }
-        applyHostFilters();
-      });
+    var emptyClearButton = document.getElementById('empty-state-clear');
+    function clearHostFilters() {
+      if (groupFilter) { groupFilter.value = ''; }
+      if (statusFilter) { statusFilter.value = ''; }
+      if (keywordFilter) { keywordFilter.value = ''; }
+      applyHostFilters();
     }
+    if (clearFilterButton) { clearFilterButton.addEventListener('click', clearHostFilters); }
+    if (emptyClearButton) { emptyClearButton.addEventListener('click', clearHostFilters); }
     restoreHostFilters();
     applyHostFilters();
 
