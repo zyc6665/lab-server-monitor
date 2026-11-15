@@ -468,12 +468,17 @@
       var table = block.querySelector('table.disk-table');
       if (!table) { return; }
       var header = rowTexts(table.querySelector('thead tr'));
+      var bodyRows = [];
+      Array.prototype.forEach.call(table.querySelectorAll('tbody tr'), function (row) {
+        // 只导出当前界面看得见的盘：被「只看异常盘」收起的行不写进 CSV。
+        if (row.hidden) { return; }
+        bodyRows.push([hostName].concat(rowTexts(row)).map(csvCell).join(','));
+      });
+      if (!bodyRows.length) { return; }
       if (!lines.length) {
         lines.push(['主机'].concat(header).map(csvCell).join(','));
       }
-      Array.prototype.forEach.call(table.querySelectorAll('tbody tr'), function (row) {
-        lines.push([hostName].concat(rowTexts(row)).map(csvCell).join(','));
-      });
+      lines = lines.concat(bodyRows);
     });
     return lines;
   }
