@@ -14,6 +14,8 @@
   var alertSeverity = '';
   var alertKeyword = '';
   var alertHost = '';
+  var alertGroup = '';
+  var alertHostGroups = {};
   var alertCategory = '';
   var alertTimeRange = '';
   var alertSortOrder = 'desc';
@@ -2381,6 +2383,7 @@
       if (!ignoreBucket && alertBucket && bucketStartFor(alert.created_at, timelineRange) !== alertBucket) { return false; }
       if (!ignoreSeverity && alertSeverity && (alert.severity || '') !== alertSeverity) { return false; }
       if (alertHost && (alert.host_name || '') !== alertHost) { return false; }
+      if (alertGroup && (alertHostGroups[alert.host_name] || '未分组') !== alertGroup) { return false; }
       if (alertCategory && (alert.category || '') !== alertCategory) { return false; }
       if (!keyword) { return true; }
       return [alert.host_name, alert.title, alert.message, alert.category]
@@ -2586,12 +2589,42 @@
   }
 
   // v0.1.217：把当前告警筛选同步进地址栏，刷新或分享链接仍保留筛选。
+  // v0.1.221：告警页按主机分组筛选（用概览的主机-分组映射，纯前端过滤）。
+  function loadAlertGroups() {
+    var select = document.getElementById('alert-group-filter');
+    if (!select) { return; }
+    fetch('/api/overview', { cache: 'no-store' }).then(function (res) {
+      return res.ok ? res.json() : null;
+    }).then(function (data) {
+      if (!data) { return; }
+      var map = {};
+      (data.hosts || []).forEach(function (host) {
+        map[host.name] = host.group || '未分组';
+      });
+      alertHostGroups = map;
+      var groups = (data.meta && data.meta.groups) || [];
+      var current = select.value || alertGroup;
+      while (select.options.length > 1) { select.remove(1); }
+      groups.forEach(function (name) {
+        if (name === '未分组') { return; }
+        var option = document.createElement('option');
+        option.value = name;
+        option.textContent = name;
+        select.appendChild(option);
+      });
+      if (current) { select.value = current; }
+      alertGroup = select.value;
+      renderAlertRows();
+    }).catch(function () { /* 概览不可用时保持「全部分组」 */ });
+  }
+
   function syncAlertFiltersToUrl() {
     if (!window.history || !window.history.replaceState) { return; }
     var params = new URLSearchParams();
     if (alertStatus && alertStatus !== 'active') { params.set('status', alertStatus); }
     if (alertSeverity) { params.set('severity', alertSeverity); }
     if (alertHost) { params.set('host', alertHost); }
+    if (alertGroup) { params.set('group', alertGroup); }
     if (alertCategory) { params.set('category', alertCategory); }
     if (alertKeyword) { params.set('q', alertKeyword); }
     var query = params.toString();
@@ -3810,6 +3843,18 @@
     }
     if (alertHostFilter && alertHostFilter.value) {
       alertHost = alertHostFilter.value;
+    }
+    var alertGroupFilter = document.getElementById('alert-group-filter');
+    if (alertGroupFilter) {
+      if (window.URLSearchParams) {
+        var groupParam = new URLSearchParams(window.location.search).get('group');
+        if (groupParam) { alertGroup = groupParam; }
+      }
+      alertGroupFilter.addEventListener('change', function () {
+        alertGroup = alertGroupFilter.value;
+        renderAlertRows();
+      });
+      loadAlertGroups();
     }
     if (alertCategoryFilter && alertCategoryFilter.value) {
       alertCategory = alertCategoryFilter.value;

@@ -379,7 +379,7 @@ def collect_host_users(
     usage_timeout: int | None = None,
     sudo_available: bool = True,
     known_usage: dict[str, dict] | None = None,
-    usage_progress: "Callable[[str, int, int], None] | None" = None,
+    usage_progress: "Callable[[str, int, int, str], None] | None" = None,
 ) -> tuple[list[HostUserAccount], bool, bool]:
     """Collect one host's user snapshot through *runner*.
 
@@ -469,8 +469,9 @@ def collect_host_users(
                 if remaining <= 5:
                     break
                 if usage_progress is not None:
+                    upcoming = plan[index + 1][0] if index + 1 < total else ""
                     try:
-                        usage_progress(name, index, total)
+                        usage_progress(name, index, total, upcoming)
                     except Exception:  # noqa: BLE001 - progress is best effort
                         pass
                 try:

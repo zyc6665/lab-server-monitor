@@ -511,9 +511,50 @@
         + (progress ? '，已完成 ' + progress : '')
         + '，首次统计大目录需要几十分钟，结果会逐台出现。';
     }
-    hint.textContent = message;
     hint.hidden = !message;
     hint.classList.toggle('is-running', running);
+    if (!running) {
+      hint.textContent = message;
+      return;
+    }
+    // v0.1.221：统计中的进度面板（当前账号 / 下一个账号 / 总进度条）。
+    var hostsTotal = scan.hosts_total || 0;
+    var hostsDone = scan.hosts_done || 0;
+    var accountsTotal = scan.accounts_total || 0;
+    var accountsDone = scan.accounts_done || 0;
+    var fraction = accountsTotal ? accountsDone / accountsTotal : 0;
+    var percent = hostsTotal ? Math.min(100, Math.round((hostsDone + fraction) * 100 / hostsTotal)) : 0;
+    var who = scan.current_account
+      ? (scan.current_host ? scan.current_host + ' 的 ' : '') + scan.current_account
+      : '准备中';
+    hint.textContent = '';
+    var head = document.createElement('div');
+    head.className = 'usage-progress-head';
+    var dot = document.createElement('span');
+    dot.className = 'usage-progress-dot';
+    dot.setAttribute('aria-hidden', 'true');
+    var title = document.createElement('strong');
+    title.textContent = '正在统计 ' + who;
+    var count = document.createElement('span');
+    count.className = 'usage-progress-count';
+    count.textContent = (accountsTotal ? '第 ' + Math.min(accountsDone + 1, accountsTotal) + ' / ' + accountsTotal + ' 个账号 · ' : '')
+      + '已完成 ' + hostsDone + ' / ' + hostsTotal + ' 台主机';
+    head.appendChild(dot);
+    head.appendChild(title);
+    head.appendChild(count);
+    var track = document.createElement('div');
+    track.className = 'usage-progress-track';
+    var fill = document.createElement('div');
+    fill.className = 'usage-progress-fill';
+    fill.style.width = percent + '%';
+    track.appendChild(fill);
+    var next = document.createElement('div');
+    next.className = 'usage-progress-next';
+    next.textContent = (scan.next_account ? '下一个：' + scan.next_account + ' · ' : '')
+      + '首轮大目录较慢，结果会逐台出现';
+    hint.appendChild(head);
+    hint.appendChild(track);
+    hint.appendChild(next);
   }
 
   var SORT_STORE = 'users:sort';

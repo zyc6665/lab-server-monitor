@@ -72,10 +72,10 @@ def test_usage_progress_reports_each_account():
         now=datetime(2026, 11, 13, 2, 0, tzinfo=timezone.utc),
         usage_due=True,
         usage_timeout=600,
-        usage_progress=lambda name, done, total: seen.append((name, done, total)),
+        usage_progress=lambda name, done, total, upcoming: seen.append((name, done, total, upcoming)),
     )
 
-    assert seen == [("alice", 0, 2), ("bob", 1, 2)]
+    assert seen == [("alice", 0, 2, "bob"), ("bob", 1, 2, "")]
     sizes = {account.username: account.home_size_bytes for account in accounts}
     assert sizes == {"alice": 1024, "bob": 2048}
     assert refreshed is True

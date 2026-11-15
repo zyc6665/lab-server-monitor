@@ -1310,6 +1310,7 @@ def _usage_scan_state(app: Any) -> dict[str, Any]:
         "started_at": payload.get("started_at"),
         "current_host": payload.get("current_host"),
         "current_account": payload.get("current_account"),
+        "next_account": payload.get("next_account"),
         "accounts_done": int(payload.get("accounts_done") or 0),
         "accounts_total": int(payload.get("accounts_total") or 0),
     }

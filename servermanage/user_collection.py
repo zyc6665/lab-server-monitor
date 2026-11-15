@@ -182,13 +182,14 @@ def _scan_host(
             "at": collected,
         }
 
-    def report_usage(username: str, done: int, total: int) -> None:
+    def report_usage(username: str, done: int, total: int, upcoming: str = "") -> None:
         if progress is None:
             return
         progress(
             {
                 "current_host": host.name,
                 "current_account": username,
+                "next_account": upcoming,
                 "accounts_done": done,
                 "accounts_total": total,
             }

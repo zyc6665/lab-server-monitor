@@ -4652,3 +4652,45 @@ html[data-theme="dark"] .group-summary-cpu.is-hot { color: #fbbf24; }
 html[data-theme="dark"] .group-summary-cpu.is-critical { color: #f87171; }
 .group-summary-item.is-static { cursor: default; opacity: .8; }
 .group-summary-item.is-static:hover { border-color: var(--border); background: var(--surface); }
+
+/* -- v0.1.221 告警按分组筛选 -- */
+#alert-group-filter { max-width: 150px; }
+
+/* -- v0.1.221 占用统计的进度面板 -- */
+.usage-progress-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.usage-progress-head strong { font-weight: 600; }
+.usage-progress-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: usage-pulse 1.2s ease-in-out infinite;
+}
+@keyframes usage-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: .35; transform: scale(.75); }
+}
+.usage-progress-count { color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.usage-progress-track {
+  margin-top: 7px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--surface-sunken);
+  overflow: hidden;
+}
+.usage-progress-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--accent), #60a5fa);
+  transition: width .45s ease;
+}
+.usage-progress-next { margin-top: 6px; font-size: 12px; color: var(--text-muted); }
+@media (prefers-reduced-motion: reduce) {
+  .usage-progress-dot { animation: none; }
+  .usage-progress-fill { transition: none; }
+}
