@@ -13,6 +13,22 @@
       });
   }
 
+  // v0.1.214：页面内提示，替代阻塞式 alert。
+  function flash(message, isError) {
+    var box = document.getElementById('health-toast');
+    if (!box) {
+      box = document.createElement('div');
+      box.id = 'health-toast';
+      box.className = 'settings-toast';
+      document.body.appendChild(box);
+    }
+    box.className = 'settings-toast' + (isError ? ' settings-toast-error' : '');
+    box.textContent = message;
+    box.hidden = false;
+    clearTimeout(box._timer);
+    box._timer = setTimeout(function () { box.hidden = true; }, 4500);
+  }
+
   function formatBytes(value) {
     var num = Number(value || 0);
     if (!num) { return '0 B'; }
@@ -264,7 +280,7 @@
             status.textContent = '数据库已恢复，但服务重启失败，请手动关闭并重新打开工具。';
           });
         } else {
-          window.alert('数据库已恢复，请关闭并重新打开工具使配置生效。');
+          flash('数据库已恢复，请关闭并重新打开工具使配置生效。', false);
         }
       }).catch(function (error) {
         status.textContent = error.message || '恢复失败。';

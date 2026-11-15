@@ -768,7 +768,7 @@
       if (!window.confirm("确定删除主机 " + name + " 吗？")) return;
       api("DELETE", "/api/settings/hosts/" + encodeURIComponent(name))
         .then(function () { reloadToHosts(); })
-        .catch(function (error) { window.alert(error.message); });
+        .catch(function (error) { toast(error.message, true); });
     });
   });
 
@@ -779,7 +779,7 @@
       if (!newName) return;
       api("POST", "/api/settings/hosts/" + encodeURIComponent(name) + "/copy", { new_name: newName })
         .then(function () { watchHostCollection([newName]); })
-        .catch(function (error) { window.alert(error.message); });
+        .catch(function (error) { toast(error.message, true); });
     });
   });
 
