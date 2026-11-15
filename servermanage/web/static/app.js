@@ -504,19 +504,20 @@
     }
     if (numbers.length < 2) { return; }
     var width = 300, height = 84, padX = 8, padY = 8;
+    var chartH = height - 12;
     var scale = numbers.concat(history.length >= 2 ? history : []);
     var min = Math.min.apply(null, scale), max = Math.max.apply(null, scale);
     if (max - min < 1) { max = min + 1; }
-    var indexed = overviewPathIndexed(values, min, max, width, height, padX, padY);
+    var indexed = overviewPathIndexed(values, min, max, width, chartH, padX, padY);
     var points = indexed.map(function (point) { return [point[0], point[1]]; });
     [0, 0.5, 1].forEach(function (fraction) {
-      var y = padY + (height - padY * 2) * fraction;
+      var y = padY + (chartH - padY * 2) * fraction;
       svg.appendChild(overviewSvgEl('line', {
         x1: padX, x2: width - padX, y1: y, y2: y, stroke: '#e8edf5', 'stroke-width': '1'
       }));
     });
     var previousPoints = history.length >= 2
-      ? overviewPath(previous, min, max, width, height, padX, padY)
+      ? overviewPath(previous, min, max, width, chartH, padX, padY)
       : [];
     if (previousPoints.length >= 2) {
       svg.appendChild(overviewSvgEl('path', {
@@ -536,6 +537,20 @@
     }));
     var last = points[points.length - 1];
     svg.appendChild(overviewSvgEl('circle', { cx: last[0], cy: last[1], r: '2.8', fill: OVERVIEW_COLORS[key] }));
+    if (labels && labels.length) {
+      [[0, 'start'], [Math.floor((labels.length - 1) / 2), 'middle'], [labels.length - 1, 'end']].forEach(function (pair) {
+        if (!labels[pair[0]]) { return; }
+        var tick = overviewSvgEl('text', {
+          x: pair[1] === 'start' ? padX : (pair[1] === 'end' ? width - padX : width / 2),
+          y: height - 2,
+          'text-anchor': pair[1],
+          fill: '#8a93a3',
+          'font-size': '7.5'
+        });
+        tick.textContent = labels[pair[0]];
+        svg.appendChild(tick);
+      });
+    }
     bindOverviewHover(svg, indexed, values, key, labels || []);
   }
 
@@ -554,7 +569,7 @@
     });
     var dot = overviewSvgEl('circle', { cx: 0, cy: 0, r: '3', fill: OVERVIEW_COLORS[key], opacity: '0' });
     var label = overviewSvgEl('text', {
-      x: width - 8, y: height - 4, 'text-anchor': 'end',
+      x: width - 8, y: 11, 'text-anchor': 'end',
       fill: '#5b6472', 'font-size': '9', opacity: '0'
     });
     svg.appendChild(cross);

@@ -13,7 +13,7 @@ def test_overview_hover_helpers():
     assert "function overviewPathIndexed(values, min, max, width, height, padX, padY)" in js
     assert "function bindOverviewHover(svg, indexed, values, key, labels)" in js
     assert "function overviewTrendText(value, key)" in js
-    assert "var indexed = overviewPathIndexed(values, min, max, width, height, padX, padY);" in js
+    assert "var indexed = overviewPathIndexed(values, min, max, width, chartH, padX, padY);" in js
     assert "bindOverviewHover(svg, indexed, values, key, labels || []);" in js
     assert "points.map(overviewPointLabel)" in js
 
