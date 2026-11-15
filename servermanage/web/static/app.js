@@ -2507,6 +2507,22 @@
     return tr;
   }
 
+  // v0.1.217：把当前告警筛选同步进地址栏，刷新或分享链接仍保留筛选。
+  function syncAlertFiltersToUrl() {
+    if (!window.history || !window.history.replaceState) { return; }
+    var params = new URLSearchParams();
+    if (alertStatus && alertStatus !== 'active') { params.set('status', alertStatus); }
+    if (alertSeverity) { params.set('severity', alertSeverity); }
+    if (alertHost) { params.set('host', alertHost); }
+    if (alertCategory) { params.set('category', alertCategory); }
+    if (alertKeyword) { params.set('q', alertKeyword); }
+    var query = params.toString();
+    var next = window.location.pathname + (query ? '?' + query : '') + window.location.hash;
+    if (next !== window.location.pathname + window.location.search + window.location.hash) {
+      window.history.replaceState(null, '', next);
+    }
+  }
+
   function renderAlertRows() {
     applyAlertWidths();
     var body = document.getElementById('alerts-body');
@@ -2565,6 +2581,7 @@
     updateGroupExpandLabel(filteredAlerts(true));
     renderAlertPagination(total, pages, start, visible.length);
     updateAlertSelectionSummary();
+    syncAlertFiltersToUrl();
     renderAlertTimeline(filteredAlerts(true));
   }
 
@@ -3697,6 +3714,12 @@
     // 支持从命令面板/外部链接带 q、severity 参数进入告警页时直接带上筛选条件。
     if (alertSearch && alertSearch.value) {
       alertKeyword = alertSearch.value;
+    } else if (!alertKeyword && window.URLSearchParams) {
+      var keywordParam = new URLSearchParams(window.location.search).get('q');
+      if (keywordParam && alertSearch) {
+        alertSearch.value = keywordParam;
+        alertKeyword = keywordParam;
+      }
     }
     if (alertSeverityFilter && alertSeverityFilter.value) {
       alertSeverity = alertSeverityFilter.value;
