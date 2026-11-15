@@ -1171,9 +1171,61 @@
   }
 
   // -- host table filter -------------------------------------------------
+  var hostCopyButton = document.getElementById("host-copy-list");
+  if (hostCopyButton) {
+    hostCopyButton.addEventListener("click", function () { copyHostList(hostCopyButton); });
+  }
+
   var hostFilterInput = qs("#host-filter");
   var hostSortSelect = qs("#host-sort");
   var hostFilterCount = qs("#host-filter-count");
+
+  // v0.1.216：把当前筛出来的主机复制成制表符文本，方便贴到工单或文档里。
+  function hostListText() {
+    var body = document.querySelector("#host-settings-table tbody");
+    if (!body) { return ""; }
+    var lines = [["名称", "状态", "地址", "端口", "用户", "认证", "分组", "负责人", "采集时间"].join("\t")];
+    Array.prototype.forEach.call(body.querySelectorAll("tr"), function (row) {
+      if (row.hidden || !row.getAttribute("data-host-name")) { return; }
+      var cells = row.querySelectorAll("td");
+      if (cells.length < 9) { return; }
+      var values = [];
+      for (var i = 0; i < 9; i += 1) {
+        values.push((cells[i].textContent || "").replace(/\s+/g, " ").trim());
+      }
+      lines.push(values.join("\t"));
+    });
+    return lines.join("\n");
+  }
+
+  function copyHostList(button) {
+    var text = hostListText();
+    if (!text) { return; }
+    function done() {
+      button.textContent = "已复制";
+      setTimeout(function () { button.textContent = "复制清单"; }, 1600);
+    }
+    function failed() {
+      button.textContent = "复制失败";
+      setTimeout(function () { button.textContent = "复制清单"; }, 1600);
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done, function () { fallback(); });
+      return;
+    }
+    fallback();
+    function fallback() {
+      try {
+        var area = document.createElement("textarea");
+        area.value = text;
+        document.body.appendChild(area);
+        area.select();
+        var ok = document.execCommand("copy");
+        document.body.removeChild(area);
+        if (ok) { done(); } else { failed(); }
+      } catch (error) { failed(); }
+    }
+  }
 
   function applyHostTable() {
     var body = qs("#host-settings-table tbody");
