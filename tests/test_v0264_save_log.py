@@ -21,7 +21,7 @@ def test_script_records_and_renders_log():
     assert "function recordSave(sectionName)" in js
     assert "function renderSaveLog()" in js
     assert "recordSave(sectionName);" in js
-    assert "box.textContent = \"上次保存：\" + parts.join(\" · \");" in js
+    assert "label.textContent = \"上次保存：\" + parts.join(\" · \");" in js
     assert "renderSaveLog();\n" in js
 
 

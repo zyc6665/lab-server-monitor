@@ -251,10 +251,11 @@
   function renderSaveLog() {
     var box = document.getElementById("settings-save-log");
     if (!box) return;
+    var label = document.getElementById("settings-save-log-text") || box;
     var entries = readSaveLog();
     if (!entries.length) {
       box.hidden = true;
-      box.textContent = "";
+      label.textContent = "";
       return;
     }
     var parts = entries.slice(0, 3).map(function (entry) {
@@ -264,7 +265,7 @@
         : pad2(when.getMonth() + 1) + "-" + pad2(when.getDate()) + " " + pad2(when.getHours()) + ":" + pad2(when.getMinutes());
       return (SECTION_TITLES[entry.section] || entry.section) + " " + stamp;
     });
-    box.textContent = "上次保存：" + parts.join(" · ");
+    label.textContent = "上次保存：" + parts.join(" · ");
     box.hidden = false;
   }
 
@@ -1306,6 +1307,18 @@
   }
 
   renderSaveLog();
+
+  var saveLogClear = document.getElementById("settings-save-log-clear");
+  if (saveLogClear) {
+    saveLogClear.addEventListener("click", function () {
+      try {
+        window.localStorage.removeItem(SAVE_LOG_KEY);
+      } catch (err) {
+        return;
+      }
+      renderSaveLog();
+    });
+  }
 
   // Fill any values that were not rendered server-side (e.g. list edits).
   fillSection("monitoring", initial.monitoring);
