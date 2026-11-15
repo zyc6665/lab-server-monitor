@@ -3035,8 +3035,10 @@
     var headers = ['级别', '类别', '主机', '标题', '内容', '时间', '状态'];
     var lines = [headers.join(',')];
     rows.forEach(function (alert) {
-      var cells = [alert.severity, alert.category, alert.host_name, alert.title,
-        alert.message, alert.created_at, alert.status].map(function (value) {
+      var cells = [SEVERITY_TEXT[alert.severity] || alert.severity,
+        alertCategoryLabel(alert.category), alert.host_name, alert.title,
+        alert.message, formatStamp(alert.created_at),
+        STATUS_TEXT[alert.status] || alert.status].map(function (value) {
         var text = value === null || value === undefined ? '' : String(value);
         return '"' + text.replace(/"/g, '""') + '"';
       });
