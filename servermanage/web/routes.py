@@ -250,7 +250,8 @@ def _settings_snapshot(config: AppConfig) -> dict[str, Any]:
                 "tags": list(host.tags),
                 "disk_mounts": list(host.disk_mounts),
                 "auth_type": auth.type,
-                "key_path": auth.key_path,
+                # config 解析会把 key_path 变成 Path，直接进 tojson 会让 /settings 500。
+                "key_path": str(auth.key_path) if auth.key_path is not None else None,
                 "disk_health": None,
                 "password_configured": bool(auth.password or auth.password_env),
                 "key_configured": bool(auth.key_path or auth.key_data),

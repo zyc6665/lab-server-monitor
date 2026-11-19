@@ -69,6 +69,11 @@
   }
   var toastTimer = null;
   function toast(text, isError) {
+    // v0.1.225：优先复用全局 toast（app.js 提供的所有页面统一样式）。
+    if (window.servermonitorToast) {
+      window.servermonitorToast(text, isError ? "error" : "success");
+      return;
+    }
     var node = document.getElementById("settings-toast");
     if (!node) {
       node = document.createElement("div");

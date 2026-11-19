@@ -1722,7 +1722,7 @@
       var name = (host.group || '').trim() || '未分组';
       var bucket = groups[name] || { name: name, total: 0, online: 0, alerts: 0, cpu: 0 };
       bucket.total += 1;
-      if (host.status === 'online') { bucket.online += 1; }
+      if (host.online) { bucket.online += 1; }
       bucket.alerts += Number(host.active_alert_count || 0);
       bucket.cpu = Math.max(bucket.cpu, Number(host.cpu_percent || 0));
       groups[name] = bucket;
@@ -1752,13 +1752,16 @@
       var meta = document.createElement('span');
       meta.className = 'group-summary-meta';
       meta.textContent = bucket.total + ' 台 · 在线 ' + bucket.online + ' · 告警 ' + bucket.alerts;
+      var top = document.createElement('span');
+      top.className = 'group-summary-top';
       var cpu = document.createElement('span');
       cpu.className = 'group-summary-cpu' + (bucket.cpu >= 90 ? ' is-critical' : bucket.cpu >= 75 ? ' is-hot' : '');
       cpu.textContent = Math.round(bucket.cpu) + '%';
       cpu.title = '这一组里最高的 CPU 使用率';
-      button.appendChild(title);
+      top.appendChild(title);
+      top.appendChild(cpu);
+      button.appendChild(top);
       button.appendChild(meta);
-      button.appendChild(cpu);
       if (name === '未分组') {
         button.title = '未分组的主机不单独筛选';
         button.disabled = true;
