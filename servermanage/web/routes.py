@@ -24,8 +24,10 @@ import os
 import secrets
 import smtplib
 import tempfile
+import threading
 import time
 from collections import deque
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -1104,6 +1106,48 @@ def _system_diagnostics(config, db_path, *, now: datetime | None = None) -> dict
     return {"status": overall, "checks": checks}
 
 
+# v0.1.226：30 天容量预测是慢变化信号，30 秒轮询不必每次重读 30 天历史重算回归。
+_CAPACITY_CACHE: dict[tuple, tuple[float, list[dict[str, Any]]]] = {}
+_CAPACITY_CACHE_TTL_SECONDS = 300.0
+_CAPACITY_CACHE_LOCK = threading.Lock()
+
+
+def _capacity_forecasts_cached(config, db_path, tz, now, thresholds, days: int = 30):
+    """Capacity forecasts with a five-minute TTL, keyed by fleet + thresholds."""
+    key = (
+        str(db_path),
+        str(getattr(tz, "key", None) or str(tz)),
+        int(days),
+        tuple(sorted(server.name for server in config.servers)),
+        (
+            float(thresholds.cpu_percent),
+            float(thresholds.memory_percent),
+            float(thresholds.disk_percent),
+            float(thresholds.gpu_memory_percent),
+            float(thresholds.disk_temperature_c),
+        ),
+    )
+    now_mono = time.monotonic()
+    with _CAPACITY_CACHE_LOCK:
+        cached = _CAPACITY_CACHE.get(key)
+        if cached is not None and now_mono - cached[0] < _CAPACITY_CACHE_TTL_SECONDS:
+            return cached[1]
+    result = capacity.build_capacity_forecasts(
+        db_path,
+        config.servers,
+        tz=timezone.utc if tz is None else tz,
+        now=now,
+        thresholds=thresholds,
+        days=days,
+    )
+    with _CAPACITY_CACHE_LOCK:
+        _CAPACITY_CACHE[key] = (now_mono, result)
+        if len(_CAPACITY_CACHE) > 8:
+            oldest = min(_CAPACITY_CACHE, key=lambda item: _CAPACITY_CACHE[item][0])
+            _CAPACITY_CACHE.pop(oldest, None)
+    return result
+
+
 def _build_overview(config, db_path) -> dict[str, Any]:
     """Build the ``/api/overview`` payload shared by the JSON API and pages.
 
@@ -1220,12 +1264,8 @@ def _build_overview(config, db_path) -> dict[str, Any]:
             "has_groups": any(server.group and server.group != "未分组" for server in config.servers),
         },
         "hosts": hosts,
-        "capacity": capacity.build_capacity_forecasts(
-            db_path,
-            config.servers,
-            tz=tz,
-            now=now,
-            thresholds=config.alerts.thresholds,
+        "capacity": _capacity_forecasts_cached(
+            config, db_path, tz, now, config.alerts.thresholds
         ),
     }
 
@@ -1496,14 +1536,8 @@ def _build_my_summary(config, db_path, *, tz=None) -> dict[str, Any]:
 
 
 
-def _gpu_usage_by_user(host_name: str, db_path) -> dict[str, dict[str, Any]]:
-    """Sum GPU memory per Linux account for one host, from the latest snapshot.
-
-    Uses the ``nvidia-smi`` process list that the poller already collects, so this
-    adds no extra work on the server. Returns ``{username: {"mb", "procs"}}``.
-    """
-    snapshot = storage.get_host_snapshot(host_name, db_path)
-    metrics = (snapshot or {}).get("metrics") or {}
+def _gpu_usage_from_metrics(metrics: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    """Sum GPU memory per Linux account from one host's metrics snapshot."""
     usage: dict[str, dict[str, Any]] = {}
     for proc in metrics.get("gpu_processes") or []:
         if not isinstance(proc, dict):
@@ -1517,21 +1551,45 @@ def _gpu_usage_by_user(host_name: str, db_path) -> dict[str, dict[str, Any]]:
     return usage
 
 
+def _gpu_usage_by_user(host_name: str, db_path) -> dict[str, dict[str, Any]]:
+    """Sum GPU memory per Linux account for one host, from the latest snapshot.
+
+    Uses the ``nvidia-smi`` process list that the poller already collects, so this
+    adds no extra work on the server. Returns ``{username: {"mb", "procs"}}``.
+    """
+    snapshot = storage.get_host_snapshot(host_name, db_path)
+    metrics = (snapshot or {}).get("metrics") or {}
+    return _gpu_usage_from_metrics(metrics)
+
+
 def _build_user_rows(
     host_name: str,
     db_path,
     tz=None,
     server: Any = None,
+    *,
+    precomputed: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
-    """Return the merged present/missing rows for one host."""
-    rows = _merge_user_rows(
-        host_name,
-        storage.get_host_user_snapshot(host_name, db_path),
-        storage.get_user_baseline(host_name, db_path),
-        server,
-    )
-    deltas = storage.get_user_usage_deltas(host_name, db_path, days=_USAGE_DELTA_DAYS)
-    gpu_usage = _gpu_usage_by_user(host_name, db_path)
+    """Return the merged present/missing rows for one host.
+
+    ``precomputed`` carries fleet-wide reads already fetched for the 30 s users
+    poll (snapshots / baselines / deltas / gpu usage).  ``None`` entries fall
+    back to the per-host query so other callers stay on the simple path.
+    """
+    shared = precomputed or {}
+    snapshot_rows = shared.get("snapshots")
+    if snapshot_rows is None:
+        snapshot_rows = storage.get_host_user_snapshot(host_name, db_path)
+    baseline_rows = shared.get("baselines")
+    if baseline_rows is None:
+        baseline_rows = storage.get_user_baseline(host_name, db_path)
+    rows = _merge_user_rows(host_name, snapshot_rows, baseline_rows, server)
+    deltas = shared.get("deltas")
+    if deltas is None:
+        deltas = storage.get_user_usage_deltas(host_name, db_path, days=_USAGE_DELTA_DAYS)
+    gpu_usage = shared.get("gpu_usage")
+    if gpu_usage is None:
+        gpu_usage = _gpu_usage_by_user(host_name, db_path)
     for row in rows:
         info = deltas.get(str(row.get("username") or ""))
         row["usage_delta_bytes"] = info.get("delta") if info else None
@@ -1622,6 +1680,15 @@ def _build_users_payload(
     statuses: dict[str, str] = {}
     addresses = {server.name: server.host for server in config.servers}
     servers_by_name = {server.name: server for server in config.servers}
+    # v0.1.226：全部主机一次批量读齐（快照/基线/增量/扫描状态/GPU 占用），
+    # 30 秒轮询不再每台主机开 5 个连接。
+    fleet_snapshots = storage.get_all_host_user_snapshots(db_path)
+    fleet_baselines = storage.get_all_user_baselines(db_path)
+    fleet_deltas = storage.get_all_user_usage_deltas(db_path, days=_USAGE_DELTA_DAYS)
+    fleet_states = storage.get_all_user_scan_states(db_path)
+    latest_by_host = {
+        item["host_name"]: item for item in storage.get_all_host_snapshots(db_path)
+    }
     for name in all_names:
         if not enabled[name]:
             statuses[name] = "disabled"
@@ -1641,8 +1708,21 @@ def _build_users_payload(
                 }
             )
             continue
-        rows = _build_user_rows(name, db_path, tz, servers_by_name.get(name))
-        state = storage.get_user_scan_state(name, db_path)
+        host_snapshot = latest_by_host.get(name)
+        precomputed = {
+            "snapshots": fleet_snapshots.get(name),
+            "baselines": fleet_baselines.get(name),
+            "deltas": fleet_deltas.get(name),
+            "gpu_usage": (
+                _gpu_usage_from_metrics((host_snapshot or {}).get("metrics") or {})
+                if host_snapshot is not None
+                else None
+            ),
+        }
+        rows = _build_user_rows(
+            name, db_path, tz, servers_by_name.get(name), precomputed=precomputed
+        )
+        state = fleet_states.get(name)
         host_status = _user_host_status(state)
         statuses[name] = host_status
         all_rows.extend(rows)
@@ -2574,11 +2654,12 @@ def register_routes(app: Flask) -> None:
         if days not in (7, 30, 90):
             return jsonify({"error": "invalid_days"}), 400
         config = _config(app)
-        hosts = capacity.build_capacity_forecasts(
+        hosts = _capacity_forecasts_cached(
+            config,
             _db_path(app),
-            config.servers,
-            tz=resolve_timezone(config.app.timezone),
-            thresholds=config.alerts.thresholds,
+            resolve_timezone(config.app.timezone),
+            None,
+            config.alerts.thresholds,
             days=days,
         )
         thresholds = config.alerts.thresholds
@@ -3521,10 +3602,12 @@ def register_routes(app: Flask) -> None:
 
     @app.post("/api/settings/hosts/test-batch")
     def api_test_hosts_batch():
-        """Probe several saved hosts, one temporary connection at a time.
+        """Probe several saved hosts with a small connection pool.
 
         Nothing is persisted and the response only carries a status line; secret
-        material from the config is never copied into the payload.
+        material from the config is never copied into the payload.  Serial
+        probing burned one connect timeout per unreachable host inside a single
+        HTTP request, so the fleet is checked in parallel instead.
         """
         service, error = _settings_or_404(app)
         if error is not None:
@@ -3539,17 +3622,13 @@ def register_routes(app: Flask) -> None:
             return jsonify({"error": "invalid_payload"}), 400
         config = _config(app)
         servers = {server.name: server for server in config.servers}
-        results = []
-        for name in names:
+
+        def probe_one(name: str) -> dict[str, Any]:
             if service.get_host(name) is None:
-                results.append({"name": name, "ok": False, "detail": "主机不存在"})
-                continue
+                return {"name": name, "ok": False, "detail": "主机不存在"}
             host_config = servers.get(name)
             if host_config is None:
-                results.append(
-                    {"name": name, "ok": False, "detail": "主机配置不可用"}
-                )
-                continue
+                return {"name": name, "ok": False, "detail": "主机配置不可用"}
             try:
                 with SSHClientWrapper(
                     host=host_config,
@@ -3559,15 +3638,21 @@ def register_routes(app: Flask) -> None:
                         "echo ok", timeout=config.ssh.command_timeout
                     )
                 detail = (probe.stdout or probe.stderr or "").strip()
-                results.append(
-                    {
-                        "name": name,
-                        "ok": probe.exit_status == 0,
-                        "detail": detail,
-                    }
-                )
+                return {
+                    "name": name,
+                    "ok": probe.exit_status == 0,
+                    "detail": detail,
+                }
             except Exception as exc:  # noqa: BLE001 - text-only error surface
-                results.append({"name": name, "ok": False, "detail": str(exc)})
+                return {"name": name, "ok": False, "detail": str(exc)}
+
+        if len(names) <= 1:
+            results = [probe_one(name) for name in names]
+        else:
+            # 一台掉线主机要吃满 connect_timeout，串行探测会让浏览器先超时。
+            workers = max(1, min(4, len(names)))
+            with ThreadPoolExecutor(max_workers=workers) as executor:
+                results = list(executor.map(probe_one, names))
         return jsonify({"results": results})
 
     @app.post("/api/settings/hosts/<name>/probe")

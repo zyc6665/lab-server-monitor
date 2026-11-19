@@ -1,4 +1,5 @@
-/* SSH terminal page (v1.4).  xterm.js + per-session SSE; no third-party network calls. */
+/* SSH terminal page (v1.4).  xterm.js + per-session SSE; no third-party network calls.
+ * v0.1.226：断线一键重连、标签可键盘操作、xterm 配色跟随页面明暗主题。 */
 (function () {
   "use strict";
 
@@ -26,6 +27,15 @@
     return bytes;
   }
 
+  function terminalTheme() {
+    // 浅色主题下沿用终端面板的浅色背景，暗色保持原配色。
+    const dark = document.documentElement.getAttribute("data-theme") === "dark";
+    if (dark) {
+      return { background: "#0b1220", foreground: "#dbeafe", cursor: "#60a5fa" };
+    }
+    return { background: "#f8fafc", foreground: "#0f172a", cursor: "#2563eb" };
+  }
+
   async function api(url, options) {
     const opts = Object.assign({ headers: {} }, options || {});
     opts.headers = Object.assign({ "X-CSRF-Token": csrfToken }, opts.headers || {});
@@ -45,19 +55,37 @@
     return response;
   }
 
+  function markDisconnected(record) {
+    record.dead = true;
+    record.tab.classList.add("is-dead");
+    record.reconnect.hidden = false;
+    setStatus(record.hostName + " 连接已断开，可点击标签上的「重连」", true);
+  }
+
   function createTab(hostName, sessionId) {
     emptyEl.hidden = true;
     const tab = document.createElement("div");
     tab.className = "terminal-tab";
     tab.setAttribute("role", "tab");
+    tab.tabIndex = 0;
     tab.dataset.session = sessionId;
     const label = document.createElement("span");
+    label.className = "tab-label";
     label.textContent = hostName;
-    const close = document.createElement("span");
+    const reconnect = document.createElement("button");
+    reconnect.type = "button";
+    reconnect.className = "tab-reconnect";
+    reconnect.textContent = "重连";
+    reconnect.title = "重新连接 " + hostName + "（会建立新会话）";
+    reconnect.hidden = true;
+    const close = document.createElement("button");
+    close.type = "button";
     close.className = "tab-close";
     close.textContent = "×";
     close.title = "关闭终端";
+    close.setAttribute("aria-label", "关闭 " + hostName + " 的终端");
     tab.appendChild(label);
+    tab.appendChild(reconnect);
     tab.appendChild(close);
     tabsEl.appendChild(tab);
 
@@ -71,14 +99,14 @@
       convertEol: true,
       fontSize: 13,
       fontFamily: 'Consolas, "Cascadia Mono", "Courier New", monospace',
-      theme: { background: "#0b1220", foreground: "#dbeafe", cursor: "#60a5fa" }
+      theme: terminalTheme()
     });
     const fit = new window.FitAddon.FitAddon();
     term.loadAddon(fit);
     term.open(pane);
     try { fit.fit(); } catch (err) { /* pane hidden initially */ }
 
-    const record = { hostName, sessionId, tab, pane, term, fit, source: null };
+    const record = { hostName, sessionId, tab, pane, term, fit, source: null, dead: false, reconnect };
     panes.set(sessionId, record);
 
     const stream = new EventSource("/api/ssh/sessions/" + encodeURIComponent(sessionId) + "/stream");
@@ -87,7 +115,7 @@
       if (event.data) term.write(base64ToBytes(event.data));
     };
     stream.onerror = function () {
-      if (panes.has(sessionId)) setStatus("连接已断开", true);
+      if (panes.has(sessionId) && !record.dead) markDisconnected(record);
     };
 
     term.onData(function (data) {
@@ -106,15 +134,49 @@
     });
 
     tab.addEventListener("click", function (event) {
-      if (event.target === close) return;
+      if (event.target === close || event.target === reconnect) return;
       activate(sessionId);
+    });
+    // 标签可键盘操作：Enter/空格激活，左右方向键在标签间移动。
+    tab.addEventListener("keydown", function (event) {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        activate(sessionId);
+      } else if (event.key === "ArrowRight" || event.key === "ArrowLeft") {
+        const order = Array.from(tabsEl.querySelectorAll(".terminal-tab"));
+        const index = order.indexOf(tab);
+        const next = order[index + (event.key === "ArrowRight" ? 1 : -1)];
+        if (next) { next.focus(); }
+      }
     });
     close.addEventListener("click", function (event) {
       event.stopPropagation();
       closeSession(sessionId);
     });
+    reconnect.addEventListener("click", function (event) {
+      event.stopPropagation();
+      reconnectSession(record);
+    });
     activate(sessionId);
     return record;
+  }
+
+  async function reconnectSession(record) {
+    if (!record || !record.dead) return;
+    const hostName = record.hostName;
+    setStatus("正在重新连接 " + hostName + "…");
+    reconnectFor(record);
+    await openSessionFor(hostName);
+  }
+
+  function reconnectFor(record) {
+    // 旧会话在服务端已不存在，静默清理本地标签。
+    try { if (record.source) record.source.close(); } catch (err) { /* noop */ }
+    try { record.term.dispose(); } catch (err) { /* noop */ }
+    record.tab.remove();
+    record.pane.remove();
+    panes.delete(record.sessionId);
+    if (panes.size === 0) emptyEl.hidden = false;
   }
 
   function activate(sessionId) {
@@ -146,9 +208,7 @@
     setStatus("");
   }
 
-  async function openSession() {
-    const hostName = hostSelect ? hostSelect.value : "";
-    if (!hostName) return;
+  async function openSessionFor(hostName) {
     if (!isDesktop) {
       setStatus("SSH 终端只在桌面客户端中可用", true);
       return;
@@ -171,10 +231,25 @@
     }
   }
 
+  async function openSession() {
+    const hostName = hostSelect ? hostSelect.value : "";
+    if (!hostName) return;
+    await openSessionFor(hostName);
+  }
+
   if (newButton) newButton.addEventListener("click", openSession);
   if (hostSelect) hostSelect.addEventListener("keydown", function (event) {
     if (event.key === "Enter") openSession();
   });
+
+  // xterm 配色跟随页面明暗主题切换。
+  const themeObserver = new MutationObserver(function () {
+    const theme = terminalTheme();
+    panes.forEach(function (record) {
+      try { record.term.options.theme = theme; } catch (err) { /* disposed */ }
+    });
+  });
+  themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
 
   const preset = new URLSearchParams(window.location.search).get("host");
   if (preset && hostSelect) {

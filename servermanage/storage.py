@@ -3813,6 +3813,49 @@ def get_all_host_user_snapshots(db_path: Path) -> dict[str, list[dict]]:
     return snapshots
 
 
+def get_all_user_baselines(db_path: Path) -> dict[str, list[dict]]:
+    """Return every baseline grouped by host name in one query.
+
+    The users page polls all hosts every 30 s; a per-host query meant one
+    connection per host on top of the snapshot and delta reads.
+    """
+    db_path = Path(db_path)
+    if not db_path.exists():
+        return {}
+
+    conn = _connect(db_path)
+    try:
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute(
+            "SELECT * FROM host_user_baseline ORDER BY host_name, username"
+        ).fetchall()
+    finally:
+        conn.close()
+
+    baselines: dict[str, list[dict]] = {}
+    for row in rows:
+        baselines.setdefault(row["host_name"], []).append(_decode_user_row(row))
+    return baselines
+
+
+def get_all_user_scan_states(db_path: Path) -> dict[str, dict]:
+    """Return the scan-state row for every host in one query."""
+    db_path = Path(db_path)
+    if not db_path.exists():
+        return {}
+
+    conn = _connect(db_path)
+    try:
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute(
+            "SELECT * FROM host_user_scan_state"
+        ).fetchall()
+    finally:
+        conn.close()
+
+    return {str(row["host_name"]): dict(row) for row in rows}
+
+
 def upsert_user_baseline(
     host_name: str,
     account: dict,
@@ -4273,6 +4316,31 @@ def top_user_growth(
     return items[:limit]
 
 
+def _deltas_from_samples(samples: dict[str, list[tuple[str, int]]]) -> dict[str, dict]:
+    """Aggregate per-username ``[(collected_at, total)]`` into delta dicts."""
+    deltas: dict[str, dict] = {}
+    for username, points in samples.items():
+        if len(points) < 2:
+            deltas[username] = {
+                "delta": None,
+                "base": points[0][1] if points else None,
+                "current": points[-1][1] if points else None,
+                "since": points[0][0] if points else None,
+                "points": len(points),
+            }
+            continue
+        base = points[0][1]
+        current = points[-1][1]
+        deltas[username] = {
+            "delta": current - base,
+            "base": base,
+            "current": current,
+            "since": points[0][0],
+            "points": len(points),
+        }
+    return deltas
+
+
 def get_user_usage_deltas(
     host_name: str,
     db_path: Path,
@@ -4307,24 +4375,43 @@ def get_user_usage_deltas(
     finally:
         conn.close()
 
-    deltas: dict[str, dict] = {}
-    for username, points in samples.items():
-        if len(points) < 2:
-            deltas[username] = {
-                "delta": None,
-                "base": points[0][1] if points else None,
-                "current": points[-1][1] if points else None,
-                "since": points[0][0] if points else None,
-                "points": len(points),
-            }
-            continue
-        base = points[0][1]
-        current = points[-1][1]
-        deltas[username] = {
-            "delta": current - base,
-            "base": base,
-            "current": current,
-            "since": points[0][0],
-            "points": len(points),
-        }
-    return deltas
+    return _deltas_from_samples(samples)
+
+
+def get_all_user_usage_deltas(
+    db_path: Path,
+    *,
+    days: int = 7,
+    now: datetime | None = None,
+) -> dict[str, dict[str, dict]]:
+    """Return per-host usage deltas for the whole fleet in one query.
+
+    Maps ``host_name`` to the same ``username -> delta`` mapping that
+    :func:`get_user_usage_deltas` returns for a single host, so the 30 s users
+    poll needs one round trip instead of one per host.
+    """
+    db_path = Path(db_path)
+    if not db_path.exists():
+        return {}
+    moment = now or datetime.now(timezone.utc)
+    since = (moment - timedelta(days=max(1, int(days)))).isoformat()
+
+    conn = _connect(db_path)
+    try:
+        cursor = conn.execute(
+            "SELECT host_name, username, collected_at, home_size_bytes, data_size_bytes"
+            " FROM host_user_usage_history"
+            " WHERE collected_at >= ?"
+            " ORDER BY host_name, username, collected_at",
+            (since,),
+        )
+        grouped: dict[str, dict[str, list[tuple[str, int]]]] = {}
+        for host_name, username, collected_at, home, data in cursor.fetchall():
+            total = int(home or 0) + int(data or 0)
+            grouped.setdefault(str(host_name), {}).setdefault(str(username), []).append(
+                (collected_at, total)
+            )
+    finally:
+        conn.close()
+
+    return {host: _deltas_from_samples(samples) for host, samples in grouped.items()}
