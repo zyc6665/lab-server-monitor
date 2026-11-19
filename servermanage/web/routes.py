@@ -1123,12 +1123,9 @@ def _build_overview(config, db_path) -> dict[str, Any]:
     mounts_by_host = {server.name: server.disk_mounts for server in config.servers}
 
     active_silences = storage.list_silences(db_path, active_only=True)
-    active_alerts = storage.list_alerts(db_path, status="active", limit=100_000)
-    alert_counts: dict[str, int] = {}
-    for alert in active_alerts:
-        host_name = alert.get("host_name")
-        if host_name:
-            alert_counts[host_name] = alert_counts.get(host_name, 0) + 1
+    # One grouped aggregate instead of materialising every active alert row.
+    alert_counts = storage.count_active_alerts_by_host(db_path)
+    active_alert_total = sum(alert_counts.values())
 
     # 24 h CPU/memory series for the inline sparkline in every host row.  One
     # query for all hosts, so the 30 s poll stays a single cheap read.
@@ -1151,6 +1148,13 @@ def _build_overview(config, db_path) -> dict[str, Any]:
         LOGGER.exception("Failed to count recent samples")
         sample_counts = {}
     expected_polls = max(1, int(24 * 3600 / max(60, int(config.app.poll_interval_seconds or 600))))
+
+    # 服务检查快照同样一次读完，避免每台主机一次查询的 N+1。
+    try:
+        check_results = storage.get_all_host_check_results(db_path)
+    except Exception:  # noqa: BLE001 - diagnostics must never break the overview
+        LOGGER.exception("Failed to load host check results")
+        check_results = {}
 
     names: list[str] = []
     for server in config.servers:
@@ -1193,9 +1197,7 @@ def _build_overview(config, db_path) -> dict[str, Any]:
                 silenced=bool(matched),
                 silenced_until=silenced_until,
                 active_alert_count=alert_counts.get(host_name, 0),
-                checks=_summarize_checks(
-                    storage.get_host_check_results(host_name, db_path)
-                ),
+                checks=_summarize_checks(check_results.get(host_name, [])),
                 spark=sparklines.get(host_name),
                 collection_uptime={
                     "samples": sample_counts.get(host_name, 0),
@@ -1209,7 +1211,7 @@ def _build_overview(config, db_path) -> dict[str, Any]:
         "summary": {
             "online": online,
             "offline": len(hosts) - online,
-            "active_alerts": len(active_alerts),
+            "active_alerts": active_alert_total,
         },
         "meta": {
             "groups": groups,
@@ -3110,6 +3112,9 @@ def register_routes(app: Flask) -> None:
             safety = safety_dir / f"pre-restore-{stamp}.db"
             storage.backup_database(db_path, safety)
             storage.restore_database(incoming, db_path)
+            # A restored file may come from an older release: re-run the schema
+            # even though this process already initialised this path before.
+            storage.init_storage(db_path, daily_summary_tz=None, force=True)
         finally:
             incoming.unlink(missing_ok=True)
 

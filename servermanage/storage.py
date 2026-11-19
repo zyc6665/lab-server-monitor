@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import sqlite3
+import threading
 import time as _time
 from collections.abc import Mapping, Sequence
 from contextlib import closing
@@ -469,10 +470,59 @@ def _ensure_host_metrics_columns(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE host_metrics_history ADD COLUMN temperature_c REAL")
 
 
-def init_storage(db_path: Path, *, daily_summary_tz: str | None = "UTC") -> None:
+def _connect(db_path: Path, *, timeout: float = 10.0) -> sqlite3.Connection:
+    """Open a connection with the pragmas every reader and writer here wants.
+
+    WAL mode is stored in the database file, but ``busy_timeout`` and
+    ``synchronous`` are per-connection, so each connection reapplies them.
+    ``NORMAL`` under WAL is corruption-safe and keeps the 30 s dashboard poll
+    from fighting the collector over fsyncs.
+    """
+    conn = sqlite3.connect(db_path, timeout=timeout)
+    try:
+        conn.execute(f"PRAGMA busy_timeout = {int(timeout * 1000)}")
+        conn.execute("PRAGMA synchronous = NORMAL")
+    except sqlite3.DatabaseError:  # pragma: no cover - unreadable file
+        pass
+    return conn
+
+
+# Schema work is idempotent and slow, so each process initialises a database
+# file at most once per timezone key instead of before every single write.
+_INITIALIZED: set[tuple[str, str]] = set()
+_INIT_LOCK = threading.Lock()
+
+
+def init_storage(
+    db_path: Path,
+    *,
+    daily_summary_tz: str | None = "UTC",
+    force: bool = False,
+) -> None:
     db_path = Path(db_path)
     db_path.parent.mkdir(parents=True, exist_ok=True)
-    with sqlite3.connect(db_path) as conn:
+    if not db_path.exists():
+        # A previous database may have left stale -wal/-shm siblings behind;
+        # replaying them into a brand-new file would resurrect old pages, so
+        # start clean.
+        db_path.with_name(db_path.name + "-wal").unlink(missing_ok=True)
+        db_path.with_name(db_path.name + "-shm").unlink(missing_ok=True)
+    cache_key = (str(db_path.resolve()), daily_summary_tz or "")
+    if not force:
+        with _INIT_LOCK:
+            if cache_key in _INITIALIZED and db_path.exists():
+                return
+    conn = _connect(db_path)
+    try:
+        try:
+            # WAL lets the dashboard poll read while the collector writes
+            # instead of failing with "database is locked".  It persists in
+            # the file, so re-running it also heals restored databases.
+            conn.execute("PRAGMA journal_mode = WAL")
+        except sqlite3.DatabaseError:  # pragma: no cover - network shares etc.
+            LOGGER.warning(
+                "WAL mode unavailable for %s; keeping the default journal", db_path
+            )
         # On a brand-new file this must be set before any table exists.  Older
         # databases keep auto_vacuum=0 until maintain_database() performs its
         # one-time compaction.
@@ -496,6 +546,13 @@ def init_storage(db_path: Path, *, daily_summary_tz: str | None = "UTC") -> None
         conn.executescript(_CREATE_USER_TABLES_SQL)
         _ensure_user_snapshot_columns(conn)
         conn.executescript(_CREATE_USER_INDEX_SQL)
+        conn.commit()
+    finally:
+        # Close for real: a lingering handle would keep the -wal file locked
+        # on Windows and break "delete and recreate" flows.
+        conn.close()
+    with _INIT_LOCK:
+        _INITIALIZED.add(cache_key)
 
 
 def _percent_value(used: float | None, total: float | None) -> float | None:
@@ -713,7 +770,7 @@ def persist_host_reports(
         LOGGER.info("No successful host reports to persist")
         return
 
-    with sqlite3.connect(db_path) as conn:
+    with _connect(db_path) as conn:
         conn.row_factory = sqlite3.Row
         conn.executemany(
             """
@@ -753,7 +810,7 @@ def backfill_daily_summary(db_path: Path, tz: tzinfo = timezone.utc) -> int:
     db_path = Path(db_path)
     if not db_path.exists():
         return 0
-    with sqlite3.connect(db_path) as conn:
+    with _connect(db_path) as conn:
         conn.row_factory = sqlite3.Row
         raw_rows = conn.execute(
             """
@@ -904,7 +961,7 @@ def fetch_host_history(
 
     if range_key == "24h":
         cutoff = (current - timedelta(hours=24)).astimezone(timezone.utc).isoformat()
-        with sqlite3.connect(db_path) as conn:
+        with _connect(db_path) as conn:
             conn.row_factory = sqlite3.Row
             rows = conn.execute(
                 """
@@ -962,7 +1019,7 @@ def fetch_host_history(
 
     days = {"7d": 7, "30d": 30, "90d": 90}[range_key]
     start_day = (current.astimezone(tz).date() - timedelta(days=days - 1)).isoformat()
-    with sqlite3.connect(db_path) as conn:
+    with _connect(db_path) as conn:
         conn.row_factory = sqlite3.Row
         rows = conn.execute(
             """
@@ -1029,7 +1086,7 @@ def fetch_overview_history(
     if range_key == "24h":
         cutoff = (current - timedelta(hours=24)).astimezone(timezone.utc).isoformat()
         ceiling = current.astimezone(timezone.utc).isoformat()
-        with sqlite3.connect(db_path) as conn:
+        with _connect(db_path) as conn:
             conn.row_factory = sqlite3.Row
             rows = conn.execute(
                 """
@@ -1070,7 +1127,7 @@ def fetch_overview_history(
     days = {"7d": 7, "30d": 30, "90d": 90}[range_key]
     start_day = (current.astimezone(tz).date() - timedelta(days=days - 1)).isoformat()
     end_day = current.astimezone(tz).date().isoformat()
-    with sqlite3.connect(db_path) as conn:
+    with _connect(db_path) as conn:
         conn.row_factory = sqlite3.Row
         rows = conn.execute(
             """
@@ -1150,7 +1207,7 @@ def fetch_alert_history(
         cutoff = datetime.combine(cutoff, datetime.min.time(), tzinfo=tz).astimezone(timezone.utc)
     cutoff_text = cutoff.isoformat()
 
-    with sqlite3.connect(db_path) as conn:
+    with _connect(db_path) as conn:
         rows = conn.execute(
             "SELECT created_at, severity FROM alerts WHERE created_at >= ? ORDER BY created_at ASC",
             (cutoff_text,),
@@ -1191,7 +1248,7 @@ def list_task_states(db_path: Path) -> list[dict[str, object]]:
     db_path = Path(db_path)
     if not db_path.exists():
         return []
-    with sqlite3.connect(db_path) as conn:
+    with _connect(db_path) as conn:
         conn.row_factory = sqlite3.Row
         try:
             rows = conn.execute(
@@ -1202,7 +1259,7 @@ def list_task_states(db_path: Path) -> list[dict[str, object]]:
     return [dict(row) for row in rows]
 
 
-_INTEGRITY_CACHE: dict[tuple[str, int, int], tuple[float, tuple[bool, str]]] = {}
+_INTEGRITY_CACHE: dict[str, tuple[float, tuple[bool, str]]] = {}
 
 
 def database_integrity(
@@ -1213,15 +1270,16 @@ def database_integrity(
     """Run SQLite's quick integrity check and return ``(ok, message)``.
 
     ``quick_check`` reads the whole database, so dashboard polling must not run
-    it every 30 seconds.  Callers may pass ``cache_seconds`` to reuse the result
-    while the database file is unchanged (size and mtime are part of the key).
+    it every 30 seconds.  ``cache_seconds`` reuses the previous result for that
+    long.  The key is the file path only: the collector writes metrics almost
+    continuously, so an mtime-based key never hit and every poll rescanned the
+    whole file.
     """
     db_path = Path(db_path)
     if not db_path.exists():
         return False, "数据库文件不存在"
     try:
-        stat = db_path.stat()
-        cache_key = (str(db_path.resolve()), stat.st_size, stat.st_mtime_ns)
+        cache_key: str | None = str(db_path.resolve())
     except OSError:
         cache_key = None
     if cache_key is not None and cache_seconds > 0:
@@ -1229,7 +1287,7 @@ def database_integrity(
         if cached is not None and _time.monotonic() - cached[0] < cache_seconds:
             return cached[1]
     try:
-        conn = sqlite3.connect(db_path)
+        conn = _connect(db_path)
         try:
             rows = conn.execute("PRAGMA quick_check").fetchall()
         finally:
@@ -1254,7 +1312,7 @@ def count_active_critical_alerts(db_path: Path) -> int:
     db_path = Path(db_path)
     if not db_path.exists():
         return 0
-    with sqlite3.connect(db_path) as conn:
+    with _connect(db_path) as conn:
         try:
             row = conn.execute(
                 "SELECT COUNT(*) FROM alerts"
@@ -1280,7 +1338,7 @@ def maintain_database(
     db_path = Path(db_path)
     if not db_path.exists():
         return {"vacuumed": False, "incremental": False, "free_pages": 0}
-    conn = sqlite3.connect(db_path)
+    conn = _connect(db_path)
     try:
         auto_vacuum = int(conn.execute("PRAGMA auto_vacuum").fetchone()[0])
         page_count = int(conn.execute("PRAGMA page_count").fetchone()[0])
@@ -1325,7 +1383,7 @@ def system_stats(db_path: Path) -> dict[str, object]:
     }
     if not db_path.exists():
         return stats
-    with sqlite3.connect(db_path) as conn:
+    with _connect(db_path) as conn:
         try:
             stats["host_snapshots"] = int(conn.execute(
                 "SELECT COUNT(*) FROM host_latest_snapshot"
@@ -1366,7 +1424,7 @@ def _summary_rows_for_week(
 ) -> list[sqlite3.Row]:
     if not Path(db_path).exists():
         return []
-    with sqlite3.connect(db_path) as conn:
+    with _connect(db_path) as conn:
         conn.row_factory = sqlite3.Row
         try:
             return conn.execute(
@@ -1437,7 +1495,7 @@ def fetch_daily_points_for_week(
     WHERE collected_at >= ? AND collected_at < ? AND success = 1
     """
 
-    with sqlite3.connect(db_path) as conn:
+    with _connect(db_path) as conn:
         conn.row_factory = sqlite3.Row
         raw_rows = conn.execute(sql, (start_iso, end_iso)).fetchall()
 
@@ -1545,7 +1603,7 @@ def fetch_weekly_metrics(
     WHERE collected_at >= ? AND collected_at < ? AND success = 1
     """
 
-    with sqlite3.connect(db_path) as conn:
+    with _connect(db_path) as conn:
         conn.row_factory = sqlite3.Row
         raw_rows = conn.execute(sql, (start_iso, end_iso)).fetchall()
 
@@ -1634,7 +1692,7 @@ def save_host_snapshot(host_report: HostReport, db_path: Path) -> None:
     )
     raw_json = dump_json(host_report)
 
-    with sqlite3.connect(db_path) as conn:
+    with _connect(db_path) as conn:
         conn.execute(
             """
             INSERT INTO host_latest_snapshot (host_name, collected_at, success, raw_json)
@@ -1660,7 +1718,7 @@ def get_host_snapshot(host_name: str, db_path: Path) -> dict | None:
     if not db_path.exists():
         return None
 
-    with sqlite3.connect(db_path) as conn:
+    with _connect(db_path) as conn:
         conn.row_factory = sqlite3.Row
         row = conn.execute(
             "SELECT host_name, collected_at, success, raw_json"
@@ -1682,22 +1740,83 @@ def get_host_snapshot(host_name: str, db_path: Path) -> dict | None:
 
 
 def get_all_host_snapshots(db_path: Path) -> list[dict]:
-    """Return one snapshot dict per host, ordered by host name."""
+    """Return one snapshot dict per host, ordered by host name.
+
+    One query for the whole fleet: the 30 s dashboard poll used to open a
+    fresh connection per host, which needless doubled the lock contention
+    with the collector.
+    """
     db_path = Path(db_path)
     if not db_path.exists():
         return []
 
-    with sqlite3.connect(db_path) as conn:
+    with _connect(db_path) as conn:
+        conn.row_factory = sqlite3.Row
         rows = conn.execute(
-            "SELECT host_name FROM host_latest_snapshot ORDER BY host_name"
+            "SELECT host_name, collected_at, success, raw_json"
+            " FROM host_latest_snapshot ORDER BY host_name"
         ).fetchall()
 
     snapshots: list[dict] = []
-    for (host_name,) in rows:
-        snapshot = get_host_snapshot(host_name, db_path)
-        if snapshot is not None:
-            snapshots.append(snapshot)
+    for row in rows:
+        raw = json.loads(row["raw_json"]) if row["raw_json"] else {}
+        snapshots.append(
+            {
+                "host_name": row["host_name"],
+                "collected_at": row["collected_at"],
+                "success": bool(row["success"]),
+                "metrics": raw.get("metrics", {}),
+                "errors": raw.get("errors", []),
+            }
+        )
     return snapshots
+
+
+def get_all_host_check_results(db_path: Path) -> dict[str, list[dict]]:
+    """Return the latest check snapshot for every host in one query.
+
+    Maps ``host_name`` to the same ordered rows that
+    :func:`get_host_check_results` returns for a single host.
+    """
+    db_path = Path(db_path)
+    if not db_path.exists():
+        return {}
+
+    with _connect(db_path) as conn:
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute(
+            """
+            SELECT host_name, check_name, check_type, target, status,
+                   message, latency_ms, checked_at
+            FROM host_check_snapshot
+            ORDER BY host_name, check_name
+            """
+        ).fetchall()
+
+    grouped: dict[str, list[dict]] = {}
+    for row in rows:
+        grouped.setdefault(str(row["host_name"]), []).append(dict(row))
+    return grouped
+
+
+def count_active_alerts_by_host(db_path: Path) -> dict[str, int]:
+    """Count active alerts per host with one grouped aggregate.
+
+    The overview used to materialise every active alert row (limit 100 000)
+    just to count them per host; this keeps the 30 s poll to a single index
+    scan and never builds alert dicts at all.
+    """
+    db_path = Path(db_path)
+    if not db_path.exists():
+        return {}
+
+    with _connect(db_path) as conn:
+        rows = conn.execute(
+            "SELECT host_name, COUNT(*) FROM alerts"
+            " WHERE status = 'active' AND host_name IS NOT NULL"
+            " GROUP BY host_name"
+        ).fetchall()
+    return {str(row[0]): int(row[1]) for row in rows}
 
 
 # ---------------------------------------------------------------------------
@@ -1732,7 +1851,7 @@ def save_host_check_results(
         for item in results
     ]
 
-    conn = sqlite3.connect(db_path)
+    conn = _connect(db_path)
     try:
         conn.execute("BEGIN IMMEDIATE")
         conn.execute(
@@ -1762,7 +1881,7 @@ def get_host_check_results(host_name: str, db_path: Path) -> list[dict]:
     if not db_path.exists():
         return []
 
-    with sqlite3.connect(db_path) as conn:
+    with _connect(db_path) as conn:
         conn.row_factory = sqlite3.Row
         rows = conn.execute(
             """
@@ -1784,7 +1903,7 @@ def delete_host_check_results(host_name: str, db_path: Path) -> None:
     if not db_path.exists():
         return
 
-    with sqlite3.connect(db_path) as conn:
+    with _connect(db_path) as conn:
         conn.execute(
             "DELETE FROM host_check_snapshot WHERE host_name = ?", (host_name,)
         )
@@ -1825,7 +1944,7 @@ def append_host_check_history(
     ]
 
     keep = max(1, int(keep))
-    conn = sqlite3.connect(db_path)
+    conn = _connect(db_path)
     try:
         conn.execute("BEGIN IMMEDIATE")
         conn.executemany(
@@ -1866,7 +1985,7 @@ def get_host_check_history(
         return {}
 
     limit = max(1, int(limit))
-    with sqlite3.connect(db_path) as conn:
+    with _connect(db_path) as conn:
         conn.row_factory = sqlite3.Row
         rows = conn.execute(
             """
@@ -1904,7 +2023,7 @@ def count_recent_samples_by_host(
 
     now = now or datetime.now(timezone.utc)
     since = _to_iso_utc(now - timedelta(hours=max(1, int(hours))))
-    with sqlite3.connect(db_path) as conn:
+    with _connect(db_path) as conn:
         rows = conn.execute(
             "SELECT host_name, COUNT(*) FROM host_metrics_history "
             "WHERE collected_at >= ? GROUP BY host_name",
@@ -1932,7 +2051,7 @@ def count_recent_samples(
 
     now = now or datetime.now(timezone.utc)
     since = _to_iso_utc(now - timedelta(hours=max(1, int(hours))))
-    with sqlite3.connect(db_path) as conn:
+    with _connect(db_path) as conn:
         row = conn.execute(
             "SELECT COUNT(*) FROM host_metrics_history WHERE host_name = ? AND collected_at >= ?",
             (host_name, since),
@@ -1961,7 +2080,7 @@ def fetch_host_sparklines(
     now = now or datetime.now(timezone.utc)
     since = _to_iso_utc(now - timedelta(hours=max(1, int(hours))))
 
-    with sqlite3.connect(db_path) as conn:
+    with _connect(db_path) as conn:
         conn.row_factory = sqlite3.Row
         rows = conn.execute(
             """
@@ -2022,7 +2141,7 @@ def fetch_host_uptime_strip(
     ]
     if db_path.exists():
         since_iso = _to_iso_utc(since)
-        with sqlite3.connect(db_path) as conn:
+        with _connect(db_path) as conn:
             rows = conn.execute(
                 "SELECT collected_at, success FROM host_metrics_history"
                 " WHERE host_name = ? AND collected_at >= ?"
@@ -2071,7 +2190,7 @@ def fetch_host_network_rates(
     if not db_path.exists():
         return empty
 
-    with sqlite3.connect(db_path) as conn:
+    with _connect(db_path) as conn:
         rows = conn.execute(
             """
             SELECT collected_at, net_rx_bytes, net_tx_bytes
@@ -2191,7 +2310,7 @@ def save_disk_health(report: DiskHealthReport, db_path: Path) -> None:
         for drive in report.physical_drives
     ]
 
-    with sqlite3.connect(db_path) as conn:
+    with _connect(db_path) as conn:
         # Always write the batch header, even for zero-drive reports, so the
         # report's own ``status`` / ``message`` are not lost.
         conn.execute(
@@ -2257,7 +2376,7 @@ def get_disk_health(host_name: str, db_path: Path) -> dict | None:
     if not db_path.exists():
         return None
 
-    with sqlite3.connect(db_path) as conn:
+    with _connect(db_path) as conn:
         conn.row_factory = sqlite3.Row
         header = conn.execute(
             "SELECT collected_at, status, message FROM disk_health_snapshot"
@@ -2323,32 +2442,109 @@ def get_disk_health(host_name: str, db_path: Path) -> dict | None:
 
 
 def get_all_disk_health(db_path: Path) -> list[dict]:
-    """Return the latest disk-health batch for every host."""
+    """Return the latest disk-health batch for every host.
+
+    Same shape as :func:`get_disk_health` per host, but fetched with four
+    queries for the whole fleet (header + one per component table) instead of
+    four per host.
+    """
     db_path = Path(db_path)
     if not db_path.exists():
         return []
 
-    with sqlite3.connect(db_path) as conn:
-        rows = conn.execute(
+    latest = (
+        "WITH latest AS ("
+        " SELECT host_name, MAX(collected_at) AS collected_at"
+        " FROM disk_health_snapshot GROUP BY host_name"
+        ")"
+    )
+    with _connect(db_path) as conn:
+        conn.row_factory = sqlite3.Row
+        headers = conn.execute(
+            f"""
+            {latest}
+            SELECT h.host_name, h.collected_at, h.status, h.message
+              FROM latest l
+              JOIN disk_health_snapshot h
+                ON h.host_name = l.host_name AND h.collected_at = l.collected_at
+             ORDER BY h.host_name
             """
-            SELECT host_name FROM (
-                SELECT host_name FROM disk_health_snapshot
-                UNION
-                SELECT host_name FROM disk_controller_snapshot
-                UNION
-                SELECT host_name FROM disk_vd_snapshot
-                UNION
-                SELECT host_name FROM disk_pd_snapshot
-            ) ORDER BY host_name
+        ).fetchall()
+        if not headers:
+            return []
+        controllers = conn.execute(
+            f"""
+            {latest}
+            SELECT c.host_name, c.controller, c.model, c.firmware, c.bbu_state,
+                   c.health, c.reasons
+              FROM latest l
+              JOIN disk_controller_snapshot c
+                ON c.host_name = l.host_name AND c.collected_at = l.collected_at
+             ORDER BY c.host_name, c.controller
+            """
+        ).fetchall()
+        virtual_drives = conn.execute(
+            f"""
+            {latest}
+            SELECT v.host_name, v.controller, v.vd_id, v.raid_level, v.state,
+                   v.size, v.health, v.reasons
+              FROM latest l
+              JOIN disk_vd_snapshot v
+                ON v.host_name = l.host_name AND v.collected_at = l.collected_at
+             ORDER BY v.host_name, v.controller, v.vd_id
+            """
+        ).fetchall()
+        physical_drives = conn.execute(
+            f"""
+            {latest}
+            SELECT p.host_name, p.controller, p.enclosure, p.slot, p.did, p.model,
+                   p.serial, p.state, p.media_errors, p.other_errors,
+                   p.predictive_failures, p.smart_alert, p.temperature_c,
+                   p.shield_counter, p.health, p.reasons
+              FROM latest l
+              JOIN disk_pd_snapshot p
+                ON p.host_name = l.host_name AND p.collected_at = l.collected_at
+             ORDER BY p.host_name, p.controller, p.enclosure, p.slot
             """
         ).fetchall()
 
-    results: list[dict] = []
-    for (host_name,) in rows:
-        health = get_disk_health(host_name, db_path)
-        if health is not None:
-            results.append(health)
-    return results
+    results: dict[str, dict] = {}
+    for row in headers:
+        results[str(row["host_name"])] = {
+            "host_name": row["host_name"],
+            "collected_at": row["collected_at"],
+            "status": row["status"],
+            "message": row["message"],
+            "controllers": [],
+            "virtual_drives": [],
+            "physical_drives": [],
+        }
+
+    for row in controllers:
+        entry = results.get(str(row["host_name"]))
+        if entry is None:
+            continue
+        item = {key: row[key] for key in row.keys() if key != "host_name"}
+        item["reasons"] = _load_reasons(item.get("reasons"))
+        entry["controllers"].append(item)
+    for row in virtual_drives:
+        entry = results.get(str(row["host_name"]))
+        if entry is None:
+            continue
+        item = {key: row[key] for key in row.keys() if key != "host_name"}
+        item["reasons"] = _load_reasons(item.get("reasons"))
+        entry["virtual_drives"].append(item)
+    for row in physical_drives:
+        entry = results.get(str(row["host_name"]))
+        if entry is None:
+            continue
+        item = {key: row[key] for key in row.keys() if key != "host_name"}
+        item["reasons"] = _load_reasons(item.get("reasons"))
+        if item.get("smart_alert") is not None:
+            item["smart_alert"] = bool(item["smart_alert"])
+        entry["physical_drives"].append(item)
+
+    return [results[name] for name in sorted(results)]
 
 
 # ---------------------------------------------------------------------------
@@ -2375,7 +2571,7 @@ def insert_alert(
     created_at_text = (
         created_at if created_at is not None else datetime.now(timezone.utc)
     ).isoformat()
-    with sqlite3.connect(db_path) as conn:
+    with _connect(db_path) as conn:
         cursor = conn.execute(
             "INSERT INTO alerts"
             " (created_at, host_name, category, severity, title, message,"
@@ -2401,7 +2597,7 @@ def find_latest_alert(fingerprint: str, db_path: Path) -> dict | None:
     if not db_path.exists():
         return None
 
-    with sqlite3.connect(db_path) as conn:
+    with _connect(db_path) as conn:
         conn.row_factory = sqlite3.Row
         row = conn.execute(
             "SELECT * FROM alerts WHERE fingerprint = ?"
@@ -2439,7 +2635,7 @@ def update_alert(
         return
 
     values.append(alert_id)
-    with sqlite3.connect(db_path) as conn:
+    with _connect(db_path) as conn:
         conn.execute(
             f"UPDATE alerts SET {', '.join(assignments)} WHERE id = ?", values
         )
@@ -2463,7 +2659,7 @@ def close_alerts_for_host(
     db_path = Path(db_path)
     if not db_path.exists():
         return 0
-    conn = sqlite3.connect(db_path)
+    conn = _connect(db_path)
     try:
         cursor = conn.execute(
             "UPDATE alerts SET status = ?"
@@ -2514,7 +2710,7 @@ def list_alerts(
     sql += " ORDER BY created_at DESC, id DESC LIMIT ?"
     params.append(int(limit))
 
-    with sqlite3.connect(db_path) as conn:
+    with _connect(db_path) as conn:
         conn.row_factory = sqlite3.Row
         rows = conn.execute(sql, params).fetchall()
 
@@ -2548,7 +2744,7 @@ def count_alerts_by_status(
         clause = " WHERE created_at >= ?"
         params.append(since)
 
-    with sqlite3.connect(db_path) as conn:
+    with _connect(db_path) as conn:
         rows = conn.execute(
             f"SELECT status, COUNT(*) AS count FROM alerts{clause} GROUP BY status",
             params,
@@ -2571,7 +2767,7 @@ def list_alerts_for_host(
     if not db_path.exists():
         return []
 
-    with sqlite3.connect(db_path) as conn:
+    with _connect(db_path) as conn:
         conn.row_factory = sqlite3.Row
         rows = conn.execute(
             "SELECT * FROM alerts WHERE host_name = ?"
@@ -2633,7 +2829,7 @@ def insert_silence(
     init_storage(db_path)
 
     created_at = datetime.now(timezone.utc).isoformat()
-    with sqlite3.connect(db_path) as conn:
+    with _connect(db_path) as conn:
         cursor = conn.execute(
             "INSERT INTO alert_silences"
             " (scope_type, scope, reason, starts_at, ends_at, created_at, created_by)"
@@ -2672,7 +2868,7 @@ def list_silences(
         return []
 
     try:
-        with sqlite3.connect(db_path) as conn:
+        with _connect(db_path) as conn:
             conn.row_factory = sqlite3.Row
             raw_rows = conn.execute(
                 "SELECT * FROM alert_silences ORDER BY id"
@@ -2710,7 +2906,7 @@ def delete_silence(silence_id: int, db_path: Path) -> bool:
         return False
 
     try:
-        with sqlite3.connect(db_path) as conn:
+        with _connect(db_path) as conn:
             cursor = conn.execute(
                 "DELETE FROM alert_silences WHERE id = ?", (int(silence_id),)
             )
@@ -2731,7 +2927,7 @@ def get_task_state(task_name: str, db_path: Path) -> dict | None:
     if not db_path.exists():
         return None
 
-    with sqlite3.connect(db_path) as conn:
+    with _connect(db_path) as conn:
         conn.row_factory = sqlite3.Row
         row = conn.execute(
             "SELECT task_name, last_run_at, last_result FROM task_state"
@@ -2753,7 +2949,7 @@ def set_task_state(
     db_path = Path(db_path)
     init_storage(db_path)
 
-    with sqlite3.connect(db_path) as conn:
+    with _connect(db_path) as conn:
         conn.execute(
             "INSERT INTO task_state (task_name, last_run_at, last_result)"
             " VALUES (?, ?, ?)"
@@ -2795,7 +2991,7 @@ def record_ssh_session_start(
     init_storage(db_path)
     started = started_at if started_at is not None else _ssh_audit_now()
 
-    with sqlite3.connect(db_path) as conn:
+    with _connect(db_path) as conn:
         cursor = conn.execute(
             "INSERT INTO ssh_audit_sessions"
             " (host_name, username, server_username, remote_addr, started_at,"
@@ -2821,7 +3017,7 @@ def record_ssh_session_end(
         return False
     ended = ended_at if ended_at is not None else _ssh_audit_now()
 
-    with sqlite3.connect(db_path) as conn:
+    with _connect(db_path) as conn:
         cursor = conn.execute(
             "UPDATE ssh_audit_sessions"
             " SET status = ?, error = ?, ended_at = ?"
@@ -2839,7 +3035,7 @@ def list_ssh_sessions(db_path: Path, limit: int = 100) -> list[sqlite3.Row]:
         return []
 
     try:
-        with sqlite3.connect(db_path) as conn:
+        with _connect(db_path) as conn:
             conn.row_factory = sqlite3.Row
             rows = conn.execute(
                 "SELECT id, host_name, username, server_username, remote_addr,"
@@ -2893,7 +3089,7 @@ def purge_old_data(
     reference = now if now is not None else datetime.now(timezone.utc)
     cutoff = (reference - timedelta(days=retention_days)).isoformat()
 
-    with sqlite3.connect(db_path) as conn:
+    with _connect(db_path) as conn:
         for table in _PURGE_TABLES:
             cursor = conn.execute(
                 f"DELETE FROM {table} WHERE collected_at < ?", (cutoff,)
@@ -2927,7 +3123,7 @@ def prune_host_metrics(db_path: Path, max_points_per_host: int = 100) -> int:
     if not db_path.exists():
         return 0
     limit = max(1, int(max_points_per_host))
-    with sqlite3.connect(db_path) as conn:
+    with _connect(db_path) as conn:
         cursor = conn.execute(
             """
             DELETE FROM host_metrics_history
@@ -2970,7 +3166,7 @@ def prune_disk_health(
     reference = now if now is not None else datetime.now(timezone.utc)
     cutoff = (reference - timedelta(days=max(1, int(retention_days)))).isoformat()
     keep_count = max(1, int(max_batches_per_host))
-    with sqlite3.connect(db_path) as conn:
+    with _connect(db_path) as conn:
         headers = conn.execute(
             "SELECT host_name, collected_at FROM disk_health_snapshot"
             " ORDER BY host_name, collected_at DESC"
@@ -3017,7 +3213,7 @@ def prune_alert_history(
         return 0
     reference = now if now is not None else datetime.now(timezone.utc)
     cutoff = (reference - timedelta(days=max(1, int(retention_days)))).isoformat()
-    with sqlite3.connect(db_path) as conn:
+    with _connect(db_path) as conn:
         cursor = conn.execute(
             "DELETE FROM alerts WHERE status = 'resolved' AND created_at < ?",
             (cutoff,),
@@ -3036,7 +3232,7 @@ def prune_ssh_audit(
         return 0
     reference = now if now is not None else datetime.now(timezone.utc)
     cutoff = (reference - timedelta(days=max(1, int(retention_days)))).isoformat()
-    with sqlite3.connect(db_path) as conn:
+    with _connect(db_path) as conn:
         cursor = conn.execute(
             "DELETE FROM ssh_audit_sessions"
             " WHERE ended_at IS NOT NULL AND started_at < ?",
@@ -3058,7 +3254,7 @@ def prune_daily_summary(
     cutoff_day = (
         reference - timedelta(days=max(1, int(retention_days)))
     ).date().isoformat()
-    with sqlite3.connect(db_path) as conn:
+    with _connect(db_path) as conn:
         cursor = conn.execute(
             "DELETE FROM host_daily_summary WHERE day < ?", (cutoff_day,)
         )
@@ -3073,7 +3269,7 @@ def prune_alert_silences(db_path: Path, *, now: datetime | None = None) -> int:
     if not db_path.exists():
         return 0
     reference = now if now is not None else datetime.now(timezone.utc)
-    with sqlite3.connect(db_path) as conn:
+    with _connect(db_path) as conn:
         cursor = conn.execute(
             "DELETE FROM alert_silences WHERE ends_at < ?", (reference.isoformat(),)
         )
@@ -3125,7 +3321,7 @@ def save_app_settings(section: str, payload: dict, db_path: Path) -> None:
     db_path = Path(db_path)
     init_storage(db_path)
 
-    with sqlite3.connect(db_path) as conn:
+    with _connect(db_path) as conn:
         conn.execute(
             "INSERT INTO app_settings (section, payload, updated_at)"
             " VALUES (?, ?, ?)"
@@ -3143,7 +3339,7 @@ def load_app_settings(db_path: Path) -> dict[str, dict]:
         return {}
 
     try:
-        with sqlite3.connect(db_path) as conn:
+        with _connect(db_path) as conn:
             rows = conn.execute(
                 "SELECT section, payload FROM app_settings"
             ).fetchall()
@@ -3160,7 +3356,7 @@ def delete_app_settings(section: str, db_path: Path) -> None:
         return
 
     try:
-        with sqlite3.connect(db_path) as conn:
+        with _connect(db_path) as conn:
             conn.execute("DELETE FROM app_settings WHERE section = ?", (section,))
             conn.commit()
     except sqlite3.OperationalError:
@@ -3172,7 +3368,7 @@ def set_secret(name: str, ciphertext: bytes, db_path: Path) -> None:
     db_path = Path(db_path)
     init_storage(db_path)
 
-    with sqlite3.connect(db_path) as conn:
+    with _connect(db_path) as conn:
         conn.execute(
             "INSERT INTO app_secrets (name, ciphertext, updated_at)"
             " VALUES (?, ?, ?)"
@@ -3190,7 +3386,7 @@ def get_secret(name: str, db_path: Path) -> bytes | None:
         return None
 
     try:
-        with sqlite3.connect(db_path) as conn:
+        with _connect(db_path) as conn:
             row = conn.execute(
                 "SELECT ciphertext FROM app_secrets WHERE name = ?", (name,)
             ).fetchone()
@@ -3210,7 +3406,7 @@ def delete_secret(name: str, db_path: Path) -> None:
         return
 
     try:
-        with sqlite3.connect(db_path) as conn:
+        with _connect(db_path) as conn:
             conn.execute("DELETE FROM app_secrets WHERE name = ?", (name,))
             conn.commit()
     except sqlite3.OperationalError:
@@ -3224,7 +3420,7 @@ def list_secret_names(db_path: Path) -> list[str]:
         return []
 
     try:
-        with sqlite3.connect(db_path) as conn:
+        with _connect(db_path) as conn:
             rows = conn.execute("SELECT name FROM app_secrets ORDER BY name").fetchall()
     except sqlite3.OperationalError:
         return []
@@ -3239,8 +3435,8 @@ def backup_database(db_path: Path, destination: Path) -> None:
     destination.parent.mkdir(parents=True, exist_ok=True)
     if destination.exists():
         destination.unlink()
-    source = sqlite3.connect(db_path)
-    target = sqlite3.connect(destination)
+    source = _connect(db_path)
+    target = _connect(destination)
     try:
         source.backup(target)
     finally:
@@ -3285,7 +3481,7 @@ def restore_database(source: Path, destination: Path) -> None:
     source = Path(source)
     destination = Path(destination)
     source_connection = sqlite3.connect(f"file:{source}?mode=ro", uri=True)
-    target_connection = sqlite3.connect(destination, timeout=30)
+    target_connection = _connect(destination, timeout=30)
     try:
         source_connection.backup(target_connection)
     finally:
@@ -3410,7 +3606,7 @@ def save_host_user_snapshot(
         for account in accounts
     ]
 
-    conn = sqlite3.connect(db_path)
+    conn = _connect(db_path)
     try:
         conn.execute("BEGIN IMMEDIATE")
         _replace_snapshot_rows(conn, host_name, rows)
@@ -3547,7 +3743,7 @@ def save_host_user_scan_result(
     )
     rows = [_snapshot_row(host_name, account, moment) for account in accounts]
 
-    conn = sqlite3.connect(db_path)
+    conn = _connect(db_path)
     try:
         conn.execute("BEGIN IMMEDIATE")
         _replace_snapshot_rows(conn, host_name, rows)
@@ -3582,7 +3778,7 @@ def get_host_user_snapshot(host_name: str, db_path: Path) -> list[dict]:
     if not db_path.exists():
         return []
 
-    conn = sqlite3.connect(db_path)
+    conn = _connect(db_path)
     try:
         conn.row_factory = sqlite3.Row
         rows = conn.execute(
@@ -3602,7 +3798,7 @@ def get_all_host_user_snapshots(db_path: Path) -> dict[str, list[dict]]:
     if not db_path.exists():
         return {}
 
-    conn = sqlite3.connect(db_path)
+    conn = _connect(db_path)
     try:
         conn.row_factory = sqlite3.Row
         rows = conn.execute(
@@ -3639,7 +3835,7 @@ def upsert_user_baseline(
         else datetime.now(timezone.utc).isoformat()
     )
 
-    conn = sqlite3.connect(db_path)
+    conn = _connect(db_path)
     try:
         conn.execute("BEGIN IMMEDIATE")
         inserted = _write_baseline(conn, host_name, account, seen_at)
@@ -3663,7 +3859,7 @@ def get_user_baseline(host_name: str, db_path: Path) -> list[dict]:
     if not db_path.exists():
         return []
 
-    conn = sqlite3.connect(db_path)
+    conn = _connect(db_path)
     try:
         conn.row_factory = sqlite3.Row
         rows = conn.execute(
@@ -3683,7 +3879,7 @@ def delete_user_baseline(host_name: str, username: str, db_path: Path) -> bool:
     if not db_path.exists():
         return False
 
-    conn = sqlite3.connect(db_path)
+    conn = _connect(db_path)
     try:
         cursor = conn.execute(
             "DELETE FROM host_user_baseline"
@@ -3704,7 +3900,7 @@ def get_user_scan_state(host_name: str, db_path: Path) -> dict | None:
     if not db_path.exists():
         return None
 
-    conn = sqlite3.connect(db_path)
+    conn = _connect(db_path)
     try:
         conn.row_factory = sqlite3.Row
         row = conn.execute(
@@ -3735,7 +3931,7 @@ def save_user_scan_state(
     db_path = Path(db_path)
     init_storage(db_path)
 
-    conn = sqlite3.connect(db_path)
+    conn = _connect(db_path)
     try:
         conn.execute("BEGIN IMMEDIATE")
         _write_scan_state(
@@ -3759,7 +3955,7 @@ def delete_host_user_data(host_name: str, db_path: Path) -> None:
     if not db_path.exists():
         return
 
-    conn = sqlite3.connect(db_path)
+    conn = _connect(db_path)
     try:
         conn.execute(
             "DELETE FROM host_user_snapshot WHERE host_name = ?", (host_name,)
@@ -3800,7 +3996,7 @@ def save_user_operation(
     finished = finished_at or datetime.now(timezone.utc)
     payload = json.dumps(list(steps or []), ensure_ascii=False)
 
-    conn = sqlite3.connect(db_path)
+    conn = _connect(db_path)
     try:
         cursor = conn.execute(
             "INSERT INTO user_operations"
@@ -3843,7 +4039,7 @@ def list_user_operations(
     sql += " ORDER BY id DESC LIMIT ?"
     params.append(max(1, min(int(limit), 200)))
 
-    conn = sqlite3.connect(db_path)
+    conn = _connect(db_path)
     try:
         rows = conn.execute(sql, params).fetchall()
     finally:
@@ -3922,7 +4118,7 @@ def append_user_usage_history(
         anchor - timedelta(hours=max(0, min_interval_hours))
     ).isoformat()
     rows: list[tuple] = []
-    conn = sqlite3.connect(db_path)
+    conn = _connect(db_path)
     try:
         for account in candidates:
             username = str(account["username"])
@@ -3980,7 +4176,7 @@ def get_user_usage_series(
     reference = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
     cutoff = (reference - timedelta(days=days)).isoformat()
     series: dict[str, list[dict[str, Any]]] = {}
-    with closing(sqlite3.connect(path, timeout=30)) as conn:
+    with closing(_connect(path, timeout=30)) as conn:
         conn.row_factory = sqlite3.Row
         try:
             rows = conn.execute(
@@ -4033,7 +4229,7 @@ def top_user_growth(
         return []
     reference = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
     cutoff = (reference - timedelta(days=days)).isoformat()
-    with closing(sqlite3.connect(path, timeout=30)) as conn:
+    with closing(_connect(path, timeout=30)) as conn:
         conn.row_factory = sqlite3.Row
         try:
             rows = conn.execute(
@@ -4095,7 +4291,7 @@ def get_user_usage_deltas(
     moment = now or datetime.now(timezone.utc)
     since = (moment - timedelta(days=max(1, int(days)))).isoformat()
 
-    conn = sqlite3.connect(db_path)
+    conn = _connect(db_path)
     try:
         cursor = conn.execute(
             "SELECT username, collected_at, home_size_bytes, data_size_bytes"

@@ -18,9 +18,13 @@ TEMPLATES = Path(__file__).resolve().parents[1] / "servermanage" / "web" / "temp
 SHANGHAI = ZoneInfo("Asia/Shanghai")
 
 
-def _seed(db_path: Path, days: int, start_cpu: float = 10.0) -> None:
+# 固定查询时钟：种子必须相对它铺开，否则真实日期一变，窗口就对不上。
+QUERY_NOW = datetime(2026, 11, 11, 12, 0, tzinfo=timezone.utc)
+
+
+def _seed(db_path: Path, days: int, start_cpu: float = 10.0, now: datetime | None = None) -> None:
     init_storage(db_path)
-    now = datetime.now(timezone.utc)
+    now = now or datetime.now(timezone.utc)
     rows = []
     for offset in range(days):
         day = (now.astimezone(SHANGHAI).date() - timedelta(days=offset)).isoformat()
@@ -66,12 +70,12 @@ def _seed(db_path: Path, days: int, start_cpu: float = 10.0) -> None:
 
 def test_ninety_day_window_reads_daily_summaries(tmp_path: Path):
     db_path = tmp_path / "monitor.db"
-    _seed(db_path, 95)
+    _seed(db_path, 95, now=QUERY_NOW)
     points = fetch_overview_history(
         db_path,
         range_key="90d",
         tz=SHANGHAI,
-        now=datetime(2026, 11, 11, 12, 0, tzinfo=timezone.utc),
+        now=QUERY_NOW,
     )
     assert len(points) == 90
     assert points[-1]["t"] == "2026-11-11"
@@ -79,8 +83,8 @@ def test_ninety_day_window_reads_daily_summaries(tmp_path: Path):
 
 def test_ninety_day_previous_period_shifts_back(tmp_path: Path):
     db_path = tmp_path / "monitor.db"
-    _seed(db_path, 200, start_cpu=10.0)
-    now = datetime(2026, 11, 11, 12, 0, tzinfo=timezone.utc)
+    _seed(db_path, 200, start_cpu=10.0, now=QUERY_NOW)
+    now = QUERY_NOW
     current = fetch_overview_history(db_path, range_key="90d", tz=SHANGHAI, now=now)
     previous = fetch_overview_history(db_path, range_key="90d", tz=SHANGHAI, now=now, offset_days=90)
     assert current and previous

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import sqlite3
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 from pathlib import Path
 
@@ -91,10 +91,25 @@ def _client(tmp_path: Path):
 
 
 def test_api_returns_previous_series_for_daily_ranges(tmp_path: Path):
-    client = _client(tmp_path)
+    # The API uses the real clock, so seed days relative to today instead of
+    # hardcoding dates that fall out of the 7-day window over time.
+    today = datetime.now(SHANGHAI).date()
+    recent_day = (today - timedelta(days=1)).isoformat()
+    previous_day = (today - timedelta(days=9)).isoformat()
+    db_path = tmp_path / "monitor.db"
+    init_storage(db_path)
+    _seed(db_path, recent_day, 20.0)
+    _seed(db_path, previous_day, 80.0)
+    app = create_app(config=_config(), db_path=db_path)
+    app.config.update(TESTING=True)
+    client = app.test_client()
+    with client.session_transaction() as session:
+        session["logged_in"] = True
+        session["username"] = "tester"
+        session["csrf_token"] = "token"
     payload = client.get("/api/overview/history?range=7d&compare=1").get_json()
-    assert [point["t"] for point in payload["points"]] == ["2026-11-10"]
-    assert [point["t"] for point in payload["previous"]] == ["2026-11-02"]
+    assert [point["t"][:10] for point in payload["points"]] == [recent_day]
+    assert [point["t"][:10] for point in payload["previous"]] == [previous_day]
 
 
 def test_api_skips_previous_for_24h(tmp_path: Path):

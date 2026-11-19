@@ -13,7 +13,9 @@ from servermanage.config import load_config_from_mapping
 ROOT = Path(__file__).resolve().parents[1]
 STATIC = ROOT / "servermanage" / "web" / "static"
 
-NOW = datetime(2026, 11, 12, 12, 0, tzinfo=timezone.utc)
+# /api/users/* 的窗口按真实“今天”计算，种子也必须相对真实时钟铺开，
+# 否则日期一变，固定日期的样本就落到窗口外（曾经的测试炸弹）。
+NOW = datetime.now(timezone.utc)
 GIB = 1024**3
 
 
