@@ -4694,3 +4694,17 @@ html[data-theme="dark"] .group-summary-cpu.is-critical { color: #f87171; }
   .usage-progress-dot { animation: none; }
   .usage-progress-fill { transition: none; }
 }
+
+/* -- v0.1.224 从基线移除确认弹窗 ------------------------------------------ */
+.user-confirm-dialog {
+  max-width: 460px;
+  padding: 20px 22px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--text);
+}
+.user-confirm-dialog::backdrop { background: rgba(15, 23, 42, 0.45); }
+.user-confirm-text { margin: 0; line-height: 1.6; }
+.user-confirm-foot { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
+html[data-theme="dark"] .user-confirm-dialog { background: #0f172a; color: #e2e8f0; }

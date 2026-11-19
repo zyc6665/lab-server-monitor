@@ -731,9 +731,12 @@
       button.className = 'btn-link';
       button.textContent = '从基线移除';
       button.addEventListener('click', function () {
-        button.disabled = true;
-        removeUserBaseline(row.host_name, row.username).then(function (ok) {
-          if (!ok) { button.disabled = false; }
+        confirmBaselineRemoval(row.host_name, row.username).then(function (confirmed) {
+          if (!confirmed) { return; }
+          button.disabled = true;
+          removeUserBaseline(row.host_name, row.username).then(function (ok) {
+            if (!ok) { button.disabled = false; }
+          });
         });
       });
       foot.appendChild(button);
@@ -1114,6 +1117,103 @@
     var button = document.getElementById('user-copy-summary');
     if (!button) { return; }
     button.addEventListener('click', function () { copyUsageSummary(button); });
+  }
+
+  // -- v0.1.224 导出账号明细 CSV（跟随当前筛选，带 BOM 方便 Excel 识别） --
+  function csvCell(value) {
+    var text = value === null || value === undefined ? '' : String(value);
+    if (/[",\r\n]/.test(text)) { text = '"' + text.replace(/"/g, '""') + '"'; }
+    return text;
+  }
+
+  function accountsCsv(data) {
+    var rows = (data && data.accounts) || [];
+    var lines = ['主机,账号,UID,主组,状态,问题,docker,sudo,家目录,家目录占用,/data,/data占用,近7天变化,显存占用,采集时间'];
+    rows.forEach(function (row) {
+      var delta = row.usage_delta_bytes === null || row.usage_delta_bytes === undefined
+        ? ''
+        : (Number(row.usage_delta_bytes) > 0 ? '+' : Number(row.usage_delta_bytes) < 0 ? '-' : '')
+          + formatBytes(Math.abs(Number(row.usage_delta_bytes)));
+      lines.push([
+        row.host_name,
+        row.username,
+        row.uid,
+        row.primary_group,
+        statusBadgeText(row),
+        (row.issues || []).join('；'),
+        row.in_docker === null || row.in_docker === undefined ? '' : (row.in_docker ? '是' : '否'),
+        row.in_sudo === null || row.in_sudo === undefined ? '' : (row.in_sudo ? '是' : '否'),
+        row.home,
+        row.home_size_bytes === null || row.home_size_bytes === undefined ? '' : formatBytes(row.home_size_bytes),
+        row.data_supported === false ? '不支持' : row.data,
+        row.data_size_bytes === null || row.data_size_bytes === undefined ? '' : formatBytes(row.data_size_bytes),
+        delta,
+        row.gpu_memory_mb ? (row.gpu_memory_mb / 1024).toFixed(1) + ' GB' : '',
+        row.collected_at ? formatTimestamp(row.collected_at) : ''
+      ].map(csvCell).join(','));
+    });
+    return '\uFEFF' + lines.join('\r\n');
+  }
+
+  function exportAccountsCsv() {
+    var csv = accountsCsv(lastPayload);
+    if (!lastPayload || !(lastPayload.accounts || []).length) {
+      setRefreshStatus('没有可导出的账号数据。');
+      return;
+    }
+    var stamp = formatTimestamp(new Date().toISOString()).replace(/[^0-9]/g, '').slice(0, 12);
+    var blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+    var url = URL.createObjectURL(blob);
+    var link = document.createElement('a');
+    link.href = url;
+    link.download = 'server-users-' + stamp + '.csv';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.setTimeout(function () { URL.revokeObjectURL(url); }, 2000);
+    setRefreshStatus('已导出 ' + lastPayload.accounts.length + ' 条账号记录。');
+  }
+
+  function bindExportCsv() {
+    var button = document.getElementById('user-export-csv');
+    if (!button) { return; }
+    button.addEventListener('click', exportAccountsCsv);
+  }
+
+  // -- v0.1.224 破坏性操作先确认：从基线移除此前点击即执行，没有回头路 --
+  function confirmBaselineRemoval(hostName, username) {
+    return new Promise(function (resolve) {
+      var dialog = document.createElement('dialog');
+      dialog.className = 'user-confirm-dialog';
+      var text = document.createElement('p');
+      text.className = 'user-confirm-text';
+      text.textContent = '把账号 ' + (username || '') + ' 从主机 ' + (hostName || '')
+        + ' 的基线移除？移除后不再提醒该账号缺失，已有的对应告警也会一并关闭。';
+      var foot = document.createElement('div');
+      foot.className = 'user-confirm-foot';
+      var cancel = document.createElement('button');
+      cancel.type = 'button';
+      cancel.className = 'secondary-button';
+      cancel.textContent = '取消';
+      var ok = document.createElement('button');
+      ok.type = 'button';
+      ok.className = 'primary-button';
+      ok.textContent = '移除';
+      foot.appendChild(cancel);
+      foot.appendChild(ok);
+      dialog.appendChild(text);
+      dialog.appendChild(foot);
+      document.body.appendChild(dialog);
+      var confirmed = false;
+      ok.addEventListener('click', function () { confirmed = true; dialog.close(); });
+      cancel.addEventListener('click', function () { dialog.close(); });
+      dialog.addEventListener('close', function () {
+        if (dialog.parentNode) { dialog.parentNode.removeChild(dialog); }
+        resolve(confirmed);
+      });
+      if (typeof dialog.showModal === 'function') { dialog.showModal(); }
+      else { dialog.setAttribute('open', ''); }
+    });
   }
 
   function fetchUsers() {
@@ -1566,6 +1666,7 @@
 
   function init() {
     bindCopySummary();
+    bindExportCsv();
     renderTopGrowth();
     if (!document.getElementById('user-host-grid')) { return; }
     try {

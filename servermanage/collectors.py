@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
 from datetime import datetime, timezone
 from typing import Callable
@@ -117,22 +118,39 @@ def collect_all_hosts(
     else:
         runner_factory = build_runner
 
-    reports: list[HostReport] = []
-    for host in config.servers:
-        runner = runner_factory(host, config.ssh.connect_timeout)
+    def _collect_one(host: HostConfig) -> HostReport:
+        runner = None
         try:
-            reports.append(
-                collect_host_report(
-                    host,
-                    runner,
-                    connect_timeout=config.ssh.connect_timeout,
-                    command_timeout=config.ssh.command_timeout,
-                    build_command_map=command_builder,
-                    parse_results=parser,
-                )
+            runner = runner_factory(host, config.ssh.connect_timeout)
+            return collect_host_report(
+                host,
+                runner,
+                connect_timeout=config.ssh.connect_timeout,
+                command_timeout=config.ssh.command_timeout,
+                build_command_map=command_builder,
+                parse_results=parser,
+            )
+        except Exception as exc:  # noqa: BLE001 - one bad host must not abort the round
+            return HostReport(
+                host_name=host.name,
+                host=host.host,
+                success=False,
+                errors=[HostCollectionError(stage="ssh", message=str(exc))],
             )
         finally:
-            close = getattr(runner, "close", None)
-            if callable(close):
-                close()
-    return reports
+            if runner is not None:
+                close = getattr(runner, "close", None)
+                if callable(close):
+                    close()
+
+    hosts = list(config.servers)
+    if not hosts:
+        return []
+    # v0.1.224：设置页的“并发数”此前只驱动用户扫描；现在也驱动主机采集，
+    # 一台掉线主机（吃满 connect_timeout）不再拖住整个轮询周期。
+    # 结果仍按 config.servers 的顺序返回（executor.map 保序）。
+    concurrency = max(1, int(getattr(config.app, "concurrency", 1) or 1))
+    if concurrency == 1 or len(hosts) == 1:
+        return [_collect_one(host) for host in hosts]
+    with ThreadPoolExecutor(max_workers=min(concurrency, len(hosts))) as executor:
+        return list(executor.map(_collect_one, hosts))
