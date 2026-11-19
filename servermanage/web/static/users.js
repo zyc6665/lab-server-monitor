@@ -58,22 +58,35 @@
     if (method !== 'GET' && method !== 'HEAD') {
       var token = csrfToken();
       if (token) { headers['X-CSRF-Token'] = token; }
+      // v0.1.223：转发请求体并声明 JSON 类型（“刷新占用”此前被静默丢弃）。
+      if (typeof opts.body === 'string') {
+        headers['Content-Type'] = 'application/json';
+      }
     }
-    return fetch(url, {
-      method: method,
-      credentials: 'same-origin',
-      headers: headers
-    }).then(function (response) {
+    var base = { credentials: 'same-origin', headers: headers };
+    if (opts.method) { base.method = opts.method; }
+    if (opts.body !== undefined) { base.body = opts.body; }
+    return fetch(url, base).then(function (response) {
       if (response.status === 401) {
         redirectToLogin();
         return null;
       }
-      if (!response.ok) { return null; }
+      if (!response.ok) {
+        // v0.1.223：把服务端返回的错误原因带出来，供提示使用。
+        return response.json().catch(function () { return null; }).then(function (payload) {
+          var detail = payload && (payload.error || payload.detail || payload.message);
+          fetchJson.lastError = detail ? String(detail) : '';
+          return null;
+        });
+      }
+      fetchJson.lastError = '';
       var contentType = response.headers.get('content-type') || '';
       if (contentType.indexOf('application/json') === -1) { return null; }
       return response.json();
     });
   }
+
+  fetchJson.lastError = '';
 
   function pad2(value) {
     return value < 10 ? '0' + value : String(value);
@@ -1165,7 +1178,11 @@
       method: 'POST',
       body: JSON.stringify({ usage: !!forceUsage })
     }).then(function (payload) {
-      if (!payload) { finishRefresh('刷新失败，请稍后重试。'); return null; }
+      if (!payload) {
+        var detail = fetchJson.lastError;
+        finishRefresh(detail ? '刷新失败：' + detail : '刷新失败，请稍后重试。');
+        return null;
+      }
       if (payload.error) { finishRefresh('刷新失败：' + payload.error); return null; }
       if (payload.started === false) { setRefreshStatus('已有采集任务在运行，等待其完成…'); }
       return pollRefreshStatus();

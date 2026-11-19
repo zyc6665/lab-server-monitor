@@ -11,6 +11,9 @@
   var ALERT_STATUS_FILTERS = ['active', 'acknowledged', 'resolved', 'all'];
   var lastHosts = [];
   var lastAlerts = [];
+  // v0.1.223：与免闪烁渲染配套的"上次渲染指纹"标记。
+  var lastAlertsSig = '';
+  var lastAlertsRendered = false;
   var alertSeverity = '';
   var alertKeyword = '';
   var alertHost = '';
@@ -42,6 +45,8 @@
 
   // 统一的 JSON 请求：401 -> 跳登录并返回 null；非 2xx / 非 JSON -> null。
   // 所有非 GET 请求自动携带 X-CSRF-Token（服务端 CSRF 校验依赖它）。
+  // v0.1.223：失败时解析响应体里的 error/detail，存到 fetchJson.lastError，
+  // 让"失败，请重试"之类的提示能带上服务端的真实原因。
   function fetchJson(url, options) {
     var opts = options || {};
     var method = (opts.method || 'GET').toUpperCase();
@@ -56,6 +61,9 @@
     if (method !== 'GET' && method !== 'HEAD') {
       var token = csrfToken();
       if (token) { headers['X-CSRF-Token'] = token; }
+      if (typeof opts.body === 'string') {
+        headers['Content-Type'] = 'application/json';
+      }
     }
     var base = {
       credentials: 'same-origin',
@@ -70,14 +78,27 @@
         return null;
       }
       if (!response.ok) {
-        return null;
+        return response.json().catch(function () { return null; }).then(function (payload) {
+          var detail = payload && (payload.error || payload.detail || payload.message);
+          fetchJson.lastError = detail ? String(detail) : '';
+          return null;
+        });
       }
+      fetchJson.lastError = '';
       var contentType = response.headers.get('content-type') || '';
       if (contentType.indexOf('application/json') === -1) {
         return null;
       }
       return response.json();
     });
+  }
+
+  fetchJson.lastError = '';
+
+  // 失败提示：能拿到服务端原因就带上，否则回落到"请重试"。
+  function failToast(prefix, kind) {
+    var detail = fetchJson.lastError;
+    showToast(detail ? prefix + '：' + detail : prefix + '，请重试', kind || 'error');
   }
 
   // 轻量 toast：所有页面共用，不依赖任何第三方组件。
@@ -1647,6 +1668,11 @@
     var heads = document.querySelectorAll('#host-table th[data-sort-key]');
     for (var i = 0; i < heads.length; i += 1) {
       var key = heads[i].getAttribute('data-sort-key');
+      // v0.1.223：排序表头可聚焦，回车/空格切换排序（与统计卡一致的键盘支持）。
+      if (!heads[i].hasAttribute('tabindex')) {
+        heads[i].setAttribute('tabindex', '0');
+        heads[i].setAttribute('role', 'button');
+      }
       heads[i].classList.toggle('sort-asc', key === hostSortKey && hostSortDir === 1);
       heads[i].classList.toggle('sort-desc', key === hostSortKey && hostSortDir === -1);
       if (key === hostSortKey) {
@@ -1751,9 +1777,19 @@
     });
   }
 
+  function payloadSignature(value) {
+    try { return JSON.stringify(value); } catch (err) { return ''; }
+  }
+
   function updateHosts(hosts) {
-    renderGroupSummary(hosts);
     if (!Array.isArray(hosts)) { return; }
+    // v0.1.223：数据没变化时跳过重建，避免 30 秒轮询清掉悬停/选区并造成闪烁。
+    var signature = payloadSignature(hosts);
+    if (hostsLoaded && signature === payloadSignature(lastHosts)) {
+      lastHosts = hosts.slice();
+      return;
+    }
+    renderGroupSummary(hosts);
     lastHosts = hosts.slice();
     hostsLoaded = true;
     renderHosts();
@@ -1872,7 +1908,7 @@
     }).catch(function () {
       button.disabled = false;
       button.textContent = original;
-      showToast('批量采集提交失败', 'error');
+      failToast('批量采集提交失败');
     });
   }
 
@@ -3001,8 +3037,21 @@
 
   function updateAlerts(alerts, counts) {
     if (!Array.isArray(alerts)) { return; }
+    // v0.1.223：告警数据与客户端筛选状态都没变时跳过重建，
+    // 保留悬停与文本选区（30 秒轮询不再整表闪烁）。
+    var signature = payloadSignature([
+      alerts,
+      alertStatus, alertKeyword, alertSeverity, alertHost, alertGroup,
+      alertCategory, alertTimeRange, alertSortOrder, alertPage,
+      alertPageSize, alertGrouped
+    ]);
+    var changed = signature !== lastAlertsSig;
     updateFocusAlerts(alerts);
     lastAlerts = alerts;
+    if (!changed && lastAlertsRendered) {
+      return;
+    }
+    lastAlertsSig = signature;
     populateAlertCategories(alerts);
     renderAlertStatusCounts(counts);
     var activeIds = {};
@@ -3014,6 +3063,7 @@
     });
     renderAlertRows();
     renderAlertTimeline(filteredAlerts(true));
+    lastAlertsRendered = true;
   }
 
   function updateAlertSelectionSummary() {
@@ -3111,7 +3161,7 @@
       showToast('已确认 ' + ids.length + ' 条告警', 'success');
       applyBulkAckInPlace(ids);
     }).catch(function () {
-      showToast('批量确认失败，请重试', 'error');
+      failToast('批量确认失败');
       if (button) { button.disabled = false; }
     });
   }
@@ -3453,6 +3503,9 @@
   }
 
   function refreshAll() {
+    // v0.1.223：窗口隐藏（最小化到托盘/切走标签）时暂停轮询；
+    // visibilitychange 回到前台时会立即补一次刷新。
+    if (document.hidden) { return; }
     // 请求互相独立；各自吞掉错误，互不影响。
     refreshOverview().catch(function () {});
     refreshAlerts().catch(function () {});
@@ -3517,7 +3570,7 @@
       })
       .catch(function () {
         button.disabled = false;
-        showToast('确认失败，请重试', 'error');
+        failToast('确认失败');
       });
   }
 
@@ -3570,7 +3623,7 @@
     }).then(function (result) {
       if (confirmButton) { confirmButton.disabled = false; }
       if (result === null) {
-        showToast('静默失败，请检查设置权限', 'error');
+        failToast('静默失败，请检查设置权限');
         return;
       }
       showToast('已静默 ' + (silenceTarget ? silenceTarget.host : '') , 'success');
@@ -3578,7 +3631,7 @@
       return refreshAlerts();
     }).catch(function () {
       if (confirmButton) { confirmButton.disabled = false; }
-      showToast('静默失败，请重试', 'error');
+      failToast('静默失败');
     });
   }
 
@@ -3751,6 +3804,17 @@
       if (sortHead) {
         setHostSort(sortHead.getAttribute('data-sort-key'));
       }
+    });
+
+    // v0.1.223：排序表头的键盘操作（Enter / 空格），与点击行为一致。
+    document.addEventListener('keydown', function (event) {
+      if (event.key !== 'Enter' && event.key !== ' ') { return; }
+      var target = event.target;
+      if (!target || !target.closest) { return; }
+      var head = target.closest('th[data-sort-key]');
+      if (!head) { return; }
+      event.preventDefault();
+      setHostSort(head.getAttribute('data-sort-key'));
     });
 
     var silenceCancel = document.getElementById('silence-cancel');

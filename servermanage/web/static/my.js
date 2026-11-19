@@ -39,6 +39,20 @@
     return (index === 0 ? scaled.toFixed(0) : scaled.toFixed(1)) + " " + units[index];
   }
 
+  // v0.1.223：后端给的是 ISO 时间戳，直接展示会变成
+  // "采集于 2026-11-19T21:30:00+08:00"，这里统一转成本地时间。
+  function formatStamp(value) {
+    var text = String(value || "");
+    if (!text) { return ""; }
+    var date = new Date(text);
+    if (isNaN(date.getTime())) { return text; }
+    var pad = function (n) { return n < 10 ? "0" + n : String(n); };
+    return (
+      date.getFullYear() + "-" + pad(date.getMonth() + 1) + "-" + pad(date.getDate()) +
+      " " + pad(date.getHours()) + ":" + pad(date.getMinutes())
+    );
+  }
+
   function issueLabel(code) {
     return ISSUE_LABELS[code] || code;
   }
@@ -128,7 +142,7 @@
       bits.push(account.home);
     }
     if (host.last_scan_at) {
-      bits.push("采集于 " + host.last_scan_at);
+      bits.push("采集于 " + formatStamp(host.last_scan_at));
     }
     meta.textContent = bits.join(" · ");
     card.appendChild(meta);
