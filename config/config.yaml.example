@@ -115,6 +115,8 @@ smtp:
 ssh:
   connect_timeout: 10
   command_timeout: 20
+  # 主机密钥校验：tofu（首次信任并记录，之后变更即拒绝）/ strict / insecure
+  host_key_policy: "tofu"
 
 # ---------------------------------------------------------------------------
 # report：日报 / 周报 / 领导摘要

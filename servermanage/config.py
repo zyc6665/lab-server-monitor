@@ -595,9 +595,15 @@ def load_config_from_mapping(
             to_addrs=executive_to_addrs,
         )
 
+    host_key_policy = str(ssh_raw.get("host_key_policy", "tofu")).strip().lower()
+    if host_key_policy not in ("tofu", "strict", "insecure"):
+        raise ConfigError(
+            "ssh.host_key_policy must be one of: tofu, strict, insecure"
+        )
     ssh = SSHRuntimeConfig(
         connect_timeout=int(ssh_raw.get("connect_timeout", 10)),
         command_timeout=int(ssh_raw.get("command_timeout", 20)),
+        host_key_policy=host_key_policy,
     )
     report = ReportConfig(
         subject_prefix=report_raw.get("subject_prefix", "[Server Daily Report]"),

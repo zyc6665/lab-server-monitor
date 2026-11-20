@@ -100,6 +100,9 @@ class SMTPConfig:
 class SSHRuntimeConfig:
     connect_timeout: int
     command_timeout: int
+    # v0.1.227：主机密钥校验策略。tofu=首次信任并记录，之后变更即拒绝；
+    # strict=只接受已记录的主机；insecure=旧行为（不做校验）。
+    host_key_policy: str = "tofu"
 
 
 @dataclass(frozen=True)

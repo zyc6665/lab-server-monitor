@@ -1365,6 +1365,59 @@
 
   renderSaveLog();
 
+  // -- v0.1.227 已信任的 SSH 主机密钥 -------------------------------------
+  var trustDetails = document.getElementById("ssh-trust-details");
+  var trustList = document.getElementById("ssh-trust-list");
+  function renderTrustedHosts(hosts) {
+    if (!trustList) { return; }
+    var names = Object.keys(hosts || {});
+    trustList.textContent = "";
+    if (!names.length) {
+      var empty = document.createElement("span");
+      empty.className = "muted small";
+      empty.textContent = "还没有记录：成功连接一次主机后会自动写入。";
+      trustList.appendChild(empty);
+      return;
+    }
+    names.sort().forEach(function (name) {
+      var row = document.createElement("div");
+      row.className = "ssh-trust-row";
+      var label = document.createElement("span");
+      label.className = "mono small";
+      label.textContent = name;
+      var fp = document.createElement("span");
+      fp.className = "muted small";
+      fp.textContent = hosts[name].fingerprint || "";
+      var forget = document.createElement("button");
+      forget.type = "button";
+      forget.className = "btn-link";
+      forget.textContent = "忘记";
+      forget.addEventListener("click", function () {
+        forget.disabled = true;
+        api("DELETE", "/api/system/host-keys/" + encodeURIComponent(name))
+          .then(function () { return loadTrustedHosts(); })
+          .catch(function (error) { toast(error.message, true); forget.disabled = false; });
+      });
+      row.appendChild(label);
+      row.appendChild(fp);
+      row.appendChild(forget);
+      trustList.appendChild(row);
+    });
+  }
+  function loadTrustedHosts() {
+    if (!trustList) { return Promise.resolve(); }
+    return api("GET", "/api/system/host-keys")
+      .then(function (payload) { renderTrustedHosts(payload.hosts || {}); })
+      .catch(function () {
+        trustList.textContent = "无法读取主机密钥记录。";
+      });
+  }
+  if (trustDetails && trustList) {
+    trustDetails.addEventListener("toggle", function () {
+      if (trustDetails.open) { loadTrustedHosts(); }
+    });
+  }
+
   var saveLogClear = document.getElementById("settings-save-log-clear");
   if (saveLogClear) {
     saveLogClear.addEventListener("click", function () {

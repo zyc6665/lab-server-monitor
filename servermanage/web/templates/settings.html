@@ -116,8 +116,20 @@
       <label class="field"><span>SSH 命令超时（秒）</span>
         <input type="number" min="1" data-field="command_timeout" value="{{ settings.ssh.command_timeout }}">
       </label>
-      <button class="secondary-button" data-save="ssh" {% if not settings.writable %}disabled{% endif %}>保存 SSH 超时</button>
+      <label class="field"><span>主机密钥校验</span>
+        <select data-field="host_key_policy">
+          <option value="tofu" {% if settings.ssh.host_key_policy == 'tofu' %}selected{% endif %}>首次信任并记录（推荐）</option>
+          <option value="strict" {% if settings.ssh.host_key_policy == 'strict' %}selected{% endif %}>只信任已记录的主机</option>
+          <option value="insecure" {% if settings.ssh.host_key_policy == 'insecure' %}selected{% endif %}>不校验（不推荐）</option>
+        </select>
+      </label>
+      <button class="secondary-button" data-save="ssh" {% if not settings.writable %}disabled{% endif %}>保存 SSH 设置</button>
     </div>
+    <details class="ssh-trust-details" id="ssh-trust-details">
+      <summary>已信任的主机密钥</summary>
+      <p class="muted small">首次连接成功时会记录指纹；之后若主机密钥变化会拒绝连接。主机重装系统后在这里「忘记」对应记录。</p>
+      <div id="ssh-trust-list" class="ssh-trust-list"><span class="muted small">加载中…</span></div>
+    </details>
 
     <div class="section-toolbar">
       <button class="primary-button" id="wizard-open-button" {% if not settings.writable %}disabled{% endif %}>连接向导</button>

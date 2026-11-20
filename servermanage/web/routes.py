@@ -71,6 +71,7 @@ from servermanage.notify_webhook import send_webhook
 from servermanage.runtime import read_runtime_state
 from servermanage.serialization import to_jsonable
 from servermanage.settings import SettingsError, _build_host_check, _sanitize_host_checks
+from servermanage import ssh_client
 from servermanage.ssh_client import SSHClientWrapper
 from servermanage.ssh_terminal import (
     SessionNotFoundError,
@@ -3090,6 +3091,19 @@ def register_routes(app: Flask) -> None:
             tz=resolve_timezone(config.app.timezone),
         )
         return jsonify({"range": range_key, "points": points})
+
+    @app.get("/api/system/host-keys")
+    def api_system_host_keys():
+        """List the SSH host keys trusted on first use."""
+        return jsonify({"hosts": ssh_client.list_known_host_keys()})
+
+    @app.delete("/api/system/host-keys/<hostname>")
+    def api_system_host_key_forget(hostname: str):
+        """Forget one recorded host key (e.g. after a legitimate reinstall)."""
+        removed = ssh_client.forget_host_key(hostname)
+        if not removed:
+            return jsonify({"error": "not_found", "message": "没有这个主机的密钥记录"}), 404
+        return jsonify({"ok": True, "host": hostname})
 
     @app.get("/api/system/health")
     def api_system_health():

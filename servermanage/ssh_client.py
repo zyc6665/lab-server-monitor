@@ -1,12 +1,19 @@
 from __future__ import annotations
 
+import base64
 import io
+import json
+import logging
+import threading
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable
 
 import paramiko
 
 from servermanage.models import CommandResult, HostConfig
+
+LOGGER = logging.getLogger(__name__)
 
 
 class SudoAuthError(Exception):
@@ -35,6 +42,151 @@ _SUDO_UNAVAILABLE_MARKERS = (
     "is not allowed to",
     "may not run sudo",
 )
+
+
+# ---------------------------------------------------------------------------
+# Host key verification (trust on first use)
+# ---------------------------------------------------------------------------
+
+class HostKeyMismatch(paramiko.SSHException):
+    """Raised when a host presents a key that differs from the trusted one.
+
+    The message carries both fingerprints so the operator can decide whether
+    the host was reinstalled (then forget the entry) or is being impersonated.
+    """
+
+
+# "tofu"     - record the key on first connect, reject any later change.
+# "strict"   - only accept hosts already recorded; unknown hosts are rejected.
+# "insecure" - legacy behaviour (accept anything); kept as an escape hatch.
+_HOST_KEY_POLICY = "tofu"
+_HOST_KEY_STORE: Path | None = None
+_HOST_KEY_LOCK = threading.Lock()
+
+
+def configure_host_keys(
+    store_path: Path | None,
+    *,
+    policy: str = "tofu",
+) -> None:
+    """Set the process-wide host-key store and policy.
+
+    ``store_path`` is a small JSON file next to the database.  When it is
+    ``None`` the policy degrades to ``insecure`` so standalone callers (tests,
+    ad-hoc probes) keep working without a data directory.
+    """
+    global _HOST_KEY_POLICY, _HOST_KEY_STORE
+    normalized = policy if policy in ("tofu", "strict", "insecure") else "tofu"
+    if store_path is None and normalized != "insecure":
+        normalized = "insecure"
+    with _HOST_KEY_LOCK:
+        _HOST_KEY_POLICY = normalized
+        _HOST_KEY_STORE = Path(store_path) if store_path is not None else None
+
+
+def host_key_store_path() -> Path | None:
+    """Return the configured known-hosts store, or ``None`` when disabled."""
+    with _HOST_KEY_LOCK:
+        return _HOST_KEY_STORE
+
+
+def _fingerprint(key: paramiko.PKey) -> str:
+    digest = key.get_fingerprint()
+    return key.get_name() + " SHA256:" + base64.b64encode(digest).decode().rstrip("=")
+
+
+def _read_store(path: Path) -> dict[str, dict]:
+    try:
+        raw = path.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return {}
+    except OSError as exc:  # pragma: no cover - unreadable store
+        LOGGER.warning("无法读取 SSH 主机密钥记录 %s：%s", path, exc)
+        return {}
+    try:
+        data = json.loads(raw)
+    except (ValueError, TypeError):
+        LOGGER.warning("SSH 主机密钥记录格式损坏，将按空记录处理：%s", path)
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def _write_store(path: Path, entries: dict[str, dict]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temp = path.with_name(path.name + ".tmp")
+    temp.write_text(
+        json.dumps(entries, ensure_ascii=False, indent=2, sort_keys=True),
+        encoding="utf-8",
+    )
+    temp.replace(path)
+
+
+class _TofuPolicy(paramiko.MissingHostKeyPolicy):
+    """Verify host keys against a JSON store, recording new ones on first use."""
+
+    def __init__(self, store_path: Path, *, strict: bool = False) -> None:
+        self.store_path = Path(store_path)
+        self.strict = strict
+
+    def missing_host_key(
+        self,
+        client: paramiko.SSHClient,
+        hostname: str,
+        key: paramiko.PKey,
+    ) -> None:
+        entry_key = hostname
+        presented = _fingerprint(key)
+        with _HOST_KEY_LOCK:
+            entries = _read_store(self.store_path)
+            known = entries.get(entry_key)
+            if known is not None:
+                if known.get("fingerprint") == presented:
+                    return
+                raise HostKeyMismatch(
+                    f"主机密钥与首次记录不一致（{entry_key}）："
+                    f"已记录 {known.get('fingerprint')}，本次 {presented}。"
+                    "若主机确实重装过系统，可删除数据目录下的 known_hosts.json 后重试；"
+                    "否则请警惕中间人攻击。"
+                )
+            if self.strict:
+                raise HostKeyMismatch(
+                    f"首次连接的主机未被信任（{entry_key}，{presented}）。"
+                    "请先在允许首次信任的模式下连接一次。"
+                )
+            entries[entry_key] = {
+                "fingerprint": presented,
+                "key_type": key.get_name(),
+                "first_seen": datetime.now(timezone.utc).isoformat(),
+            }
+            try:
+                _write_store(self.store_path, entries)
+            except OSError as exc:
+                LOGGER.warning("无法写入 SSH 主机密钥记录 %s：%s", self.store_path, exc)
+
+
+def forget_host_key(hostname: str) -> bool:
+    """Remove one host's recorded key; return whether an entry was removed."""
+    with _HOST_KEY_LOCK:
+        store = _HOST_KEY_STORE
+        if store is None:
+            return False
+        entries = _read_store(store)
+        removed = entries.pop(hostname, None) is not None
+        if removed:
+            try:
+                _write_store(store, entries)
+            except OSError:  # pragma: no cover - disk error
+                return False
+        return removed
+
+
+def list_known_host_keys() -> dict[str, dict]:
+    """Return the recorded host keys (fingerprint + first-seen timestamp)."""
+    with _HOST_KEY_LOCK:
+        store = _HOST_KEY_STORE
+        if store is None:
+            return {}
+        return _read_store(store)
 
 
 def _text_contains_any(texts: tuple[str | None, ...], markers: tuple[str, ...]) -> bool:
@@ -81,6 +233,16 @@ def _load_inline_private_key(key_data: str, passphrase: str | None) -> paramiko.
     raise ValueError("Invalid SSH private key") from last_error
 
 
+def _host_key_policy() -> paramiko.MissingHostKeyPolicy:
+    """Return the configured host-key policy instance."""
+    with _HOST_KEY_LOCK:
+        policy = _HOST_KEY_POLICY
+        store = _HOST_KEY_STORE
+    if policy == "insecure" or store is None:
+        return paramiko.AutoAddPolicy()
+    return _TofuPolicy(store, strict=policy == "strict")
+
+
 class SSHClientWrapper:
     def __init__(
         self,
@@ -101,7 +263,7 @@ class SSHClientWrapper:
     @staticmethod
     def _default_client_factory() -> paramiko.SSHClient:
         client = paramiko.SSHClient()
-        client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        client.set_missing_host_key_policy(_host_key_policy())
         return client
 
     def _build_connect_kwargs(self) -> dict:

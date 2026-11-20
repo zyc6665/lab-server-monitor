@@ -442,6 +442,7 @@ class SettingsService:
             "ssh": {
                 "connect_timeout": config.ssh.connect_timeout,
                 "command_timeout": config.ssh.command_timeout,
+                "host_key_policy": config.ssh.host_key_policy,
             },
             "smtp": {
                 "host": config.smtp.host if config.smtp else "",

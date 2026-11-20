@@ -4716,3 +4716,26 @@ html[data-theme="dark"] .group-summary-cpu.is-critical { color: #f87171; }
 .user-confirm-text { margin: 0; line-height: 1.6; }
 .user-confirm-foot { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
 html[data-theme="dark"] .user-confirm-dialog { background: #0f172a; color: #e2e8f0; }
+
+/* -- v0.1.227 已信任的 SSH 主机密钥 --------------------------------------- */
+.ssh-trust-details { margin-top: 14px; }
+.ssh-trust-details summary {
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+.ssh-trust-details summary:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(44, 92, 246, .2); border-radius: 6px; }
+.ssh-trust-list { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+.ssh-trust-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-sunken);
+}
+.ssh-trust-row .mono { min-width: 140px; }
+.ssh-trust-row .muted { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

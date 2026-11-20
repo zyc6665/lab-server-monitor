@@ -49,7 +49,7 @@ from servermanage.scheduler import (
     compute_daily_fire,
     compute_weekly_fire,
 )
-from servermanage.ssh_client import SSHClientWrapper
+from servermanage.ssh_client import SSHClientWrapper, configure_host_keys
 from servermanage.log_cleanup import prune_log_files
 from servermanage.maintenance import cleanup_logs
 from servermanage.user_collection import (
@@ -244,6 +244,18 @@ def watch_parent_stdin(on_eof: Callable[[], None], stream=None) -> None:
     on_eof()
 
 
+def _configure_ssh_host_keys(config: AppConfig, db_path: Path) -> None:
+    """Point the SSH layer at the data directory's known-hosts store.
+
+    Stored next to the database so a backup/restore keeps the trusted
+    fingerprints with the instance.
+    """
+    configure_host_keys(
+        Path(db_path).parent / "known_hosts.json",
+        policy=config.ssh.host_key_policy,
+    )
+
+
 def load_runtime(
     config_path: Path, dotenv_path: Path | None = None
 ) -> tuple[AppConfig, Path]:
@@ -257,6 +269,7 @@ def load_runtime(
     config = load_config(Path(config_path))
     db_path = Path(config.storage.db_path)
     init_storage(db_path, daily_summary_tz=config.app.timezone)
+    _configure_ssh_host_keys(config, db_path)
     return config, db_path
 
 
@@ -289,6 +302,7 @@ def load_runtime_with_settings(
     )
     effective = settings.load()
     init_storage(db_path, daily_summary_tz=effective.app.timezone)
+    _configure_ssh_host_keys(effective, db_path)
     return effective, db_path, settings
 
 
@@ -338,6 +352,12 @@ class MonitorService:
         self._tz = resolve_timezone(config.app.timezone)
         # Consecutive failed status collections per host (for the offline message).
         self._failure_counts: dict[str, int] = {}
+        # Guards ``_failure_counts``: import auto-collection threads and the
+        # scheduler thread can poll at the same time.
+        self._failure_lock = threading.Lock()
+        # Bumped by ``apply_config`` so a round started under the old config
+        # discards its results instead of writing stale rows.
+        self._config_generation = 0
         # Consecutive periods a condition has been present / absent, keyed by
         # ``(host_name, fingerprint)``.  A system/availability alert only opens
         # after the condition holds for the host's effective period count, and
@@ -383,6 +403,10 @@ class MonitorService:
             self._scheduler = None
             self._running = False
         self.config = new_config
+        # v0.1.227：配置变更后让进行中的采集轮次作废（见 run_status_once），
+        # 否则旧配置的结果会写库并可能重复触发告警。
+        self._config_generation += 1
+        _configure_ssh_host_keys(new_config, self.db_path)
         self._tz = resolve_timezone(new_config.app.timezone)
         self._notifier = Notifier(smtp=new_config.smtp)
         self.engine = AlertEngine(
@@ -461,7 +485,15 @@ class MonitorService:
         ``{"hosts": <reports>, "alerts": <notification count>}``.
         """
         config = self._config_for_hosts(host_names)
+        generation = self._config_generation
         reports = list(self.collect_status(config))
+        if generation != self._config_generation:
+            # 采集期间配置被改（例如用户在设置页保存）：本轮结果是旧配置下的，
+            # 写库会污染快照、并可能按旧主机清单重复触发告警，直接丢弃。
+            LOGGER.info(
+                "配置在采集期间变更，丢弃本轮采集结果（%s 台主机）", len(reports)
+            )
+            return {"hosts": [], "alerts": 0, "discarded": True}
         storage_enabled = bool(getattr(config.storage, "enabled", True))
         offline_threshold = max(1, int(config.alerts.offline_failures))
         recovery_count = 0
@@ -490,7 +522,8 @@ class MonitorService:
             host_name = report.host_name
             present_by_host.setdefault(host_name, {})
             if report.success:
-                self._failure_counts[host_name] = 0
+                with self._failure_lock:
+                    self._failure_counts[host_name] = 0
                 if storage_enabled:
                     save_host_snapshot(report, self.db_path)
                     self._save_check_results(host_name, report.checks)
@@ -526,8 +559,9 @@ class MonitorService:
                 ):
                     present_by_host[host_name][event.fingerprint] = event
             else:
-                failures = self._failure_counts.get(host_name, 0) + 1
-                self._failure_counts[host_name] = failures
+                with self._failure_lock:
+                    failures = self._failure_counts.get(host_name, 0) + 1
+                    self._failure_counts[host_name] = failures
                 # An unreachable host cannot verify its services: mark every
                 # configured check unknown so a stale "ok" never survives.
                 if storage_enabled:

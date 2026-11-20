@@ -16,7 +16,9 @@ def test_no_blocking_alert_left_in_static_scripts():
 
 def test_settings_uses_toast_for_save_errors():
     js = (STATIC / "settings.js").read_text(encoding="utf-8")
-    assert js.count("toast(error.message, true);") == 2
+    # 错误统一走页面内 toast；具体调用点会随功能增加，断言"至少两处"
+    # （保存与探针）而不是钉死精确次数。
+    assert js.count("toast(error.message, true);") >= 2
 
 
 def test_health_page_has_local_flash_helper():
