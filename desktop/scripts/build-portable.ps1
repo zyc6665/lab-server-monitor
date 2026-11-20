@@ -23,20 +23,21 @@ $ErrorActionPreference = 'Stop'
 function Resolve-ProjectRoot {
     $dir = $PSScriptRoot
     while ($dir) {
-        # Preferred layout: <repo>/servermonitor-main/servermonitor-main/...
+        # 直接目录优先：正常布局就是 <repo>/desktop/package.json。
+        # 曾经的 nested 优先顺序会让仓库里遗留的旧归档副本被静默打包。
+        if (Test-Path (Join-Path $dir 'desktop/package.json')) {
+            return $dir
+        }
+        # 兼容旧布局：<repo>/servermonitor-main/servermonitor-main/...
         $nested = Join-Path $dir 'servermonitor-main/servermonitor-main'
         if (Test-Path (Join-Path $nested 'desktop/package.json')) {
             return $nested
-        }
-        # Fallback: the directory itself is already a project root.
-        if (Test-Path (Join-Path $dir 'desktop/package.json')) {
-            return $dir
         }
         $parent = Split-Path -Parent $dir
         if ([string]::IsNullOrEmpty($parent) -or $parent -eq $dir) { break }
         $dir = $parent
     }
-    throw "Could not locate the project root (servermonitor-main/servermonitor-main) by walking up from $PSScriptRoot"
+    throw "Could not locate the project root (desktop/package.json) by walking up from $PSScriptRoot"
 }
 
 $projectRoot = Resolve-ProjectRoot
