@@ -86,7 +86,7 @@ def test_summary_is_absent_without_temperatures(tmp_path: Path):
 def test_styles_cover_the_summary():
     tail = (STATIC / "style.css").read_text(encoding="utf-8").split("v0.1.107 磁盘温度汇总")[1]
     assert ".disk-temp-summary {" in tail
-    assert ".disk-temp-summary-hot { color: #b45309; font-weight: 600; }" in tail
+    assert ".disk-temp-summary-hot { color: var(--warn-text); font-weight: 600; }" in tail
     assert 'html[data-theme="dark"] .disk-temp-summary-hot' in tail
 
 

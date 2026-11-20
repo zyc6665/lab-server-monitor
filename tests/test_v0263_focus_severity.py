@@ -28,4 +28,4 @@ def test_styles_mark_levels():
     assert "/* -- v0.1.163 重点关注按级别筛选 -- */" in css
     assert ".focus-sev {" in css
     assert ".focus-severity[hidden] { display: none !important; }" in css
-    assert ".focus-sev-critical { color: #b91c1c;" in css
+    assert ".focus-sev-critical { color: var(--danger-text);" in css

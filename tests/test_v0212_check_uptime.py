@@ -108,4 +108,4 @@ def test_script_has_uptime_helpers():
 def test_styles_cover_uptime_cell():
     tail = (STATIC / "style.css").read_text(encoding="utf-8").split("v0.1.112 服务检查可用率")[1]
     assert ".uptime-cell { white-space: nowrap; font-variant-numeric: tabular-nums; }" in tail
-    assert ".uptime-cell.is-low { color: #b45309; font-weight: 600; }" in tail
+    assert ".uptime-cell.is-low { color: var(--warn-text); font-weight: 600; }" in tail

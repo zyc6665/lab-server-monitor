@@ -1,3 +1,27 @@
+## v0.1.228 样式债：暗色主题单一 token 源 + 按钮类去重
+
+- 暗色主题此前有两处 `html[data-theme="dark"] { --token }` 块**互相覆盖**
+  （后一块静默赢，改色时极易改错地方）。合并为一个块，保留后者胜出的取值，
+  同时补回只有前者声明过的告警色（warn/danger/info）。
+- 新增 8 个语义 token（`--warn-text`、`--danger-text`、`--success-text`、
+  `--surface-nav`、`--surface-hover`、`--surface-deep`、`--border-soft`、`--track`），
+  取值与改造前的字面量完全一致；规则里的硬编码色改为引用 token，
+  **全站硬编码 hex 从 542 降到 390**。
+- 合并近义边框色（`#223049` / `#22314a` → `--border-soft`），顺手删掉 3 条
+  被后续规则完全覆盖的死规则。
+- 六套按钮类别名（primary-button/btn-primary、secondary-button/btn-secondary/
+  link-button、btn-link/button-link）此前在 5 处分别定义、互相覆盖；
+  现在外观只在「semantic buttons」一处定义，其余位置只保留禁用态与个别外边距。
+  按钮定义块从 21 降到 14。
+- **验证方式**：用「全站 computed style 指纹」对比改造前后——7 个页面 × 亮/暗
+  双主题 × 7742 个元素 × 14 个属性（背景/文字/边框/字号/字体/行高/内边距/
+  圆角/外边距/指针）。结果：浅色主题 **0 处变化**；暗色主题 19 处，全部是
+  刻意统一的边框色（rgb 34,48,73 → 38,52,76，肉眼不可见）；按钮改造 **0 处变化**。
+
+校验：1807 passed / 1 skipped（新增 9 个防回归测试：暗色 token 块唯一、
+两套调色板合并取值、语义 token 双主题定义、字面量不得回流、近义边框已归一、
+按钮单一来源）。
+
 ## v0.1.227 主机密钥校验 + 配置热更新竞态
 
 - **SSH 主机密钥校验（安全）**：此前所有连接都用 `AutoAddPolicy`，任何能占用

@@ -74,4 +74,4 @@ def test_group_totals_are_computed(tmp_path: Path):
 
     css = (STATIC / "style.css").read_text(encoding="utf-8")
     assert "/* -- v0.1.159 磁盘分组显示合计 -- */" in css
-    assert ".disk-group-health b.is-warn { color: #b45309; }" in css
+    assert ".disk-group-health b.is-warn { color: var(--warn-text); }" in css
