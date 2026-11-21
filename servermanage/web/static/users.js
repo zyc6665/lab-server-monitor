@@ -1502,6 +1502,18 @@
     });
   }
 
+  function adminGet(url) {
+    return fetch(url, {
+      method: 'GET',
+      credentials: 'same-origin',
+      headers: { Accept: 'application/json' }
+    }).then(function (response) {
+      return response.json().catch(function () { return {}; }).then(function (data) {
+        return { status: response.status, ok: response.ok, data: data || {} };
+      });
+    });
+  }
+
   function renderList(container, items, className) {
     container.textContent = '';
     (items || []).forEach(function (text) {
@@ -1593,40 +1605,85 @@
     adminEl('user-admin-execute').disabled = !(hostOk && accountOk);
   }
 
+  // v0.1.230：账号操作改为后台任务。提交后轮询状态接口，
+  // 关掉对话框/窗口也不会中断执行，结果在「操作记录」里可查。
   function executePlan() {
     if (!currentPlan || currentPlan.blocked) { return; }
     var button = adminEl('user-admin-execute');
     button.disabled = true;
-    setAdminStatus('正在执行，请不要关闭窗口…');
+    setAdminStatus('已提交，正在服务器上执行…');
     adminPost('/api/users/execute', {
       plan_hash: currentPlan.plan_hash,
       confirm_host: adminEl('user-admin-confirm-host').value.trim(),
       confirm_account: adminEl('user-admin-confirm-account').value.trim()
     }).then(function (result) {
       if (result.status === 401) { redirectToLogin(); return; }
-      var outcome = result.data.result || {};
-      var steps = outcome.steps || [];
-      var list = adminEl('user-admin-result-steps');
-      list.textContent = '';
-      steps.forEach(function (step) {
-        var item = document.createElement('li');
-        item.className = step.status === 'ok' ? 'user-admin-step-ok' : 'user-admin-step-failed';
-        item.textContent = (step.status === 'ok' ? '✓ ' : '✗ ') + step.title +
-          (step.stderr ? '：' + step.stderr : '');
-        list.appendChild(item);
-      });
-      adminEl('user-admin-result').hidden = false;
-      if (result.ok) {
-        setAdminStatus('执行成功，正在刷新账号列表…');
-        currentPlan = null;
-        fetchUsers();
-      } else {
-        setAdminStatus(result.data.message || outcome.error || '执行失败，请查看每一步的输出', true);
+      if (!result.ok) {
+        var payload = result.data || {};
+        setAdminStatus(payload.message || payload.error || '执行请求失败，请检查网络后重试', true);
+        updateExecuteState();
+        return;
       }
+      currentPlan = null;
+      pollExecuteStatus(result.data.job_id, 0);
     }).catch(function () {
       setAdminStatus('执行请求失败，请检查网络后重试', true);
       updateExecuteState();
     });
+  }
+
+  function renderExecuteSteps(job) {
+    var list = adminEl('user-admin-result-steps');
+    list.textContent = '';
+    (job.steps || []).forEach(function (step) {
+      var item = document.createElement('li');
+      if (step.status === 'ok') {
+        item.className = 'user-admin-step-ok';
+        item.textContent = '✓ ' + step.title + (step.stderr ? '：' + step.stderr : '');
+      } else if (step.status) {
+        item.className = 'user-admin-step-failed';
+        item.textContent = '✗ ' + step.title + (step.stderr ? '：' + step.stderr : '');
+      } else {
+        item.textContent = '· ' + step.title;
+      }
+      list.appendChild(item);
+    });
+    adminEl('user-admin-result').hidden = false;
+  }
+
+  function pollExecuteStatus(jobId, attempt) {
+    adminGet('/api/users/execute/status?job_id=' + encodeURIComponent(jobId))
+      .then(function (result) {
+        if (result.status === 401) { redirectToLogin(); return; }
+        if (!result.ok) {
+          var payload = result.data || {};
+          setAdminStatus(payload.message || '无法获取执行状态', true);
+          return;
+        }
+        var job = result.data || {};
+        renderExecuteSteps(job);
+        if (job.state === 'running') {
+          if (attempt >= 300) {
+            setAdminStatus('执行时间过长，请稍后在「操作记录」里查看结果', true);
+            return;
+          }
+          window.setTimeout(function () { pollExecuteStatus(jobId, attempt + 1); }, 1000);
+          return;
+        }
+        if (job.state === 'error') {
+          setAdminStatus('执行失败：' + (job.error || '未知错误'), true);
+          return;
+        }
+        if (job.ok) {
+          setAdminStatus('执行成功，正在刷新账号列表…');
+          fetchUsers();
+        } else {
+          setAdminStatus('执行失败，请查看每一步的输出', true);
+        }
+      })
+      .catch(function () {
+        setAdminStatus('无法获取执行状态，请检查网络后重试', true);
+      });
   }
 
   function bindAdminDialog() {

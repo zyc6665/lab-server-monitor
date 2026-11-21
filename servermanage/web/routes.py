@@ -103,6 +103,73 @@ _VIRTUAL_FILESYSTEMS = {
 # size-bounded and TTL-bounded in :class:`servermanage.user_admin.PlanCache`.
 _plan_cache = admin.PlanCache()
 
+def _run_execute_job(
+    *,
+    app,
+    job: dict[str, Any],
+    plan: dict[str, Any],
+    plan_hash: str,
+    host_config,
+    connect_timeout: int,
+    actor: str,
+    started: datetime,
+    db_path,
+) -> None:
+    """Run one provisioning plan off the request thread, then write the audit row."""
+    try:
+        try:
+            with SSHClientWrapper(
+                host=host_config, connect_timeout=connect_timeout
+            ) as ssh:
+                outcome = admin.execute_plan(plan, ssh)
+        except Exception as exc:  # noqa: BLE001 - never leak a traceback or password
+            outcome = {
+                "ok": False,
+                "status": "error",
+                "steps": [],
+                "error": str(exc)[:400],
+            }
+        for entry in outcome.get("steps", []):
+            masked_step = next(
+                (item for item in job["steps"] if item["id"] == entry["id"]), None
+            )
+            if masked_step is not None:
+                masked_step["status"] = entry["status"]
+                masked_step["stderr"] = entry.get("stderr", "")
+                masked_step["stdout"] = entry.get("stdout", "")
+        storage.save_user_operation(
+            plan["host"],
+            plan["account"],
+            plan["operation"],
+            outcome.get("status", "error"),
+            actor=actor,
+            plan_hash=plan_hash,
+            steps=job["steps"],
+            error=str(outcome.get("error") or ""),
+            created_at=started,
+            finished_at=datetime.now(timezone.utc),
+            db_path=db_path,
+        )
+        job["ok"] = bool(outcome.get("ok"))
+        job["error"] = str(outcome.get("error") or "")
+        job["state"] = "done"
+        if job["ok"]:
+            _request_user_refresh(app)
+    except Exception as exc:  # noqa: BLE001 - job must never stay "running"
+        job["ok"] = False
+        job["error"] = str(exc)[:400]
+        job["state"] = "error"
+    finally:
+        job["finished_at"] = datetime.now(timezone.utc).isoformat()
+
+
+# v0.1.230：账号操作改为后台任务执行。此前整个计划在请求线程里同步跑
+# （最多 6 步 sudo SSH，慢主机会把浏览器拖到超时，重试还可能重复执行）。
+# 任务注册表只存脱敏后的步骤；按 actor 隔离读取。
+_EXECUTE_JOBS: dict[str, dict[str, Any]] = {}
+_EXECUTE_JOBS_LOCK = threading.Lock()
+_EXECUTE_JOB_TTL_SECONDS = 3600.0
+
 # ---------------------------------------------------------------------------
 # Small value helpers
 # ---------------------------------------------------------------------------
@@ -2986,48 +3053,85 @@ def register_routes(app: Flask) -> None:
         )
         if host_config is None:
             return jsonify({"error": "unknown_host"}), 404
-        try:
-            with SSHClientWrapper(
-                host=host_config, connect_timeout=config.ssh.connect_timeout
-            ) as ssh:
-                outcome = admin.execute_plan(plan, ssh)
-        except Exception as exc:  # noqa: BLE001 - never leak a traceback or password
-            outcome = {
-                "ok": False,
-                "status": "error",
-                "steps": [],
-                "error": str(exc)[:400],
-            }
-        _plan_cache.drop(plan_hash)
+
         masked = [
             {key: value for key, value in step.items() if key != "stdin"}
             for step in plan["steps"]
         ]
-        for entry in outcome.get("steps", []):
-            masked_step = next(
-                (item for item in masked if item["id"] == entry["id"]), None
-            )
-            if masked_step is not None:
-                masked_step["status"] = entry["status"]
-                masked_step["stderr"] = entry.get("stderr", "")
-                masked_step["stdout"] = entry.get("stdout", "")
-        storage.save_user_operation(
-            plan["host"],
-            plan["account"],
-            plan["operation"],
-            outcome.get("status", "error"),
-            actor=actor,
-            plan_hash=plan_hash,
-            steps=masked,
-            error=str(outcome.get("error") or ""),
-            created_at=started,
-            finished_at=datetime.now(timezone.utc),
-            db_path=db_path,
-        )
-        if outcome.get("ok"):
-            _request_user_refresh(app)
-        status_code = 200 if outcome.get("ok") else 400
-        return jsonify({"ok": bool(outcome.get("ok")), "result": outcome, "steps": masked}), status_code
+        job_id = secrets.token_hex(16)
+        job: dict[str, Any] = {
+            "id": job_id,
+            "host": plan["host"],
+            "account": plan["account"],
+            "operation": plan["operation"],
+            "actor": actor,
+            "state": "running",
+            "ok": None,
+            "error": "",
+            "steps": masked,
+            "started_at": started.isoformat(),
+            "finished_at": None,
+            "_ts": time.monotonic(),
+        }
+        with _EXECUTE_JOBS_LOCK:
+            stale = [
+                key
+                for key, item in _EXECUTE_JOBS.items()
+                if time.monotonic() - item["_ts"] > _EXECUTE_JOB_TTL_SECONDS
+            ]
+            for key in stale:
+                _EXECUTE_JOBS.pop(key, None)
+            _EXECUTE_JOBS[job_id] = job
+        # 计划在入队时立即作废：就算工作线程还没开始跑，重复提交也会被拒。
+        _plan_cache.drop(plan_hash)
+        threading.Thread(
+            target=_run_execute_job,
+            name="user-execute-job",
+            daemon=True,
+            kwargs=dict(
+                app=app,
+                job=job,
+                plan=plan,
+                plan_hash=plan_hash,
+                host_config=host_config,
+                connect_timeout=config.ssh.connect_timeout,
+                actor=actor,
+                started=started,
+                db_path=db_path,
+            ),
+        ).start()
+        return jsonify({"ok": True, "job_id": job_id})
+
+    @app.get("/api/users/execute/status")
+    def api_users_execute_status():
+        """Poll a background provisioning job (masked steps only)."""
+        job_id = (request.args.get("job_id") or "").strip()
+        if not job_id:
+            return jsonify({"error": "missing_job_id"}), 400
+        with _EXECUTE_JOBS_LOCK:
+            job = _EXECUTE_JOBS.get(job_id)
+            snapshot: dict[str, Any] | None = None
+            if job is not None:
+                snapshot = {
+                    "id": job["id"],
+                    "host": job["host"],
+                    "account": job["account"],
+                    "operation": job["operation"],
+                    "actor": job["actor"],
+                    "state": job["state"],
+                    "ok": job["ok"],
+                    "error": job["error"],
+                    "steps": [dict(step) for step in job["steps"]],
+                    "started_at": job["started_at"],
+                    "finished_at": job["finished_at"],
+                }
+        if snapshot is None:
+            return jsonify({"error": "unknown_job", "message": "任务不存在或已过期。"}), 404
+        if _view_mode(_config(app)) == user_mode.MODE_USER and snapshot["actor"] != str(
+            session.get("username") or ""
+        ):
+            return jsonify({"error": "forbidden", "message": "只能查看自己的操作任务。"}), 403
+        return jsonify(snapshot)
 
     @app.get("/api/users/operations")
     def api_users_operations():

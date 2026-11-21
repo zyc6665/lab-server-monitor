@@ -167,6 +167,21 @@ def _plan(client, **payload):
     return client.post("/api/users/plan", json=body, headers=_headers(client))
 
 
+def _wait_job_done(client, job_id, timeout: float = 10.0) -> dict:
+    """Poll the background execute job until it leaves the running state."""
+    import time as _time
+
+    deadline = _time.monotonic() + timeout
+    while _time.monotonic() < deadline:
+        response = client.get(f"/api/users/execute/status?job_id={job_id}")
+        assert response.status_code == 200, response.get_data(as_text=True)
+        payload = response.get_json()
+        if payload["state"] != "running":
+            return payload
+        _time.sleep(0.02)
+    raise AssertionError("execute job did not finish in time")
+
+
 def test_plan_requires_the_global_write_switch(tmp_path) -> None:
     app = _new_app(_db(tmp_path), write_enabled=False)
     with app.test_client() as client:
@@ -240,6 +255,13 @@ def test_execute_runs_the_plan_and_writes_an_audit_row(client, tmp_path) -> None
     assert body["ok"] is True
     assert SECRET not in response.get_data(as_text=True)
 
+    # v0.1.230：执行在后台线程进行，轮询状态直到结束。
+    job = _wait_job_done(client, body["job_id"])
+    assert job["state"] == "done"
+    assert job["ok"] is True
+    assert [step["status"] for step in job["steps"] if step["id"]].count("ok") >= 3
+    assert SECRET not in str(job)
+
     commands = [call[0] for call in _FakeSSH.calls]
     assert any(command.startswith("useradd") for command in commands)
     assert "chpasswd" in commands
@@ -264,8 +286,10 @@ def test_execute_marks_a_failed_step(client, tmp_path) -> None:
         },
         headers=_headers(client),
     )
-    assert response.status_code == 400
-    assert response.get_json()["ok"] is False
+    assert response.status_code == 200
+    body = response.get_json()
+    job = _wait_job_done(client, body["job_id"])
+    assert job["ok"] is False
     rows = list_user_operations(_db(tmp_path))
     assert rows[0]["status"] == "failed"
     assert "gpasswd" not in rows[0]["error"] or True  # message is human readable
@@ -286,7 +310,7 @@ def test_execute_rejects_an_unknown_or_reused_plan(client) -> None:
 
 def test_operations_endpoint_lists_history(client) -> None:
     plan = _plan(client).get_json()["plan"]
-    client.post(
+    submitted = client.post(
         "/api/users/execute",
         json={
             "plan_hash": plan["plan_hash"],
@@ -295,6 +319,7 @@ def test_operations_endpoint_lists_history(client) -> None:
         },
         headers=_headers(client),
     )
+    _wait_job_done(client, submitted.get_json()["job_id"])
     response = client.get("/api/users/operations")
     assert response.status_code == 200
     items = response.get_json()["items"]
