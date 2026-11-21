@@ -770,10 +770,17 @@
   qsa("[data-host-delete]").forEach(function (button) {
     button.addEventListener("click", function () {
       var name = button.getAttribute("data-host-delete");
-      if (!window.confirm("确定删除主机 " + name + " 吗？")) return;
-      api("DELETE", "/api/settings/hosts/" + encodeURIComponent(name))
-        .then(function () { reloadToHosts(); })
-        .catch(function (error) { toast(error.message, true); });
+      // v0.1.231：阻塞式原生弹窗换成站内主题对话框。
+      window.servermonitorConfirm({
+        message: "确定删除主机 " + name + " 吗？主机的监控数据与告警会一并清除。",
+        confirmLabel: "删除",
+        danger: true,
+      }).then(function (confirmed) {
+        if (!confirmed) return;
+        api("DELETE", "/api/settings/hosts/" + encodeURIComponent(name))
+          .then(function () { reloadToHosts(); })
+          .catch(function (error) { toast(error.message, true); });
+      });
     });
   });
 
@@ -1128,18 +1135,24 @@
       tr.appendChild(cell(scopeLabel(silence.scope_type)));
       tr.appendChild(cell(silence.scope || "全部"));
       tr.appendChild(cell(silence.reason || ""));
-      tr.appendChild(cell(silence.starts_at ? new Date(silence.starts_at).toLocaleString() : ""));
-      tr.appendChild(cell(silence.ends_at ? new Date(silence.ends_at).toLocaleString() : ""));
+      // v0.1.231：时间格式与其它页面统一（此前直接本地化输出）。
+      tr.appendChild(cell(silence.starts_at ? window.servermonitorFmt.stamp(silence.starts_at) : ""));
+      tr.appendChild(cell(silence.ends_at ? window.servermonitorFmt.stamp(silence.ends_at) : ""));
       var actions = document.createElement("td");
       var button = document.createElement("button");
       button.className = "danger-button";
       button.textContent = "解除";
       button.disabled = !writable;
       button.addEventListener("click", function () {
-        if (!window.confirm("确定解除这条静默吗？")) return;
-        api("DELETE", "/api/settings/silences/" + encodeURIComponent(silence.id))
-          .then(loadSilences)
-          .catch(function (error) { status(silenceStatus, error.message, true); });
+        window.servermonitorConfirm({
+          message: "确定解除这条静默吗？解除后告警会立即恢复通知。",
+          confirmLabel: "解除",
+        }).then(function (confirmed) {
+          if (!confirmed) return;
+          api("DELETE", "/api/settings/silences/" + encodeURIComponent(silence.id))
+            .then(loadSilences)
+            .catch(function (error) { status(silenceStatus, error.message, true); });
+        });
       });
       actions.appendChild(button);
       tr.appendChild(actions);

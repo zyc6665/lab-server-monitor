@@ -86,17 +86,23 @@
 
   function install() {
     if (!pending) return;
-    if (!window.confirm("安装更新会关闭当前客户端并自动重新启动，确定继续吗？")) return;
-    installButton.disabled = true;
-    setStatus("正在安装更新，程序即将重启…");
-    bridge.installUpdate(pending).then((response) => {
-      if (response && response.ok === false) {
-        setStatus(response.error || "安装失败", true);
+    // v0.1.231：站内确认对话框替代原生弹窗。
+    window.servermonitorConfirm({
+      message: "安装更新会关闭当前客户端并自动重新启动，确定继续吗？",
+      confirmLabel: "安装更新",
+    }).then((confirmed) => {
+      if (!confirmed) return;
+      installButton.disabled = true;
+      setStatus("正在安装更新，程序即将重启…");
+      bridge.installUpdate(pending).then((response) => {
+        if (response && response.ok === false) {
+          setStatus(response.error || "安装失败", true);
+          installButton.disabled = false;
+        }
+      }).catch((error) => {
+        setStatus(`安装失败：${error.message || error}`, true);
         installButton.disabled = false;
-      }
-    }).catch((error) => {
-      setStatus(`安装失败：${error.message || error}`, true);
-      installButton.disabled = false;
+      });
     });
   }
 

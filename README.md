@@ -1,3 +1,17 @@
+## v0.1.231 全站确认对话框 + 共享格式化器
+
+- 删除主机、解除静默、恢复备份、安装更新这四个破坏性操作此前用
+  ``window.confirm`` 原生弹窗：在 Electron 里会冻结整窗渲染，且与站内对话框
+  风格割裂。现在 app.js 提供统一的 ``servermonitorConfirm``（主题对话框、
+  危险操作红色按钮、支持 Esc 关闭），四处全部替换。对话框结果只结算一次
+  （按钮 / Esc / close 事件任何路径都不会卡住或重复 resolve）。
+  浏览器实测：确认→true、取消→false、Esc→false，DOM 零残留。
+- 字节格式化统一走 ``window.servermonitorFmt.bytes``：此前 settings-health 的
+  本地实现会把 2 TB 显示成 "2048.00 GB"；静默列表时间此前直接
+  ``toLocaleString``，现在与其它页面统一为 "YYYY-MM-DD HH:MM"。
+
+校验：1824 passed / 1 skipped；对话框三路径浏览器实测通过（暗色主题截图确认）。
+
 ## v0.1.230 账号操作改为后台任务执行
 
 - 「重置密码 / 加入 docker 组 / 建 data 目录」等账号操作此前在浏览器请求线程里

@@ -29,13 +29,9 @@
     box._timer = setTimeout(function () { box.hidden = true; }, 4500);
   }
 
+  // v0.1.231：与其它页面共用同一套字节格式化（此前 TB 级显示成 2048.00 GB）。
   function formatBytes(value) {
-    var num = Number(value || 0);
-    if (!num) { return '0 B'; }
-    if (num < 1024) { return num + ' B'; }
-    if (num < 1024 * 1024) { return (num / 1024).toFixed(1) + ' KB'; }
-    if (num < 1024 * 1024 * 1024) { return (num / (1024 * 1024)).toFixed(1) + ' MB'; }
-    return (num / (1024 * 1024 * 1024)).toFixed(2) + ' GB';
+    return window.servermonitorFmt ? window.servermonitorFmt.bytes(value) : '—';
   }
 
   function card(label, value, hint) {
@@ -248,9 +244,18 @@
         status.textContent = '请先选择 .db 备份文件。';
         return;
       }
-      if (!window.confirm('恢复会覆盖当前配置和历史数据。当前数据库会先自动备份，确定继续吗？')) {
-        return;
-      }
+      // v0.1.231：站内确认对话框替代原生弹窗。
+      window.servermonitorConfirm({
+        message: '恢复会覆盖当前配置和历史数据，当前数据库会先自动备份。确定继续吗？',
+        confirmLabel: '恢复',
+        danger: true,
+      }).then(function (confirmed) {
+        if (!confirmed) return;
+        doRestore();
+      });
+    });
+
+    function doRestore() {
       var root = document.getElementById('settings-root');
       var form = new FormData();
       form.append('file', fileInput.files[0]);
@@ -287,7 +292,7 @@
       }).then(function () {
         restoreButton.disabled = false;
       });
-    });
+    }
   }
   setupRestore();
   setupStorage();
