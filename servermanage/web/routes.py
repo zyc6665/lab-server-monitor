@@ -1967,14 +1967,32 @@ def _host_alert_days(
     return rows
 
 
-def _build_host_detail(name: str, config, db_path) -> dict[str, Any] | None:
+def _build_host_detail(
+    name: str,
+    config,
+    db_path,
+    *,
+    precomputed: dict[str, Any] | None = None,
+) -> dict[str, Any] | None:
     """Build the ``/api/host/<name>`` payload, or ``None`` when unknown.
 
     A host that is configured but has not been polled yet is still valid: the
     detail page opens with empty metrics instead of a 404, which is important
     right after adding a host (or while the first collection is failing).
+
+    ``precomputed`` carries fleet-wide reads for the inspection report
+    (``snapshots`` / ``disks`` / ``alerts`` / ``checks`` / ``check_history`` /
+    ``network`` / ``sample_counts`` / ``uptime_strips`` plus the user-row
+    inputs).  ``None`` entries fall back to the per-host query so single-host
+    callers stay on the simple path.
     """
-    snapshot = storage.get_host_snapshot(name, db_path)
+    shared = precomputed or {}
+    snapshots = shared.get("snapshots")
+    snapshot = (
+        snapshots.get(name)
+        if snapshots is not None
+        else storage.get_host_snapshot(name, db_path)
+    )
     addresses = {server.name: server.host for server in config.servers}
     servers_by_name = {server.name: server for server in config.servers}
     server = servers_by_name.get(name)
@@ -1982,14 +2000,37 @@ def _build_host_detail(name: str, config, db_path) -> dict[str, Any] | None:
         return None
 
     tz = resolve_timezone(config.app.timezone)
-    disk = storage.get_disk_health(name, db_path)
+    disks = shared.get("disks")
+    disk = disks.get(name) if disks is not None else storage.get_disk_health(name, db_path)
     if disk is not None:
         disk = dict(disk)
         disk["collected_at"] = _to_local_iso(disk.get("collected_at"), tz)
+    alerts_grouped = shared.get("alerts")
     alerts = _localize_alerts(
-        storage.list_alerts_for_host(name, db_path, limit=20),
+        alerts_grouped.get(name, [])
+        if alerts_grouped is not None
+        else storage.list_alerts_for_host(name, db_path, limit=20),
         tz,
     )
+    checks_grouped = shared.get("checks")
+    checks = (
+        checks_grouped.get(name, [])
+        if checks_grouped is not None
+        else storage.get_host_check_results(name, db_path)
+    )
+    history_grouped = shared.get("check_history")
+    check_history = (
+        history_grouped.get(name, {})
+        if history_grouped is not None
+        else storage.get_host_check_history(name, db_path)
+    )
+    network_grouped = shared.get("network")
+    network = (
+        network_grouped.get(name, {"rx_bytes_per_second": None, "tx_bytes_per_second": None})
+        if network_grouped is not None
+        else storage.fetch_host_network_rates(db_path, name)
+    )
+    users_pre = (shared.get("users") or {}).get(name) or {}
     detail = {
         "name": name,
         "host": addresses.get(name),
@@ -2005,18 +2046,31 @@ def _build_host_detail(name: str, config, db_path) -> dict[str, Any] | None:
         "errors": (snapshot.get("errors") or []) if snapshot else [],
         "disk": disk,
         "alerts": alerts,
-        "checks": storage.get_host_check_results(name, db_path),
-        "check_history": storage.get_host_check_history(name, db_path),
-        "network": storage.fetch_host_network_rates(db_path, name),
-        "users": _build_user_rows(name, db_path, tz, server),
+        "checks": checks,
+        "check_history": check_history,
+        "network": network,
+        "users": _build_user_rows(name, db_path, tz, server, precomputed=users_pre),
     }
     poll_seconds = max(60, int(config.app.poll_interval_seconds or 600))
+    sample_counts = shared.get("sample_counts")
     detail["collection_uptime"] = {
-        "samples": storage.count_recent_samples(db_path, detail["name"], hours=24),
+        "samples": (
+            sample_counts.get(name, 0)
+            if sample_counts is not None
+            else storage.count_recent_samples(db_path, detail["name"], hours=24)
+        ),
         "expected": max(1, int(24 * 3600 / poll_seconds)),
     }
-    detail["uptime_strip"] = storage.fetch_host_uptime_strip(
-        db_path, detail["name"], hours=24, bucket_minutes=15
+    strips = shared.get("uptime_strips")
+    detail["uptime_strip"] = (
+        strips.get(
+            name,
+            _empty_uptime_strip_payload(24, 15, shared.get("_strip_since")),
+        )
+        if strips is not None
+        else storage.fetch_host_uptime_strip(
+            db_path, detail["name"], hours=24, bucket_minutes=15
+        )
     )
     detail["diagnostics"] = diagnostics_mod.build_host_diagnostics(
         detail,
@@ -2031,6 +2085,23 @@ def _build_host_detail(name: str, config, db_path) -> dict[str, Any] | None:
         now=datetime.now(tz),
     )
     return detail
+
+
+def _empty_uptime_strip_payload(hours: int, bucket_minutes: int, since) -> dict:
+    """Zero-filled heartbeat strip matching fetch_host_uptime_strip's shape."""
+    since = since or datetime.now(timezone.utc)
+    count = max(1, int((hours * 60) / bucket_minutes))
+    bucket = timedelta(minutes=bucket_minutes)
+    return {
+        "hours": hours,
+        "bucket_minutes": bucket_minutes,
+        "buckets": [
+            {"index": index, "start": (since + bucket * index).isoformat(), "total": 0, "ok": 0}
+            for index in range(count)
+        ],
+        "samples": 0,
+        "ok": 0,
+    }
 
 
 def _report_number(value: Any) -> float | None:
@@ -2267,9 +2338,48 @@ def _build_fleet_report(config: Any, db_path: Path, generated_at: datetime) -> s
     then appends the detailed diagnostic report for each host.  It is meant to
     be saved or mailed as a point-in-time handover/check-up artifact.
     """
+    # v0.1.233：全队一次批量读齐（此前每台主机约 10 次查询）。
+    tz = resolve_timezone(config.app.timezone)
+    latest_raw = {
+        item["host_name"]: item for item in storage.get_all_host_snapshots(db_path)
+    }
+    disks = {item["host_name"]: item for item in storage.get_all_disk_health(db_path)}
+    alerts = {
+        host: _localize_alerts(items, tz)
+        for host, items in storage.list_recent_alerts_grouped(db_path, per_host=20).items()
+    }
+    checks = storage.get_all_host_check_results(db_path)
+    check_history = storage.get_all_host_check_history(db_path)
+    network = storage.fetch_all_host_network_rates(db_path)
+    sample_counts = storage.count_recent_samples_by_host(db_path, hours=24)
+    strip_now = datetime.now(timezone.utc)
+    uptime_strips = storage.fetch_all_host_uptime_strips(
+        db_path, hours=24, bucket_minutes=15, now=strip_now
+    )
+    fleet_users = {
+        "snapshots": storage.get_all_host_user_snapshots(db_path),
+        "baselines": storage.get_all_user_baselines(db_path),
+        "deltas": storage.get_all_user_usage_deltas(db_path, days=_USAGE_DELTA_DAYS),
+        "gpu_usage": {
+            name: _gpu_usage_from_metrics((item or {}).get("metrics") or {})
+            for name, item in latest_raw.items()
+        },
+    }
+    precomputed = {
+        "snapshots": latest_raw,
+        "disks": disks,
+        "alerts": alerts,
+        "checks": checks,
+        "check_history": check_history,
+        "network": network,
+        "sample_counts": sample_counts,
+        "uptime_strips": uptime_strips,
+        "_strip_since": strip_now - timedelta(hours=24),
+        "users": {name: dict(fleet_users) for name in {s.name for s in config.servers}},
+    }
     details: list[dict[str, Any]] = []
     for server in config.servers:
-        detail = _build_host_detail(server.name, config, db_path)
+        detail = _build_host_detail(server.name, config, db_path, precomputed=precomputed)
         if detail is not None:
             details.append(detail)
     total = len(details)

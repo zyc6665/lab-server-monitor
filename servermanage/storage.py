@@ -1976,6 +1976,41 @@ def append_host_check_history(
         conn.close()
 
 
+def get_all_host_check_history(
+    db_path: Path, *, limit: int = 40
+) -> dict[str, dict[str, list[str]]]:
+    """Return :func:`get_host_check_history` for every host, in one query."""
+    db_path = Path(db_path)
+    if not db_path.exists():
+        return {}
+    limit = max(1, int(limit))
+    with _connect(db_path) as conn:
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute(
+            """
+            SELECT host_name, check_name, status FROM (
+                SELECT host_name, check_name, status,
+                       ROW_NUMBER() OVER (
+                           PARTITION BY host_name ORDER BY id DESC
+                       ) AS rn
+                FROM host_check_history
+            ) WHERE rn <= ?
+            ORDER BY host_name, rn DESC
+            """,
+            (limit * 32,),
+        ).fetchall()
+
+    grouped: dict[str, dict[str, list[str]]] = {}
+    for row in rows:
+        host_group = grouped.setdefault(str(row["host_name"]), {})
+        bucket = host_group.setdefault(row["check_name"], [])
+        bucket.append(row["status"])
+    return {
+        host: {name: statuses[-limit:] for name, statuses in host_group.items()}
+        for host, host_group in grouped.items()
+    }
+
+
 def get_host_check_history(
     host_name: str, db_path: Path, *, limit: int = 40
 ) -> dict[str, list[str]]:
@@ -2108,6 +2143,67 @@ def fetch_host_sparklines(
     }
 
 
+def _empty_uptime_strip(hours: int, bucket_minutes: int, since: datetime) -> dict:
+    count = max(1, int((hours * 60) / bucket_minutes))
+    bucket = timedelta(minutes=bucket_minutes)
+    return {
+        "hours": hours,
+        "bucket_minutes": bucket_minutes,
+        "buckets": [
+            {"index": index, "start": (since + bucket * index).isoformat(), "total": 0, "ok": 0}
+            for index in range(count)
+        ],
+        "samples": 0,
+        "ok": 0,
+    }
+
+
+def fetch_all_host_uptime_strips(
+    db_path: Path,
+    *,
+    hours: int = 24,
+    bucket_minutes: int = 15,
+    now: datetime | None = None,
+) -> dict[str, dict]:
+    """Return :func:`fetch_host_uptime_strip` for every host, in one query."""
+    db_path = Path(db_path)
+    bucket_minutes = max(1, int(bucket_minutes))
+    hours = max(1, int(hours))
+    now = now or datetime.now(timezone.utc)
+    since = now - timedelta(hours=hours)
+    bucket = timedelta(minutes=bucket_minutes)
+    count = max(1, int((hours * 60) / bucket_minutes))
+    strips: dict[str, dict] = {}
+    if not db_path.exists():
+        return strips
+    since_iso = _to_iso_utc(since)
+    with _connect(db_path) as conn:
+        rows = conn.execute(
+            "SELECT host_name, collected_at, success FROM host_metrics_history"
+            " WHERE collected_at >= ? ORDER BY host_name, collected_at",
+            (since_iso,),
+        ).fetchall()
+    for host_name, raw, success in rows:
+        strip = strips.get(str(host_name))
+        if strip is None:
+            strip = _empty_uptime_strip(hours, bucket_minutes, since)
+            strips[str(host_name)] = strip
+        try:
+            moment = _parse_collected_at(raw)
+        except (TypeError, ValueError):
+            continue
+        index = int((moment - since).total_seconds() // bucket.total_seconds())
+        if index < 0 or index >= count:
+            continue
+        strip["buckets"][index]["total"] += 1
+        if success:
+            strip["buckets"][index]["ok"] += 1
+    for strip in strips.values():
+        strip["samples"] = sum(item["total"] for item in strip["buckets"])
+        strip["ok"] = sum(item["ok"] for item in strip["buckets"])
+    return strips
+
+
 def fetch_host_uptime_strip(
     db_path: Path,
     host_name: str,
@@ -2171,6 +2267,64 @@ def fetch_host_uptime_strip(
     }
 
 
+def _network_rate_pair(rows) -> dict[str, float | None]:
+    """Compute rx/tx rates from a host's two most recent samples."""
+    if len(rows) < 2:
+        return {"rx_bytes_per_second": None, "tx_bytes_per_second": None}
+    latest, previous = rows[0], rows[1]
+    try:
+        latest_at = _parse_collected_at(latest[0])
+        previous_at = _parse_collected_at(previous[0])
+    except (TypeError, ValueError):
+        return {"rx_bytes_per_second": None, "tx_bytes_per_second": None}
+    seconds = (latest_at - previous_at).total_seconds()
+    if seconds <= 0:
+        return {"rx_bytes_per_second": None, "tx_bytes_per_second": None}
+
+    def _rate(current, before):
+        if current is None or before is None:
+            return None
+        delta = int(current) - int(before)
+        if delta < 0:
+            return None
+        return round(delta / seconds, 1)
+
+    return {
+        "rx_bytes_per_second": _rate(latest[1], previous[1]),
+        "tx_bytes_per_second": _rate(latest[2], previous[2]),
+    }
+
+
+def fetch_all_host_network_rates(db_path: Path) -> dict[str, dict[str, float | None]]:
+    """Return :func:`fetch_host_network_rates` for every host, in one query."""
+    db_path = Path(db_path)
+    empty = {"rx_bytes_per_second": None, "tx_bytes_per_second": None}
+    if not db_path.exists():
+        return {}
+    with _connect(db_path) as conn:
+        rows = conn.execute(
+            """
+            SELECT host_name, collected_at, net_rx_bytes, net_tx_bytes FROM (
+                SELECT host_name, collected_at, net_rx_bytes, net_tx_bytes,
+                       ROW_NUMBER() OVER (
+                           PARTITION BY host_name ORDER BY collected_at DESC
+                       ) AS rn
+                FROM host_metrics_history
+                WHERE success = 1 AND net_rx_bytes IS NOT NULL
+                  AND net_tx_bytes IS NOT NULL
+            ) WHERE rn <= 2
+            ORDER BY host_name, collected_at DESC
+            """
+        ).fetchall()
+    grouped: dict[str, list] = {}
+    for host_name, collected_at, rx, tx in rows:
+        grouped.setdefault(str(host_name), []).append((collected_at, rx, tx))
+    return {
+        host: _network_rate_pair(samples) if len(samples) >= 2 else dict(empty)
+        for host, samples in grouped.items()
+    }
+
+
 def fetch_host_network_rates(
     db_path: Path,
     host_name: str,
@@ -2202,31 +2356,7 @@ def fetch_host_network_rates(
             """,
             (host_name,),
         ).fetchall()
-    if len(rows) < 2:
-        return empty
-
-    latest, previous = rows[0], rows[1]
-    try:
-        latest_at = _parse_collected_at(latest[0])
-        previous_at = _parse_collected_at(previous[0])
-    except (TypeError, ValueError):
-        return empty
-    seconds = (latest_at - previous_at).total_seconds()
-    if seconds <= 0:
-        return empty
-
-    def _rate(current: int | None, before: int | None) -> float | None:
-        if current is None or before is None:
-            return None
-        delta = int(current) - int(before)
-        if delta < 0:
-            return None
-        return round(delta / seconds, 1)
-
-    return {
-        "rx_bytes_per_second": _rate(latest[1], previous[1]),
-        "tx_bytes_per_second": _rate(latest[2], previous[2]),
-    }
+    return _network_rate_pair(rows) if len(rows) >= 2 else empty
 
 
 # ---------------------------------------------------------------------------
@@ -2776,6 +2906,44 @@ def list_alerts_for_host(
         ).fetchall()
 
     return [dict(row) for row in rows]
+
+
+def list_recent_alerts_grouped(
+    db_path: Path,
+    *,
+    per_host: int = 20,
+) -> dict[str, list[dict]]:
+    """Return the most recent *per_host* alerts for every host, in one query.
+
+    Maps ``host_name`` to the same newest-first rows that
+    :func:`list_alerts_for_host` returns, so the fleet report reads all hosts
+    with one round trip instead of one per host.
+    """
+    db_path = Path(db_path)
+    if not db_path.exists():
+        return {}
+    cap = max(1, int(per_host))
+    with _connect(db_path) as conn:
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute(
+            """
+            SELECT * FROM (
+                SELECT *, ROW_NUMBER() OVER (
+                    PARTITION BY host_name ORDER BY created_at DESC, id DESC
+                ) AS rn
+                FROM alerts
+                WHERE host_name IS NOT NULL
+            ) WHERE rn <= ?
+            ORDER BY host_name, created_at DESC, id DESC
+            """,
+            (cap,),
+        ).fetchall()
+    grouped: dict[str, list[dict]] = {}
+    for row in rows:
+        entry = dict(row)
+        entry.pop("rn", None)  # 窗口函数辅助列，逐主机读取没有这一列
+        grouped.setdefault(str(entry["host_name"]), []).append(entry)
+    return grouped
 
 
 # ---------------------------------------------------------------------------

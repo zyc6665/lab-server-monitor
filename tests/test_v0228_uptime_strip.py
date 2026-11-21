@@ -53,9 +53,11 @@ def test_strip_missing_database_is_empty(tmp_path):
 
 
 def test_route_exposes_strip():
+    # v0.1.233 起调用点有批量/逐主机两条路径，断言语义而非源码形式。
     routes = ROUTES.read_text(encoding="utf-8")
-    assert 'detail["uptime_strip"] = storage.fetch_host_uptime_strip(' in routes
+    assert 'detail["uptime_strip"] =' in routes
     assert "hours=24, bucket_minutes=15" in routes
+    assert "fetch_host_uptime_strip(" in routes
 
 
 def test_template_renders_cells():
