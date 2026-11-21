@@ -13,6 +13,7 @@ import argparse
 import logging
 import os
 import sys
+import queue
 import threading
 from dataclasses import replace
 from datetime import datetime, timezone
@@ -367,6 +368,13 @@ class MonitorService:
         self._streak_lock = threading.Lock()
         self._collection_states: dict[str, dict] = {}
         self._collection_lock = threading.Lock()
+        # v0.1.229：导入自动采集走单一工作线程 + 队列。此前每次 API 调用都
+        # 起一条裸线程，两次请求可能同时轮询同一台主机（SSH 负载翻倍、
+        # 告警重复评估）；统一队列后同主机在途期间不会再次入队。
+        self._collection_queue: "queue.Queue[tuple[tuple[str, ...], bool]]" = queue.Queue()
+        self._collection_worker_lock = threading.Lock()
+        self._collection_worker_started = False
+        self._inflight_names: set[str] = set()
         # User scans run one at a time on a daemon thread; the lock is held for
         # the whole round and released by the worker in ``finally``.
         self._user_scan_lock = threading.Lock()
@@ -861,60 +869,79 @@ class MonitorService:
     def schedule_host_collection(
         self, names: list[str] | set[str], *, include_disk: bool = True
     ) -> None:
-        """Collect status (and optionally disk) for *names* on a daemon thread."""
+        """Queue status (and optionally disk) collection for *names*.
+
+        A single worker thread drains the queue, so overlapping API calls can
+        never poll the same host at the same time.  A host that is already
+        queued or being collected is not enqueued again — the in-flight round
+        already covers it.
+        """
         selected = [str(name) for name in names if str(name)]
         if not selected:
             return
         with self._collection_lock:
-            for name in selected:
+            pending = [name for name in selected if name not in self._inflight_names]
+            for name in pending:
+                self._inflight_names.add(name)
                 self._collection_states[name] = {
                     "state": "pending",
                     "started_at": None,
                     "finished_at": None,
                     "error": None,
                 }
+        if not pending:
+            return
+        self._ensure_collection_worker()
+        self._collection_queue.put((tuple(pending), bool(include_disk)))
 
-        def worker() -> None:
-            with self._collection_lock:
-                for name in selected:
-                    self._collection_states[name] = {
-                        "state": "running",
-                        "started_at": datetime.now(timezone.utc).isoformat(),
-                        "finished_at": None,
-                        "error": None,
-                    }
-            try:
-                self.run_status_once(set(selected))
-                if include_disk:
-                    self.run_disk_once(set(selected))
-                with self._collection_lock:
-                    for name in selected:
-                        state = dict(self._collection_states.get(name, {}))
-                        state.update(
-                            {
-                                "state": "done",
-                                "finished_at": datetime.now(timezone.utc).isoformat(),
-                                "error": None,
-                            }
-                        )
-                        self._collection_states[name] = state
-            except Exception as exc:  # pragma: no cover - worker isolation
-                LOGGER.exception("Import auto-collection failed")
-                with self._collection_lock:
-                    for name in selected:
-                        state = dict(self._collection_states.get(name, {}))
-                        state.update(
-                            {
-                                "state": "error",
-                                "finished_at": datetime.now(timezone.utc).isoformat(),
-                                "error": str(exc),
-                            }
-                        )
-                        self._collection_states[name] = state
-
+    def _ensure_collection_worker(self) -> None:
+        with self._collection_worker_lock:
+            if self._collection_worker_started:
+                return
+            self._collection_worker_started = True
         threading.Thread(
-            target=worker, name="host-import-collection", daemon=True
+            target=self._run_collection_worker,
+            name="host-collection-worker",
+            daemon=True,
         ).start()
+
+    def _run_collection_worker(self) -> None:
+        while True:
+            names_tuple, include_disk = self._collection_queue.get()
+            names = set(names_tuple)
+            try:
+                with self._collection_lock:
+                    for name in names:
+                        self._collection_states[name] = {
+                            "state": "running",
+                            "started_at": datetime.now(timezone.utc).isoformat(),
+                            "finished_at": None,
+                            "error": None,
+                        }
+                self.run_status_once(names)
+                if include_disk:
+                    self.run_disk_once(names)
+                finished = datetime.now(timezone.utc).isoformat()
+                with self._collection_lock:
+                    for name in names:
+                        state = dict(self._collection_states.get(name, {}))
+                        state.update(
+                            {"state": "done", "finished_at": finished, "error": None}
+                        )
+                        self._collection_states[name] = state
+            except Exception as exc:  # noqa: BLE001 - worker isolation
+                LOGGER.exception("Import auto-collection failed")
+                finished = datetime.now(timezone.utc).isoformat()
+                with self._collection_lock:
+                    for name in names:
+                        state = dict(self._collection_states.get(name, {}))
+                        state.update(
+                            {"state": "error", "finished_at": finished, "error": str(exc)}
+                        )
+                        self._collection_states[name] = state
+            finally:
+                with self._collection_lock:
+                    self._inflight_names.difference_update(names)
 
     def collection_status(self, names: list[str] | None = None) -> dict[str, dict]:
         with self._collection_lock:

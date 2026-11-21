@@ -3163,19 +3163,37 @@ def register_routes(app: Flask) -> None:
 
     @app.get("/api/system/backup")
     def api_system_backup():
-        """Download a consistent snapshot of the SQLite database."""
+        """Download a consistent snapshot of the SQLite database.
+
+        The snapshot is streamed in 1 MB chunks instead of being read fully
+        into memory: the database grows with history, and ``read_bytes`` used
+        to spike RAM by the whole file size on every backup click while a
+        waitress worker sat blocked.
+        """
         handle, temp_name = tempfile.mkstemp(prefix="servermonitor-backup-", suffix=".db")
         os.close(handle)
         temp_path = Path(temp_name)
         try:
             storage.backup_database(_db_path(app), temp_path)
-            data = temp_path.read_bytes()
-        finally:
+        except BaseException:
             temp_path.unlink(missing_ok=True)
+            raise
 
         stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+
+        def _stream():
+            try:
+                with temp_path.open("rb") as fh:
+                    while True:
+                        chunk = fh.read(1024 * 1024)
+                        if not chunk:
+                            break
+                        yield chunk
+            finally:
+                temp_path.unlink(missing_ok=True)
+
         return Response(
-            data,
+            _stream(),
             mimetype="application/octet-stream",
             headers={
                 "Content-Disposition": f'attachment; filename="servermonitor-backup-{stamp}.db"'
