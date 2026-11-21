@@ -323,6 +323,33 @@
     });
   }
 
+  // v0.1.232：采集/检查完成后软刷新——重新拉取当前页面并只替换 <main>，
+  // 重新绑定事件，不再整页 reload（Electron 下白屏闪烁、滚动位置丢失）。
+  function softRefreshDetail() {
+    return fetch(window.location.href, { credentials: 'same-origin' })
+      .then(function (response) {
+        if (response.redirected || response.url.indexOf('/login') !== -1) {
+          window.location.assign('/login');
+          return null;
+        }
+        if (!response.ok) { throw new Error('bad status ' + response.status); }
+        return response.text();
+      })
+      .then(function (html) {
+        if (!html) { return; }
+        var doc = new DOMParser().parseFromString(html, 'text/html');
+        var fresh = doc.querySelector('main');
+        var current = document.querySelector('main');
+        if (!fresh || !current) { window.location.reload(); return; }
+        while (current.firstChild) { current.removeChild(current.firstChild); }
+        Array.prototype.forEach.call(fresh.children, function (node) {
+          current.appendChild(document.importNode(node, true));
+        });
+        mountDetail();
+      })
+      .catch(function () { /* 网络异常时保留当前页面 */ });
+  }
+
   function pollCollection() {
     var deadline = Date.now() + 60000;
     var url = '/api/settings/hosts/collection-status?names=' + encodeURIComponent(HOST_NAME);
@@ -331,7 +358,7 @@
         var status = payload && payload.statuses && payload.statuses[HOST_NAME];
         if (status && status.state === 'done') {
           setStatus('采集完成，正在刷新…');
-          window.location.reload();
+          softRefreshDetail().then(function () { setStatus(''); });
           return;
         }
         if (status && status.state === 'error') {
@@ -806,7 +833,7 @@
       button.textContent = original;
       if (titleEl) { titleEl.textContent = failed ? '采集失败' : '采集完成'; }
       if (detailEl && message) { detailEl.textContent = message; }
-      if (!failed) { window.setTimeout(function () { window.location.reload(); }, 900); }
+      if (!failed) { window.setTimeout(softRefreshDetail, 900); }
     }
 
     function poll() {
@@ -994,17 +1021,30 @@
     apply();
   }
 
-  bindHostTabs();
-  bindAlertAcks();
-  bindRanges();
-  bindActions();
-  bindCollectNow();
-  bindTrendExport();
-  bindCheckFilter();
-  bindDiagCopy();
-  bindContainerFilter();
-  bindContainerStats();
-  bindChecksRun();
-  loadHistory('24h');
-  loadChecks();
+  function mountDetail() {
+    bindHostTabs();
+    bindAlertAcks();
+    bindRanges();
+    bindActions();
+    bindCollectNow();
+    bindTrendExport();
+    bindCheckFilter();
+    bindDiagCopy();
+    bindContainerFilter();
+    bindContainerStats();
+    bindChecksRun();
+    // 软刷新后保留用户之前选中的趋势区间。
+    var rangeTabs = document.querySelectorAll('[data-history-range]');
+    Array.prototype.forEach.call(rangeTabs, function (tab) {
+      tab.classList.toggle('active', tab.getAttribute('data-history-range') === historyRange);
+    });
+    loadHistory(historyRange || '24h');
+    loadChecks();
+  }
+
+
+  // 供命令面板等外部流程触发的原地刷新钩子。
+  window.servermonitorSoftRefresh = softRefreshDetail;
+
+  mountDetail();
 })();

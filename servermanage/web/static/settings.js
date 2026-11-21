@@ -787,11 +787,17 @@
   qsa("[data-host-copy]").forEach(function (button) {
     button.addEventListener("click", function () {
       var name = button.getAttribute("data-host-copy");
-      var newName = window.prompt("复制为新的主机名称", name + "-copy");
-      if (!newName) return;
-      api("POST", "/api/settings/hosts/" + encodeURIComponent(name) + "/copy", { new_name: newName })
-        .then(function () { watchHostCollection([newName]); })
-        .catch(function (error) { toast(error.message, true); });
+      // v0.1.232：阻塞式原生 prompt 换成站内输入对话框。
+      window.servermonitorPrompt({
+        message: "复制为新的主机名称",
+        value: name + "-copy",
+        confirmLabel: "复制",
+      }).then(function (newName) {
+        if (!newName) return;
+        api("POST", "/api/settings/hosts/" + encodeURIComponent(name) + "/copy", { new_name: newName })
+          .then(function () { watchHostCollection([newName]); })
+          .catch(function (error) { toast(error.message, true); });
+      });
     });
   });
 
