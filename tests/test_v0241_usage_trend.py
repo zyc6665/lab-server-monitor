@@ -90,7 +90,8 @@ def test_host_counts_sum_the_growth():
 def test_frontend_switches_to_tb_and_renders_growth():
     js = (STATIC / "users.js").read_text(encoding="utf-8")
 
-    assert "num / 1099511627776).toFixed(2) + ' TB'" in js
+    # v0.1.234：TB 格式化统一走共享 formatter（app.js 提供同口径实现）。
+    assert "window.servermonitorFmt.bytes(value)" in js
     assert "function deltaChip(bytes, days)" in js
     assert "deltaChip(row.usage_delta_bytes, row.usage_delta_days)" in js
     assert "deltaChip(host.delta_bytes, host.delta_days)" in js

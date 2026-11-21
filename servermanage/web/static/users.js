@@ -123,15 +123,9 @@
     );
   }
 
+  // v0.1.234：与其它页面共用同一套格式化（此前四处实现口径不一）。
   function formatBytes(value) {
-    if (value === null || value === undefined || value === '') { return '—'; }
-    var num = Number(value);
-    if (isNaN(num) || num < 0) { return '—'; }
-    if (num >= 1099511627776) { return (num / 1099511627776).toFixed(2) + ' TB'; }
-    if (num >= 1073741824) { return (num / 1073741824).toFixed(1) + ' GB'; }
-    if (num >= 1048576) { return (num / 1048576).toFixed(1) + ' MB'; }
-    if (num >= 1024) { return (num / 1024).toFixed(1) + ' KB'; }
-    return num + ' B';
+    return window.servermonitorFmt ? window.servermonitorFmt.bytes(value) : '—';
   }
 
   // 占用变化：只有拿到两次以上采样才显示，避免把"还没量过"说成 0。

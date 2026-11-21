@@ -32,7 +32,7 @@ def test_restore_skips_unknown_option():
 
 def test_clear_button_visibility_and_reset():
     script = (STATIC / "app.js").read_text(encoding="utf-8")
-    assert "clear.hidden = !(group || status || keyword);" in script
+    assert "clear.hidden = !(group || status || keyword || tag);" in script
     assert "function clearHostFilters()" in script
     assert "clearFilterButton.addEventListener('click', clearHostFilters);" in script
 

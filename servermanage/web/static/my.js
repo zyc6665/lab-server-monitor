@@ -24,33 +24,15 @@
   var updatedEl = document.getElementById("my-updated");
   var retryButton = document.getElementById("my-retry");
 
+  // v0.1.234：与其它页面共用同一套格式化。
   function formatBytes(value) {
-    if (value === null || value === undefined || isNaN(value)) {
-      return "—";
-    }
-    var size = Number(value);
-    if (size <= 0) {
-      return "0 B";
-    }
-    var units = ["B", "KB", "MB", "GB", "TB"];
-    var index = Math.floor(Math.log(size) / Math.log(1024));
-    index = Math.max(0, Math.min(units.length - 1, index));
-    var scaled = size / Math.pow(1024, index);
-    return (index === 0 ? scaled.toFixed(0) : scaled.toFixed(1)) + " " + units[index];
+    return window.servermonitorFmt ? window.servermonitorFmt.bytes(value) : "—";
   }
-
   // v0.1.223：后端给的是 ISO 时间戳，直接展示会变成
   // "采集于 2026-11-19T21:30:00+08:00"，这里统一转成本地时间。
   function formatStamp(value) {
-    var text = String(value || "");
-    if (!text) { return ""; }
-    var date = new Date(text);
-    if (isNaN(date.getTime())) { return text; }
-    var pad = function (n) { return n < 10 ? "0" + n : String(n); };
-    return (
-      date.getFullYear() + "-" + pad(date.getMonth() + 1) + "-" + pad(date.getDate()) +
-      " " + pad(date.getHours()) + ":" + pad(date.getMinutes())
-    );
+    // v0.1.234：与其它页面共用同一套时间格式。
+    return window.servermonitorFmt ? window.servermonitorFmt.stamp(value) : "";
   }
 
   function issueLabel(code) {

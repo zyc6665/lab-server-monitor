@@ -1646,8 +1646,13 @@
     return Math.min(1, Math.max(0, Number(uptime.samples || 0) / Number(uptime.expected)));
   }
 
-  function hostRowMatches(tr, group, status, keyword) {
+  function hostRowMatches(tr, group, status, keyword, tag) {
     if (group && tr.getAttribute('data-group') !== group) { return false; }
+    if (tag) {
+      // 标签存储为小写 "|" 连接串；标签本身可能含空格，按 | 切分精确匹配。
+      var tags = (tr.getAttribute('data-tags') || '').split('|');
+      if (tags.indexOf(tag) === -1) { return false; }
+    }
     if (status === 'online' && tr.getAttribute('data-online') !== '1') { return false; }
     if (status === 'offline' && tr.getAttribute('data-online') !== '0') { return false; }
     if (status === 'alert' && Number(tr.getAttribute('data-alert-count') || 0) <= 0) { return false; }
@@ -1677,13 +1682,13 @@
     }
   }
 
-  function saveHostFilters(group, status) {
+  function saveHostFilters(group, status, tag) {
     try {
-      if (!group && !status) {
+      if (!group && !status && !tag) {
         localStorage.removeItem(HOST_FILTER_KEY);
         return;
       }
-      localStorage.setItem(HOST_FILTER_KEY, JSON.stringify({ group: group || '', status: status || '' }));
+      localStorage.setItem(HOST_FILTER_KEY, JSON.stringify({ group: group || '', status: status || '', tag: tag || '' }));
     } catch (err) {}
   }
 
@@ -1691,7 +1696,8 @@
     var saved = readHostFilters();
     var groupEl = document.getElementById('filter-group');
     var statusEl = document.getElementById('filter-status');
-    var pairs = [[groupEl, saved.group], [statusEl, saved.status]];
+    var tagEl = document.getElementById('filter-tag');
+    var pairs = [[groupEl, saved.group], [statusEl, saved.status], [tagEl, saved.tag]];
     pairs.forEach(function (pair) {
       var el = pair[0];
       var value = pair[1];
@@ -1711,21 +1717,23 @@
     var groupEl = document.getElementById('filter-group');
     var statusEl = document.getElementById('filter-status');
     var keywordEl = document.getElementById('filter-keyword');
+    var tagEl = document.getElementById('filter-tag');
     var group = groupEl ? groupEl.value : '';
     var status = statusEl ? statusEl.value : '';
     var keyword = keywordEl ? keywordEl.value.trim().toLowerCase() : '';
+    var tag = tagEl ? tagEl.value : '';
     var rows = tbody ? tbody.querySelectorAll('tr') : [];
     var cards = grid ? grid.querySelectorAll('[data-host]') : [];
     var i;
     var rowsVisible = 0;
     for (i = 0; i < rows.length; i += 1) {
-      var showRow = hostRowMatches(rows[i], group, status, keyword);
+      var showRow = hostRowMatches(rows[i], group, status, keyword, tag);
       rows[i].hidden = !showRow;
       if (showRow) { rowsVisible += 1; }
     }
     var cardsVisible = 0;
     for (i = 0; i < cards.length; i += 1) {
-      var showCard = hostRowMatches(cards[i], group, status, keyword);
+      var showCard = hostRowMatches(cards[i], group, status, keyword, tag);
       cards[i].hidden = !showCard;
       if (showCard) { cardsVisible += 1; }
     }
@@ -1733,19 +1741,19 @@
     var totalCount = hostView === 'cards' ? cards.length : rows.length;
     var count = document.getElementById('filter-count');
     if (count) {
-      count.textContent = (group || status || keyword)
+      count.textContent = (group || status || keyword || tag)
         ? ('筛选出 ' + visible + ' / ' + totalCount + ' 台')
         : '';
     }
     var clear = document.getElementById('filter-clear');
-    if (clear) { clear.hidden = !(group || status || keyword); }
-    saveHostFilters(group, status);
+    if (clear) { clear.hidden = !(group || status || keyword || tag); }
+    saveHostFilters(group, status, tag);
     if (totalCount > 0) {
       var table = document.getElementById('host-table');
       var empty = document.getElementById('empty-state');
       var emptyText = document.getElementById('empty-state-text');
       var emptyClear = document.getElementById('empty-state-clear');
-      var filtering = Boolean(group || status || keyword);
+      var filtering = Boolean(group || status || keyword || tag);
       if (table) { table.hidden = rowsVisible === 0; }
       if (empty) { empty.hidden = visible !== 0; }
       if (emptyText) {
@@ -1754,6 +1762,7 @@
         } else {
           var picked = [];
           if (group) { picked.push('分组「' + group + '」'); }
+          if (tag) { picked.push('标签「' + tag + '」'); }
           if (status) { picked.push('状态「' + status + '」'); }
           if (keyword) { picked.push('关键字「' + keyword + '」'); }
           emptyText.textContent = '没有符合条件的主机：' + picked.join('、');
@@ -3966,6 +3975,8 @@
     var keywordFilter = document.getElementById('filter-keyword');
     if (groupFilter) { groupFilter.addEventListener('change', applyHostFilters); }
     if (statusFilter) { statusFilter.addEventListener('change', applyHostFilters); }
+    var tagFilter = document.getElementById('filter-tag');
+    if (tagFilter) { tagFilter.addEventListener('change', applyHostFilters); }
     bindSummaryCards();
     if (keywordFilter) { keywordFilter.addEventListener('input', applyHostFilters); }
     var clearFilterButton = document.getElementById('filter-clear');
@@ -3974,6 +3985,8 @@
       if (groupFilter) { groupFilter.value = ''; }
       if (statusFilter) { statusFilter.value = ''; }
       if (keywordFilter) { keywordFilter.value = ''; }
+      var tagFilter = document.getElementById('filter-tag');
+      if (tagFilter) { tagFilter.value = ''; }
       applyHostFilters();
     }
     if (clearFilterButton) { clearFilterButton.addEventListener('click', clearHostFilters); }

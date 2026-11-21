@@ -23,5 +23,5 @@ def test_rows_and_cards_carry_attention_count():
 
 def test_matcher_filters_by_attention():
     script = (STATIC / "app.js").read_text(encoding="utf-8")
-    body = script.split("function hostRowMatches(tr, group, status, keyword) {")[1].split("function applyHostFilters")[0]
+    body = script.split("function hostRowMatches(tr, group, status, keyword, tag) {")[1].split("function applyHostFilters")[0]
     assert "if (status === 'attention' && Number(tr.getAttribute('data-attention') || 0) <= 0) { return false; }" in body

@@ -1330,6 +1330,9 @@ def _build_overview(config, db_path) -> dict[str, Any]:
             "groups": groups,
             "silenced_count": silenced_count,
             "has_groups": any(server.group and server.group != "未分组" for server in config.servers),
+            # v0.1.234：标签筛选（标签是自由文本，取全队去重排序）。
+            "tags": sorted({tag.strip() for server in config.servers for tag in (server.tags or []) if tag.strip()}),
+            "has_tags": any(server.tags for server in config.servers),
         },
         "hosts": hosts,
         "capacity": _capacity_forecasts_cached(
