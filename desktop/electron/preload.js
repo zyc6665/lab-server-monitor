@@ -12,6 +12,11 @@ contextBridge.exposeInMainWorld('desktopBridge', {
   checkForUpdate: (force) => ipcRenderer.invoke('update:check', Boolean(force)),
   downloadUpdate: (update) => ipcRenderer.invoke('update:download', update),
   installUpdate: (update) => ipcRenderer.invoke('update:install', update),
+  onBackendState: (callback) => {
+    const listener = (_event, payload) => callback(payload);
+    ipcRenderer.on('desktop:backend-state', listener);
+    return () => ipcRenderer.removeListener('desktop:backend-state', listener);
+  },
   onUpdateStatus: (callback) => {
     const listener = (_event, payload) => callback(payload);
     ipcRenderer.on('update:status', listener);

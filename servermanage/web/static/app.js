@@ -3786,7 +3786,27 @@
   var connectionTimer = null;
   var connectionLost = false;
 
+  // v0.1.236：标题栏连接标签随真实状态变化。桌面客户端由 Electron 直接
+  // 推送后端生命周期事件；正常状态下桌面模式不显示「已连接」（没有信息量），
+  // 只在异常时出现。浏览器模式保持显示两种状态。
+  function updateConnPill(lost) {
+    var pill = document.getElementById('conn-status-pill');
+    if (!pill) { return; }
+    var desktop = window.desktopBridge && window.desktopBridge.isDesktop;
+    var textEl = document.getElementById('conn-status-text');
+    if (lost) {
+      pill.classList.add('conn-status-bad');
+      if (textEl) { textEl.textContent = '连接中断'; }
+      pill.hidden = false;
+      return;
+    }
+    pill.classList.remove('conn-status-bad');
+    if (textEl) { textEl.textContent = '已连接'; }
+    pill.hidden = Boolean(desktop);
+  }
+
   function setConnectionBanner(lost, recovered) {
+    updateConnPill(lost);
     var banner = document.getElementById('conn-banner');
     if (!banner) { return; }
     var text = document.getElementById('conn-text');
@@ -3829,6 +3849,35 @@
     document.addEventListener('visibilitychange', function () {
       if (!document.hidden) { checkConnection(); }
     });
+    // 桌面客户端：后端生命周期由 Electron 主进程直接推送（毫秒级感知），
+    // 不必等 15 秒一轮的 HTTP 探活。
+    var bridge = window.desktopBridge;
+    if (bridge && bridge.isDesktop && typeof bridge.onBackendState === 'function') {
+      bridge.onBackendState(function (payload) {
+        var state = payload && payload.state;
+        if (state === 'running') {
+          if (connectionLost) {
+            setConnectionBanner(false, true);
+            refreshAll();
+          }
+          updateConnPill(false);
+          return;
+        }
+        connectionLost = true;
+        updateConnPill(true);
+        var banner = document.getElementById('conn-banner');
+        var text = document.getElementById('conn-text');
+        if (banner) {
+          banner.className = 'conn-banner';
+          if (text) {
+            text.textContent = state === 'restarting'
+              ? '后台服务正在重启…'
+              : '后台服务已停止，正在自动恢复…';
+          }
+          banner.hidden = false;
+        }
+      });
+    }
   }
 
   function bindSummaryCards() {

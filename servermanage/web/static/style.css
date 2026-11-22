@@ -4729,3 +4729,8 @@ html[data-theme="dark"] .confirm-dialog { background: #0f172a; color: #e2e8f0; }
   font-size: 13.5px;
 }
 
+/* -- v0.1.236 连接状态标签随真实状态变化 ---------------------------------- */
+.conn-status[hidden] { display: none; }
+.conn-status.conn-status-bad { color: var(--danger); }
+.conn-status.conn-status-bad .conn-dot { background: var(--danger); animation: conn-blink 1s infinite; }
+@keyframes conn-blink { 50% { opacity: .35; } }

@@ -242,10 +242,12 @@ function registerIpc() {
       if (!backend) {
         throw new Error('后端尚未初始化');
       }
+      sendBackendState('restarting');
       await backend.stop();
       await backend.start();
       const runtime = await backend.waitForRuntime();
       currentRuntimeUrl = runtime.url;
+      sendBackendState('running');
       if (mainWindow) {
         await mainWindow.loadURL(runtime.url);
       }
@@ -285,6 +287,14 @@ function registerIpc() {
   });
 }
 
+// v0.1.236：把后端生命周期状态推给渲染层，页面据此显示真实的连接状态，
+// 不再用一个永远显示「已连接」的静态标签误导用户。
+function sendBackendState(state) {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('desktop:backend-state', { state, at: Date.now() });
+  }
+}
+
 function scheduleBackendRecovery() {
   if (quitting || cleanupDone || recoveryTimer) {
     return;
@@ -307,11 +317,13 @@ async function attemptBackendRecovery() {
     return;
   }
   appendLog('restarting backend after unexpected exit');
+  sendBackendState('restarting');
   try {
     await backend.start();
     const runtime = await backend.waitForRuntime();
     currentRuntimeUrl = runtime.url;
     recoveryAttempts = 0;
+    sendBackendState('running');
     appendLog(`backend recovered at ${runtime.url}`);
     if (mainWindow && !mainWindow.isDestroyed()) {
       await mainWindow.loadURL(runtime.url);
@@ -333,6 +345,7 @@ async function startBackendAndLoad() {
     },
     onUnexpectedExit: (code, signal) => {
       appendLog(`backend exited unexpectedly (code=${code}, signal=${signal})`);
+      sendBackendState('stopped');
       scheduleBackendRecovery();
     },
   });
@@ -340,6 +353,7 @@ async function startBackendAndLoad() {
   await backend.start();
   const runtime = await backend.waitForRuntime();
   currentRuntimeUrl = runtime.url;
+  sendBackendState('running');
 
   if (!mainWindow) {
     return;
