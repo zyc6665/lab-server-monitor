@@ -918,6 +918,13 @@
       .catch(function (error) { status(qs("#notify-status"), error.message, true); });
   });
 
+  qs("#test-desktop-button").addEventListener("click", function () {
+    status(qs("#notify-status"), "正在发送桌面通知…");
+    api("POST", "/api/settings/test-desktop", {})
+      .then(function (result) { status(qs("#notify-status"), result.detail, !result.ok); })
+      .catch(function (error) { status(qs("#notify-status"), error.message, true); });
+  });
+
   qs("#test-email-button").addEventListener("click", function () {
     var payload = collectSection("smtp");
     status(qs("#smtp-status"), "正在发送测试邮件…");

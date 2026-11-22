@@ -1021,7 +1021,53 @@
     apply();
   }
 
+  var AUTO_REFRESH_KEY = "host-detail:auto-refresh";
+  var autoRefreshTimer = null;
+
+  function setAutoRefresh(on) {
+    try { window.localStorage.setItem(AUTO_REFRESH_KEY, on ? "1" : ""); } catch (err) { /* 无痕模式等 */ }
+  }
+
+  function autoRefreshOn() {
+    try { return window.localStorage.getItem(AUTO_REFRESH_KEY) === "1"; } catch (err) { return false; }
+  }
+
+  function applyAutoRefresh() {
+    var button = document.getElementById("host-auto-refresh");
+    if (button) {
+      var on = autoRefreshOn();
+      button.textContent = on ? "自动刷新：开" : "自动刷新：关";
+      button.setAttribute("aria-pressed", on ? "true" : "false");
+    }
+    if (autoRefreshOn() && !autoRefreshTimer) {
+      autoRefreshTimer = window.setInterval(function () {
+        if (document.hidden) { return; }
+        softRefreshDetail();
+      }, 30000);
+    } else if (!autoRefreshOn() && autoRefreshTimer) {
+      window.clearInterval(autoRefreshTimer);
+      autoRefreshTimer = null;
+    }
+  }
+
+  function bindAutoRefresh() {
+    var button = document.getElementById("host-auto-refresh");
+    if (!button) { return; }
+    if (!button.dataset.bound) {
+      button.dataset.bound = "1";
+      button.addEventListener("click", function () {
+        setAutoRefresh(!autoRefreshOn());
+        applyAutoRefresh();
+      });
+      document.addEventListener("visibilitychange", function () {
+        if (!document.hidden && autoRefreshOn()) { softRefreshDetail(); }
+      });
+    }
+    applyAutoRefresh();
+  }
+
   function mountDetail() {
+    bindAutoRefresh();
     bindHostTabs();
     bindAlertAcks();
     bindRanges();

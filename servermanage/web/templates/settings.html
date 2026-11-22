@@ -359,6 +359,7 @@
     <div class="form-actions">
       <button class="primary-button" data-save="alerts" {% if not settings.writable %}disabled{% endif %}>保存通知</button>
       <button class="secondary-button" id="test-webhook-button" {% if not settings.writable %}disabled{% endif %}>测试 Webhook</button>
+      <button class="secondary-button" id="test-desktop-button" {% if not settings.writable %}disabled{% endif %}>测试桌面通知</button>
     </div>
     <p class="form-status" id="notify-status"></p>
 

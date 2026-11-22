@@ -67,6 +67,7 @@ from servermanage.availability import run_host_checks
 from servermanage.user_collection import is_user_monitoring_enabled
 from servermanage.disk_health import AlertEvent
 from servermanage.models import AuthConfig, HostConfig, WebhookConfig
+from servermanage.notify_desktop import send_desktop_notification
 from servermanage.notify_webhook import send_webhook
 from servermanage.runtime import read_runtime_state
 from servermanage.serialization import to_jsonable
@@ -3702,6 +3703,27 @@ def register_routes(app: Flask) -> None:
         except Exception as exc:  # noqa: BLE001 - text-only error surface
             return jsonify({"ok": False, "detail": str(exc)})
         return jsonify({"ok": True, "detail": "SMTP 连接与登录成功"})
+
+    @app.post("/api/settings/test-desktop")
+    def api_test_desktop():
+        """Fire one local desktop toast so the channel can be verified."""
+        service, error = _settings_or_404(app)
+        if error is not None:
+            return error
+        sent = send_desktop_notification(
+            "服务器监控 · 测试通知",
+            "这是一条来自设置页的桌面通知测试",
+        )
+        return jsonify(
+            {
+                "ok": bool(sent),
+                "detail": (
+                    "已发送桌面通知"
+                    if sent
+                    else "桌面通知发送失败（可能当前不在 Windows 桌面会话中）"
+                ),
+            }
+        )
 
     @app.post("/api/settings/test-webhook")
     def api_test_webhook():
