@@ -32,6 +32,24 @@ function isNewer(candidate, current) {
   return compareVersions(candidate, current) > 0;
 }
 
+function majorOf(version) {
+  return versionParts(version)[0] || 0;
+}
+
+/**
+ * Only releases on the same major line as the running build are eligible.
+ * The repository historically carried a stray `v1.x` release line while the
+ * package stayed on `0.1.x`; without this guard a 0.1.x install would see
+ * `v1.6.1` as newer, download it, and then "downgrade" back on the next run.
+ */
+function isSameMajorLine(candidate, current) {
+  return majorOf(candidate) === majorOf(current);
+}
+
+function isPrerelease(release) {
+  return Boolean(release && (release.prerelease || release.draft));
+}
+
 function normaliseVersion(tag) {
   return String(tag || '').trim().replace(/^v/i, '');
 }
@@ -130,6 +148,26 @@ function createUpdaterCore(options = {}) {
     }
     const version = normaliseVersion(release && release.tag_name);
     if (!version) return { status: 'error', message: '最新版本缺少 tag_name' };
+    if (isPrerelease(release)) {
+      const result = {
+        status: 'up-to-date',
+        version,
+        current_version: currentVersion,
+        reason: 'prerelease',
+      };
+      writeCache({ checked_at: now(), result });
+      return result;
+    }
+    if (!isSameMajorLine(version, currentVersion)) {
+      const result = {
+        status: 'up-to-date',
+        version,
+        current_version: currentVersion,
+        reason: 'major-mismatch',
+      };
+      writeCache({ checked_at: now(), result });
+      return result;
+    }
     if (!isNewer(version, currentVersion)) {
       const result = { status: 'up-to-date', version, current_version: currentVersion };
       writeCache({ checked_at: now(), result });
@@ -207,6 +245,8 @@ function createUpdaterCore(options = {}) {
 module.exports = {
   compareVersions,
   isNewer,
+  isSameMajorLine,
+  isPrerelease,
   normaliseVersion,
   findAssets,
   createUpdaterCore,

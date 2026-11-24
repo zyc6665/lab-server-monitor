@@ -156,7 +156,7 @@
   {% endif %}
 
   <script src="{{ asset_url('titlebar.js') }}"></script>
-  <script src="{{ asset_url('app.js') }}"></script>
+  <script type="module" src="{{ asset_url('app.js') }}"></script>
   {% if is_app and view_mode != 'user' %}<script src="{{ asset_url('command-palette.js') }}"></script>{% endif %}
   {% block scripts %}{% endblock %}
 <dialog class="shortcut-help" id="shortcut-help" aria-labelledby="shortcut-help-title">

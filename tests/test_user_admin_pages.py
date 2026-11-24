@@ -105,4 +105,6 @@ def test_style_defines_the_admin_dialog_layout():
         ".user-acct-action",
     ):
         assert selector in source, selector
-    assert 'html[data-theme="dark"] .user-admin-dialog' in source
+    # M3：暗色由 token 重定义覆盖，规则统一用 var(--*)
+    assert "background: var(--card-bg)" in source
+    assert "html[data-theme=\"dark\"] {" in source

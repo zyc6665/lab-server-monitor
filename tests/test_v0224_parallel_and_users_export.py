@@ -185,4 +185,5 @@ def test_confirm_dialog_styles_exist():
     css = (STATIC / "style.css").read_text(encoding="utf-8")
     assert ".user-confirm-dialog {" in css
     assert ".user-confirm-foot" in css
-    assert 'html[data-theme="dark"] .user-confirm-dialog' in css
+    # M3：对话框背景用 --card-bg，暗色在 token 块重定义
+    assert ".user-confirm-dialog {" in css and "background: var(--card-bg)" in css

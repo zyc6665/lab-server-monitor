@@ -23,5 +23,5 @@ def test_bar_styles_and_heat_colors():
     assert "/* -- v0.1.170 磁盘温度柱状条 -- */" in css
     assert ".temp-bar {" in css
     assert ".temp-bar-fill {" in css
-    assert ".disk-temp.is-hot .temp-bar-fill { background: #d97706; }" in css
-    assert ".disk-temp.is-critical .temp-bar-fill { background: #dc2626; }" in css
+    assert ".disk-temp.is-hot .temp-bar-fill { background: var(--warn); }" in css
+    assert ".disk-temp.is-critical .temp-bar-fill { background: var(--danger); }" in css

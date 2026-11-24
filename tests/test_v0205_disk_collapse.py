@@ -35,4 +35,5 @@ def test_styles_mark_collapsed_blocks():
     tail = css.split("v0.1.105 磁盘按主机折叠")[1]
     assert ".disk-collapse {" in tail
     assert ".disk-host.is-collapsed .disk-host-head { border-bottom-color: transparent; }" in tail
-    assert 'html[data-theme="dark"] .disk-collapse:hover' in tail
+    # M3：hover 背景用 --surface-sunken token，暗色自动覆盖
+    assert ".disk-collapse:hover { background: var(--surface-sunken);" in tail

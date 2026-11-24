@@ -43,8 +43,8 @@ def test_timeline_styles():
     tail = css[css.index("v0.1.91 告警时间分布") :]
     assert ".timeline {" in tail
     assert ".timeline-bar {" in tail
-    assert ".timeline-seg-critical { background: #dc2626; }" in tail
-    assert ".timeline-seg-warning { background: #d97706; }" in tail
+    assert ".timeline-seg-critical { background: var(--danger); }" in tail
+    assert ".timeline-seg-warning { background: var(--warn); }" in tail
     assert ".timeline-seg-info { background: #94a3b8; }" in tail
     assert 'html[data-theme="dark"] .timeline-bar' in tail
     assert "@media (max-width: 760px)" in tail

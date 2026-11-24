@@ -1,5 +1,17 @@
 # 更新日志
 
+## v0.1.237 第一阶段架构演进（M0–M3）
+
+> 承接 2026-11-23 架构计划（GLM5.4 架构 / DS 后端 / kimi 前端 / 混元 UI）。
+
+- **M0 版本归一与工程基础**：版本统一留在 0.1.x 线（A 方案）；新增 `.github/workflows/ci.yml`（push/PR 跑 pytest + Node 测试，release 依赖）；updater 过滤 prerelease 与跨 major 的 Release（避免 0.1.x 安装被线上遗留 v1.6.1 误判为可升级）；线上 v1.5.2/v1.6.0/v1.6.1 Release 已标记 prerelease；`bump_version.py` 增加一致性校验；`build-portable.ps1` 产物名由 package.json 版本派生 + 末尾强制 `verify-bundle.py` 校验包内 tzdata/模板/静态资源。
+- **M1 routes.py 拆分**：`web/routes/` 包（兼容门面保留所有旧 import 路径与裸 endpoint，`_core.py` 承载全部视图，`ssh_terminal.py` 先拆）；`test_route_endpoints.py` 锁住 79 个裸 endpoint，防止 `url_for` 误改；`register_routes()` 签名不变。
+- **M2 前端模块化**：`web/static/lib/`（`api.js` / `bus.js` / `format.js`）与 `pages/overview-trends.js`（三个纯函数 ESM 模块）；`app.js` 改为 import；Node 单测覆盖 7 例。
+- **M3 设计令牌**：`style.css` 全站改用 token（颜色/表面/圆角/间距），暗色由 `html[data-theme=dark]` 重定义 token 自动覆盖，删除上百条硬编码暗色选择器；`--success` 等重复 token 归一。
+- **测试契约同步**：10 个旧断言从「硬编码暗色 selector / 字面量」改为「token 引用」断言；旧的 v1.4.1 zip 名断言跟随产物命名规则更新。
+- 全量：1863 passed / 1 skipped（Python）+ 85 passed（Node）。
+
+
 本文件记录项目的完整版本历史，**最新版本在最前面**。使用与部署说明请回到 [README.md](README.md)。
 
 - 桌面客户端发布线：v1.6 → v1.2（见下文「桌面客户端版本」）

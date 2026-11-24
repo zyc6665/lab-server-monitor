@@ -55,7 +55,8 @@ def test_confirm_dialog_styles_cover_dark_theme():
     css = _read("style.css")
     assert ".confirm-dialog {" in css
     assert ".confirm-dialog::backdrop" in css
-    assert 'html[data-theme="dark"] .confirm-dialog' in css
+    # M3：对话框背景用 --card-bg，暗色在 token 块重定义
+    assert ".confirm-dialog {" in css and "background: var(--card-bg)" in css
     # 复用 v0.1.224 的对话框按钮行
     assert ".user-confirm-foot" in css
     assert ".danger-button {" in css
@@ -80,6 +81,6 @@ def test_settings_health_format_bytes_delegates_to_shared():
 
 
 def test_shared_bytes_uses_tb_units():
-    script = _read("app.js")
+    script = _read("lib/format.js")
     assert "num >= 1099511627776" in script
     assert "' TB'" in script

@@ -71,5 +71,5 @@ def test_style_covers_strip():
     css = STYLE.read_text(encoding="utf-8")
     block = css[css.index("v0.1.128 主机采集时间线"):]
     assert ".uptime-strip {" in block
-    assert ".uptime-cell.is-bad { background: #dc2626; }" in block
+    assert ".uptime-cell.is-bad { background: var(--danger); }" in block
     assert 'html[data-theme="dark"] .uptime-cell.is-empty' in block

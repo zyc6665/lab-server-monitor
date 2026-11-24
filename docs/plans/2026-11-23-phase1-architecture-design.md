@@ -1,6 +1,6 @@
 # 第一阶段架构设计：模块边界、巨文件拆分、API 约定与工程基础
 
-> 作者：GLM5.4（架构）　日期：2026-11-23　状态：待 zzz 确认后执行
+> 作者：GLM5.4（架构）　日期：2026-11-23　状态：**zzz 已确认开工（2026-11-23），版本号走 A 线**
 > 分工：架构 GLM5.4 / 前端 kimi / 后端 DS / UI 混元
 > 原则：**在现有基础上演进，不推倒重写**；每一步可独立合并、可回滚、测试全绿。
 
@@ -90,11 +90,15 @@ DS 盘点确认 `storage.py` 没有任何 class，因此不做 Repo 类化，只
 4. 写操作必须带 `X-CSRF-Token`（已有机制），前端统一走 `lib/api.js` 的 `request()` 封装
 5. 错误码表：`AUTH_REQUIRED / FORBIDDEN / NOT_FOUND / VALIDATION / CONFLICT / UPSTREAM_SSH / INTERNAL`
 
-## 4. 版本号归一（需 zzz 二选一）
+## 4. 版本号归一（zzz 已拍板：**A，留在 0.1.x 线**）
 
-- **推荐 B：抬升到 1.x 线**。理由：自动更新用 `app.getVersion()` 与 Release 标签比较，线上已有 `v1.6.1` 用户，走 A 会让已升级用户被判"降级"。
-- 执行：`python tools/bump_version.py 1.6.2`，发 `v1.6.2` 标签；README/CHANGELOG 不再写死版本。
-- `build-portable.ps1` 产物命名加 `-local` 后缀，避免误分发。
+- 仓库三处保持 `0.1.x`，下一版 `0.1.237`，发布标签 `v0.1.237`
+- **必须同步处理线上 `v1.6.1` 标签**，否则已装 0.1.x 的机器仍会被自动更新判为可升级：
+  - 把 GitHub 上 `v1.x` Release 全部标记为 **prerelease**（或删除），`updater-core.js` 只取非 prerelease 的最新 Release
+  - `updater-core.js` 加一条防御：忽略 major ≠ 当前 major 的标签，并在比较前打日志
+  - 加 `tests/test_updater_core`（或 `desktop/test/updater-core.test.js`）用例锁住「0.1.237 安装 + 线上 v1.6.1 prerelease → 不提示」
+- `build-portable.ps1` 产物命名加 `-local` 后缀，避免误分发
+- README / CHANGELOG 不再写死版本
 
 ## 5. 测试 CI
 
@@ -107,7 +111,7 @@ DS 盘点确认 `storage.py` 没有任何 class，因此不做 Repo 类化，只
 
 | # | 任务 | 负责 | 产出 | 依赖 |
 | --- | --- | --- | --- | --- |
-| M0 | 版本号归一 + CI 工作流 | GLM5.4 | `bump_version 1.6.2`、`ci.yml` | zzz 选 A/B |
+| M0 | 版本号归一（A 线）+ CI 工作流 + updater 防御 | GLM5.4 | `ci.yml`、updater 过滤 prerelease/跨 major、对应测试 | — |
 | M1 | `routes.py` → Blueprint 拆分 | DS | `web/routes/` 包，`register_routes` 兼容 | M0 |
 | M2 | `lib/api.js` + `lib/format.js` 抽取，`app.js` 按页面拆 | kimi | `web/static/lib/`、`pages/` | 无（可与 M1 并行） |
 | M3 | CSS 设计令牌（颜色/间距/圆角/字号/暗色模式） | 混元 | `tokens.css`，各 css 改引用令牌 | 无 |

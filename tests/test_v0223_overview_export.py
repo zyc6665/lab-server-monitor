@@ -29,7 +29,8 @@ def test_script_exports_current_history():
 
 def test_script_escapes_and_uses_bom():
     script = SCRIPT.read_text(encoding="utf-8")
-    assert 'text.split(\'"\').join(\'""\')' in script
+    formatter = (SCRIPT.parent / "lib" / "format.js").read_text(encoding="utf-8")
+    assert 'text.split(\'"\').join(\'""\')' in formatter
     assert "type: 'text/csv;charset=utf-8'" in script
 
 

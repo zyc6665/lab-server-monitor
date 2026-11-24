@@ -89,7 +89,8 @@ def test_templates_use_stamp_filter_with_full_value_in_title() -> None:
 
 def test_app_js_formats_stamps_client_side() -> None:
     script = (STATIC / "app.js").read_text(encoding="utf-8")
-    assert "function formatStamp(value)" in script
+    formatter = (STATIC / "lib" / "format.js").read_text(encoding="utf-8")
+    assert "function formatStamp(value)" in formatter
     assert "host.collected_at ? formatRelative(host.collected_at) : '—'" in script
     assert "textCell(formatRelative(alert.created_at), 'mono alert-time')" in script
     assert "formatStamp(alert.created_at)" in script  # 悬停显示绝对时间 / 重点关注

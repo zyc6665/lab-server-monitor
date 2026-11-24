@@ -64,7 +64,8 @@ def test_group_styles_and_dark_theme():
     assert ".alert-group > td.alert-group-cell" in tail
     assert "cursor: pointer" in tail
     assert "tr.alert-subrow > td:first-child" in tail
-    assert 'html[data-theme="dark"] .alert-group > td.alert-group-cell' in tail
+    # M3：暗色由 --surface-sunken/--border token 自动覆盖
+    assert "background: var(--surface-sunken)" in tail
 
 
 def test_severity_weight_prefers_critical():

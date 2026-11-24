@@ -10,6 +10,8 @@ const path = require('node:path');
 const {
   compareVersions,
   isNewer,
+  isSameMajorLine,
+  isPrerelease,
   normaliseVersion,
   findAssets,
   createUpdaterCore,
@@ -114,6 +116,56 @@ test('checkForUpdate handles 403 as skipped', async () => {
     updatesDir: tempDir(),
   });
   assert.equal((await core.checkForUpdate()).status, 'skipped');
+});
+
+test('isSameMajorLine and isPrerelease classify releases', () => {
+  assert.equal(isSameMajorLine('0.1.237', '0.1.236'), true);
+  assert.equal(isSameMajorLine('1.6.1', '0.1.236'), false);
+  assert.equal(isPrerelease({ prerelease: true }), true);
+  assert.equal(isPrerelease({ draft: true }), true);
+  assert.equal(isPrerelease({ prerelease: false, draft: false }), false);
+  assert.equal(isPrerelease(null), false);
+});
+
+test('checkForUpdate ignores a release from a different major line (0.1.x vs stray v1.x)', async () => {
+  const core = createUpdaterCore({
+    currentVersion: '0.1.236',
+    fetchImpl: async () => jsonResponse(release('1.6.1')),
+    updatesDir: tempDir(),
+    now: () => 1000,
+  });
+  const result = await core.checkForUpdate();
+  assert.equal(result.status, 'up-to-date');
+  assert.equal(result.reason, 'major-mismatch');
+  assert.equal(result.current_version, '0.1.236');
+  assert.equal(result.version, '1.6.1');
+});
+
+test('checkForUpdate ignores a prerelease even on the same major line', async () => {
+  const rel = release('0.1.237');
+  rel.prerelease = true;
+  const core = createUpdaterCore({
+    currentVersion: '0.1.236',
+    fetchImpl: async () => jsonResponse(rel),
+    updatesDir: tempDir(),
+    now: () => 1000,
+  });
+  const result = await core.checkForUpdate();
+  assert.equal(result.status, 'up-to-date');
+  assert.equal(result.reason, 'prerelease');
+});
+
+test('checkForUpdate offers a newer release on the same major line', async () => {
+  const core = createUpdaterCore({
+    currentVersion: '0.1.236',
+    fetchImpl: async () => jsonResponse(release('0.1.237')),
+    updatesDir: tempDir(),
+    now: () => 1000,
+  });
+  const result = await core.checkForUpdate();
+  assert.equal(result.status, 'update-available');
+  assert.equal(result.version, '0.1.237');
+  assert.equal(result.reason, undefined);
 });
 
 test('downloadAndVerify checks sha256 and writes the zip', async () => {

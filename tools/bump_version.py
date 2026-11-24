@@ -60,10 +60,55 @@ def bump(version: str) -> None:
     )
 
 
+VERSION_RE = re.compile(r'\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?')
+
+
+def _read_versions() -> dict[str, str]:
+    pyproject = PYPROJECT.read_text(encoding="utf-8")
+    init_text = INIT_PY.read_text(encoding="utf-8")
+    package = json.loads(PACKAGE_JSON.read_text(encoding="utf-8"))
+    py_match = re.search(r'(?m)^version\s*=\s*"([^"]+)"', pyproject)
+    init_match = re.search(r'(?m)^__version__\s*=\s*"([^"]+)"', init_text)
+    return {
+        "pyproject.toml": py_match.group(1) if py_match else "",
+        "servermanage/__init__.py": init_match.group(1) if init_match else "",
+        "desktop/package.json": str(package.get("version") or ""),
+    }
+
+
+def check() -> list[str]:
+    """Return a list of problems; empty means the three version files agree."""
+    versions = _read_versions()
+    problems: list[str] = []
+    for path, version in versions.items():
+        if not VERSION_RE.fullmatch(version):
+            problems.append(f"{path}: missing or malformed version {version!r}")
+    if not problems and len(set(versions.values())) != 1:
+        detail = ", ".join(f"{path}={version}" for path, version in versions.items())
+        problems.append(f"version files disagree: {detail}")
+    return problems
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("version", help="semantic version, e.g. 1.5.0")
+    parser.add_argument("version", nargs="?", help="semantic version, e.g. 1.5.0")
+    parser.add_argument(
+        "--check",
+        action="store_true",
+        help="verify the three version files agree instead of bumping",
+    )
     args = parser.parse_args()
+    if args.check:
+        problems = check()
+        if problems:
+            for problem in problems:
+                print(f"ERROR: {problem}")
+            return 1
+        versions = _read_versions()
+        print(f"version consistent: {next(iter(versions.values()))}")
+        return 0
+    if not args.version:
+        parser.error("version is required unless --check is given")
     bump(args.version)
     print(f"version updated to {args.version}")
     return 0

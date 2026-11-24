@@ -1,3 +1,14 @@
+import { fetchJson } from './lib/api.js';
+import { overviewNumbers, overviewPathIndexed, overviewTrendText } from './pages/overview-trends.js';
+import {
+  csvEscape,
+  formatBytesShared,
+  formatPercent,
+  formatRelative,
+  formatStamp,
+  formatStampShared,
+} from './lib/format.js';
+
 /* 服务器轮询监测 - 静态轮询脚本
  * 每 30 秒拉取 /api/overview 与 /api/alerts?status=active，原位更新 DOM。
  * 无框架、无外部依赖；任何网络/解析错误都被吞掉，绝不抛出未捕获异常。
@@ -30,70 +41,6 @@
   var hostSortDir = 1;
   var silenceTarget = null;
   var resourceRankMetric = 'cpu';
-
-  function redirectToLogin() {
-    if (window.location.pathname !== '/login') {
-      window.location.assign('/login');
-    }
-  }
-
-  // 读取 base.html <meta name="csrf-token"> 中的会话 CSRF 令牌。
-  function csrfToken() {
-    var meta = document.querySelector('meta[name="csrf-token"]');
-    return meta ? (meta.getAttribute('content') || '') : '';
-  }
-
-  // 统一的 JSON 请求：401 -> 跳登录并返回 null；非 2xx / 非 JSON -> null。
-  // 所有非 GET 请求自动携带 X-CSRF-Token（服务端 CSRF 校验依赖它）。
-  // v0.1.223：失败时解析响应体里的 error/detail，存到 fetchJson.lastError，
-  // 让"失败，请重试"之类的提示能带上服务端的真实原因。
-  function fetchJson(url, options) {
-    var opts = options || {};
-    var method = (opts.method || 'GET').toUpperCase();
-    var headers = { 'Accept': 'application/json' };
-    if (opts.headers) {
-      for (var key in opts.headers) {
-        if (Object.prototype.hasOwnProperty.call(opts.headers, key)) {
-          headers[key] = opts.headers[key];
-        }
-      }
-    }
-    if (method !== 'GET' && method !== 'HEAD') {
-      var token = csrfToken();
-      if (token) { headers['X-CSRF-Token'] = token; }
-      if (typeof opts.body === 'string') {
-        headers['Content-Type'] = 'application/json';
-      }
-    }
-    var base = {
-      credentials: 'same-origin',
-      headers: headers
-    };
-    if (opts.method) { base.method = opts.method; }
-    if (opts.body !== undefined) { base.body = opts.body; }
-
-    return fetch(url, base).then(function (response) {
-      if (response.status === 401) {
-        redirectToLogin();
-        return null;
-      }
-      if (!response.ok) {
-        return response.json().catch(function () { return null; }).then(function (payload) {
-          var detail = payload && (payload.error || payload.detail || payload.message);
-          fetchJson.lastError = detail ? String(detail) : '';
-          return null;
-        });
-      }
-      fetchJson.lastError = '';
-      var contentType = response.headers.get('content-type') || '';
-      if (contentType.indexOf('application/json') === -1) {
-        return null;
-      }
-      return response.json();
-    });
-  }
-
-  fetchJson.lastError = '';
 
   // 失败提示：能拿到服务端原因就带上，否则回落到"请重试"。
   function failToast(prefix, kind) {
@@ -236,34 +183,7 @@
 
   // v0.1.231：跨页面共享的格式化器。此前 settings-health 的 formatBytes 在
   // TB 级会显示成 "2048.00 GB"，settings.js 的静默时间直接 toLocaleString。
-  function formatBytesShared(value) {
-    if (value === null || value === undefined || value === '') { return '—'; }
-    var num = Number(value);
-    if (isNaN(num) || num < 0) { return '—'; }
-    if (num >= 1099511627776) { return (num / 1099511627776).toFixed(2) + ' TB'; }
-    if (num >= 1073741824) { return (num / 1073741824).toFixed(1) + ' GB'; }
-    if (num >= 1048576) { return (num / 1048576).toFixed(1) + ' MB'; }
-    if (num >= 1024) { return (num / 1024).toFixed(1) + ' KB'; }
-    return num.toFixed(0) + ' B';
-  }
-
-  function formatStampShared(value) {
-    var text = String(value || '');
-    if (!text) { return '—'; }
-    var date = new Date(text);
-    if (isNaN(date.getTime())) { return text; }
-    var pad = function (n) { return n < 10 ? '0' + n : '' + n; };
-    return date.getFullYear() + '-' + pad(date.getMonth() + 1) + '-' + pad(date.getDate()) +
-      ' ' + pad(date.getHours()) + ':' + pad(date.getMinutes());
-  }
   window.servermonitorFmt = { bytes: formatBytesShared, stamp: formatStampShared };
-
-  function formatPercent(value) {
-    if (value === null || value === undefined || value === '') { return '—'; }
-    var num = Number(value);
-    if (isNaN(num)) { return '—'; }
-    return num.toFixed(1) + '%';
-  }
 
   function setText(id, text) {
     var el = document.getElementById(id);
@@ -278,18 +198,6 @@
   }
 
   // 时间戳：表格里只显示「月-日 时:分」，完整值放进 title，避免 ISO 串撑宽行。
-  function formatStamp(value) {
-    if (!value) { return '—'; }
-    var text = String(value);
-    var date = new Date(text);
-    if (isNaN(date.getTime())) { return text; }
-    function pad(n) { return n < 10 ? '0' + n : String(n); }
-    var sameYear = date.getFullYear() === new Date().getFullYear();
-    return (sameYear ? '' : date.getFullYear() + '-') +
-      pad(date.getMonth() + 1) + '-' + pad(date.getDate()) +
-      ' ' + pad(date.getHours()) + ':' + pad(date.getMinutes());
-  }
-
   // v0.1.81：温度小徽标（≥70℃ 琥珀、≥85℃ 红），无数据时不渲染。
   // 采集成功率低于 90% 才显示，正常时不打扰视线。
   function uptimeChip(uptime) {
@@ -320,22 +228,6 @@
   }
 
   // v0.1.79：相对时间（3 分钟前 / 2 小时前），超过 7 天回退到绝对时间。
-  function formatRelative(value) {
-    if (!value) { return '—'; }
-    var date = new Date(String(value));
-    if (isNaN(date.getTime())) { return String(value); }
-    var seconds = Math.round((Date.now() - date.getTime()) / 1000);
-    if (seconds < 0) { seconds = 0; }
-    if (seconds < 45) { return '刚刚'; }
-    var minutes = Math.round(seconds / 60);
-    if (minutes < 60) { return minutes + ' 分钟前'; }
-    var hours = Math.round(minutes / 60);
-    if (hours < 24) { return hours + ' 小时前'; }
-    var days = Math.round(hours / 24);
-    if (days <= 7) { return days + ' 天前'; }
-    return formatStamp(value);
-  }
-
   // 迷你趋势线：纯 SVG，不引第三方图表库。数据点不足两个时返回 null。
   function sparkline(values, className) {
     var list = (values || []).filter(function (item) {
@@ -616,12 +508,6 @@
     return el;
   }
 
-  function overviewNumbers(values) {
-    return (values || []).filter(function (v) {
-      return v !== null && v !== undefined && !isNaN(Number(v));
-    }).map(Number);
-  }
-
   function overviewPath(values, min, max, width, height, padX, padY) {
     var span = Math.max(1, values.length - 1);
     var coords = [];
@@ -630,20 +516,6 @@
       coords.push([
         padX + (width - padX * 2) * (index / span),
         height - padY - (height - padY * 2) * ((Number(value) - min) / (max - min))
-      ]);
-    });
-    return coords;
-  }
-
-  function overviewPathIndexed(values, min, max, width, height, padX, padY) {
-    var span = Math.max(1, values.length - 1);
-    var coords = [];
-    values.forEach(function (value, index) {
-      if (value === null || value === undefined || isNaN(Number(value))) { return; }
-      coords.push([
-        padX + (width - padX * 2) * (index / span),
-        height - padY - (height - padY * 2) * ((Number(value) - min) / (max - min)),
-        index
       ]);
     });
     return coords;
@@ -710,12 +582,6 @@
       });
     }
     bindOverviewHover(svg, indexed, values, key, labels || []);
-  }
-
-  function overviewTrendText(value, key) {
-    if (value === null || value === undefined || isNaN(Number(value))) { return ''; }
-    var num = Number(value);
-    return key === 'load_1' ? num.toFixed(2) : formatPercent(num);
   }
 
   function bindOverviewHover(svg, indexed, values, key, labels) {
@@ -884,11 +750,6 @@
     var text = String(raw);
     if (text.length >= 16) { return text.slice(5, 16).replace('T', ' '); }
     return text;
-  }
-
-  function csvEscape(value) {
-    var text = value == null ? '' : String(value);
-    return '"' + text.split('"').join('""') + '"';
   }
 
   function exportOverviewHistory() {

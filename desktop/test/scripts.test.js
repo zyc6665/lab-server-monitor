@@ -78,10 +78,14 @@ test('build-portable.ps1 copies the root launchers and docs', () => {
   }
 });
 
-test('build-portable.ps1 compresses to the v1.4 release zip', () => {
+test('build-portable.ps1 compresses to a version-derived release zip', () => {
   assertContains(build, 'Compress-Archive');
-  assertContains(build, '服务器轮询监测工具-Windows-x64-v1.4.1.zip');
+  // 产物名由 package.json 版本派生（不再写死 v1.4.1）
+  assertContains(build, '服务器轮询监测工具-Windows-x64-v');
+  assertContains(build, '$appVersion', 'version comes from package.json');
   assertContains(build, 'release', 'release output dir');
+  // M0：构建末尾强制校验包内 tzdata / web 资源 / 报告模板
+  assertContains(build, 'verify-bundle.py');
 });
 
 test('build-portable.ps1 cleans ONLY the staging directory on upgrade', () => {

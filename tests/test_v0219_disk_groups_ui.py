@@ -101,4 +101,5 @@ def test_style_covers_group_header():
     block = css[css.index("v0.1.119 磁盘按分组折叠") :]
     for selector in (".disk-group-head", ".disk-group-collapse", ".disk-group-name", ".disk-group-count"):
         assert selector in block
-    assert 'html[data-theme="dark"] .disk-group-collapse:hover' in block
+    # M3：hover 背景用 --surface-sunken token，暗色自动覆盖
+    assert ".disk-group-collapse:hover { background: var(--surface-sunken);" in block

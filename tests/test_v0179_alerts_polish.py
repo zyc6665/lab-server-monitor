@@ -24,11 +24,12 @@ def test_alert_rows_carry_severity_and_status():
 
 def test_alert_time_uses_relative_format():
     js = _app_js()
-    assert "function formatRelative(value)" in js
-    assert "' 分钟前'" in js
-    assert "' 小时前'" in js
-    assert "' 天前'" in js
-    assert "'刚刚'" in js
+    formatter = (STATIC / "lib" / "format.js").read_text(encoding="utf-8")
+    assert "function formatRelative(value)" in formatter
+    assert "' 分钟前'" in formatter
+    assert "' 小时前'" in formatter
+    assert "' 天前'" in formatter
+    assert "'刚刚'" in formatter
     assert "textCell(formatRelative(alert.created_at), 'mono alert-time')" in js
     assert "timeCell.title = formatStamp(alert.created_at);" in js
 

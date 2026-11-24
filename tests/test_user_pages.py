@@ -261,6 +261,7 @@ def test_style_defines_user_layout_and_badges():
         ".user-chip",
     ):
         assert selector in css, selector
-    assert 'html[data-theme="dark"] .badge-missing' in css
-    assert 'html[data-theme="dark"] .user-row-missing' in css
-    assert 'html[data-theme="dark"] .user-host-card' in css
+    # M3：暗色由 --danger-soft/--danger 等 token 自动覆盖
+    assert ".badge-missing { background: var(--danger-soft); color: var(--danger); }" in css
+    assert ".user-row-missing td { background: var(--danger-soft); }" in css
+    assert "html[data-theme=\"dark\"] {" in css

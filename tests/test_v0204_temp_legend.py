@@ -21,5 +21,6 @@ def test_style_present():
     css = (STATIC / "style.css").read_text(encoding="utf-8")
     assert "v0.1.204" in css
     assert ".disk-legend-bar" in css
-    assert "linear-gradient(90deg, var(--accent), #d97706, #dc2626)" in css
-    assert 'html[data-theme="dark"] .disk-legend-critical' in css
+    assert "linear-gradient(90deg, var(--accent), var(--warn), var(--danger))" in css
+    # M3：告警色用 --danger-text token，暗色在 token 块重定义
+    assert ".disk-legend-critical { color: var(--danger-text);" in css

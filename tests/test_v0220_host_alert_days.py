@@ -96,4 +96,5 @@ def test_style_covers_alert_days():
     assert ".host-alert-days" in block
     assert "grid-template-columns: repeat(7, minmax(0, 1fr));" in block
     assert ".host-alert-seg-critical" in block
-    assert 'html[data-theme="dark"] .host-alert-day-bar' in block
+    # M3：告警条颜色用 token，暗色在 token 块重定义
+    assert "var(--danger)" in block or "var(--success)" in block

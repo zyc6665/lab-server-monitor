@@ -34,7 +34,7 @@
 
 1. **发布前必须 bump**：对外分发前执行 `python tools/bump_version.py <x.y.z>`，并让 `<x.y.z>` 与即将创建的 Release 标签一致。
 2. **本地构建不得直接对外分发**：`build-portable.ps1` 产物仅供内部验证；对外发布走 `release-windows.yml`，由工作流注入版本。
-3. **版本线归一（待决策）**：两种可选做法，需由维护者选定其一后执行——
+3. **版本线归一（2026-11-23 已决策：A，留在 0.1.x 线）**：后续发布标签一律 `v0.1.237`、`v0.1.238`……；历史 `v1.x` Release 由维护者在 GitHub 上标记为 **prerelease**（或删除）；`desktop/electron/updater-core.js` 已加防御（忽略 prerelease/draft，忽略 major 不一致的标签）；`python tools/bump_version.py --check` 在 CI 中校验三处版本一致。原 A/B 备选记录如下：
    - **A. 回落到 0.1.x 线**：后续发布标签改为 `v0.1.237`、`v0.1.238`……与仓库现状一致，历史 `v1.x` 标签保留但不再递增；
    - **B. 抬升到 1.x 线**：仓库三处版本 bump 到 `1.6.2`（或下一个语义化版本），此后一律 `1.x.y`，`0.1.236` 视为历史遗留。
 4. **README / CHANGELOG 不写死版本**：文档中以「参见 Release 页面」表述，避免再次出现 `v1.4` 与 `1.6.1` 并存。

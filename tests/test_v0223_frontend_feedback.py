@@ -55,7 +55,7 @@ def test_users_refresh_failure_includes_server_reason():
 
 
 def test_app_fetchjson_captures_error_detail_and_sets_json_type():
-    script = _read("app.js")
+    script = _read("lib/api.js")
     assert "fetchJson.lastError" in script
     assert "payload.error || payload.detail || payload.message" in script
     # 请求体存在时自动补 JSON Content-Type（users.js 同步修复的同一约定）。

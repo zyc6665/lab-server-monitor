@@ -10,9 +10,12 @@ STATIC = ROOT / "servermanage" / "web" / "static"
 
 def test_overview_hover_helpers():
     js = (STATIC / "app.js").read_text(encoding="utf-8")
-    assert "function overviewPathIndexed(values, min, max, width, height, padX, padY)" in js
+    # M2：纯函数已抽到 pages/overview-trends.js（Node 单测覆盖），app.js 改为 import
+    assert "from './pages/overview-trends.js'" in js
     assert "function bindOverviewHover(svg, indexed, values, key, labels)" in js
-    assert "function overviewTrendText(value, key)" in js
+    module = (STATIC / "pages" / "overview-trends.js").read_text(encoding="utf-8")
+    assert "export function overviewPathIndexed(" in module
+    assert "export function overviewTrendText(" in module
     assert "var indexed = overviewPathIndexed(values, min, max, width, chartH, padX, padY);" in js
     assert "bindOverviewHover(svg, indexed, values, key, labels || []);" in js
     assert "points.map(overviewPointLabel)" in js
