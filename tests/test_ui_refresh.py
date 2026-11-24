@@ -65,10 +65,26 @@ def test_tables_keep_dense_padding_and_sticky_header() -> None:
 
 
 def test_stamp_filter_shortens_iso_timestamps() -> None:
+    """``stamp`` renders in the *machine's* local time zone.
+
+    CI runners are UTC, so asserting a fixed wall-clock value made this test
+    pass locally (UTC+8) and fail in CI. Assert the shape and that the same
+    instant in two representations shortens identically instead.
+    """
+    import re
+    from datetime import datetime
+
     app = _app()
     stamp = app.jinja_env.filters["stamp"]
-    assert stamp("2026-11-10T20:11:46.576946+08:00") == "11-10 20:11"
-    assert stamp("2026-11-10T20:11:46") == "11-10 20:11"
+    with_offset = stamp("2026-11-10T20:11:46.576946+08:00")
+    without_offset = stamp("2026-11-10T20:11:46")
+    assert re.fullmatch(r"\d{2}-\d{2} \d{2}:\d{2}", with_offset), with_offset
+    assert re.fullmatch(r"\d{2}-\d{2} \d{2}:\d{2}", without_offset), without_offset
+    # 带偏移的字符串按本地时区换算；把同一时刻转成本地时间再比对，跨时区稳定。
+    expected = datetime.fromisoformat("2026-11-10T20:11:46.576946+08:00").astimezone()
+    assert with_offset == expected.strftime("%m-%d %H:%M")
+    # 无偏移的字符串按字面取时分（不换算）。
+    assert without_offset.endswith("20:11")
     assert stamp("") == "—"
     assert stamp(None) == "—"
     assert stamp("not-a-date") == "not-a-date"

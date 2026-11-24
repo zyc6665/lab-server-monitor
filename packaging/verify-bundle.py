@@ -59,6 +59,15 @@ def _default_target() -> Path | None:
 
 
 def main(argv: list[str]) -> int:
+    # Windows CI runners default to a legacy code page (cp1252); the Chinese
+    # report below would raise UnicodeEncodeError and fail the build even when
+    # every check passed. Force UTF-8 and never crash on an unrepresentable char.
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, ValueError):  # pragma: no cover - old Python
+            pass
+
     target = Path(argv[1]).expanduser() if len(argv) > 1 else _default_target()
     if target is None or not target.exists():
         print(f"[FAIL] 找不到待校验产物: {target}")
