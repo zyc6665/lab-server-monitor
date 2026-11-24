@@ -61,7 +61,8 @@ def test_usage_uses_its_own_timeout():
     assert refreshed is True
     assert readable is True
     assert runner.run_calls[0][1] == 120
-    assert runner.sudo_calls[0][1] == 1815
+    # 预算按 time.monotonic() 递减：慢机器上首轮剩余会少几秒，断言区间而非精确值
+    assert 1800 <= runner.sudo_calls[0][1] <= 1815
     assert "timeout -k 10 1800 bash -c" in runner.sudo_calls[0][0]
     assert accounts
 
@@ -74,7 +75,7 @@ def test_usage_falls_back_to_command_timeout():
     collect_host_users(
         make_host(), runner, now=NOW, usage_due=True, command_timeout=90
     )
-    assert runner.sudo_calls[0][1] == 105
+    assert 90 <= runner.sudo_calls[0][1] <= 105
     assert "timeout -k 10 90 bash -c" in runner.sudo_calls[0][0]
 
 
