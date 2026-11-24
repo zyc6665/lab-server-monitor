@@ -13,6 +13,7 @@ and usage paths are derived from validated usernames and remote passwd data.
 
 from __future__ import annotations
 
+import math
 import posixpath
 import re
 import shlex
@@ -483,7 +484,9 @@ def collect_host_users(
                 # bash, and cap this account with `timeout`.  `du` prints a
                 # path as soon as that path is done, so a cut-off account still
                 # contributes the directories it finished.
-                span = max(10, int(remaining))
+                # 向上取整：``deadline - now`` 永远略小于预算，int() 会让首轮
+                # 变成 1799（Linux 纳秒时钟），预算看似少 1 秒。
+                span = max(10, math.ceil(remaining))
                 inner = "timeout -k 10 %d bash -c %s" % (
                     span,
                     shlex.quote(usage_command),
