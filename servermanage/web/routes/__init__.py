@@ -23,9 +23,14 @@ class _FacadeModule(_ModuleType):
 
     def __setattr__(self, name, value):
         super().__setattr__(name, value)
-        core = _sys.modules.get("servermanage.web.routes._core")
-        if core is not None and name in core.__dict__:
-            object.__setattr__(core, name, value)
+        # A test patching ``routes.SSHClientWrapper`` / ``routes.send_webhook``
+        # must reach every split module that imported that name, not just _core.
+        prefix = "servermanage.web.routes."
+        for module_name, module in list(_sys.modules.items()):
+            if module is None or not module_name.startswith(prefix):
+                continue
+            if name in getattr(module, "__dict__", {}):
+                object.__setattr__(module, name, value)
 
 from servermanage.web.routes._core import (  # noqa: F401
     base64,
@@ -421,5 +426,111 @@ __all__ = [
     '_fleet_report_filename',
     '_build_fleet_report',
     '_aggregate_series',
-    'register_routes',
 ]
+
+
+def register_routes(app: Flask) -> None:
+    """Register auth guards and every split route module (M1 facade).
+
+    ``_require_login`` stays here so it is installed exactly once, before the
+    domain modules add their rules.  Each module registers its own view
+    functions with the original bare endpoint names, so templates and
+    ``url_for`` keep working unchanged.
+    """
+    from servermanage.web.routes import (
+        alerts as _alerts,
+        auth as _auth,
+        disk_health as _disk_health,
+        hosts as _hosts,
+        overview as _overview,
+        pages as _pages,
+        settings_api as _settings_api,
+        ssh_terminal as _ssh_terminal,
+        system as _system,
+        users as _users,
+    )
+    from servermanage.web.routes._core import (
+        _config,
+        _csrf_token,
+        _require_csrf,
+        _settings_service,
+        _user_mode_allows,
+        _view_mode,
+        user_mode,
+    )
+
+    app.jinja_env.globals["csrf_token"] = _csrf_token
+
+    @app.before_request
+    def _require_login():
+        path = request.path
+        if path.startswith("/static/"):
+            return None
+
+        service = _settings_service(app)
+
+        # 1) First-run setup gate.  ``/setup`` itself must stay reachable, and
+        #    ``/login`` stays reachable so credentials can be checked/limited.
+        if (
+            path not in ("/setup", "/login")
+            and service is not None
+            and service.setup_required()
+        ):
+            if path.startswith("/api/"):
+                return jsonify({"error": "setup_required"}), 428
+            return redirect(url_for("setup"))
+
+        # 1b) Unauthenticated API calls must be 401 even for POST/PUT/DELETE;
+        #     otherwise a missing session yields a misleading CSRF 400.
+        if path.startswith("/api/") and service is not None:
+            api_config = _config(app)
+            if api_config.dashboard.auth.enabled and not session.get("logged_in"):
+                return jsonify({"error": "unauthorized"}), 401
+
+        # 2) CSRF protection for state-changing requests.  Only enforced when a
+        #    settings service is wired in (the legacy no-service app in
+        #    ``tests/test_web_api.py`` keeps working unchanged).
+        if (
+            service is not None
+            and path not in ("/login", "/setup")
+            and request.method in ("POST", "PUT", "DELETE")
+        ):
+            rejection = _require_csrf()
+            if rejection is not None:
+                return rejection
+
+        # 3) ``/setup`` and ``/login`` bypass the logged-in gate.
+        if path in ("/setup", "/login"):
+            return None
+
+        config = _config(app)
+        if config.dashboard.auth.enabled and not session.get("logged_in"):
+            if path.startswith("/api/"):
+                return jsonify({"error": "unauthorized"}), 401
+            return redirect(url_for("login"))
+
+        # 4) Member (user) mode: only the personal surfaces stay reachable.
+        if _view_mode(config) == user_mode.MODE_USER and not _user_mode_allows(path):
+            if path.startswith("/api/"):
+                return (
+                    jsonify(
+                        {
+                            "error": "admin_only",
+                            "message": "该功能仅在管理员模式下可用",
+                        }
+                    ),
+                    403,
+                )
+            return redirect(url_for("my_page"))
+        return None
+
+    _auth.register_auth(app)
+    _overview.register_overview(app)
+    _hosts.register_hosts(app)
+    _users.register_users(app)
+    _alerts.register_alerts(app)
+    _disk_health.register_disk_health(app)
+    _settings_api.register_settings_api(app)
+    _system.register_system(app)
+    _ssh_terminal.register(app)
+    _pages.register_pages(app)
