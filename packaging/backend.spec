@@ -15,6 +15,7 @@ import os
 from pathlib import Path
 
 from PyInstaller.config import CONF
+from PyInstaller.utils.hooks import collect_data_files
 
 # ``SPECPATH`` is injected by PyInstaller.  In PyInstaller 6.x it is the
 # *directory* containing the spec file (i.e. ``packaging/``), so the project
@@ -46,6 +47,13 @@ datas = [
     (str(project_root / "servermanage" / "web" / "templates"), "servermanage/web/templates"),
     (str(project_root / "servermanage" / "web" / "static"), "servermanage/web/static"),
 ]
+
+# ``zoneinfo`` needs the tzdata *data* files (tzdata/zoneinfo/Asia/Shanghai ...),
+# not just the package import.  PyInstaller's tzdata hook normally collects them,
+# but a bundle of this project has already shipped with an incomplete
+# ``_internal/tzdata/zoneinfo/`` tree, which silently degraded every timestamp to
+# UTC.  Collect explicitly so the timezone data cannot regress.
+datas += collect_data_files("tzdata")
 
 a = Analysis(
     [str(project_root / "servermanage" / "__main__.py")],

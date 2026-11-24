@@ -79,7 +79,7 @@ from servermanage.ssh_terminal import (
     SshTerminalManager,
     TerminalLimitError,
 )
-from servermanage.timeutil import resolve_timezone
+from servermanage.timeutil import resolve_timezone, timezone_status
 
 LOGGER = logging.getLogger(__name__)
 
@@ -1060,6 +1060,25 @@ def _system_diagnostics(config, db_path, *, now: datetime | None = None) -> dict
             "label": "数据库",
             "status": "ok" if ok else "error",
             "message": message,
+        }
+    )
+
+    # A silent UTC fallback used to be visible only in the log file, so every
+    # timestamp looked normal while being 8 hours off.  Surface it here.
+    tz_state = timezone_status(getattr(config.app, "timezone", "Asia/Shanghai"))
+    if tz_state["available"]:
+        tz_message = f"时区 {tz_state['name']} 已生效"
+    else:
+        tz_message = (
+            f"时区 {tz_state['name']} 不可用，已回退 {tz_state['effective']}，"
+            f"页面与报告的本地时间会偏移；请确认打包产物包含 tzdata 时区数据（{tz_state['detail']}）"
+        )
+    checks.append(
+        {
+            "key": "timezone",
+            "label": "时区",
+            "status": "ok" if tz_state["available"] else "warning",
+            "message": tz_message,
         }
     )
 

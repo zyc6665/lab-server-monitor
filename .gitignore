@@ -34,6 +34,12 @@ logs/
 data/*
 !data/.gitkeep
 
+# Archived copies, offline backups and one-off scratch dirs
+# (an untracked servermonitor-main/ copy once confused the packaging script root detection)
+servermonitor-main/
+backup_*/
+.tmp-upd/
+
 # Local configuration and secrets
 .env
 config.yaml

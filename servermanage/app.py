@@ -204,19 +204,51 @@ def default_config_path() -> Path:
     falls back to the repo-level ``config/config.yaml``.  When no frozen
     candidate exists the first (exe-dir) candidate is returned so the subsequent
     load error names a sensible location.
+
+    The current working directory is deliberately *not* consulted: a frozen app
+    launched from a developer checkout used to pick up the repo-level
+    ``config/config.yaml`` instead of its own shipped copy, which silently masked
+    a packaging mistake (the archive had no seeded config at all).
     """
     if getattr(sys, "frozen", False):
         exe = Path(sys.executable)
         candidates = [
             exe.parent / "config" / "config.yaml",
             exe.parents[2] / "config" / "config.yaml",
-            Path.cwd() / "config" / "config.yaml",
         ]
         for candidate in candidates:
             if candidate.exists():
                 return candidate
         return candidates[0]
     return Path(__file__).resolve().parents[1] / "config" / "config.yaml"
+
+
+def seed_config_from_example(config_path: Path) -> bool:
+    """Create *config_path* from the sibling ``config.yaml.example`` if missing.
+
+    A fresh source checkout (and any portable bundle built before the build
+    script seeded the file) ships only ``config.yaml.example``.  Writing the
+    initial config once keeps the runtime from silently falling back to built-in
+    defaults, which used to create a second, empty database under ``data/`` and
+    left the deployment with no editable config at all.
+    """
+    if config_path.exists():
+        return False
+    example = config_path.with_name("config.yaml.example")
+    if not example.exists():
+        return False
+    try:
+        config_path.parent.mkdir(parents=True, exist_ok=True)
+        config_path.write_bytes(example.read_bytes())
+    except OSError as exc:  # pragma: no cover - filesystem dependent
+        LOGGER.warning("Could not seed %s from %s: %s", config_path, example, exc)
+        return False
+    LOGGER.info(
+        "Seeded %s from %s (first run; edit it to fit this deployment)",
+        config_path,
+        example,
+    )
+    return True
 
 
 def watch_parent_stdin(on_eof: Callable[[], None], stream=None) -> None:
@@ -295,6 +327,7 @@ def load_runtime_with_settings(
         Path(config_path),
         allow_empty_servers=True,
         allow_missing_secrets=True,
+        allow_missing_file=True,
     )
     db_path = Path(base.storage.db_path)
     init_storage(db_path, daily_summary_tz=None)
@@ -1307,6 +1340,8 @@ def main(
             config_path = (
                 Path(args.config) if args.config else default_config_path()
             )
+            if args.config is None:
+                seed_config_from_example(config_path)
             config, db_path, settings = load_runtime_with_settings(
                 config_path,
                 Path(args.dotenv) if args.dotenv else None,

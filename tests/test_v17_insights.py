@@ -201,6 +201,7 @@ def test_system_health_payload(tmp_path: Path) -> None:
     assert diagnostics["status"] == "ok"
     assert [item["key"] for item in diagnostics["checks"]] == [
         "database",
+        "timezone",
         "hosts",
         "disk",
         "tasks",

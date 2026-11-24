@@ -3,6 +3,7 @@ from pathlib import Path
 import pytest
 
 from servermanage.config import ConfigError, load_config
+from servermanage.models import DEFAULT_DB_PATH
 
 
 def test_load_config_with_password_auth(tmp_path: Path, monkeypatch):
@@ -268,7 +269,8 @@ servers:
     config = load_config(config_file)
 
     assert config.storage.enabled is True
-    assert config.storage.db_path == Path("data/servermanage.db")
+    # ``db_path`` is omitted in this fixture, so the documented fallback applies.
+    assert config.storage.db_path == Path(DEFAULT_DB_PATH)
     assert config.report.weekly.enabled is True
     assert config.report.weekly.subject_prefix == "[Server Weekly Report]"
     assert config.report.weekly.busy_threshold == 70.0

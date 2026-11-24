@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import os
 import re
 from pathlib import Path
@@ -30,7 +31,11 @@ from servermanage.models import (
     UserMonitoringConfig,
     WebhookConfig,
     WeeklyReportConfig,
+    default_db_path,
 )
+
+
+LOGGER = logging.getLogger(__name__)
 
 
 class ConfigError(ValueError):
@@ -92,10 +97,15 @@ def _load_storage_config(data: Any) -> StorageConfig:
     if data is None:
         return StorageConfig()
     mapping = _require_mapping(data, "storage")
-    db_path_raw = mapping.get("db_path", "data/servermanage.db")
+    # ``storage.db_path`` in the config always wins; the fallback below is the
+    # legacy Docker name and only applies to hand-written configs that omit the
+    # key.  A generated config (see ``seed_config_from_example``) always carries
+    # the PC name ``data/servermonitor.db`` explicitly.
+    db_path_raw = mapping.get("db_path")
+    db_path = default_db_path() if db_path_raw is None else Path(str(db_path_raw)).expanduser()
     return StorageConfig(
         enabled=bool(mapping.get("enabled", True)),
-        db_path=Path(str(db_path_raw)).expanduser(),
+        db_path=db_path,
     )
 
 
@@ -644,10 +654,25 @@ def load_config(
     *,
     allow_empty_servers: bool = False,
     allow_missing_secrets: bool = False,
+    allow_missing_file: bool = False,
 ) -> AppConfig:
     config_path = Path(path)
-    with config_path.open("r", encoding="utf-8") as handle:
-        raw = yaml.safe_load(handle) or {}
+    if not config_path.is_file():
+        if not allow_missing_file:
+            raise FileNotFoundError(f"Config file does not exist: {config_path}")
+        # A fresh source checkout only ships ``config.yaml.example`` and the
+        # desktop reset flow may remove the YAML seed entirely.  The SQLite
+        # settings store is the real source of truth, so an absent seed must
+        # degrade to built-in defaults instead of aborting startup.
+        LOGGER.warning(
+            "Config file %s does not exist; starting from built-in defaults "
+            "(the settings store still takes precedence once configured).",
+            config_path,
+        )
+        raw: dict[str, Any] = {}
+    else:
+        with config_path.open("r", encoding="utf-8") as handle:
+            raw = yaml.safe_load(handle) or {}
     return load_config_from_mapping(
         raw,
         allow_empty_servers=allow_empty_servers,

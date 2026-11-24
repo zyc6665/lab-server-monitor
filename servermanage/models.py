@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
 from pathlib import Path
@@ -132,10 +133,22 @@ class ExecutiveReportConfig:
     to_addrs: list[str] = field(default_factory=list)
 
 
+# Legacy fallback used only when no config file exists at all.  The runtime
+# never relies on it: ``servermanage.config.seed_config_from_example`` writes a
+# real ``config.yaml`` (db_path=data/servermonitor.db) on first start.  The name
+# is kept as-is because the historical Docker image pointed here.
+DEFAULT_DB_PATH = "data/servermanage.db"
+
+
+def default_db_path() -> Path:
+    """Return the built-in SQLite path used when a config omits ``db_path``."""
+    return Path(DEFAULT_DB_PATH)
+
+
 @dataclass(frozen=True)
 class StorageConfig:
     enabled: bool = True
-    db_path: Path = field(default_factory=lambda: Path("data/servermanage.db"))
+    db_path: Path = field(default_factory=default_db_path)
 
 
 @dataclass(frozen=True)

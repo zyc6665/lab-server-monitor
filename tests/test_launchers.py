@@ -82,9 +82,11 @@ def test_user_guide_covers_v14_desktop_workflow() -> None:
 
 
 def test_readme_covers_v14_desktop_workflow() -> None:
-    text = read_text("README.md")
+    # 版本历史已抽到 CHANGELOG.md（README 只保留使用说明）。
+    changelog = read_text("CHANGELOG.md")
+    assert "1.4.1" in changelog, "版本历史必须保留在 CHANGELOG.md"
+    assert "SSH 终端" in changelog
 
-    assert "1.4.1" in text
-    assert "SSH 终端" in text
+    text = read_text("README.md")
     assert "servermonitor.exe" in text
     assert "--start-hidden" in text, "README 应说明开机自启走 --start-hidden"

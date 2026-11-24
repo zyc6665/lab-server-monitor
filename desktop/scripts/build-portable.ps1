@@ -9,7 +9,9 @@
 #   3. pnpm install + pnpm run build (electron-builder --win, target dir).
 #   4. Stage win-unpacked under desktop/build/portable/servermonitor and add
 #      resources/backend, a seeded config, data/, logs/, launchers and docs.
-#   5. Compress-Archive into release/服务器轮询监测工具-Windows-x64-v1.4.1.zip.
+#   5. Compress-Archive into release/服务器轮询监测工具-Windows-x64-v<package.json version>.zip.
+#   6. Run packaging/verify-bundle.py so a missing tzdata / web asset / template
+#      fails the build instead of surfacing later as a UTC time-zone fallback.
 #
 # Upgrade safety: only the staging directory is ever removed. The source
 # config/, data/ and logs/ directories are never deleted; the config file is
@@ -202,4 +204,20 @@ finally {
 
 $sizeMb = [math]::Round((Get-Item $zipPath).Length / 1MB, 2)
 Write-Host ("Portable release created: {0} ({1} MB)" -f $zipPath, $sizeMb) -ForegroundColor Green
+
+# --- 6. Verify bundle contents (tzdata / web assets / report templates) -----
+# A missing tzdata payload makes ZoneInfo fall back to UTC at runtime, which is
+# silent in the UI unless packaging/verify-bundle.py gates the build.
+$verifyScript = Join-Path $projectRoot 'packaging/verify-bundle.py'
+if (Test-Path $verifyScript) {
+    Write-Host 'Verifying bundle contents (tzdata, web assets, report templates) ...' -ForegroundColor Cyan
+    python $verifyScript $zipPath
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host 'Bundle verification FAILED - the archive is missing required resources.' -ForegroundColor Red
+        exit $LASTEXITCODE
+    }
+}
+else {
+    Write-Host "WARNING: verify script not found: $verifyScript" -ForegroundColor Yellow
+}
 
