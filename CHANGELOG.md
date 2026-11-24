@@ -1,5 +1,37 @@
 # 更新日志
 
+## v0.1.238 第一阶段架构计划完成（M1–M6 收尾）
+
+承接 v0.1.237（M0–M3 起步），本轮把计划中剩余里程碑全部落地：
+
+- **M1 路由拆分完成**：`register_routes()` 的 4 395 行闭包拆成 10 个领域模块
+  （hosts 605 / users 430 / system 275 / settings_api 241 / auth 184 /
+  disk_health 173 / alerts 153 / overview 148 / pages 89 + ssh_terminal 191），
+  `_core.py` 只留 2 493 行 helper 与 `_build_*` 构造函数。视图函数模块级化并
+  用 `add_url_rule` 保留 79 个裸 endpoint，`url_for` 与 Electron 客户端零改动；
+  兼容门面把 monkeypatch 转发到全部子模块（`routes.SSHClientWrapper` /
+  `send_webhook` / `_LOG_FILE` 等）。删除被包遮蔽的死文件 `web/routes.py`。
+- **M2 前端模块化**：`lib/ui.js`（toast + 主题对话框）、`pages/trend-chart.js`
+  （SVG 趋势图）、`pages/host-views.js`（主机行/卡片渲染，524 行）抽出；
+  `app.js` 4 172 → 3 435 行，只留编排与 `window.*` 门面。新增
+  `tests/_frontend.py` 提供 `app_js_source()` / `routes_source()`，56 个
+  源码片段断言迁移为读取「逻辑单元」而非单一文件。
+- **M4 storage 分包**：4 585 行 → `base`(1142) / `metrics`(1126) /
+  `users`(832) / `hosts` / `alerts` / `disk` / `runtime` + 门面重导出 126 个
+  函数；`storage.sqlite3` / `storage._time` 保持可 patch。
+- **M5 settings 分包**：2 110 行单类 → `schema`(615) / `hosts`(612) /
+  `sections` / `admin` / `core` / `silences` 五个 mixin 组合，保留
+  `@staticmethod`/`@property`，重导出 `SettingsService`、`SettingsError`
+  与 60 个 schema 名字（含 `SECRET_*`）。
+- **M6 UI 组件统一**：7 个对话框合并为一套壳层（新增 `--dialog-radius` /
+  `--dialog-padding` / `--shadow-dialog` / `--backdrop` 令牌，暗色单独覆盖），
+  各对话框只声明尺寸差异；删除重复的 `.card` 声明。浏览器实测：对话框
+  radius 14px、阴影/遮罩统一，亮暗双主题正常，卡片渲染无回归。
+
+校验：1882 passed / 1 skipped（M1–M6 各配结构测试，锁住包布局、门面导出、
+方法数量与「不再回退到单文件」）；Node 85 passed。
+
+
 ## v0.1.237 第一阶段架构演进（M0–M3）
 
 > 承接 2026-11-23 架构计划（GLM5.4 架构 / DS 后端 / kimi 前端 / 混元 UI）。
