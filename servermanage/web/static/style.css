@@ -148,14 +148,8 @@ a:hover { text-decoration: underline; }
 .page-title { font-size: 22px; margin: 8px 0 20px; }
 .breadcrumb { font-size: 14px; color: var(--text-muted); margin-bottom: 12px; }
 
-.card {
-  background: var(--card-bg);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 20px 22px;
-  margin-bottom: 20px;
-  box-shadow: var(--shadow);
-}
+/* M6: the canonical .card shell lives further down (v0.7.0 block); this earlier
+   duplicate was fully overridden there. */
 .card h2 { font-size: 17px; margin: 0 0 14px; }
 .card h3 { font-size: 15px; margin: 20px 0 10px; color: var(--text-muted); }
 .section-head {
@@ -437,14 +431,8 @@ a:hover { text-decoration: underline; }
   margin-top: 16px;
 }
 .sub-card h3 { margin-top: 0; }
-.settings-dialog {
-  width: min(920px, 92vw);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 20px 22px;
-  box-shadow: 0 20px 50px rgba(15, 23, 42, 0.25);
-}
-.settings-dialog::backdrop { background: rgba(15, 23, 42, 0.35); }
+.settings-dialog { width: min(920px, 92vw); }
+
 .import-row-invalid td { color: var(--danger); }
 .import-row-duplicate td { color: var(--warn); }
 .logs-output {
@@ -1096,10 +1084,7 @@ body.command-open { overflow: hidden; }
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  border: 1px solid var(--border-strong);
-  border-radius: 14px;
-  background: var(--card-bg);
-  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.28);
+  border-color: var(--border-strong);
 }
 .command-title {
   position: absolute;
@@ -1379,16 +1364,11 @@ html[data-theme="dark"] .capacity-risk-warning .capacity-trend { color: var(--wa
 /* 账号写操作弹窗：默认关闭，必须打开全局与主机两道开关才会出现入口。 */
 .user-detail-create { margin-left: 8px; }
 .user-admin-dialog {
-  border: 1px solid var(--border, #e2e8f0);
-  border-radius: 14px;
   padding: 0;
   width: min(680px, calc(100vw - 32px));
   max-height: calc(100vh - 64px);
-  background: var(--card-bg);
-  color: var(--text, #0f172a);
-  box-shadow: 0 24px 64px rgba(15, 23, 42, 0.28);
 }
-.user-admin-dialog::backdrop { background: rgba(15, 23, 42, 0.45); }
+
 .user-admin-form { display: flex; flex-direction: column; gap: 14px; padding: 20px 22px 22px; overflow: auto; max-height: calc(100vh - 64px); }
 .user-admin-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .user-admin-head h2 { font-size: 18px; margin: 0; }
@@ -1859,6 +1839,11 @@ html[data-theme="dark"] .settings-toast { background: var(--surface-nav); border
   --accent-contrast: #ffffff;
   --warn-bg: #fffbeb;
   --code-bg: #f1f5f9;
+  /* M6：对话框统一壳层（此前 7 个 dialog 各写一套 radius/shadow/backdrop） */
+  --dialog-radius: 14px;
+  --dialog-padding: 20px 22px;
+  --shadow-dialog: 0 20px 52px rgba(15, 23, 42, .24);
+  --backdrop: rgba(15, 23, 42, .42);
 }
 
 /* -- 工作区：铺满窗口 ---------------------------------------------------- */
@@ -2292,6 +2277,8 @@ html[data-theme="dark"] {
   --accent-contrast: #0b111c;
   --warn-bg: #2b230f;
   --code-bg: #1e293b;
+  --shadow-dialog: 0 22px 56px rgba(0, 0, 0, .5);
+  --backdrop: rgba(2, 6, 23, .62);
 }
 html[data-theme="dark"] .topbar { background: rgba(11, 17, 28, 0.86); }
 html[data-theme="dark"] .sidebar { background: #0e1622; }
@@ -4400,14 +4387,9 @@ table.disk-table.hide-shield .col-shield { display: none; }
 tr[data-disk-row] { cursor: zoom-in; }
 .disk-drive-dialog {
   width: min(560px, 92vw);
-  border: 1px solid var(--border);
-  border-radius: 14px;
   padding: 16px 18px;
-  background: var(--card-bg);
-  color: var(--text);
-  box-shadow: 0 18px 48px rgba(15, 23, 42, .18);
 }
-.disk-drive-dialog::backdrop { background: rgba(15, 23, 42, .38); }
+
 .disk-drive-head { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
 .disk-drive-head strong { font-size: 14px; }
 .disk-drive-head button { margin-left: auto; }
@@ -4482,13 +4464,8 @@ tr[data-disk-row] { cursor: zoom-in; }
 .shortcut-help {
   min-width: min(420px, 92vw);
   padding: 18px 20px;
-  border: 1px solid var(--border);
-  border-radius: 14px;
-  background: var(--card-bg);
-  color: var(--text);
-  box-shadow: 0 18px 48px rgba(15, 23, 42, .28);
 }
-.shortcut-help::backdrop { background: rgba(15, 23, 42, .42); }
+
 .shortcut-help-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
 .shortcut-help-head h2 { font-size: 15px; margin: 0; }
 .shortcut-list { display: grid; grid-template-columns: max-content 1fr; gap: 8px 14px; margin: 0; font-size: 13px; }
@@ -4630,15 +4607,8 @@ html[data-theme="dark"] .group-summary-cpu.is-critical { color: var(--danger-tex
 }
 
 /* -- v0.1.224 从基线移除确认弹窗 ------------------------------------------ */
-.user-confirm-dialog {
-  max-width: 460px;
-  padding: 20px 22px;
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  background: var(--card-bg);
-  color: var(--text);
-}
-.user-confirm-dialog::backdrop { background: rgba(15, 23, 42, 0.45); }
+.user-confirm-dialog { max-width: 460px; }
+
 .user-confirm-text { margin: 0; line-height: 1.6; }
 .user-confirm-foot { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
 
@@ -4666,15 +4636,8 @@ html[data-theme="dark"] .group-summary-cpu.is-critical { color: var(--danger-tex
 .ssh-trust-row .muted { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* -- v0.1.231 全站确认对话框（替代原生 confirm）--------------------------- */
-.confirm-dialog {
-  max-width: 460px;
-  padding: 20px 22px;
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  background: var(--card-bg);
-  color: var(--text);
-}
-.confirm-dialog::backdrop { background: rgba(15, 23, 42, 0.45); }
+.confirm-dialog { max-width: 460px; }
+
 .confirm-dialog-text { margin: 0; line-height: 1.65; }
 .confirm-dialog-input {
   width: 100%;
@@ -4689,3 +4652,35 @@ html[data-theme="dark"] .group-summary-cpu.is-critical { color: var(--danger-tex
 .conn-status.conn-status-bad { color: var(--danger); }
 .conn-status.conn-status-bad .conn-dot { background: var(--danger); animation: conn-blink 1s infinite; }
 @keyframes conn-blink { 50% { opacity: .35; } }
+
+/* -- M6: one dialog shell for every modal --------------------------------
+   Sizes/padding deltas stay on the individual classes above; the shell
+   (border/radius/background/shadow/backdrop) is defined once. */
+.settings-dialog,
+.command-dialog,
+.user-admin-dialog,
+.disk-drive-dialog,
+.shortcut-help,
+.user-confirm-dialog,
+.confirm-dialog {
+  border: 1px solid var(--border);
+  border-radius: var(--dialog-radius);
+  padding: var(--dialog-padding);
+  background: var(--card-bg);
+  color: var(--text);
+  box-shadow: var(--shadow-dialog);
+}
+/* Per-dialog deltas that must win over the shared shell. */
+.command-dialog { border-color: var(--border-strong); }
+.user-admin-dialog { padding: 0; }
+.disk-drive-dialog { padding: 16px 18px; }
+.shortcut-help { padding: 18px 20px; }
+.settings-dialog::backdrop,
+.command-dialog::backdrop,
+.user-admin-dialog::backdrop,
+.disk-drive-dialog::backdrop,
+.shortcut-help::backdrop,
+.user-confirm-dialog::backdrop,
+.confirm-dialog::backdrop {
+  background: var(--backdrop);
+}
