@@ -5,6 +5,7 @@ from __future__ import annotations
 import sqlite3
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from _frontend import app_js_source, routes_source
 
 from servermanage.storage import fetch_overview_history, init_storage
 
@@ -73,13 +74,13 @@ def test_page_and_script_wire_the_host_filter():
     assert 'id="overview-trend-host"' in page
     assert '<option value="">全部主机</option>' in page
 
-    js = (STATIC / "app.js").read_text(encoding="utf-8")
+    js = app_js_source(STATIC)
     assert "function populateTrendHosts(hosts)" in js
     assert "populateTrendHosts(hosts);" in js
     assert "'&host=' + encodeURIComponent(host)" in js
     assert "loadOverviewHistory(overviewHistory.range || '24h');" in js
 
-    routes = (ROOT / "servermanage" / "web" / "routes.py").read_text(encoding="utf-8")
+    routes = routes_source(ROOT / "servermanage" / "web")
     assert 'host=(request.args.get("host") or "").strip() or None,' in routes
 
     css = (STATIC / "style.css").read_text(encoding="utf-8")

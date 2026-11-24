@@ -5,6 +5,7 @@ from __future__ import annotations
 import sqlite3
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from _frontend import routes_source
 
 from servermanage import storage
 from servermanage.storage import init_storage
@@ -12,7 +13,7 @@ from servermanage.storage import init_storage
 ROOT = Path(__file__).resolve().parents[1]
 TEMPLATE = ROOT / "servermanage" / "web" / "templates" / "host.html"
 STYLE = ROOT / "servermanage" / "web" / "static" / "style.css"
-ROUTES = ROOT / "servermanage" / "web" / "routes.py"
+ROUTES_DIR = ROOT / "servermanage" / "web"
 
 
 def _insert(path: Path, when: datetime, success: int) -> None:
@@ -54,7 +55,7 @@ def test_strip_missing_database_is_empty(tmp_path):
 
 def test_route_exposes_strip():
     # v0.1.233 起调用点有批量/逐主机两条路径，断言语义而非源码形式。
-    routes = ROUTES.read_text(encoding="utf-8")
+    routes = routes_source(ROUTES_DIR)
     assert 'detail["uptime_strip"] =' in routes
     assert "hours=24, bucket_minutes=15" in routes
     assert "fetch_host_uptime_strip(" in routes

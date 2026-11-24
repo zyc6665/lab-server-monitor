@@ -9,6 +9,7 @@ there is no bundler step, so the served JS/CSS *is* the product.
 from __future__ import annotations
 
 from pathlib import Path
+from _frontend import app_js_source
 
 SERVED = Path(__file__).resolve().parents[1] / "servermanage" / "web"
 STATIC = SERVED / "static"
@@ -32,7 +33,7 @@ def test_overview_cards_can_be_collapsed_and_remembered() -> None:
     for section_id in ("focus-card", "system-check", "resource-rank", "capacity-forecast"):
         assert f'id="{section_id}"' in markup, section_id
 
-    app = _script("app.js")
+    app = app_js_source(STATIC)
     assert "function setupCardCollapse" in app
     assert "overview:collapsed:" in app
     assert "is-collapsed" in app
@@ -49,7 +50,7 @@ def test_alert_rows_expand_inline_without_leaving_the_page() -> None:
     assert 'id="alerts-body"' in markup
     assert 'id="alerts-table"' in markup
 
-    app = _script("app.js")
+    app = app_js_source(STATIC)
     assert "function setupAlertRowExpansion" in app
     assert "function buildAlertDetailRow" in app
     assert "function toggleAlertDetail" in app
@@ -102,7 +103,7 @@ def test_alert_table_hides_secondary_columns_on_narrow_screens() -> None:
     assert 'class="col-secondary col-category">类别</th>' in markup
     assert 'class="alert-message col-wide"' in markup
 
-    app = _script("app.js")
+    app = app_js_source(STATIC)
     assert "col-secondary" in app
     assert "col-wide" in app
 
@@ -145,7 +146,7 @@ def test_first_render_uses_skeletons_instead_of_flashing_empty() -> None:
     assert 'class="skeleton"' in overview
     assert 'id="alert-skeleton"' in alerts
 
-    app = _script("app.js")
+    app = app_js_source(STATIC)
     assert "host-skeleton" in app
     assert "alert-skeleton" in app
     assert ".skeleton-row" in _style()
@@ -189,7 +190,7 @@ def test_settings_sections_validate_before_saving() -> None:
 
 
 def test_alert_empty_state_explains_filters() -> None:
-    app = _script("app.js")
+    app = app_js_source(STATIC)
     assert "当前筛选没有匹配的告警" in app
     assert "还没有告警记录" in app
 

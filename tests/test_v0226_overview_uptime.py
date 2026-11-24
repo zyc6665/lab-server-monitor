@@ -5,12 +5,13 @@ from __future__ import annotations
 import sqlite3
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from _frontend import routes_source, app_js_source
 
 from servermanage import storage
 from servermanage.storage import init_storage
 
 ROOT = Path(__file__).resolve().parents[1]
-SCRIPT = ROOT / "servermanage" / "web" / "static" / "app.js"
+SCRIPT_DIR = ROOT / "servermanage" / "web" / "static"
 STYLE = ROOT / "servermanage" / "web" / "static" / "style.css"
 
 
@@ -44,7 +45,7 @@ def test_missing_database_returns_empty(tmp_path):
 
 
 def test_overview_rows_carry_counts():
-    routes = (ROOT / "servermanage" / "web" / "routes.py").read_text(encoding="utf-8")
+    routes = routes_source(ROOT / "servermanage" / "web")
     assert "sample_counts = storage.count_recent_samples_by_host(db_path, hours=24, now=now)" in routes
     assert '"samples": sample_counts.get(host_name, 0),' in routes
     assert '"expected": expected_polls,' in routes
@@ -52,7 +53,7 @@ def test_overview_rows_carry_counts():
 
 
 def test_frontend_renders_uptime_chip():
-    script = SCRIPT.read_text(encoding="utf-8")
+    script = app_js_source(SCRIPT_DIR)
     assert "function uptimeChip(uptime)" in script
     assert "if (ratio >= 0.9) { return null; }" in script
     assert "var rowUptime = uptimeChip(host.collection_uptime);" in script

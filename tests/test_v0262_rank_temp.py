@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from _frontend import app_js_source, routes_source
 
 ROOT = Path(__file__).resolve().parents[1]
 TEMPLATES = ROOT / "servermanage" / "web" / "templates"
@@ -16,7 +17,7 @@ def test_rank_tabs_include_temperature():
 
 
 def test_script_reads_temperature_and_formats_it():
-    js = (STATIC / "app.js").read_text(encoding="utf-8")
+    js = app_js_source(STATIC)
     assert "temp: '温度'" in js
     assert "else if (metric === 'temp') { value = host.temperature_c; }" in js
     # 温度用 °C 展示，柱宽按 0–100 收口
@@ -26,5 +27,5 @@ def test_script_reads_temperature_and_formats_it():
 
 
 def test_overview_payload_exposes_temperature():
-    routes = (ROOT / "servermanage" / "web" / "routes.py").read_text(encoding="utf-8")
+    routes = routes_source(ROOT / "servermanage" / "web")
     assert routes.count('"temperature_c":') >= 2

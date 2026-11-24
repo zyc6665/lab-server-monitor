@@ -6,6 +6,7 @@ import sqlite3
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 from pathlib import Path
+from _frontend import app_js_source
 
 from servermanage.config import load_config_from_mapping
 from servermanage.storage import fetch_overview_history, init_storage
@@ -125,7 +126,7 @@ def test_api_without_compare_keeps_old_shape(tmp_path: Path):
 
 
 def test_frontend_draws_dashed_comparison():
-    script = (STATIC / "app.js").read_text(encoding="utf-8")
+    script = app_js_source(STATIC)
     assert "function overviewPath(" in script
     assert "(trendCompare ? '&compare=1' : '')" in script
     assert "'stroke-dasharray': '4 4'" in script

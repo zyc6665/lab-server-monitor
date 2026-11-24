@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 from pathlib import Path
+from _frontend import app_js_source
 
 ROOT = Path(__file__).resolve().parents[1]
-SCRIPT = ROOT / "servermanage" / "web" / "static" / "app.js"
+SCRIPT_DIR = ROOT / "servermanage" / "web" / "static"
 TEMPLATE = ROOT / "servermanage" / "web" / "templates" / "overview.html"
 STYLE = ROOT / "servermanage" / "web" / "static" / "style.css"
 
@@ -17,7 +18,7 @@ def test_template_has_export_button():
 
 
 def test_script_exports_current_history():
-    script = SCRIPT.read_text(encoding="utf-8")
+    script = app_js_source(SCRIPT_DIR)
     assert "var overviewHistory = { range: '24h', points: [], previous: [] };" in script
     assert "overviewHistory = { range: rangeKey, points: points, previous: previous };" in script
     assert "exportButton.hidden = points.length === 0;" in script
@@ -28,8 +29,8 @@ def test_script_exports_current_history():
 
 
 def test_script_escapes_and_uses_bom():
-    script = SCRIPT.read_text(encoding="utf-8")
-    formatter = (SCRIPT.parent / "lib" / "format.js").read_text(encoding="utf-8")
+    script = app_js_source(SCRIPT_DIR)
+    formatter = (SCRIPT_DIR / "lib" / "format.js").read_text(encoding="utf-8")
     assert 'text.split(\'"\').join(\'""\')' in formatter
     assert "type: 'text/csv;charset=utf-8'" in script
 

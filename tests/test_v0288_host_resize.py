@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 from pathlib import Path
+from _frontend import app_js_source
 
 STATIC = Path(__file__).resolve().parents[1] / "servermanage" / "web" / "static"
 
 
 def test_generic_resizer_helpers():
-    js = (STATIC / "app.js").read_text(encoding="utf-8")
+    js = app_js_source(STATIC)
     assert "function readTableWidths(key)" in js
     assert "function applyTableWidths(tableId, key)" in js
     assert "function bindTableResizers(tableId, key)" in js
@@ -18,7 +19,7 @@ def test_generic_resizer_helpers():
 
 
 def test_host_table_keeps_widths_on_rerender():
-    js = (STATIC / "app.js").read_text(encoding="utf-8")
+    js = app_js_source(STATIC)
     start = js.index("function renderHosts(")
     call = js.index("applyTableWidths('host-table', HOST_WIDTHS_KEY);", start)
     # 重绘函数开头就恢复列宽，避免下一次渲染把用户拖过的宽度冲掉

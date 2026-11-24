@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 from pathlib import Path
+from _frontend import app_js_source
 
 STATIC = Path(__file__).resolve().parents[1] / "servermanage" / "web" / "static"
 
 
 def _script() -> str:
-    return (STATIC / "app.js").read_text(encoding="utf-8")
+    return app_js_source(STATIC)
 
 
 def test_focus_host_is_a_button():

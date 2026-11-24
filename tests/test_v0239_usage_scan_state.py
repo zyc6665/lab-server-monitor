@@ -1,11 +1,12 @@
 from pathlib import Path
+from _frontend import routes_source
 
 ROOT = Path(__file__).resolve().parent.parent
 STATIC = ROOT / "servermanage" / "web" / "static"
 
 
 def test_payload_exposes_running_usage_scan():
-    body = (ROOT / "servermanage" / "web" / "routes.py").read_text(encoding="utf-8")
+    body = routes_source(ROOT / "servermanage" / "web")
     assert '"usage_scan": _usage_scan_state(current_app._get_current_object()),' in body
     assert "def _usage_scan_state(app: Any) -> dict[str, Any]:" in body
     assert 'return {"running": False}' in body

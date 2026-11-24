@@ -12,6 +12,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from _frontend import app_js_source
 
 ROOT = Path(__file__).resolve().parents[1]
 STATIC = ROOT / "servermanage" / "web" / "static"
@@ -63,7 +64,7 @@ def test_app_fetchjson_captures_error_detail_and_sets_json_type():
 
 
 def test_generic_failures_route_through_failtoast():
-    script = _read("app.js")
+    script = app_js_source(STATIC)
     assert "function failToast(prefix, kind)" in script
     assert "failToast('批量确认失败')" in script
     assert "failToast('确认失败')" in script
@@ -72,13 +73,13 @@ def test_generic_failures_route_through_failtoast():
 
 
 def test_overview_skips_rebuild_when_unchanged():
-    script = _read("app.js")
+    script = app_js_source(STATIC)
     assert "function payloadSignature(value)" in script
     assert "signature === payloadSignature(lastHosts)" in script
 
 
 def test_alerts_skip_rebuild_when_payload_and_filters_unchanged():
-    script = _read("app.js")
+    script = app_js_source(STATIC)
     assert "lastAlertsSig" in script
     assert "lastAlertsRendered" in script
     # 签名必须包含客户端筛选状态，避免筛选变化被误判为“无变化”。
@@ -91,12 +92,12 @@ def test_alerts_skip_rebuild_when_payload_and_filters_unchanged():
 
 
 def test_refresh_all_pauses_when_hidden():
-    script = _read("app.js")
+    script = app_js_source(STATIC)
     assert "if (document.hidden) { return; }" in script
 
 
 def test_sort_headers_are_keyboard_reachable():
-    script = _read("app.js")
+    script = app_js_source(STATIC)
     assert "heads[i].setAttribute('tabindex', '0')" in script
     assert "heads[i].setAttribute('role', 'button')" in script
     assert "event.key !== 'Enter' && event.key !== ' '" in script

@@ -3,19 +3,20 @@
 from __future__ import annotations
 
 from pathlib import Path
+from _frontend import app_js_source
 
 STATIC = Path(__file__).resolve().parents[1] / "servermanage" / "web" / "static"
 
 
 def test_attention_helpers_exist():
-    script = (STATIC / "app.js").read_text(encoding="utf-8")
+    script = app_js_source(STATIC)
     assert "function hostAttentionReasons(host) {" in script
     assert "function attentionChip(host, compact) {" in script
     assert "var ATTENTION_LIMITS = { cpu: 90, memory: 90, disk: 90, gpu: 90, temperature: 70 };" in script
 
 
 def test_reasons_cover_the_operator_surface():
-    script = (STATIC / "app.js").read_text(encoding="utf-8")
+    script = app_js_source(STATIC)
     body = script.split("function hostAttentionReasons(host) {")[1].split("function attentionChip")[0]
     for token in ("项服务检查异常", "块盘严重", "块盘告警", "温度 ", "条活动告警"):
         assert token in body
@@ -23,7 +24,7 @@ def test_reasons_cover_the_operator_surface():
 
 
 def test_chip_rendered_in_table_and_cards():
-    script = (STATIC / "app.js").read_text(encoding="utf-8")
+    script = app_js_source(STATIC)
     assert "var rowAttention = attentionChip(host, true);" in script
     assert "var cardAttention = attentionChip(host);" in script
     # 表格里放在状态列，避免名称列换行把行高撑高

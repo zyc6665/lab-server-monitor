@@ -18,6 +18,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from pathlib import Path
+from _frontend import app_js_source
 
 import pytest
 
@@ -290,7 +291,7 @@ def test_overview_has_capacity_forecast_card(client):
     assert 'id="capacity-summary"' in html
     assert 'id="capacity-list"' in html
 
-    js = (STATIC / "app.js").read_text(encoding="utf-8")
+    js = app_js_source(STATIC)
     assert "function renderCapacityForecast" in js
     assert "data.capacity" in js
     assert "days_to_threshold" in js
@@ -308,7 +309,7 @@ def test_overview_has_onboarding_for_empty_install(client):
     assert 'id="onboard-import-ssh"' in html
     assert 'href="/settings#hosts"' in html
 
-    js = (STATIC / "app.js").read_text(encoding="utf-8")
+    js = app_js_source(STATIC)
     assert "onboard-card" in js
     assert "onboard.hidden = hasData" in js
 
@@ -546,7 +547,7 @@ def test_alerts_page_supports_query_and_severity_deep_links(client):
     assert 'value="gpu-01" selected' in html
     assert 'value="7d" selected' in html
     assert 'value="asc" selected' in html
-    source = (STATIC / "app.js").read_text(encoding="utf-8")
+    source = app_js_source(STATIC)
     assert "alertSearch.value" in source
     assert "alertSeverityFilter.value" in source
     assert "alertHostFilter.value" in source
@@ -574,7 +575,7 @@ def test_alerts_page_status_filter_deep_link_and_counts(client):
     html = _page(client, "/alerts?status=acknowledged")
     assert 'data-status="acknowledged" role="tab" aria-selected="true"' in html
     assert 'id="alert-status-count-acknowledged"' in html
-    source = (STATIC / "app.js").read_text(encoding="utf-8")
+    source = app_js_source(STATIC)
     assert "function renderAlertStatusCounts" in source
     assert "data.counts" in source
     assert "ALERT_STATUS_FILTERS" in source
@@ -582,7 +583,7 @@ def test_alerts_page_status_filter_deep_link_and_counts(client):
 
 
 def test_app_js_keeps_terminal_and_filter_logic():
-    source = (STATIC / "app.js").read_text(encoding="utf-8")
+    source = app_js_source(STATIC)
     assert "/terminal?host=" in source
     assert "summary-total" in source
     assert "applyHostFilters" in source
@@ -631,7 +632,7 @@ def test_host_detail_tabs_support_keyboard_navigation():
 
 
 def test_app_js_renders_terminal_link_without_user_innerhtml():
-    source = (STATIC / "app.js").read_text(encoding="utf-8")
+    source = app_js_source(STATIC)
     # Terminal link must be built with DOM APIs + textContent, never innerHTML
     # fed from host data.
     assert "innerHTML" not in source

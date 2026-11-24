@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
+from _frontend import app_js_source
 
 from servermanage.config import load_config_from_mapping
 from servermanage.web import create_app
@@ -133,14 +134,14 @@ def test_pages_without_tags_hide_the_select(tmp_path: Path):
 
 
 def test_app_filters_match_by_tag():
-    script = _read("app.js")
+    script = app_js_source(STATIC)
     assert "function hostRowMatches(tr, group, status, keyword, tag)" in script
     assert "(tr.getAttribute('data-tags') || '').split('|')" in script
     assert "tags.indexOf(tag) === -1" in script
 
 
 def test_filter_state_includes_tag():
-    script = _read("app.js")
+    script = app_js_source(STATIC)
     assert "function saveHostFilters(group, status, tag)" in script
     assert "[tagEl, saved.tag]" in script
     assert "var tagFilter = document.getElementById('filter-tag');" in script

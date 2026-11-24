@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from _frontend import app_js_source
 
 ROOT = Path(__file__).resolve().parents[1]
 TEMPLATES = ROOT / "servermanage" / "web" / "templates"
@@ -17,7 +18,7 @@ def test_header_has_alert_column():
 
 
 def test_row_builds_alert_cell():
-    js = (STATIC / "app.js").read_text(encoding="utf-8")
+    js = app_js_source(STATIC)
     assert "var alertTotal = Number(host.active_alert_count || 0);" in js
     assert "'/alerts?host=' + encodeURIComponent(host.name || '') + '&status=active'" in js
     assert "alertLink.textContent = String(alertTotal);" in js

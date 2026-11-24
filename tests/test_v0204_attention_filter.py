@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from _frontend import app_js_source
 
 STATIC = Path(__file__).resolve().parents[1] / "servermanage" / "web" / "static"
 TEMPLATES = Path(__file__).resolve().parents[1] / "servermanage" / "web" / "templates"
@@ -17,11 +18,11 @@ def test_status_filter_has_attention_option():
 
 
 def test_rows_and_cards_carry_attention_count():
-    script = (STATIC / "app.js").read_text(encoding="utf-8")
+    script = app_js_source(STATIC)
     assert script.count("setAttribute('data-attention', hostAttentionReasons(host).length);") == 2
 
 
 def test_matcher_filters_by_attention():
-    script = (STATIC / "app.js").read_text(encoding="utf-8")
+    script = app_js_source(STATIC)
     body = script.split("function hostRowMatches(tr, group, status, keyword, tag) {")[1].split("function applyHostFilters")[0]
     assert "if (status === 'attention' && Number(tr.getAttribute('data-attention') || 0) <= 0) { return false; }" in body

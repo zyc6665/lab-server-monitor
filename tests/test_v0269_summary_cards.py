@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from _frontend import app_js_source
 
 ROOT = Path(__file__).resolve().parents[1]
 TEMPLATES = ROOT / "servermanage" / "web" / "templates"
@@ -18,7 +19,7 @@ def test_cards_carry_filter_values():
 
 
 def test_script_toggles_status_filter():
-    js = (STATIC / "app.js").read_text(encoding="utf-8")
+    js = app_js_source(STATIC)
     assert "function bindSummaryCards()" in js
     assert "statusEl.value = statusEl.value === value ? '' : value;" in js
     assert "applyHostFilters();" in js

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from _frontend import app_js_source
 
 ROOT = Path(__file__).resolve().parents[1]
 TEMPLATES = ROOT / "servermanage" / "web" / "templates"
@@ -17,7 +18,7 @@ def test_card_has_actions():
 
 
 def test_script_builds_summary_text_and_wires_buttons():
-    js = (STATIC / "app.js").read_text(encoding="utf-8")
+    js = app_js_source(STATIC)
     assert "var lastSystemChecks = null;" in js
     assert "function systemChecksText()" in js
     assert "lines.push('- [' + state + '] '" in js

@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from _frontend import app_js_source
 
 ROOT = Path(__file__).resolve().parents[1]
 STATIC = ROOT / "servermanage" / "web" / "static"
@@ -48,7 +49,7 @@ def test_settings_uses_input_dialog_for_host_copy():
 
 
 def test_app_exports_prompt_dialog():
-    script = _read("app.js")
+    script = app_js_source(STATIC)
     assert "function servermonitorPrompt(options)" in script
     assert "window.servermonitorPrompt = servermonitorPrompt;" in script
     # Enter 提交、Esc 取消、空输入视为取消

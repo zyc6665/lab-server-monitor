@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from _frontend import app_js_source
 
 ROOT = Path(__file__).resolve().parents[1]
 STATIC = ROOT / "servermanage" / "web" / "static"
@@ -10,7 +11,7 @@ TEMPLATES = ROOT / "servermanage" / "web" / "templates"
 
 
 def _js() -> str:
-    return (STATIC / "app.js").read_text(encoding="utf-8")
+    return app_js_source(STATIC)
 
 
 def test_toolbar_has_category_select():

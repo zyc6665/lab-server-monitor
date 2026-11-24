@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from pathlib import Path
+from _frontend import app_js_source
 
 from servermanage.commands import DOCKER_STATUS_STAGE
 from servermanage.config import load_config_from_mapping
@@ -148,7 +149,7 @@ def test_overview_payload_reports_container_count(tmp_path: Path):
 
 def test_host_card_shows_container_count():
     static = Path(__file__).resolve().parents[1] / "servermanage" / "web" / "static"
-    script = (static / "app.js").read_text(encoding="utf-8")
+    script = app_js_source(static)
     assert "host-card-containers" in script
     assert "host.container_count" in script
     style = (static / "style.css").read_text(encoding="utf-8")

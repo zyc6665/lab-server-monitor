@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from _frontend import app_js_source
 
 ROOT = Path(__file__).resolve().parents[1]
 STATIC = ROOT / "servermanage" / "web" / "static"
@@ -18,7 +19,7 @@ def test_base_template_has_connection_banner():
 
 
 def test_app_js_watches_connection():
-    js = (STATIC / "app.js").read_text(encoding="utf-8")
+    js = app_js_source(STATIC)
     assert "var CONNECTION_WATCH_MS = 15000;" in js
     assert "function checkConnection()" in js
     assert "fetch('/api/runtime', { cache: 'no-store' })" in js

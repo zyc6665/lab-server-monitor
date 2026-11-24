@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 from pathlib import Path
+from _frontend import app_js_source
 
 REPO = Path(__file__).resolve().parents[1]
 TEMPLATE = REPO / "servermanage" / "web" / "templates" / "alerts.html"
-SCRIPT = REPO / "servermanage" / "web" / "static" / "app.js"
+SCRIPT_DIR = REPO / "servermanage" / "web" / "static"
 STYLE = REPO / "servermanage" / "web" / "static" / "style.css"
 
 
@@ -15,7 +16,7 @@ def _template() -> str:
 
 
 def _script() -> str:
-    return SCRIPT.read_text(encoding="utf-8")
+    return app_js_source(SCRIPT_DIR)
 
 
 def test_toolbar_offers_column_menu():

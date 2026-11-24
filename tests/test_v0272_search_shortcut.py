@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 from pathlib import Path
+from _frontend import app_js_source
 
 ROOT = Path(__file__).resolve().parents[1]
 STATIC = ROOT / "servermanage" / "web" / "static"
 
 
 def test_slash_focuses_the_search_box():
-    js = (STATIC / "app.js").read_text(encoding="utf-8")
+    js = app_js_source(STATIC)
     assert "function bindSearchShortcut()" in js
     assert "var ids = ['alert-search', 'user-search', 'host-filter'];" in js
     assert "if (event.key === '/' && !typing) {" in js
@@ -20,7 +21,7 @@ def test_slash_focuses_the_search_box():
 
 
 def test_escape_clears_the_search_box():
-    js = (STATIC / "app.js").read_text(encoding="utf-8")
+    js = app_js_source(STATIC)
     assert "if (event.key === 'Escape' && tag === 'input' && ids.indexOf(target.id) !== -1) {" in js
     assert "target.dispatchEvent(new Event('input', { bubbles: true }));" in js
     assert "bindSearchShortcut();" in js

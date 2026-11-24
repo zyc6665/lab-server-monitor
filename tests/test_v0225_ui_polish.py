@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from _frontend import app_js_source
 
 from servermanage.config import load_config_from_mapping
 from servermanage.web.routes import _settings_snapshot
@@ -34,13 +35,13 @@ def _read(name: str) -> str:
 
 
 def test_group_summary_counts_online_hosts():
-    script = _read("app.js")
+    script = app_js_source(STATIC)
     assert "if (host.online) { bucket.online += 1; }" in script
     assert "host.status === 'online'" not in script
 
 
 def test_group_summary_card_two_row_layout():
-    script = _read("app.js")
+    script = app_js_source(STATIC)
     assert "top.className = 'group-summary-top';" in script
     css = _read("style.css")
     assert ".group-summary-top { display: flex;" in css

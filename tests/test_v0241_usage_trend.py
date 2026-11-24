@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from _frontend import routes_source
 
 from servermanage import storage
 from servermanage.web.routes import _host_user_counts
@@ -107,7 +108,7 @@ def test_growth_styles_exist_for_both_themes():
 
 
 def test_routes_expose_delta_fields():
-    routes = (ROOT / "servermanage" / "web" / "routes.py").read_text(encoding="utf-8")
+    routes = routes_source(ROOT / "servermanage" / "web")
 
     assert "_USAGE_DELTA_DAYS = 7" in routes
     assert 'row["usage_delta_bytes"] = info.get("delta") if info else None' in routes

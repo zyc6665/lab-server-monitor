@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 from pathlib import Path
+from _frontend import app_js_source
 
-SCRIPT = Path(__file__).resolve().parents[1] / "servermanage" / "web" / "static" / "app.js"
+SCRIPT_DIR = Path(__file__).resolve().parents[1] / "servermanage" / "web" / "static"
 
 
 def _script() -> str:
-    return SCRIPT.read_text(encoding="utf-8")
+    return app_js_source(SCRIPT_DIR)
 
 
 def test_sort_is_persisted():

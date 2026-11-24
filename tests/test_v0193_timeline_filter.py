@@ -1,6 +1,7 @@
 """v0.1.93：告警时间分布点击筛选。"""
 
 from pathlib import Path
+from _frontend import app_js_source
 
 ROOT = Path(__file__).resolve().parents[1]
 STATIC = ROOT / "servermanage" / "web" / "static"
@@ -8,7 +9,7 @@ TEMPLATES = ROOT / "servermanage" / "web" / "templates"
 
 
 def _app_js() -> str:
-    return (STATIC / "app.js").read_text(encoding="utf-8")
+    return app_js_source(STATIC)
 
 
 def _css() -> str:

@@ -12,6 +12,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from _frontend import app_js_source
 
 ROOT = Path(__file__).resolve().parents[1]
 STATIC = ROOT / "servermanage" / "web" / "static"
@@ -27,12 +28,14 @@ def _read(name: str) -> str:
 
 
 def test_app_exports_shared_confirm_and_formatters():
-    script = _read("app.js")
-    assert "function servermonitorConfirm(options)" in script
+    # M2：对话框实现已抽到 lib/ui.js，app.js 改为 import 并保持全局门面。
+    script = app_js_source(STATIC)
+    ui = (STATIC / "lib" / "ui.js").read_text(encoding="utf-8")
+    assert "export function servermonitorConfirm(options)" in ui
     assert "window.servermonitorConfirm = servermonitorConfirm;" in script
     assert "window.servermonitorFmt = { bytes: formatBytesShared, stamp: formatStampShared };" in script
     # 危险操作用 danger 按钮并可自定义文案
-    assert "opts.danger ? 'danger-button' : 'primary-button'" in script
+    assert "opts.danger ? 'danger-button' : 'primary-button'" in ui
 
 
 def test_no_native_confirm_left_in_settings_scripts():

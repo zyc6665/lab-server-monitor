@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 from pathlib import Path
+from _frontend import app_js_source
 
 STATIC = Path(__file__).resolve().parents[1] / "servermanage" / "web" / "static"
 
 
 def test_preference_helpers_exist():
-    js = (STATIC / "app.js").read_text(encoding="utf-8")
+    js = app_js_source(STATIC)
     assert "var TREND_PREF_KEY = 'overview:trend';" in js
     assert "var TREND_RANGES = ['24h', '7d', '30d', '90d'];" in js
     assert "function readTrendPref()" in js
@@ -17,7 +18,7 @@ def test_preference_helpers_exist():
 
 
 def test_restores_and_persists():
-    js = (STATIC / "app.js").read_text(encoding="utf-8")
+    js = app_js_source(STATIC)
     # 初始化时按存储恢复页签与主机
     assert "var initialRange = pref && pref.range ? pref.range : '24h';" in js
     assert "tab.classList.toggle('active', tab.getAttribute('data-overview-range') === initialRange);" in js

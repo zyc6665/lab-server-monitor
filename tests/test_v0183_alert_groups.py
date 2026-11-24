@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from _frontend import app_js_source
 
 from servermanage.config import load_config_from_mapping
 from servermanage.web import create_app
@@ -38,7 +39,7 @@ def test_alerts_toolbar_has_group_toggle(tmp_path: Path):
 
 
 def test_grouping_helpers_exist():
-    js = (STATIC / "app.js").read_text(encoding="utf-8")
+    js = app_js_source(STATIC)
     assert "var ALERT_GROUP_KEY = 'alerts:group-by-host';" in js
     assert "function groupAlertsByHost(alerts)" in js
     assert "function buildAlertGroupRow(group)" in js
@@ -49,7 +50,7 @@ def test_grouping_helpers_exist():
 
 
 def test_group_rows_render_instead_of_flat_rows():
-    js = (STATIC / "app.js").read_text(encoding="utf-8")
+    js = app_js_source(STATIC)
     assert "if (alertGrouped) {" in js
     assert "body.appendChild(buildAlertGroupRow(group));" in js
     assert "if (collapsedHosts[group.host]) { continue; }" in js
@@ -69,6 +70,6 @@ def test_group_styles_and_dark_theme():
 
 
 def test_severity_weight_prefers_critical():
-    js = (STATIC / "app.js").read_text(encoding="utf-8")
+    js = app_js_source(STATIC)
     assert "var SEVERITY_WEIGHT = { critical: 3, warning: 2, info: 1 };" in js
     assert "if (weight > (SEVERITY_WEIGHT[group.severity] || 0)) {" in js

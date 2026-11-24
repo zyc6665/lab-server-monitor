@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from _frontend import app_js_source
 
 from servermanage.config import load_config_from_mapping
 from servermanage.web import create_app
@@ -45,7 +46,7 @@ def test_alerts_page_has_load_banner(tmp_path: Path):
 
 
 def test_app_js_shows_banner_on_failure():
-    js = (STATIC / "app.js").read_text(encoding="utf-8")
+    js = app_js_source(STATIC)
     assert "function showLoadBanner(id, text)" in js
     assert "function hideLoadBanner(id)" in js
     assert "function hideSkeleton(id)" in js

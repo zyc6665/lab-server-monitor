@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 from pathlib import Path
+from _frontend import app_js_source
 
 ROOT = Path(__file__).resolve().parents[1]
 TEMPLATE = ROOT / "servermanage" / "web" / "templates" / "alerts.html"
 STYLE = ROOT / "servermanage" / "web" / "static" / "style.css"
-SCRIPT = ROOT / "servermanage" / "web" / "static" / "app.js"
+SCRIPT_DIR = ROOT / "servermanage" / "web" / "static"
 
 
 def _template() -> str:
@@ -19,7 +20,7 @@ def _style() -> str:
 
 
 def _script() -> str:
-    return SCRIPT.read_text(encoding="utf-8")
+    return app_js_source(SCRIPT_DIR)
 
 
 def test_level_filter_is_only_rendered_once():

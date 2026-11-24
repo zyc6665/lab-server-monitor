@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 from pathlib import Path
+from _frontend import app_js_source
 
 ROOT = Path(__file__).resolve().parents[1]
 STATIC = ROOT / "servermanage" / "web" / "static"
 
 
 def test_group_rows_are_semantic_buttons():
-    js = (STATIC / "app.js").read_text(encoding="utf-8")
+    js = app_js_source(STATIC)
     assert "tr.tabIndex = 0;" in js
     assert "tr.setAttribute('role', 'button');" in js
     assert "tr.setAttribute('aria-label', group.host + ' 分组，' + group.alerts.length + ' 条告警');" in js
@@ -17,7 +18,7 @@ def test_group_rows_are_semantic_buttons():
 
 
 def test_keyboard_toggles_and_keeps_focus():
-    js = (STATIC / "app.js").read_text(encoding="utf-8")
+    js = app_js_source(STATIC)
     assert "function toggleAlertGroup(hostKey, keepFocus) {" in js
     assert "if (again && again.focus) { again.focus(); }" in js
     assert "document.addEventListener('keydown', function (event) {" in js

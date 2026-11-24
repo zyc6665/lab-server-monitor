@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 from pathlib import Path
+from _frontend import app_js_source
 
 ROOT = Path(__file__).resolve().parents[1]
 STATIC = ROOT / "servermanage" / "web" / "static"
 
 
 def test_script_navigates_from_rows():
-    js = (STATIC / "app.js").read_text(encoding="utf-8")
+    js = app_js_source(STATIC)
     assert "function bindHostRowNavigation()" in js
     assert "bindHostRowNavigation();" in js
     assert "event.target.closest('a, button, input, select, textarea, label')" in js

@@ -6,6 +6,7 @@ import json
 import sqlite3
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from _frontend import app_js_source
 
 from servermanage.availability import HostCheckResult
 from servermanage.config import load_config_from_mapping
@@ -198,7 +199,7 @@ def test_host_detail_renders_heartbeat_and_api_exposes_history(tmp_path: Path) -
 
 
 def test_client_scripts_render_sparkline_and_heartbeat() -> None:
-    app_js = (STATIC / "app.js").read_text(encoding="utf-8")
+    app_js = app_js_source(STATIC)
     assert "function sparkline(values, className)" in app_js
     assert "percentCell(host.cpu_percent, spark.cpu)" in app_js
     assert "percentCell(host.memory_percent, spark.memory)" in app_js

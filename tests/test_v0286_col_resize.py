@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 from pathlib import Path
+from _frontend import app_js_source
 
 STATIC = Path(__file__).resolve().parents[1] / "servermanage" / "web" / "static"
 
 
 def test_resize_helpers_exist():
-    js = (STATIC / "app.js").read_text(encoding="utf-8")
+    js = app_js_source(STATIC)
     assert "var ALERT_WIDTHS_KEY = 'alerts:colwidths';" in js
     assert "function applyAlertWidths()" in js
     assert "function bindAlertResizers()" in js
@@ -18,7 +19,7 @@ def test_resize_helpers_exist():
 
 
 def test_resizers_bound_and_applied():
-    js = (STATIC / "app.js").read_text(encoding="utf-8")
+    js = app_js_source(STATIC)
     assert "bindAlertResizers();\n    applyAlertWidths();" in js
     assert "function renderAlertRows() {\n    applyAlertWidths();" in js
     css = (STATIC / "style.css").read_text(encoding="utf-8")

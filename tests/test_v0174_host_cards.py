@@ -2,6 +2,7 @@
 
 import sys
 from pathlib import Path
+from _frontend import app_js_source
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "tests"))
@@ -28,7 +29,7 @@ def test_overview_renders_view_toggle_and_card_grid(tmp_path):
 
 
 def test_app_js_renders_cards_and_remembers_choice():
-    script = (STATIC / "app.js").read_text(encoding="utf-8")
+    script = app_js_source(STATIC)
     assert "function buildHostCard(host)" in script
     assert "function renderHostCards(hosts)" in script
     assert "function applyHostView(view)" in script

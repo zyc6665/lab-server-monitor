@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from _frontend import app_js_source
 
 STATIC = Path(__file__).resolve().parents[1] / "servermanage" / "web" / "static"
 TEMPLATES = Path(__file__).resolve().parents[1] / "servermanage" / "web" / "templates"
@@ -16,7 +17,7 @@ def test_overview_has_load_chart():
 
 
 def test_script_draws_five_series():
-    script = (STATIC / "app.js").read_text(encoding="utf-8")
+    script = app_js_source(STATIC)
     assert "load_1: '#0ea5e9'" in script
     assert "var OVERVIEW_TREND_KEYS = ['cpu', 'memory', 'disk', 'gpu_util', 'load_1'];" in script
     assert "OVERVIEW_TREND_KEYS.forEach(function (key) {" in script

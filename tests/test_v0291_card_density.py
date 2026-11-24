@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from _frontend import app_js_source
 
 ROOT = Path(__file__).resolve().parents[1]
 STATIC = ROOT / "servermanage" / "web" / "static"
@@ -30,7 +31,7 @@ def test_payload_exposes_load_and_uptime(tmp_path):
 
 
 def test_card_renders_chips():
-    js = (STATIC / "app.js").read_text(encoding="utf-8")
+    js = app_js_source(STATIC)
     assert "loadChip.className = 'host-card-load';" in js
     assert "loadChip.textContent = '负载 ' + Number(host.load_1).toFixed(2);" in js
     assert "uptimeChipNode.className = 'host-card-uptime';" in js

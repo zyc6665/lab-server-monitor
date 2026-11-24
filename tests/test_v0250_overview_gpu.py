@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from _frontend import app_js_source, routes_source
 
 from servermanage.web.routes import _gpu_memory_totals
 
@@ -26,13 +27,13 @@ def test_gpu_memory_totals():
 
 
 def test_overview_rows_expose_gpu_memory():
-    routes = (ROOT / "servermanage" / "web" / "routes.py").read_text(encoding="utf-8")
+    routes = routes_source(ROOT / "servermanage" / "web")
     assert "def _gpu_memory_totals(" in routes
     assert routes.count('"gpu_memory": _gpu_payload(gpu_totals)') == 2  # 无快照与正常两条返回
 
 
 def test_frontend_and_pages_link_hosts():
-    js = (STATIC / "app.js").read_text(encoding="utf-8")
+    js = app_js_source(STATIC)
     assert "function gpuMemoryChip(memory)" in js
     assert "chip.className = 'gpu-chip'" in js
     assert js.count("gpuMemoryChip(host.gpu_memory)") == 2

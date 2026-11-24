@@ -1,4 +1,5 @@
 from pathlib import Path
+from _frontend import routes_source
 
 ROOT = Path(__file__).resolve().parent.parent
 STATIC = ROOT / "servermanage" / "web" / "static"
@@ -85,7 +86,7 @@ def test_usage_progress_reports_each_account():
 
 
 def test_route_exposes_current_account():
-    body = (ROOT / "servermanage" / "web" / "routes.py").read_text(encoding="utf-8")
+    body = routes_source(ROOT / "servermanage" / "web")
     assert '"current_account": payload.get("current_account"),' in body
     assert '"accounts_done": int(payload.get("accounts_done") or 0),' in body
     assert '"current_host": payload.get("current_host"),' in body

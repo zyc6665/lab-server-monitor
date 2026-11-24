@@ -3,18 +3,19 @@
 from __future__ import annotations
 
 from pathlib import Path
+from _frontend import app_js_source
 
 STATIC = Path(__file__).resolve().parents[1] / "servermanage" / "web" / "static"
 
 
 def test_state_cell_is_localized_and_tagged():
-    js = (STATIC / "app.js").read_text(encoding="utf-8")
+    js = app_js_source(STATIC)
     assert "var stateCell = textCell(STATUS_TEXT[alert.status] || alert.status || '—', 'alert-state');" in js
     assert "stateCell.setAttribute('data-state', alert.status || 'active');" in js
 
 
 def test_ack_updates_row_in_place():
-    js = (STATIC / "app.js").read_text(encoding="utf-8")
+    js = app_js_source(STATIC)
     assert "function applyAckInPlace(button, alertId)" in js
     assert "function dropAlertRow(row)" in js
     assert "applyAckInPlace(button, alertId);" in js

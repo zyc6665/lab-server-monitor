@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from _frontend import app_js_source
 
 ROOT = Path(__file__).resolve().parents[1]
 TEMPLATES = ROOT / "servermanage" / "web" / "templates"
@@ -22,7 +23,7 @@ def test_more_filters_wrapped():
 
 
 def test_more_filters_script_and_style():
-    js = (STATIC / "app.js").read_text(encoding="utf-8")
+    js = app_js_source(STATIC)
     assert "function bindAlertMore()" in js
     assert "apply(panel.hidden);" in js
     assert "bindAlertTimeline();\n    bindAlertMore();" in js

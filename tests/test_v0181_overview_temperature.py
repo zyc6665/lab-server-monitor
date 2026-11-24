@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from pathlib import Path
+from _frontend import app_js_source
 
 from servermanage.config import load_config_from_mapping
 from servermanage.models import GPUSummaryRow, HostMetrics, HostReport, ThermalZone
@@ -93,7 +94,7 @@ def test_host_row_without_snapshot_has_null_temperature(tmp_path: Path):
 
 
 def test_chip_rendering_and_styles():
-    js = (STATIC / "app.js").read_text(encoding="utf-8")
+    js = app_js_source(STATIC)
     assert "function temperatureChip(value)" in js
     assert "chip.textContent = Math.round(num) + '°';" in js
     assert "if (num >= 85) { chip.classList.add('is-critical'); }" in js

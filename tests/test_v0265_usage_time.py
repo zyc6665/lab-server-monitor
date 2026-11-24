@@ -3,14 +3,15 @@
 from __future__ import annotations
 
 from pathlib import Path
+from _frontend import routes_source
 
 ROOT = Path(__file__).resolve().parents[1]
-ROUTES = ROOT / "servermanage" / "web" / "routes.py"
+ROUTES_DIR = ROOT / "servermanage" / "web"
 USERS_JS = ROOT / "servermanage" / "web" / "static" / "users.js"
 
 
 def test_payload_exposes_last_usage_at():
-    source = ROUTES.read_text(encoding="utf-8")
+    source = routes_source(ROUTES_DIR)
     # 正常分支与「监控关闭」分支都要有，否则页面字段会 undefined
     assert source.count('"last_usage_at": _to_local_iso((state or {}).get("last_usage_at"), tz),') == 1
     assert source.count('"last_usage_at": None,') == 1

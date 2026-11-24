@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from _frontend import app_js_source
 
 WEB = Path(__file__).resolve().parents[1] / "servermanage" / "web"
 TEMPLATES = WEB / "templates"
@@ -16,7 +17,7 @@ def test_template_has_clear_button():
 
 
 def test_filters_are_persisted_and_restored():
-    script = (STATIC / "app.js").read_text(encoding="utf-8")
+    script = app_js_source(STATIC)
     assert "var HOST_FILTER_KEY = 'overview:filters';" in script
     assert "localStorage.setItem(HOST_FILTER_KEY" in script
     assert "localStorage.removeItem(HOST_FILTER_KEY);" in script
@@ -25,13 +26,13 @@ def test_filters_are_persisted_and_restored():
 
 
 def test_restore_skips_unknown_option():
-    script = (STATIC / "app.js").read_text(encoding="utf-8")
+    script = app_js_source(STATIC)
     assert "if (el.options[i].value === value) { found = true; break; }" in script
     assert "if (found) { el.value = value; }" in script
 
 
 def test_clear_button_visibility_and_reset():
-    script = (STATIC / "app.js").read_text(encoding="utf-8")
+    script = app_js_source(STATIC)
     assert "clear.hidden = !(group || status || keyword || tag);" in script
     assert "function clearHostFilters()" in script
     assert "clearFilterButton.addEventListener('click', clearHostFilters);" in script

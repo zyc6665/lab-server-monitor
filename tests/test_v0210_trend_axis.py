@@ -2,14 +2,16 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
+from _frontend import app_js_source
 
 ROOT = Path(__file__).resolve().parents[1]
 STATIC = ROOT / "servermanage" / "web" / "static"
 
 
 def _js() -> str:
-    return (STATIC / "app.js").read_text(encoding="utf-8")
+    return app_js_source(STATIC)
 
 
 def _trend_block() -> str:
@@ -35,5 +37,8 @@ def test_trend_renders_three_labels():
 def test_ticks_live_in_draw_not_in_hover_binding():
     js = _js()
     hover = js[js.index("function bindOverviewHover("):]
-    hover = hover[:hover.index("\n  }\n")]
+    # M2: the function may live in app.js (2-space indent) or an extracted
+    # module (no indent); cut at the first closing brace at line start.
+    match = re.search(r"\n\s*}\n", hover)
+    hover = hover[: match.start()] if match else hover
     assert "tick.textContent" not in hover

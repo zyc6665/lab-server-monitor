@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from _frontend import app_js_source
 
 from servermanage.config import load_config_from_mapping
 from servermanage.web import create_app
@@ -38,7 +39,7 @@ def test_overview_has_focus_hint(tmp_path: Path):
 
 
 def test_js_groups_focus_alerts_by_host():
-    js = (STATIC / "app.js").read_text(encoding="utf-8")
+    js = app_js_source(STATIC)
     assert "function pickFocusAlerts(alerts)" in js
     assert "FOCUS_SEVERITY_WEIGHT = { critical: 3, warning: 2, info: 1 }" in js
     assert "同一台主机只保留最严重" in js

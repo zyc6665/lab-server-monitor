@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from _frontend import app_js_source
 
 STATIC = Path(__file__).resolve().parents[1] / "servermanage" / "web" / "static"
 TEMPLATES = Path(__file__).resolve().parents[1] / "servermanage" / "web" / "templates"
@@ -22,7 +23,7 @@ def test_timeline_card_markup():
 
 
 def test_timeline_script_helpers():
-    js = (STATIC / "app.js").read_text(encoding="utf-8")
+    js = app_js_source(STATIC)
     assert "var TIMELINE_RANGES = {" in js
     assert "'24h': { hours: 24, stepHours: 1" in js
     assert "function timelineBuckets(range)" in js

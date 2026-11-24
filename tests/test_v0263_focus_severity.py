@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from _frontend import app_js_source
 
 ROOT = Path(__file__).resolve().parents[1]
 TEMPLATES = ROOT / "servermanage" / "web" / "templates"
@@ -15,7 +16,7 @@ def test_card_has_severity_container():
 
 
 def test_script_builds_level_links():
-    js = (STATIC / "app.js").read_text(encoding="utf-8")
+    js = app_js_source(STATIC)
     assert "function renderFocusSeverity(alerts)" in js
     assert "chip.href = '/alerts?status=active&severity=' + level;" in js
     assert "chip.textContent = pair[1] + ' ' + counts[level];" in js

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import datetime as dt
 from pathlib import Path
+from _frontend import app_js_source
 
 from servermanage.web import create_app
 from servermanage.config import load_config_from_mapping
@@ -104,7 +105,7 @@ def test_templates_use_stamp_filter_with_full_value_in_title() -> None:
 
 
 def test_app_js_formats_stamps_client_side() -> None:
-    script = (STATIC / "app.js").read_text(encoding="utf-8")
+    script = app_js_source(STATIC)
     formatter = (STATIC / "lib" / "format.js").read_text(encoding="utf-8")
     assert "function formatStamp(value)" in formatter
     assert "host.collected_at ? formatRelative(host.collected_at) : '—'" in script

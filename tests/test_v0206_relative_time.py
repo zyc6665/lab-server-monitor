@@ -3,20 +3,21 @@
 from __future__ import annotations
 
 from pathlib import Path
+from _frontend import app_js_source
 
 ROOT = Path(__file__).resolve().parents[1]
 STATIC = ROOT / "servermanage" / "web" / "static"
 
 
 def test_table_cell_shows_relative_time_with_absolute_title():
-    js = (STATIC / "app.js").read_text(encoding="utf-8")
+    js = app_js_source(STATIC)
     assert "host.collected_at ? formatRelative(host.collected_at) : '—'" in js
     assert "'mono col-collected'" in js
     assert "collectedCell.title = formatStamp(host.collected_at) + '（' + String(host.collected_at) + '）';" in js
 
 
 def test_card_time_is_relative_too():
-    js = (STATIC / "app.js").read_text(encoding="utf-8")
+    js = app_js_source(STATIC)
     assert "time.textContent = host.collected_at ? formatRelative(host.collected_at) : '—';" in js
     assert "time.title = formatStamp(host.collected_at) + '（' + String(host.collected_at) + '）';" in js
 

@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 from pathlib import Path
+from _frontend import app_js_source
 
 ROOT = Path(__file__).resolve().parents[1]
 TEMPLATE = ROOT / "servermanage" / "web" / "templates" / "overview.html"
-SCRIPT = ROOT / "servermanage" / "web" / "static" / "app.js"
+SCRIPT_DIR = ROOT / "servermanage" / "web" / "static"
 STYLE = ROOT / "servermanage" / "web" / "static" / "style.css"
 
 
@@ -25,7 +26,7 @@ def test_template_marks_optional_cells():
 
 
 def test_script_applies_and_persists():
-    script = SCRIPT.read_text(encoding="utf-8")
+    script = app_js_source(SCRIPT_DIR)
     assert "var HOST_COLUMNS_STORE = 'overview:columns';" in script
     assert "table.classList.toggle('hide-' + name, !!hidden[name]);" in script
     assert "localStorage.setItem(HOST_COLUMNS_STORE, JSON.stringify(hidden));" in script
@@ -33,7 +34,7 @@ def test_script_applies_and_persists():
 
 
 def test_client_rows_carry_column_classes():
-    script = SCRIPT.read_text(encoding="utf-8")
+    script = app_js_source(SCRIPT_DIR)
     assert "textCell(host.host, 'mono col-secondary col-address')" in script
     assert "checkCell.className = 'check-cell col-secondary col-checks';" in script
     assert "healthCell.className = 'col-secondary col-health';" in script
