@@ -25,6 +25,7 @@ import * as nunjucks from 'nunjucks';
 import type { Response } from 'express';
 
 import { assetUrl, urlFor, type UrlParams } from './routes/registry';
+import { preprocessTemplate } from './template-preprocess';
 
 /** Options for {@link configureNunjucks} / {@link createTemplating}. */
 export interface TemplatingOptions {
@@ -345,6 +346,13 @@ function registerFilters(env: nunjucks.Environment): void {
   env.addFilter('tojson', (value: unknown) => tojson(value));
   env.addFilter('min', (...values: unknown[]) => minFilter(...values));
   env.addFilter('max', (...values: unknown[]) => maxFilter(...values));
+  // `head` supports the Python slice `EXPR[:N]` rewritten by
+  // `preprocessTemplate`; returns the first N items of an array.
+  env.addFilter('head', (value: unknown, count: unknown) =>
+    Array.isArray(value) ? value.slice(0, Number(count)) : [],
+  );
+  // `floor` backs the floordiv rewrite `A * B // C` -> `((A * B) / C)|floor`.
+  env.addFilter('floor', (value: unknown) => Math.floor(Number(value)));
 }
 
 function registerGlobals(env: nunjucks.Environment, appVersion: string): void {
@@ -359,6 +367,28 @@ function registerGlobals(env: nunjucks.Environment, appVersion: string): void {
   });
   env.addGlobal('asset_url', (filename: string) => assetUrl(filename, appVersion));
   env.addGlobal('csrf_token', () => renderStore.getStore()?.csrfToken() ?? '');
+  // Backing globals for the Jinja `namespace()` / `{% set ns.attr = ... %}`
+  // rewrites done by `preprocessTemplate`. `__ns` returns a plain mutable
+  // object; `__setattr` mutates it in place and renders nothing.
+  env.addGlobal('__ns', (initial: Record<string, unknown> | null | undefined) => ({ ...(initial ?? {}) }));
+  env.addGlobal('__setattr', (target: Record<string, unknown>, key: string, value: unknown): string => {
+    if (target !== null && typeof target === 'object') {
+      target[String(key)] = value;
+    }
+    return '';
+  });
+}
+
+/**
+ * A {@link nunjucks.FileSystemLoader} that funnels every template through
+ * {@link preprocessTemplate} before Nunjucks compiles it. This keeps the
+ * read-only Jinja `.html` files untouched while letting them compile.
+ */
+class PreprocessingLoader extends nunjucks.FileSystemLoader {
+  override getSource(name: string): nunjucks.LoaderSource {
+    const source = super.getSource(name);
+    return { ...source, src: preprocessTemplate(source.src) };
+  }
 }
 
 /**
@@ -368,7 +398,7 @@ function registerGlobals(env: nunjucks.Environment, appVersion: string): void {
 export function configureNunjucks(opts: TemplatingOptions = {}): nunjucks.Environment {
   const templatesDir = opts.templatesDir ?? defaultTemplatesDir();
   const appVersion = opts.appVersion ?? '0.0.0';
-  const env = new nunjucks.Environment(new nunjucks.FileSystemLoader(templatesDir), {
+  const env = new nunjucks.Environment(new PreprocessingLoader(templatesDir), {
     autoescape: opts.autoescape ?? true,
     throwOnUndefined: false,
   });
