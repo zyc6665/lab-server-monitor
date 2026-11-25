@@ -85,6 +85,7 @@ import {
   type UptimeStrip,
 } from '../../storage/metrics-read';
 import { nowIsoUtc } from '../../storage/time';
+import { toLocalIso as sharedToLocalIso } from '../local-iso';
 
 type SqliteDatabase = import('better-sqlite3').Database;
 type Obj = Record<string, unknown>;
@@ -219,41 +220,7 @@ function readHostsSettings(db: SqliteDatabase): HostsSettings {
 
 /** Formats an instant as an offset-qualified ISO string in `timeZone`. */
 function toLocalIso(value: unknown, timeZone: string): string | null {
-  if (value === null || value === undefined) return null;
-  const text = String(value);
-  const date = new Date(text);
-  if (Number.isNaN(date.getTime())) return text;
-  try {
-    const parts = new Intl.DateTimeFormat('en-US', {
-      timeZone,
-      hour12: false,
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-    }).formatToParts(date);
-    const get = (type: string): string => parts.find((part) => part.type === type)?.value ?? '00';
-    const wallAsUtc = Date.UTC(
-      Number(get('year')),
-      Number(get('month')) - 1,
-      Number(get('day')),
-      Number(get('hour')) % 24,
-      Number(get('minute')),
-      Number(get('second')),
-    );
-    const offsetMinutes = Math.round((wallAsUtc - date.getTime()) / 60000);
-    const sign = offsetMinutes >= 0 ? '+' : '-';
-    const abs = Math.abs(offsetMinutes);
-    return (
-      `${get('year')}-${get('month')}-${get('day')}` +
-      `T${pad2(Number(get('hour')) % 24)}:${get('minute')}:${get('second')}` +
-      `${sign}${pad2(Math.trunc(abs / 60))}:${pad2(abs % 60)}`
-    );
-  } catch {
-    return date.toISOString();
-  }
+  return sharedToLocalIso(value, timeZone) as string | null;
 }
 
 /** `%Y%m%d-%H%M%S` for an instant in `timeZone` (report filename stamp). */

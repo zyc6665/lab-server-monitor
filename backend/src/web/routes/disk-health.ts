@@ -24,6 +24,7 @@ import { getAllDiskHealth, type DiskHealthSnapshot } from '../../storage/disk';
 import { aggregateDiskHealth, diskReportFromSnapshot } from '../../disk/report';
 import { anchor as anchorSlug, createTemplating, type Templating } from '../templating';
 import { ENDPOINTS } from './registry';
+import { toLocalIso as sharedToLocalIso } from '../local-iso';
 
 type SqliteDatabase = import('better-sqlite3').Database;
 type Obj = Record<string, unknown>;
@@ -110,56 +111,13 @@ export function driveSortKey(drive: Obj): [number, number] {
   return [-hot, slotKey];
 }
 
-/** Left-pads a non-negative integer to two digits. */
-function pad2(value: number): string {
-  return String(value).padStart(2, '0');
-}
-
 /**
  * `_to_local_iso`: render an instant as an offset-qualified ISO string in
  * `timeZone`. Unparseable values pass through unchanged. (Same algorithm as
  * `backend/src/web/routes/alerts.ts:toLocalIso`.)
  */
 export function toLocalIso(value: unknown, timeZone: string): string | null {
-  if (value === null || value === undefined) {
-    return null;
-  }
-  const text = String(value);
-  const date = new Date(text);
-  if (Number.isNaN(date.getTime())) {
-    return text;
-  }
-  try {
-    const parts = new Intl.DateTimeFormat('en-US', {
-      timeZone,
-      hour12: false,
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-    }).formatToParts(date);
-    const get = (type: string): string => parts.find((part) => part.type === type)?.value ?? '00';
-    const wallAsUtc = Date.UTC(
-      Number(get('year')),
-      Number(get('month')) - 1,
-      Number(get('day')),
-      Number(get('hour')) % 24,
-      Number(get('minute')),
-      Number(get('second')),
-    );
-    const offsetMinutes = Math.round((wallAsUtc - date.getTime()) / 60000);
-    const sign = offsetMinutes >= 0 ? '+' : '-';
-    const abs = Math.abs(offsetMinutes);
-    return (
-      `${get('year')}-${get('month')}-${get('day')}` +
-      `T${pad2(Number(get('hour')) % 24)}:${get('minute')}:${get('second')}` +
-      `${sign}${pad2(Math.trunc(abs / 60))}:${pad2(abs % 60)}`
-    );
-  } catch {
-    return date.toISOString();
-  }
+  return sharedToLocalIso(value, timeZone) as string | null;
 }
 
 /** Resolves the configured display timezone (defaults to `Asia/Shanghai`). */

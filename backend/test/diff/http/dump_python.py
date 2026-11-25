@@ -16,8 +16,9 @@ golden diff.  A JSON *plan* (from ``--plan <file>``) lists the requests to make:
     }
 
 ``capture`` is one of ``json`` (parse the JSON body), ``text`` (keep the raw
-string body) or ``none`` (status / content-type / cookie presence only — used
-for HTML pages and the login redirect).
+string body), ``markers`` (record only the presence of spec ``markers`` plus the
+document ``<title>`` and body length — used for large HTML pages) or ``none``
+(status / content-type / cookie presence only — used for redirects).
 
 For every request the script records ``{name, status, content_type, json, text,
 set_cookie}`` and prints a single result line prefixed with
@@ -33,10 +34,13 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 import traceback
 from pathlib import Path
 from typing import Any
+
+_TITLE_RE = re.compile(r"<title[^>]*>(.*?)</title>", re.IGNORECASE | re.DOTALL)
 
 _REPO_ROOT = next(
     (p for p in Path(__file__).resolve().parents if (p / "servermanage").is_dir()),
@@ -68,7 +72,7 @@ def _build_app(config_path: Path, db_path: Path, admin_user: str, admin_password
     return app
 
 
-def _response_record(name: str, resp, capture: str) -> dict[str, Any]:
+def _response_record(name: str, resp, capture: str, markers: list[str] | None = None) -> dict[str, Any]:
     content_type = (resp.headers.get("Content-Type") or "").split(";")[0].strip()
     record: dict[str, Any] = {
         "name": name,
@@ -82,6 +86,18 @@ def _response_record(name: str, resp, capture: str) -> dict[str, Any]:
         record["json"] = resp.get_json(silent=True)
     elif capture == "text":
         record["text"] = resp.get_data(as_text=True)
+    elif capture == "markers":
+        # HTML pages are large and template whitespace/attribute order can drift
+        # harmlessly between stacks, so instead of shipping (and byte-comparing)
+        # whole documents we return only the presence of spec-provided key
+        # markers plus the document title. The Node side extracts the exact same
+        # shape, so a marker that renders on one stack but not the other fails.
+        text = resp.get_data(as_text=True)
+        wanted = markers or []
+        title_match = _TITLE_RE.search(text)
+        record["markers"] = {marker: (marker in text) for marker in wanted}
+        record["title"] = title_match.group(1).strip() if title_match else None
+        record["html_length"] = len(text)
     return record
 
 
@@ -103,6 +119,7 @@ def run_plan(config_path: Path, db_path: Path, plan: dict[str, Any]) -> dict[str
         path = str(spec.get("path", "/"))
         needs_auth = bool(spec.get("auth", False))
         capture = str(spec.get("capture", "none"))
+        markers = spec.get("markers")
         form = spec.get("form")
         try:
             if needs_auth:
@@ -118,7 +135,7 @@ def run_plan(config_path: Path, db_path: Path, plan: dict[str, Any]) -> dict[str
                 resp = client.put(path, data=form or {})
             else:
                 resp = client.get(path)
-            record = _response_record(name, resp, capture)
+            record = _response_record(name, resp, capture, markers)
             # A successful login request hands its cookie-bearing client to the
             # authenticated sweep (both stacks share one agent).
             if method == "POST" and path == "/login" and resp.status_code in (301, 302, 303) and authed_client is None:

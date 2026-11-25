@@ -49,6 +49,7 @@ import { dpapiAvailable } from '../../storage/dpapi';
 import { nowIsoUtc } from '../../storage/time';
 import { createTemplating, type Templating } from '../templating';
 import { ENDPOINTS } from './registry';
+import { toLocalIso as sharedToLocalIso } from '../local-iso';
 
 type SqliteDatabase = import('better-sqlite3').Database;
 type Obj = Record<string, unknown>;
@@ -137,48 +138,9 @@ function alertRangeSince(rangeKey: string): Date | null {
   return new Date(Date.now() - ALERT_RANGE_HOURS[key] * 60 * 60 * 1000);
 }
 
-/** Left-pads a non-negative integer to two digits. */
-function pad2(value: number): string {
-  return String(value).padStart(2, '0');
-}
-
 /** Formats an instant as an offset-qualified ISO string in `timeZone`. */
 function toLocalIso(value: unknown, timeZone: string): string | null {
-  if (value === null || value === undefined) return null;
-  const text = String(value);
-  const date = new Date(text);
-  if (Number.isNaN(date.getTime())) return text;
-  try {
-    const parts = new Intl.DateTimeFormat('en-US', {
-      timeZone,
-      hour12: false,
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-    }).formatToParts(date);
-    const get = (type: string): string => parts.find((part) => part.type === type)?.value ?? '00';
-    const wallAsUtc = Date.UTC(
-      Number(get('year')),
-      Number(get('month')) - 1,
-      Number(get('day')),
-      Number(get('hour')) % 24,
-      Number(get('minute')),
-      Number(get('second')),
-    );
-    const offsetMinutes = Math.round((wallAsUtc - date.getTime()) / 60000);
-    const sign = offsetMinutes >= 0 ? '+' : '-';
-    const abs = Math.abs(offsetMinutes);
-    return (
-      `${get('year')}-${get('month')}-${get('day')}` +
-      `T${pad2(Number(get('hour')) % 24)}:${get('minute')}:${get('second')}` +
-      `${sign}${pad2(Math.trunc(abs / 60))}:${pad2(abs % 60)}`
-    );
-  } catch {
-    return date.toISOString();
-  }
+  return sharedToLocalIso(value, timeZone) as string | null;
 }
 
 /** Resolves the configured display timezone (defaults to `Asia/Shanghai`). */
