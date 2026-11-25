@@ -6,13 +6,26 @@ interface PackageJson {
 }
 
 /**
- * Reads the version from backend/package.json.
+ * Build-time injected version literal.
  *
- * Works from both `src/` (vitest, ts-node) and `dist/` (compiled output) because
- * package.json always sits one level above the file's own directory.
+ * `backend/build.mjs` passes `define: { __APP_VERSION__: JSON.stringify(version) }`
+ * to esbuild, so in the packaged single-file bundle this identifier is replaced
+ * with a string literal and the code below never touches the filesystem. This is
+ * essential: the installed layout is `<install>/resources/backend/main.cjs`,
+ * which has no `package.json` beside it — reading one at startup used to crash
+ * with ENOENT before the server could bind a port.
+ *
+ * Under vitest / ts-node the global is not defined, so `typeof` yields
+ * 'undefined' and we fall back to reading `backend/package.json` from disk.
  */
-const packageJson = JSON.parse(
-  readFileSync(join(__dirname, '..', 'package.json'), 'utf8'),
-) as PackageJson;
+declare const __APP_VERSION__: string | undefined;
 
-export const APP_VERSION: string = packageJson.version;
+function readPackageVersion(): string {
+  const packageJson = JSON.parse(
+    readFileSync(join(__dirname, '..', 'package.json'), 'utf8'),
+  ) as PackageJson;
+  return packageJson.version;
+}
+
+export const APP_VERSION: string =
+  typeof __APP_VERSION__ === 'string' ? __APP_VERSION__ : readPackageVersion();
