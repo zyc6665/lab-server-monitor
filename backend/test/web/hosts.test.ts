@@ -587,6 +587,33 @@ describe('hosts routes — checks and container stats', () => {
     expect(getHostCheckResults(h.fresh.db, 'alpha')).toHaveLength(1);
   });
 
+  it('maps camelCase latencyMs from the availability checker into persisted latency_ms', async () => {
+    // P3 availability.runHostChecks emits camelCase `latencyMs`; the route must
+    // map it to snake_case for storage (and echo it back) instead of null.
+    const h = setup({
+      deps: {
+        runHostChecks: (_host, checks) =>
+          checks.map((check) => ({
+            name: check.name,
+            type: check.type,
+            target: check.target,
+            status: 'ok',
+            message: '',
+            latencyMs: 12,
+            checkedAt: '2026-01-09T09:00:00.000Z',
+          })),
+      },
+    });
+    seedHost(h, 'alpha', { checks: [{ name: 'ssh', type: 'tcp', target: '22' }] });
+    const res = await request(h.app).post('/api/host/alpha/checks/run').set('Cookie', h.cookie)
+      .set('X-CSRF-Token', 'csrf-test').send({});
+    expect(res.status).toBe(200);
+    expect(res.body.checks[0].latency_ms).toBe(12);
+    const stored = getHostCheckResults(h.fresh.db, 'alpha');
+    expect(stored).toHaveLength(1);
+    expect(stored[0].latency_ms).toBe(12);
+  });
+
   it('reports no configured checks without failing', async () => {
     const h = setup({ deps: { runHostChecks: () => [] } });
     seedHost(h, 'alpha');

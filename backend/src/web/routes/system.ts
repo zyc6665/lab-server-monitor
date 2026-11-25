@@ -54,6 +54,7 @@ import {
   databaseIntegrity,
   systemStats,
 } from '../../storage/runtime';
+import { cleanupLogs as runCleanupLogs } from '../../runtime/maintenance';
 import { ENDPOINTS } from './registry';
 
 type SqliteDatabase = import('better-sqlite3').Database;
@@ -378,36 +379,15 @@ function defaultStorageUsage(db: SqliteDatabase): StorageUsage {
   };
 }
 
-/** Deletes `*.log` files older than 24h, protecting the live log files. */
+/**
+ * Deletes rotated `*.log` / `*.log.N` files older than 24h, protecting the
+ * live log files. Delegates to the shared runtime maintenance helper, which
+ * also matches rotated suffixes (`.log.1`, `.log.2`, …) — the previous local
+ * implementation only matched files ending in `.log` and silently left the
+ * rotated files behind.
+ */
 function cleanupLogs(logDir: string): { deleted: number; bytes: number } {
-  const protectedNames = new Set(['servermonitor.log', 'desktop.log']);
-  const cutoff = Date.now() - 24 * 60 * 60 * 1000;
-  let deleted = 0;
-  let bytes = 0;
-  let names: string[];
-  try {
-    names = readdirSync(logDir);
-  } catch {
-    return { deleted, bytes };
-  }
-  for (const name of names) {
-    if (!name.endsWith('.log') || protectedNames.has(name)) {
-      continue;
-    }
-    const filePath = join(logDir, name);
-    try {
-      const stat = statSync(filePath);
-      if (!stat.isFile() || stat.mtimeMs >= cutoff) {
-        continue;
-      }
-      rmSync(filePath, { force: true });
-      deleted += 1;
-      bytes += stat.size;
-    } catch {
-      // Ignore files that vanish or cannot be stat-ed mid-walk.
-    }
-  }
-  return { deleted, bytes };
+  return runCleanupLogs(logDir);
 }
 
 /** Recursively collects `*.zip` files under `root`. */

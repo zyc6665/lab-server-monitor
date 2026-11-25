@@ -1096,7 +1096,11 @@ export function registerHostsRoutes(app: Express, deps: HostsRouteDeps): void {
           target: String(row['target'] ?? ''),
           status: String(row['status'] ?? 'unknown'),
           message: row['message'] === undefined || row['message'] === null ? null : String(row['message']),
-          latency_ms: asFloat(row['latency_ms']),
+          // P3 `availability.runHostChecks` emits camelCase `latencyMs` /
+          // `checkedAt`; the storage layer expects snake_case. Fall back to the
+          // camelCase keys so check latency is not silently persisted as null.
+          latency_ms: asFloat(row['latency_ms'] ?? row['latencyMs']),
+          checked_at: (row['checked_at'] ?? row['checkedAt'] ?? null) as string | null,
         };
       });
       saveHostCheckResults(db, name, rows);
@@ -1119,7 +1123,7 @@ export function registerHostsRoutes(app: Express, deps: HostsRouteDeps): void {
           target: row['target'] ?? null,
           status: row['status'] ?? null,
           message: row['message'] ?? null,
-          latency_ms: row['latency_ms'] ?? null,
+          latency_ms: row['latency_ms'] ?? row['latencyMs'] ?? null,
         };
       }),
     });

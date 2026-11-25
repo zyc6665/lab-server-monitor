@@ -6,7 +6,7 @@
  * runtime-state file, administrative cleanup targets and restore hooks) are
  * injected so no test opens a real connection or rewrites the live database.
  */
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -22,6 +22,8 @@ import { backupDatabase } from '../../src/storage/runtime';
 import type { AppConfig, HostConfig } from '../../src/config/config';
 import type { SessionManager } from '../../src/web/session';
 import { cleanupStorageTests, freshDb, type FreshDb } from '../storage-helpers';
+import { openDatabase } from '../../src/storage/db';
+import { initSchema } from '../../src/storage/schema';
 
 afterEach(() => {
   cleanupStorageTests();
@@ -282,6 +284,67 @@ describe('POST /api/system/maintenance', () => {
       expect(res.body.target).toBe(target);
     }
     expect(calls).toEqual(['logs', 'updates', 'cache']);
+  });
+
+  it('deletes rotated .log.N files with the default logs handler', async () => {
+    // Build a db whose grandparent directory is a temp root, so the route's
+    // `appDir = dirname(dirname(db.name))` resolves to `<root>` and its logs
+    // directory is `<root>/logs`.
+    const root = mkdtempSync(path.join(tmpdir(), 'sm-system-logs-'));
+    createdRoots.push(root);
+    const dataDir = path.join(root, 'data');
+    mkdirSync(dataDir, { recursive: true });
+    const db = openDatabase(path.join(dataDir, 'servermonitor.db'));
+    initSchema(db);
+    try {
+      setAdminPassword(db, { newPassword: 'admin-secret', username: 'admin' });
+      const logsDir = path.join(root, 'logs');
+      mkdirSync(logsDir, { recursive: true });
+      const oldTs = new Date(Date.now() - 48 * 60 * 60 * 1000);
+      for (const name of ['app.log', 'app.log.1']) {
+        const filePath = path.join(logsDir, name);
+        writeFileSync(filePath, 'old');
+        utimesSync(filePath, oldTs, oldTs);
+      }
+      writeFileSync(path.join(logsDir, 'servermonitor.log'), 'live');
+
+      const config = makeConfig();
+      const app = createWebApp({
+        db,
+        config,
+        mountStatic: false,
+        registerRoutes: (instance) => {
+          registerSystemRoutes(instance, {
+            db,
+            config,
+            appVersion: '9.9.9-test',
+            logFile: path.join(root, 'servermonitor.log'),
+            runtimeFile: path.join(root, 'runtime.json'),
+          });
+        },
+      });
+      const cookie = (app.locals.session as SessionManager).createCookie({
+        logged_in: true,
+        username: 'admin',
+        csrf_token: CSRF_TOKEN,
+      });
+
+      const res = await request(app)
+        .post('/api/system/maintenance')
+        .set({ Cookie: cookie, 'X-CSRF-Token': CSRF_TOKEN })
+        .send({ target: 'logs' });
+
+      expect(res.status).toBe(200);
+      expect(res.body.ok).toBe(true);
+      expect(res.body.result.deleted).toBe(2);
+      expect(existsSync(path.join(logsDir, 'app.log.1'))).toBe(false);
+      expect(existsSync(path.join(logsDir, 'app.log'))).toBe(false);
+      expect(existsSync(path.join(logsDir, 'servermonitor.log'))).toBe(true);
+    } finally {
+      if (db.open) {
+        db.close();
+      }
+    }
   });
 });
 

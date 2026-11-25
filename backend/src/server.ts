@@ -41,6 +41,19 @@ export interface StartServerOptions {
   db?: SqliteDatabase;
   /** Optional resolved runtime config; required alongside {@link db}. */
   config?: AppConfig;
+  /**
+   * Whether to start the background task scheduler once the full app is
+   * composed. Defaults to `true` outside the test environment and `false`
+   * under Vitest (`NODE_ENV=test` / `VITEST` set), so unit tests never spawn a
+   * 600 s collection loop. Pass `false` to opt out explicitly, or `true` to
+   * force it on even under test.
+   */
+  scheduler?: boolean;
+}
+
+/** True when running under the Vitest test runner. */
+function isTestEnvironment(): boolean {
+  return process.env['NODE_ENV'] === 'test' || process.env['VITEST'] !== undefined;
 }
 
 export interface StartedServer {
@@ -61,9 +74,27 @@ export async function startServer(opts: StartServerOptions = {}): Promise<Starte
   // imported lazily so the health-only bundle never loads the native
   // better-sqlite3 / @primno/dpapi modules at startup.
   let app: Express;
+  let stopScheduler: (() => void) | null = null;
   if (opts.db && opts.config) {
     const { createServerApp } = await import('./web/composition');
     app = createServerApp({ db: opts.db, config: opts.config });
+
+    // Start the background scheduler on the same db/config assembly path. The
+    // wiring module is imported lazily so the health-only bundle never loads
+    // the collector/storage stack. Scheduler failures must never prevent the
+    // HTTP server from coming up.
+    const shouldStartScheduler = opts.scheduler ?? !isTestEnvironment();
+    if (shouldStartScheduler) {
+      try {
+        const { startSchedulerIfConfigured } = await import('./runtime/wiring');
+        const handle = startSchedulerIfConfigured({ db: opts.db, config: opts.config });
+        if (handle) {
+          stopScheduler = handle.stop;
+        }
+      } catch (err) {
+        console.error('[server] failed to start scheduler:', err);
+      }
+    }
   } else {
     app = createApp();
   }
@@ -105,6 +136,12 @@ export async function startServer(opts: StartServerOptions = {}): Promise<Starte
     url,
     port: boundPort,
     close: async () => {
+      // Stop the scheduler before draining HTTP so no in-flight tick races the
+      // shutdown. `stop()` is idempotent.
+      if (stopScheduler) {
+        stopScheduler();
+        stopScheduler = null;
+      }
       await new Promise<void>((resolve, reject) => {
         server.close((err) => (err ? reject(err) : resolve()));
       });
