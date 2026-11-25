@@ -1,0 +1,20 @@
+{
+  "host": { "name": "cpu-01", "host": "10.0.0.10" },
+  "stages": {
+    "hostname": "cpu-01\n",
+    "os_release": "Ubuntu 22.04.4 LTS\n",
+    "kernel": "5.15.0-113-generic\n",
+    "uptime": " 14:32:01 up 21 days,  3 users,  load average: 0.42, 0.55, 0.61\n",
+    "cpu_cores": "32\n",
+    "cpu_usage": "7.3\n",
+    "memory": "              total        used        free      shared  buff/cache   available\nMem:          128000       51234       12000        1024       64766       74210\nSwap:           4096         512        3584\n",
+    "disk": "Filesystem      Size  Used Avail Use% Mounted on\n/dev/sda1       200G   80G  120G  40% /\n/dev/sdb1       4.0T  2.1T  1.9T  52% /data\n",
+    "net": "123456789 987654321\n",
+    "thermal": "x86_pkg_temp\t45000\nacpitz\t38000\n",
+    "who": "root     pts/0        2026-03-25 09:00 (10.0.0.2)\nalice    pts/1        2026-03-25 08:10 (10.0.0.3)\n",
+    "total_processes": "342\n",
+    "process_counts": "210 root\n64 alice\n30 www-data\n",
+    "top_cpu": "root 1234 55.2 4.1 12:00:01 /usr/bin/python3 train.py\nwww-data 2345 12.5 1.2 1-02:03:04 nginx: worker process\n",
+    "top_memory": "root 1234 55.2 18.4 12:00:01 /usr/bin/python3 train.py\nalice 3456 3.1 9.9 3-04:05:06 /usr/bin/node server.js\n"
+  }
+}
