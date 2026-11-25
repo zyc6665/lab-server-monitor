@@ -23,6 +23,18 @@ import { deleteAppSettings, loadAppSettings, saveAppSettings } from '../storage/
 import { getSecret } from '../storage/secrets';
 import { dpapiAvailable } from '../storage/dpapi';
 import { APP_VERSION } from '../version';
+import {
+  assertReportSmtpReady,
+  databaseSecretWriter,
+  isSmtpReady,
+  mergeSections,
+  sanitizeSection,
+  SectionsError,
+  type SecretWriter,
+} from './sections';
+import { SECRET_ADMIN, SECRET_SMTP_PASSWORD, SECRET_WEBHOOK_URL } from './secrets';
+
+export { SECRET_ADMIN, SECRET_SESSION, SECRET_SMTP_PASSWORD, SECRET_WEBHOOK_URL } from './secrets';
 
 type SqliteDatabase = import('better-sqlite3').Database;
 
@@ -31,11 +43,6 @@ export type SectionPayload = Record<string, unknown>;
 
 /** The full `{section: payload}` effective settings map. */
 export type Settings = Record<string, SectionPayload>;
-
-/** Secret names, matching `servermanage/settings/schema.py`. */
-export const SECRET_SMTP_PASSWORD = 'smtp:password';
-export const SECRET_WEBHOOK_URL = 'webhook:url';
-export const SECRET_ADMIN = 'dashboard:admin_password';
 
 /** Error surface for {@link saveSection} / {@link deleteSection}. */
 export interface SettingsServiceErrorOptions {
@@ -139,17 +146,14 @@ export function loadEffectiveSettings(db: SqliteDatabase): Settings {
   return settings;
 }
 
-/** Strip credential-bearing fields so they can never reach `app_settings`. */
-function stripSecrets(section: string, value: SectionPayload): SectionPayload {
-  const out = cloneValue(value);
-  if (section === 'smtp') {
-    delete out['password'];
-  }
-  if (section === 'alerts' && isPlainObject(out.webhook)) {
-    delete out.webhook.url;
-    delete out.webhook.url_env;
-  }
-  return out;
+/** Options controlling how {@link saveSection} stores credentials. */
+export interface SaveSectionOptions {
+  /** DPAPI protector for secret values (defaults to {@link protect}). */
+  protect?: (plain: Buffer) => Buffer;
+  /** Whether secrets may be written on this platform (defaults to dpapiAvailable()). */
+  writable?: boolean;
+  /** Secret sink for stripped credentials (defaults to a DB-backed writer). */
+  secrets?: SecretWriter;
 }
 
 /**
@@ -161,7 +165,8 @@ function stripSecrets(section: string, value: SectionPayload): SectionPayload {
  *
  * The new values are merged over the *effective* section (defaults + whatever
  * is already stored) before validation, so a partial save never resets fields
- * it did not mention. Credential fields are stripped before the row is written.
+ * it did not mention. Credential fields are stripped from the persisted row and
+ * written to `app_secrets` (DPAPI-protected) instead.
  *
  * @returns `{restartRequired}` — true only for sections flagged in the schema
  *   (`dashboard`), matching `settings_api.py`'s `restart_required` response.
@@ -170,6 +175,7 @@ export function saveSection(
   db: SqliteDatabase,
   section: string,
   payload: unknown,
+  options: SaveSectionOptions = {},
 ): { restartRequired: boolean } {
   if (!isKnownSection(section)) {
     throw new SettingsServiceError(`unknown settings section: ${section}`, {
@@ -185,7 +191,7 @@ export function saveSection(
   }
 
   const current = loadEffectiveSettings(db)[section] ?? defaultSection(section);
-  const merged = deepMerge(current, payload);
+  const merged = mergeSections(current, payload);
   const { value, errors } = validateSection(section, merged);
   if (errors.length > 0) {
     throw new SettingsServiceError(errors.join('; '), {
@@ -195,7 +201,32 @@ export function saveSection(
     });
   }
 
-  saveAppSettings(db, section, stripSecrets(section, value));
+  const secrets = options.secrets ?? databaseSecretWriter(db, { protect: options.protect });
+  const writable = options.writable ?? dpapiAvailable();
+
+  let persisted: SectionPayload;
+  try {
+    persisted = sanitizeSection(section, value, { secrets, writable });
+  } catch (err) {
+    if (err instanceof SectionsError) {
+      throw new SettingsServiceError(err.message, { status: err.status, code: 'validation_failed' });
+    }
+    throw err;
+  }
+
+  if (section === 'report') {
+    const smtp = loadEffectiveSettings(db).smtp;
+    try {
+      assertReportSmtpReady(current, value, isSmtpReady(smtp, secrets));
+    } catch (err) {
+      if (err instanceof SectionsError) {
+        throw new SettingsServiceError(err.message, { status: err.status, code: 'validation_failed' });
+      }
+      throw err;
+    }
+  }
+
+  saveAppSettings(db, section, persisted);
   return { restartRequired: SETTINGS_SCHEMA[section].restartRequired };
 }
 
