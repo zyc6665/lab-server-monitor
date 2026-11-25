@@ -426,8 +426,8 @@ export interface Templating {
   env: nunjucks.Environment;
   /** Render a template to a string (no request context). */
   render(template: string, ctx?: Record<string, unknown>): string;
-  /** Render a template and write a 200 text/html response. */
-  renderPage(res: Response, template: string, ctx?: Record<string, unknown>): void;
+  /** Render a template and write a text/html response (default status 200). */
+  renderPage(res: Response, template: string, ctx?: Record<string, unknown>, status?: number): void;
 }
 
 /** Creates a templating bundle (environment + `render`/`renderPage`). */
@@ -439,7 +439,7 @@ export function createTemplating(opts: TemplatingOptions = {}): Templating {
     return renderStore.run({ csrfToken: () => '' }, () => env.render(template, ctx));
   }
 
-  function renderPage(res: Response, template: string, ctx: Record<string, unknown> = {}): void {
+  function renderPage(res: Response, template: string, ctx: Record<string, unknown> = {}, status = 200): void {
     const req = (res.req ?? undefined) as RenderRequest | undefined;
     const locals = req?.app?.locals;
     const manager = locals?.session;
@@ -471,7 +471,7 @@ export function createTemplating(opts: TemplatingOptions = {}): Templating {
     };
 
     const html = renderStore.run({ csrfToken }, () => env.render(template, context));
-    res.status(200).type('html').send(html);
+    res.status(status).type('html').send(html);
   }
 
   return { env, render, renderPage };
