@@ -9,6 +9,9 @@ __pycache__/
 .coverage.*
 htmlcov/
 
+# Node dependencies (root + backend workspace)
+node_modules/
+
 # Build artifacts
 build/
 dist/
