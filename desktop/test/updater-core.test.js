@@ -15,6 +15,7 @@ const {
   normaliseVersion,
   findAssets,
   createUpdaterCore,
+  MAX_DOWNLOAD_BYTES,
 } = require('../electron/updater-core.js');
 
 function tempDir() {
@@ -38,12 +39,12 @@ function release(version = '1.5.1') {
     html_url: `https://github.com/zyc6665/lab-server-monitor/releases/tag/v${version}`,
     assets: [
       {
-        name: `服务器轮询监测工具-Windows-x64-v${version}.zip`,
+        name: `lab-server-monitor-Windows-x64-v${version}.zip`,
         browser_download_url: `https://example.test/v${version}.zip`,
         size: 100,
       },
       {
-        name: `服务器轮询监测工具-Windows-x64-v${version}.zip.sha256`,
+        name: `lab-server-monitor-Windows-x64-v${version}.zip.sha256`,
         browser_download_url: `https://example.test/v${version}.zip.sha256`,
       },
     ],
@@ -62,6 +63,18 @@ test('findAssets requires a zip and prefers matching sha256', () => {
   const assets = findAssets(release('1.5.1'));
   assert.match(assets.name, /\.zip$/);
   assert.equal(assets.checksumUrl, 'https://example.test/v1.5.1.zip.sha256');
+});
+
+test('findAssets matches the exact expected asset name instead of a decoy zip', () => {
+  const rel = release('1.5.1');
+  // A wrong/foreign zip appears first: the old code would have picked it blindly.
+  rel.assets.unshift({
+    name: 'some-other-tool.zip',
+    browser_download_url: 'https://example.test/decoy.zip',
+    size: 1,
+  });
+  const assets = findAssets(rel, { version: '1.5.1' });
+  assert.equal(assets.name, 'lab-server-monitor-Windows-x64-v1.5.1.zip');
 });
 
 test('findAssets prefers GitHub API asset urls over browser download urls', () => {
@@ -223,5 +236,113 @@ test('downloadAndVerify rejects a checksum mismatch', async () => {
         checksum_url: 'https://example.test/package.zip.sha256',
       }),
     /校验失败/,
+  );
+});
+
+test('downloadAndVerify fails closed when checksum_url is missing', async () => {
+  let assetFetched = false;
+  const core = createUpdaterCore({
+    currentVersion: '1.5.0',
+    updatesDir: tempDir(),
+    fetchImpl: async () => {
+      assetFetched = true;
+      return { ok: true, status: 200, arrayBuffer: async () => Buffer.from('bytes') };
+    },
+  });
+  await assert.rejects(
+    () =>
+      core.downloadAndVerify({
+        version: '1.5.1',
+        asset_name: 'package.zip',
+        asset_url: 'https://example.test/package.zip',
+        // no checksum_url
+      }),
+    /缺少校验文件|fail-closed/,
+  );
+  assert.equal(assetFetched, false, 'must not download the asset when no checksum is available');
+});
+
+test('downloadAndVerify fails closed when the checksum fetch is not OK', async () => {
+  const core = createUpdaterCore({
+    currentVersion: '1.5.0',
+    updatesDir: tempDir(),
+    fetchImpl: async (url) => {
+      if (String(url).endsWith('.sha256')) {
+        return { ok: false, status: 500, text: async () => '' };
+      }
+      return { ok: true, status: 200, arrayBuffer: async () => Buffer.from('bytes') };
+    },
+  });
+  await assert.rejects(
+    () =>
+      core.downloadAndVerify({
+        version: '1.5.1',
+        asset_name: 'package.zip',
+        asset_url: 'https://example.test/package.zip',
+        checksum_url: 'https://example.test/package.zip.sha256',
+      }),
+    /校验文件失败|fail-closed/,
+  );
+});
+
+test('downloadAndVerify rejects an oversized declared asset before downloading', async () => {
+  let assetFetched = false;
+  const core = createUpdaterCore({
+    currentVersion: '1.5.0',
+    updatesDir: tempDir(),
+    fetchImpl: async (url) => {
+      if (String(url).endsWith('.sha256')) {
+        return { ok: true, status: 200, text: async () => 'a'.repeat(64) };
+      }
+      assetFetched = true;
+      return { ok: true, status: 200, arrayBuffer: async () => Buffer.from('bytes') };
+    },
+  });
+  await assert.rejects(
+    () =>
+      core.downloadAndVerify({
+        version: '1.5.1',
+        asset_name: 'package.zip',
+        asset_url: 'https://example.test/package.zip',
+        checksum_url: 'https://example.test/package.zip.sha256',
+        asset_size: MAX_DOWNLOAD_BYTES + 1,
+      }),
+    /过大/,
+  );
+  assert.equal(assetFetched, false, 'must not download an asset over the size cap');
+});
+
+test('downloadAndVerify rejects an oversized Content-Length before buffering', async () => {
+  const core = createUpdaterCore({
+    currentVersion: '1.5.0',
+    updatesDir: tempDir(),
+    fetchImpl: async (url) => {
+      if (String(url).endsWith('.sha256')) {
+        return { ok: true, status: 200, text: async () => 'a'.repeat(64) };
+      }
+      return {
+        ok: true,
+        status: 200,
+        headers: {
+          get: (name) =>
+            String(name).toLowerCase() === 'content-length'
+              ? String(MAX_DOWNLOAD_BYTES + 1024)
+              : null,
+        },
+        arrayBuffer: async () => {
+          throw new Error('must not buffer an oversized body');
+        },
+      };
+    },
+  });
+  await assert.rejects(
+    () =>
+      core.downloadAndVerify({
+        version: '1.5.1',
+        asset_name: 'package.zip',
+        asset_url: 'https://example.test/package.zip',
+        checksum_url: 'https://example.test/package.zip.sha256',
+      }),
+    /过大/,
   );
 });

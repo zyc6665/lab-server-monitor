@@ -1,4 +1,5 @@
 import { fetchJson } from './lib/api.js';
+import { debounce } from './lib/debounce.js';
 import {
   failToast,
   servermonitorConfirm,
@@ -367,7 +368,7 @@ import {
       saveTrendPref();
       var exportButton = document.getElementById('overview-trend-export');
       if (exportButton) { exportButton.hidden = points.length === 0; }
-    }).catch(function () {});
+    }).catch(function () { failToast('趋势数据加载失败'); });
   }
 
   function overviewPointLabel(point) {
@@ -559,7 +560,7 @@ import {
       var hasAlerts = buckets.some(function (bucket) { return Number(bucket.total || 0) > 0; });
       if (empty) { empty.hidden = hasAlerts; }
       drawAlertTrend(buckets);
-    }).catch(function () {});
+    }).catch(function () { failToast('告警趋势加载失败'); });
   }
 
   function bindAlertRanges() {
@@ -934,19 +935,28 @@ import {
 
   function updateSortIndicators() {
     var heads = document.querySelectorAll('#host-table th[data-sort-key]');
+    var activeHead = null;
     for (var i = 0; i < heads.length; i += 1) {
       var key = heads[i].getAttribute('data-sort-key');
-      // v0.1.223：排序表头可聚焦，回车/空格切换排序（与统计卡一致的键盘支持）。
-      if (!heads[i].hasAttribute('tabindex')) {
-        heads[i].setAttribute('tabindex', '0');
-        heads[i].setAttribute('role', 'button');
-      }
+      if (key === hostSortKey) { activeHead = heads[i]; }
       heads[i].classList.toggle('sort-asc', key === hostSortKey && hostSortDir === 1);
       heads[i].classList.toggle('sort-desc', key === hostSortKey && hostSortDir === -1);
       if (key === hostSortKey) {
         heads[i].setAttribute('aria-sort', hostSortDir === 1 ? 'ascending' : 'descending');
       } else {
         heads[i].removeAttribute('aria-sort');
+      }
+    }
+    // 保留 th 的 columnheader 语义：不再调用 heads[i].setAttribute('role', 'button')，
+    // 排序方向改由 aria-sort 表达；同时做 roving tabindex——只让当前排序列
+    //（无排序时第一列）进入 Tab 顺序，其余 -1，方便方向键移动焦点。
+    if (!activeHead && heads.length) { activeHead = heads[0]; }
+    for (var i = 0; i < heads.length; i += 1) {
+      if (heads[i].getAttribute('role') === 'button') { heads[i].removeAttribute('role'); }
+      if (heads[i] === activeHead) {
+        heads[i].setAttribute('tabindex', '0');
+      } else {
+        heads[i].setAttribute('tabindex', '-1');
       }
     }
   }
@@ -1102,7 +1112,7 @@ import {
         if (status && status.state === 'done') {
           restore();
           showToast('采集完成：' + name, 'success');
-          refreshOverview().catch(function () {});
+          refreshOverview().catch(function () { failToast('刷新概览失败'); });
           return;
         }
         if (status && status.state === 'error') {
@@ -1247,7 +1257,7 @@ import {
           } else {
             showToast('采集完成：' + names.length + ' 台', 'success');
           }
-          refreshOverview().catch(function () {});
+          refreshOverview().catch(function () { failToast('刷新概览失败'); });
           return;
         }
         if (Date.now() < deadline) {
@@ -2621,7 +2631,7 @@ import {
     renderAlertStatusTabs();
     renderAlertRows();
     syncAlertUrl();
-    refreshAlerts().catch(function () {});
+    refreshAlerts().catch(function () { failToast('刷新告警失败'); });
   }
 
   function refreshAlerts() {
@@ -2770,17 +2780,17 @@ import {
     selectedAlertIds = {};
     renderAlertStatusTabs();
     syncAlertUrl();
-    refreshAlerts().catch(function () {});
+    refreshAlerts().catch(function () { failToast('刷新告警失败'); });
   }
 
   function refreshAll() {
     // v0.1.223：窗口隐藏（最小化到托盘/切走标签）时暂停轮询；
     // visibilitychange 回到前台时会立即补一次刷新。
     if (document.hidden) { return; }
-    // 请求互相独立；各自吞掉错误，互不影响。
-    refreshOverview().catch(function () {});
-    refreshAlerts().catch(function () {});
-    refreshSystemChecks().catch(function () {});
+    // 请求互相独立；各自处理失败（横幅/toast），互不影响。
+    refreshOverview().catch(function () { failToast('刷新概览失败'); });
+    refreshAlerts().catch(function () { failToast('刷新告警失败'); });
+    refreshSystemChecks().catch(function () { failToast('刷新系统检查失败'); });
   }
 
   function hasDashboard() {
@@ -3126,13 +3136,40 @@ import {
       }
     });
 
-    // v0.1.223：排序表头的键盘操作（Enter / 空格），与点击行为一致。
+    // 排序表头键盘操作：Enter/空格切换排序；方向键/Home/End 在表头间移动焦点
+    // （配合 updateSortIndicators 的 roving tabindex）。
     document.addEventListener('keydown', function (event) {
-      if (event.key !== 'Enter' && event.key !== ' ') { return; }
       var target = event.target;
       if (!target || !target.closest) { return; }
       var head = target.closest('th[data-sort-key]');
       if (!head) { return; }
+      if (event.key !== 'Enter' && event.key !== ' ') {
+        var move = 0;
+        if (event.key === 'ArrowRight') { move = 1; }
+        else if (event.key === 'ArrowLeft') { move = -1; }
+        else if (event.key === 'Home') { move = 'first'; }
+        else if (event.key === 'End') { move = 'last'; }
+        else { return; }
+        var heads = Array.prototype.slice.call(document.querySelectorAll('#host-table th[data-sort-key]'));
+        var index = heads.indexOf(head);
+        if (index === -1 || !heads.length) { return; }
+        event.preventDefault();
+        var nextIndex;
+        if (move === 'first') { nextIndex = 0; }
+        else if (move === 'last') { nextIndex = heads.length - 1; }
+        else {
+          nextIndex = index + move;
+          if (nextIndex < 0) { nextIndex = heads.length - 1; }
+          if (nextIndex >= heads.length) { nextIndex = 0; }
+        }
+        var next = heads[nextIndex];
+        if (!next) { return; }
+        heads.forEach(function (item) {
+          item.setAttribute('tabindex', item === next ? '0' : '-1');
+        });
+        next.focus();
+        return;
+      }
       event.preventDefault();
       setHostSort(head.getAttribute('data-sort-key'));
     });
@@ -3151,7 +3188,10 @@ import {
     var tagFilter = document.getElementById('filter-tag');
     if (tagFilter) { tagFilter.addEventListener('change', applyHostFilters); }
     bindSummaryCards();
-    if (keywordFilter) { keywordFilter.addEventListener('input', applyHostFilters); }
+    if (keywordFilter) {
+      // 关键字输入约 200ms 防抖，避免每次按键都遍历整张表重新显隐。
+      keywordFilter.addEventListener('input', debounce(applyHostFilters, 200));
+    }
     var clearFilterButton = document.getElementById('filter-clear');
     var emptyClearButton = document.getElementById('empty-state-clear');
     function clearHostFilters() {
@@ -3348,7 +3388,7 @@ import {
         alertTimeRange = alertRangeFilter.value || '';
         alertPage = 1;
         syncAlertUrl();
-        refreshAlerts().catch(function () {});
+        refreshAlerts().catch(function () { failToast('刷新告警失败'); });
       });
     }
     if (alertSort) {

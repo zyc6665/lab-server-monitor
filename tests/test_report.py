@@ -386,3 +386,18 @@ def test_render_daily_report_includes_service_checks():
     assert "连接超时" in rendered.text_body
     assert "服务检查" in rendered.html_body
     assert "数据库" in rendered.html_body
+
+
+def test_report_environment_autoescapes_j2_templates():
+    """Report templates are ``report*.html.j2``; ``.j2`` must be autoescaped.
+
+    Regression guard: ``select_autoescape`` previously listed only ``html``/
+    ``xml``, so the real ``.html.j2`` templates rendered with autoescape OFF.
+    """
+    from servermanage.report import _build_environment
+
+    env = _build_environment()
+    assert env.autoescape("daily.html.j2") is True
+    assert env.autoescape("report.html.j2") is True
+    assert env.autoescape("report.xml") is True
+    assert env.autoescape("report.txt") is False

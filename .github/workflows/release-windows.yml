@@ -15,7 +15,58 @@ permissions:
   contents: write
 
 jobs:
+  # Gate: a v* tag (or manual dispatch) must pass the same tests as CI before
+  # anything is built or published. build-and-release `needs:` this job, so a
+  # red test run can never produce a release asset.
+  test:
+    name: Release gate (tests must pass)
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Enable pnpm
+        run: corepack enable && corepack prepare pnpm@12.14.0 --activate
+        shell: pwsh
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev]"
+        shell: pwsh
+
+      - name: Version consistency
+        run: python tools/bump_version.py --check
+        shell: pwsh
+
+      - name: Run backend tests
+        run: python -m pytest -q
+        shell: pwsh
+
+      - name: Install desktop dependencies
+        working-directory: desktop
+        run: pnpm install --frozen-lockfile --config.strictDepBuilds=false
+        shell: pwsh
+
+      - name: Run desktop tests
+        working-directory: desktop
+        run: pnpm test
+        shell: pwsh
+
   build-and-release:
+    needs: test
     runs-on: windows-latest
     steps:
       - name: Checkout
@@ -36,6 +87,10 @@ jobs:
         shell: pwsh
 
       - name: Install Python dependencies
+        # TODO(reproducibility): there is no Python lock/constraints file in the
+        # repo yet, so this install is not fully reproducible. Add a
+        # constraints.txt (pip freeze / pip-compile) and switch to
+        # `pip install -e ".[build]" -c constraints.txt` once it exists.
         run: |
           python -m pip install --upgrade pip
           python -m pip install -e ".[build]"

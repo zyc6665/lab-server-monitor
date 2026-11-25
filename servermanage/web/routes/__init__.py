@@ -254,11 +254,6 @@ from servermanage.web.routes._core import (  # noqa: F401
 )
 
 
-def register_routes(app):
-    """Register every route on ``app`` with its original bare endpoint name."""
-    _core.register_routes(app)
-    ssh_terminal.register(app)
-
 _sys.modules[__name__].__class__ = _FacadeModule
 
 __all__ = [
@@ -487,11 +482,19 @@ def register_routes(app: Flask) -> None:
             if api_config.dashboard.auth.enabled and not session.get("logged_in"):
                 return jsonify({"error": "unauthorized"}), 401
 
-        # 2) CSRF protection for state-changing requests.  Only enforced when a
-        #    settings service is wired in (the legacy no-service app in
-        #    ``tests/test_web_api.py`` keeps working unchanged).
+        # 2) CSRF protection for state-changing requests.  Enforced whenever the
+        #    app manages a session: a wired settings service always enforces it;
+        #    an auth-enabled app also enforces it once the session carries a CSRF
+        #    token (i.e. a browser session that rendered a page).  The token gate
+        #    keeps the legacy no-service app in ``tests/test_web_api.py`` working
+        #    (it drives the API directly, without ever loading a page) while
+        #    closing the hole where an auth-enabled app skipped CSRF entirely.
+        csrf_session_active = service is not None or (
+            bool(getattr(_config(app).dashboard.auth, "enabled", False))
+            and bool(session.get("csrf_token"))
+        )
         if (
-            service is not None
+            csrf_session_active
             and path not in ("/login", "/setup")
             and request.method in ("POST", "PUT", "DELETE")
         ):

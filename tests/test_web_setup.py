@@ -139,3 +139,53 @@ def test_ack_accepts_csrf_header_once_service_wired(tmp_path):
     assert ok.get_json() == {"ok": True}
 
     assert client.post("/api/alerts/1/ack").status_code == 400
+
+
+def test_login_throttle_keys_on_forwarded_for_behind_loopback(tmp_path):
+    client = _app(tmp_path).test_client()
+    bad = {"username": "admin", "password": "bad"}
+
+    for _ in range(6):
+        client.post("/login", data=bad, environ_base={"HTTP_X_FORWARDED_FOR": "203.0.113.7"})
+    throttled = client.post(
+        "/login", data=bad, environ_base={"HTTP_X_FORWARDED_FOR": "203.0.113.7"}
+    )
+    assert throttled.status_code == 429
+
+    # A different real client behind the same proxy is unaffected.
+    other = client.post(
+        "/login", data=bad, environ_base={"HTTP_X_FORWARDED_FOR": "203.0.113.9"}
+    )
+    assert other.status_code == 401
+
+
+def test_login_failure_map_prunes_expired_and_caps_entries(tmp_path):
+    from servermanage.web.routes import auth as auth_mod
+
+    app = _app(tmp_path)
+    with app.app_context():
+        failures = auth_mod._login_failures()
+        now = auth_mod.time.monotonic()
+        stale = now - auth_mod._LOGIN_FAILURE_WINDOW_SECONDS - 5
+        failures["1.1.1.1"] = auth_mod.deque([stale])
+        failures["2.2.2.2"] = auth_mod.deque()
+        auth_mod._prune_failure_map(failures, now)
+        assert "1.1.1.1" not in failures
+        assert "2.2.2.2" not in failures
+
+        for i in range(auth_mod._LOGIN_FAILURE_MAX_ENTRIES + 10):
+            failures[f"ip-{i}"] = auth_mod.deque([now])
+        auth_mod._prune_failure_map(failures, now)
+        assert len(failures) == auth_mod._LOGIN_FAILURE_MAX_ENTRIES
+
+
+def test_session_cookie_secure_defaults_off_and_http_only(tmp_path):
+    app = _app(tmp_path)
+    assert app.config["SESSION_COOKIE_SECURE"] is False
+    assert app.config["SESSION_COOKIE_HTTPONLY"] is True
+
+
+def test_session_cookie_secure_enabled_by_env(tmp_path, monkeypatch):
+    monkeypatch.setenv("SESSION_COOKIE_SECURE", "1")
+    app = _app(tmp_path)
+    assert app.config["SESSION_COOKIE_SECURE"] is True

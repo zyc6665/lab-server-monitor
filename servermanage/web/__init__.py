@@ -9,6 +9,7 @@ acknowledgement).
 from __future__ import annotations
 
 import logging
+import os
 import secrets
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -24,6 +25,14 @@ from servermanage.web.routes import register_routes
 __all__ = ["create_app"]
 
 LOGGER = logging.getLogger(__name__)
+
+
+def _env_flag(name: str, default: bool = False) -> bool:
+    """Read a boolean flag from the environment (``1/true/yes/on`` = True)."""
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
 
 
 def create_app(
@@ -81,6 +90,15 @@ def create_app(
         cookie_name = f"servermonitor_session_{session_cookie_suffix}"
     app.config["SESSION_COOKIE_NAME"] = cookie_name
     app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+    app.config["SESSION_COOKIE_HTTPONLY"] = True
+
+    # Session-cookie transport hardening.  Default OFF because the desktop build
+    # connects to the dashboard over plain HTTP on loopback; a Secure cookie
+    # there would simply never be sent and every login would appear to fail.
+    # Set ``SESSION_COOKIE_SECURE=1`` in the environment (or override
+    # ``app.config["SESSION_COOKIE_SECURE"]``) when the dashboard is served over
+    # HTTPS so the cookie is never transmitted in cleartext.
+    app.config["SESSION_COOKIE_SECURE"] = _env_flag("SESSION_COOKIE_SECURE", False)
 
     lifetime_hours = config.dashboard.session_lifetime_hours or 12
     app.permanent_session_lifetime = timedelta(hours=lifetime_hours)

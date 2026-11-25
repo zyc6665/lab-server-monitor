@@ -35,7 +35,14 @@ def collect_host_report(
     build_command_map: Callable[[], dict[str, str]],
     parse_results: Callable[[dict[str, CommandResult], HostConfig], HostMetrics],
 ) -> HostReport:
-    del connect_timeout  # reserved for future explicit connect lifecycle control
+    # ``collect_all_hosts`` already builds the runner with ``connect_timeout``; if
+    # a caller hands in a pre-built runner, apply the configured value here so
+    # the lazy connect (performed on the first ``run``) is still bounded by it.
+    if connect_timeout and getattr(ssh_runner, "connect_timeout", None) is not None:
+        try:
+            ssh_runner.connect_timeout = connect_timeout
+        except Exception:  # noqa: BLE001 - a read-only runner is fine to skip
+            pass
 
     command_map = build_command_map()
     results: dict[str, CommandResult] = {}

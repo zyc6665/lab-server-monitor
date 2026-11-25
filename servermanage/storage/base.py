@@ -67,6 +67,8 @@ CREATE INDEX IF NOT EXISTS idx_host_metrics_history_collected_at
     ON host_metrics_history(collected_at);
 CREATE INDEX IF NOT EXISTS idx_host_metrics_history_host
     ON host_metrics_history(host_name, host);
+CREATE INDEX IF NOT EXISTS idx_host_metrics_history_host_collected
+    ON host_metrics_history(host_name, collected_at);
 """
 
 
@@ -183,6 +185,8 @@ CREATE INDEX IF NOT EXISTS idx_alerts_fingerprint
     ON alerts(fingerprint);
 CREATE INDEX IF NOT EXISTS idx_alerts_created_at
     ON alerts(created_at);
+CREATE INDEX IF NOT EXISTS idx_alerts_host_status_category
+    ON alerts(host_name, status, category);
 CREATE INDEX IF NOT EXISTS idx_host_daily_summary_day
     ON host_daily_summary(day);
 """
@@ -977,6 +981,33 @@ def maintain_database(
         conn.close()
 
 
+def _delete_rows_in_chunks(
+    conn: sqlite3.Connection,
+    table: str,
+    where_sql: str,
+    params: Sequence[object],
+    *,
+    chunk: int = 500,
+) -> int:
+    """Delete matching rows in bounded batches, returning the total removed.
+
+    ``DELETE ... LIMIT`` is not guaranteed to be compiled in, so each batch is
+    driven by a ``rowid IN (SELECT rowid ... LIMIT ?)`` subquery instead.
+    """
+    total = 0
+    while True:
+        cursor = conn.execute(
+            f"DELETE FROM {table} WHERE rowid IN ("
+            f"SELECT rowid FROM {table} WHERE {where_sql} LIMIT ?)",
+            (*params, chunk),
+        )
+        deleted = cursor.rowcount if cursor.rowcount is not None else 0
+        total += deleted
+        if deleted < chunk:
+            break
+    return total
+
+
 def purge_old_data(
     db_path: Path,
     retention_days: int,
@@ -1004,26 +1035,20 @@ def purge_old_data(
 
     with _connect(db_path) as conn:
         for table in _PURGE_TABLES:
-            cursor = conn.execute(
-                f"DELETE FROM {table} WHERE collected_at < ?", (cutoff,)
+            counts[table] = _delete_rows_in_chunks(
+                conn, table, "collected_at < ?", (cutoff,)
             )
-            counts[table] = cursor.rowcount if cursor.rowcount is not None else 0
-        cursor = conn.execute(
-            "DELETE FROM alerts WHERE created_at < ? AND status = 'resolved'",
+        counts["alerts"] = _delete_rows_in_chunks(
+            conn,
+            "alerts",
+            "created_at < ? AND status = 'resolved'",
             (cutoff,),
         )
-        counts["alerts"] = cursor.rowcount if cursor.rowcount is not None else 0
-        cursor = conn.execute(
-            "DELETE FROM alert_silences WHERE ends_at < ?", (cutoff,)
+        counts["alert_silences"] = _delete_rows_in_chunks(
+            conn, "alert_silences", "ends_at < ?", (cutoff,)
         )
-        counts["alert_silences"] = (
-            cursor.rowcount if cursor.rowcount is not None else 0
-        )
-        cursor = conn.execute(
-            "DELETE FROM ssh_audit_sessions WHERE started_at < ?", (cutoff,)
-        )
-        counts["ssh_audit_sessions"] = (
-            cursor.rowcount if cursor.rowcount is not None else 0
+        counts["ssh_audit_sessions"] = _delete_rows_in_chunks(
+            conn, "ssh_audit_sessions", "started_at < ?", (cutoff,)
         )
         conn.commit()
 

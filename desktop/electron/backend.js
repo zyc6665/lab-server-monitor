@@ -266,8 +266,8 @@ function createBackendController(options = {}) {
     });
   }
 
-  async function waitForRuntime() {
-    const deadline = clock.now() + startupTimeoutMs;
+  async function waitForRuntime(timeoutMs = startupTimeoutMs) {
+    const deadline = clock.now() + timeoutMs;
     let lastError = null;
     for (;;) {
       try {
@@ -294,7 +294,7 @@ function createBackendController(options = {}) {
         const detail =
           lastError && lastError.code !== 'ENOENT' ? ` (last error: ${lastError.message})` : '';
         throw new Error(
-          `Timed out waiting for backend runtime at ${runtimeFile} after ${startupTimeoutMs}ms${detail}`,
+          `Timed out waiting for backend runtime at ${runtimeFile} after ${timeoutMs}ms${detail}`,
         );
       }
       await delay(pollIntervalMs);
@@ -409,6 +409,47 @@ function createBackendController(options = {}) {
     return waitForRuntime();
   }
 
+  /**
+   * Start the backend and wait for runtime.json, retrying a bounded number of
+   * times with a growing timeout before giving up. First launch on a cold or
+   * antivirus-scanned machine can take longer than the fixed default, so the
+   * second attempt gets a larger window instead of quitting on the first miss.
+   *
+   * @param {{attempts?: number, timeoutMs?: number, timeoutGrowth?: number}} [options]
+   */
+  async function startWithRetry(options = {}) {
+    const attempts = Math.max(1, Math.trunc(Number(options.attempts)) || 2);
+    const baseTimeoutMs =
+      Number(options.timeoutMs) > 0 ? Number(options.timeoutMs) : startupTimeoutMs;
+    const growth = Number(options.timeoutGrowth) > 0 ? Number(options.timeoutGrowth) : 2;
+    let lastError = null;
+    for (let attempt = 1; attempt <= attempts; attempt += 1) {
+      const timeoutMs = Math.round(baseTimeoutMs * Math.pow(growth, attempt - 1));
+      try {
+        if (!isRunning()) {
+          await start();
+        }
+        return await waitForRuntime(timeoutMs);
+      } catch (error) {
+        lastError = error;
+        try {
+          await stop();
+        } catch (stopError) {
+          logger.warn?.('failed to stop backend after a failed startup attempt', stopError);
+        }
+        if (attempt < attempts) {
+          const nextTimeoutMs = Math.round(baseTimeoutMs * Math.pow(growth, attempt));
+          logger.warn?.(
+            `backend startup attempt ${attempt}/${attempts} failed (${
+              error && error.message ? error.message : error
+            }); retrying with ${nextTimeoutMs}ms timeout`,
+          );
+        }
+      }
+    }
+    throw lastError;
+  }
+
   function isRunning() {
     return running && Boolean(child);
   }
@@ -416,6 +457,7 @@ function createBackendController(options = {}) {
   return {
     start,
     waitForRuntime,
+    startWithRetry,
     stop,
     restart,
     isRunning,

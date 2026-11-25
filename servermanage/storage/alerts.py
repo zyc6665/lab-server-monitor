@@ -261,6 +261,9 @@ def insert_alert(
         created_at if created_at is not None else datetime.now(timezone.utc)
     ).isoformat()
     with _connect(db_path) as conn:
+        # Serialise the insert behind an immediate write lock so a concurrent
+        # writer cannot interleave a competing row for the same fingerprint.
+        conn.execute("BEGIN IMMEDIATE")
         cursor = conn.execute(
             "INSERT INTO alerts"
             " (created_at, host_name, category, severity, title, message,"
@@ -380,6 +383,42 @@ def list_alerts_for_host(
             " ORDER BY created_at DESC, id DESC LIMIT ?",
             (host_name, int(limit)),
         ).fetchall()
+
+    return [dict(row) for row in rows]
+
+
+def list_open_alerts_for_host(
+    host_name: str,
+    db_path: Path,
+    *,
+    category: str | None = None,
+    limit: int = 100_000,
+) -> list[dict]:
+    """Return this host's unresolved alerts (``active`` + ``acknowledged``).
+
+    Filtering happens in SQL (backed by ``idx_alerts_host_status_category``) so
+    alert reconciliation never scans and Python-filters the whole table.  Pass
+    *category* to scope the result to one alert type.
+    """
+    db_path = Path(db_path)
+    if not db_path.exists():
+        return []
+
+    clauses = ["host_name = ?", "status IN ('active', 'acknowledged')"]
+    params: list[object] = [host_name]
+    if category is not None:
+        clauses.append("category = ?")
+        params.append(category)
+    sql = (
+        "SELECT * FROM alerts WHERE "
+        + " AND ".join(clauses)
+        + " ORDER BY created_at DESC, id DESC LIMIT ?"
+    )
+    params.append(int(limit))
+
+    with _connect(db_path) as conn:
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute(sql, params).fetchall()
 
     return [dict(row) for row in rows]
 

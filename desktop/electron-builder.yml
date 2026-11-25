@@ -2,6 +2,7 @@ appId: com.lab.servermonitor
 productName: 服务器轮询监测工具
 directories:
   output: release-electron
+afterPack: scripts/after-pack.js
 files:
   - electron/**
   - build/icon.ico

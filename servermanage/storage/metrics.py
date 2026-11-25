@@ -1098,29 +1098,58 @@ def prune_daily_summary(
 
 
 def prune_host_metrics(db_path: Path, max_points_per_host: int = 100) -> int:
-    """Keep only the newest *max_points_per_host* rows for every host."""
+    """Keep only the newest *max_points_per_host* rows for every host.
+
+    Uses a bounded per-host deletion: for each host we locate the cutoff row
+    (the ``max_points_per_host + 1``-th newest via ``LIMIT 1 OFFSET n``) and
+    then delete everything at or below it in ``(collected_at, id)`` order in
+    small chunks.  This avoids the previous ``ROW_NUMBER()`` window over the
+    entire table on every poll.
+    """
     db_path = Path(db_path)
     if not db_path.exists():
         return 0
     limit = max(1, int(max_points_per_host))
+    chunk = 500
+    deleted_total = 0
     with _connect(db_path) as conn:
-        cursor = conn.execute(
-            """
-            DELETE FROM host_metrics_history
-             WHERE id NOT IN (
-                SELECT id FROM (
-                    SELECT id,
-                           ROW_NUMBER() OVER (
-                               PARTITION BY host_name
-                               ORDER BY collected_at DESC, id DESC
-                           ) AS rn
-                      FROM host_metrics_history
-                ) ranked
-                WHERE ranked.rn <= ?
-             )
-            """,
-            (limit,),
-        )
-        deleted = cursor.rowcount if cursor.rowcount is not None else 0
+        host_names = [
+            row[0]
+            for row in conn.execute(
+                "SELECT DISTINCT host_name FROM host_metrics_history"
+            ).fetchall()
+        ]
+        for host_name in host_names:
+            cutoff = conn.execute(
+                """
+                SELECT collected_at, id
+                  FROM host_metrics_history
+                 WHERE host_name = ?
+                 ORDER BY collected_at DESC, id DESC
+                 LIMIT 1 OFFSET ?
+                """,
+                (host_name, limit),
+            ).fetchone()
+            if cutoff is None:
+                continue
+            cutoff_at, cutoff_id = cutoff[0], cutoff[1]
+            while True:
+                cursor = conn.execute(
+                    """
+                    DELETE FROM host_metrics_history
+                     WHERE id IN (
+                        SELECT id FROM host_metrics_history
+                         WHERE host_name = ?
+                           AND (collected_at < ?
+                                OR (collected_at = ? AND id <= ?))
+                         LIMIT ?
+                     )
+                    """,
+                    (host_name, cutoff_at, cutoff_at, cutoff_id, chunk),
+                )
+                deleted = cursor.rowcount if cursor.rowcount is not None else 0
+                deleted_total += deleted
+                if deleted < chunk:
+                    break
         conn.commit()
-    return deleted
+    return deleted_total

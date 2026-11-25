@@ -29,6 +29,8 @@ from servermanage.web.routes._core import (
     _host_config_from_payload,
     _member_account,
     _refresh_config,
+    _reject_unsafe_target,
+    _reject_unsafe_url,
     _request_user_refresh,
     _settings_or_404,
     _settings_service,
@@ -99,8 +101,12 @@ def api_test_ssh():
     payload = request.get_json(silent=True)
     if not isinstance(payload, dict):
         return jsonify({"error": "invalid_payload"}), 400
-    if not str(payload.get("host") or "").strip():
+    host = str(payload.get("host") or "").strip()
+    if not host:
         return jsonify({"ok": False, "detail": "host 不能为空"})
+    blocked = _reject_unsafe_target(host, app)
+    if blocked:
+        return jsonify({"ok": False, "detail": blocked})
     config = _config(app)
     try:
         host_config = _host_config_from_payload(payload)
@@ -125,6 +131,9 @@ def api_test_email():
     host = str(payload.get("host") or "").strip()
     if not host:
         return jsonify({"ok": False, "detail": "host 不能为空"})
+    blocked = _reject_unsafe_target(host, app)
+    if blocked:
+        return jsonify({"ok": False, "detail": blocked})
     port = _as_int(payload.get("port"), 25)
     username = str(payload.get("username") or "")
     password = str(payload.get("password") or "")
@@ -185,6 +194,9 @@ def api_test_webhook():
     url = str(payload.get("url") or "").strip()
     if not url:
         return jsonify({"ok": False, "detail": "url 不能为空"})
+    blocked = _reject_unsafe_url(url, app)
+    if blocked:
+        return jsonify({"ok": False, "detail": blocked})
     kind = str(payload.get("type") or "generic")
     try:
         webhook = WebhookConfig(enabled=True, type=kind, url=url)

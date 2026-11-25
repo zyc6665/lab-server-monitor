@@ -45,6 +45,29 @@ try {
     Start-Sleep -Milliseconds 500
 
     New-Item -ItemType Directory -Force -Path $Stage | Out-Null
+
+    # Reject unsafe archive entries (path traversal or absolute/rooted paths)
+    # BEFORE extraction, so a malicious update package cannot write outside the
+    # staging directory and clobber arbitrary files.
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    $zipArchive = [System.IO.Compression.ZipFile]::OpenRead($ZipPath)
+    try {
+        foreach ($entry in $zipArchive.Entries) {
+            $entryName = [string]$entry.FullName
+            $isAbsolute = [System.IO.Path]::IsPathRooted($entryName) -or
+                $entryName.StartsWith('/') -or
+                $entryName -match '^[A-Za-z]:'
+            $segments = $entryName -split '[\\/]'
+            $hasDotDot = $segments -contains '..'
+            if ($isAbsolute -or $hasDotDot) {
+                throw "Unsafe zip entry rejected: $entryName"
+            }
+        }
+    }
+    finally {
+        $zipArchive.Dispose()
+    }
+
     Expand-Archive -LiteralPath $ZipPath -DestinationPath $Stage -Force
     $Source = Join-Path $Stage "servermonitor"
     if (-not (Test-Path -LiteralPath $Source)) { $Source = $Stage }

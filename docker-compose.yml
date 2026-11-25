@@ -16,5 +16,34 @@ services:
       - ./.env:/app/.env:ro
       - ./ssh:/app/ssh:ro
       - ./data:/app/data
+    # 容器内以非 root（uid/gid 10001，见 Dockerfile）运行，宿主机 ./data 需可被该
+    # uid 写入，否则 SQLite/日志会因权限失败。首次部署请执行：
+    #   sudo chown -R 10001:10001 ./data
+    # 若宿主机开启了 SELinux，请追加 :z（如 ./data:/app/data:z）。
+
+    # 资源与安全加固
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    # 说明：应用仅需读取时钟/网络（SSH 出站、SMTP），不需要任何 Linux capability，
+    # 故 drop ALL；SSH 端口是 22（>1024 绑定无需 CAP），如需绑定低端口再按需 add。
+
+    # 日志限额，避免 json-file 日志无限增长撑满磁盘
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+    # 健康检查：本容器以 supercronic 定时执行任务（无 HTTP 监听），
+    # 因此检查 crontab 已生成且 PID 1 仍是 supercronic 即视为健康。
+    healthcheck:
+      test: ["CMD-SHELL", "test -f /etc/supercronic/servermanage.crontab && grep -q '^supercronic$' /proc/1/comm"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
     # 如果 bridge 网络无法访问目标服务器，可改为 host 模式
     # network_mode: host

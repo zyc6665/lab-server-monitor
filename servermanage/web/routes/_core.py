@@ -18,11 +18,13 @@ from __future__ import annotations
 import base64
 import getpass
 import hmac
+import ipaddress
 import json
 import logging
 import os
 import secrets
 import smtplib
+import socket
 import tempfile
 import threading
 import time
@@ -32,6 +34,7 @@ from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
 from flask import (
     Flask,
@@ -551,6 +554,97 @@ def _truthy_arg(value: Any, default: bool = False) -> bool:
     if isinstance(value, bool):
         return value
     return str(value).strip().lower() not in {"0", "false", "no", "off", ""}
+
+
+def _ssrf_allow_private() -> bool:
+    """Test/deployment escape hatch for the SSRF guard below.
+
+    The guard blocks requests-triggered dial-outs to internal addresses.  A
+    private monitoring dashboard is often deployed *inside* the network it
+    watches, so tests (and controlled deployments that genuinely need to probe
+    RFC1918 hosts) can set ``SSRF_ALLOW_PRIVATE=1`` (or
+    ``SERVERMONITOR_ALLOW_PRIVATE_TARGETS=1``) to disable the check.
+    """
+    return _truthy_arg(
+        os.environ.get("SSRF_ALLOW_PRIVATE")
+        or os.environ.get("SERVERMONITOR_ALLOW_PRIVATE_TARGETS"),
+        False,
+    )
+
+
+def _is_internal_ip(value: str) -> bool:
+    try:
+        ip = ipaddress.ip_address(value)
+    except ValueError:
+        return False
+    return (
+        ip.is_loopback
+        or ip.is_private
+        or ip.is_link_local
+        or ip.is_reserved
+        or ip.is_multicast
+        or ip.is_unspecified
+    )
+
+
+def _configured_target_names(app: Flask | None) -> set[str]:
+    if app is None:
+        return set()
+    try:
+        servers = _config(app).servers or []
+    except Exception:  # noqa: BLE001 - no config wired (tests) is fine
+        return set()
+    names: set[str] = set()
+    for server in servers:
+        host = getattr(server, "host", None)
+        name = getattr(server, "name", None)
+        if host:
+            names.add(str(host).strip().lower())
+        if name:
+            names.add(str(name).strip().lower())
+    return names
+
+
+def _reject_unsafe_target(host: str, app: Flask | None = None) -> str | None:
+    """Return a rejection message when ``host`` must not be dialled.
+
+    Admin-only settings probes (``test-ssh`` / ``test-email`` / ``test-webhook``
+    and the host probe) take an arbitrary ``host:port`` from the request body.
+    Left unguarded that is an SSRF primitive: a logged-in user could make the
+    dashboard open connections to loopback / RFC1918 / link-local services.
+
+    A target is allowed when it is one of the configured inventory hosts (an
+    admin legitimately tests those) or when the env escape hatch is set.  A
+    name that cannot be resolved is allowed through — there is nothing to
+    connect to and the probe will simply fail.
+    """
+    host = (host or "").strip()
+    if not host:
+        return None
+    if _ssrf_allow_private():
+        return None
+    if host.lower() in _configured_target_names(app):
+        return None
+    try:
+        infos = socket.getaddrinfo(host, None)
+    except (socket.gaierror, UnicodeError, OSError):
+        return None
+    for info in infos:
+        address = info[4][0]
+        if _is_internal_ip(address):
+            return f"目标地址 {host} 指向内网/保留地址，已拒绝访问"
+    return None
+
+
+def _reject_unsafe_url(url: str, app: Flask | None = None) -> str | None:
+    """SSRF guard for webhook URLs (extract the host then delegate)."""
+    try:
+        host = urlsplit(url).hostname
+    except ValueError:
+        return None
+    if not host:
+        return None
+    return _reject_unsafe_target(host, app)
 
 
 def _host_config_from_payload(payload: dict[str, Any], *, name: str | None = None) -> HostConfig:

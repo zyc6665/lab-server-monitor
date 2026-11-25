@@ -81,7 +81,7 @@ try {
     # strictDepBuilds=false keeps pnpm from treating ignored dependency build
     # scripts as a hard install failure; the packages we need are still linked.
     $ErrorActionPreference = 'Continue'
-    pnpm install --config.strictDepBuilds=false
+    pnpm install --frozen-lockfile --config.strictDepBuilds=false
     $ErrorActionPreference = 'Stop'
     if ($LASTEXITCODE -ne 0) {
         throw "pnpm install failed (exit code $LASTEXITCODE). See output above."

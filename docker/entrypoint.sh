@@ -15,8 +15,13 @@ fi
 
 if [[ -n "${TZ:-}" ]]; then
   if [[ -f "/usr/share/zoneinfo/${TZ}" ]]; then
-    ln -snf "/usr/share/zoneinfo/${TZ}" /etc/localtime
-    echo "${TZ}" > /etc/timezone
+    # 容器以非 root 运行时无法改写 /etc/localtime（镜像已预置默认时区）。
+    # 仅在 /etc 可写时才落盘，否则依赖导出的 TZ 环境变量（Go/Python 均会读取）。
+    if [[ -w /etc ]]; then
+      ln -snf "/usr/share/zoneinfo/${TZ}" /etc/localtime
+      echo "${TZ}" > /etc/timezone
+    fi
+    export TZ
   else
     echo "无效的时区配置: ${TZ}" >&2
     exit 1

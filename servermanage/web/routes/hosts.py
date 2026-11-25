@@ -32,6 +32,7 @@ from servermanage.web.routes._core import (
     _parse_import_payload,
     _read_ssh_config_candidates,
     _refresh_config,
+    _reject_unsafe_target,
     _report_filename,
     _request_user_refresh,
     _sanitize_host_checks,
@@ -52,9 +53,13 @@ from servermanage.web.routes._core import (
 
 
 def probe_host_settings():
+    app = current_app._get_current_object()
     payload = request.get_json(silent=True) or {}
     if not isinstance(payload, dict) or not str(payload.get("host") or "").strip():
         return jsonify({"ok": False, "status": "invalid", "message": "请填写服务器地址"}), 400
+    blocked = _reject_unsafe_target(str(payload.get("host") or ""), app)
+    if blocked:
+        return jsonify({"ok": False, "status": "blocked", "message": blocked}), 200
     try:
         result = host_probe.probe_host(payload)
     except Exception as exc:  # defensive; probe_host normally reports failures

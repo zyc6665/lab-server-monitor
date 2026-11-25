@@ -56,6 +56,24 @@
     if (el) { el.textContent = text || ''; }
   }
 
+  // 全局（window/document）监听器登记表：软刷新会反复 mountDetail，
+  // 若每次都 addEventListener 会让监听器无限累积。这里按 target+type 去重，
+  // 重挂载时先移除旧的、再挂新的，保证同名全局监听器始终只有一份。
+  var globalListeners = [];
+  function addGlobalListener(target, type, handler) {
+    for (var i = 0; i < globalListeners.length; i += 1) {
+      var entry = globalListeners[i];
+      if (entry.target === target && entry.type === type) {
+        target.removeEventListener(type, entry.handler);
+        entry.handler = handler;
+        target.addEventListener(type, handler);
+        return;
+      }
+    }
+    target.addEventListener(type, handler);
+    globalListeners.push({ target: target, type: type, handler: handler });
+  }
+
   function fmt(value) {
     if (value === null || value === undefined || value === '') { return '—'; }
     var num = Number(value);
@@ -325,8 +343,17 @@
 
   // v0.1.232：采集/检查完成后软刷新——重新拉取当前页面并只替换 <main>，
   // 重新绑定事件，不再整页 reload（Electron 下白屏闪烁、滚动位置丢失）。
+  // 去重：自动刷新、可见性变化与采集轮询可能同时触发，只保留一次在途刷新，
+  // 避免重复请求与并发替换 DOM。
+  var refreshInFlight = null;
   function softRefreshDetail() {
-    return fetch(window.location.href, { credentials: 'same-origin' })
+    if (refreshInFlight) { return refreshInFlight; }
+    // 记录滚动与焦点，替换 <main> 后尽量恢复，减少位置丢失。
+    var scrollX = window.pageXOffset || 0;
+    var scrollY = window.pageYOffset || 0;
+    var active = document.activeElement;
+    var activeId = active && active.id ? active.id : '';
+    var request = fetch(window.location.href, { credentials: 'same-origin' })
       .then(function (response) {
         if (response.redirected || response.url.indexOf('/login') !== -1) {
           window.location.assign('/login');
@@ -346,8 +373,22 @@
           current.appendChild(document.importNode(node, true));
         });
         mountDetail();
+        if (activeId) {
+          var again = document.getElementById(activeId);
+          if (again && typeof again.focus === 'function') {
+            try { again.focus({ preventScroll: true }); } catch (err) { again.focus(); }
+          }
+        }
+        if (typeof window.scrollTo === 'function') {
+          try { window.scrollTo(scrollX, scrollY); } catch (err) { /* 忽略 */ }
+        }
       })
       .catch(function () { /* 网络异常时保留当前页面 */ });
+    refreshInFlight = request;
+    request.then(function () {
+      if (refreshInFlight === request) { refreshInFlight = null; }
+    });
+    return request;
   }
 
   function pollCollection() {
@@ -581,7 +622,14 @@
       if (payload.checks) {
         renderChecksTable(payload.checks);
       }
-    }).catch(function () {});
+    }).catch(function () {
+      // 检查项加载失败时说一声，别静默留白。
+      if (window.servermonitorToast) {
+        window.servermonitorToast('检查数据加载失败，请稍后重试', 'error');
+      } else {
+        setStatus('检查数据加载失败。');
+      }
+    });
   }
 
   function bindHostTabs() {
@@ -741,7 +789,7 @@
         if (element) { element.scrollIntoView({ block: 'start' }); }
       }
     }
-    window.addEventListener('hashchange', fromHash);
+    addGlobalListener(window, 'hashchange', fromHash);
     bindTabLink();
     var initialHash = (window.location.hash || '').replace('#', '');
     if (!initialHash) {
@@ -1050,6 +1098,10 @@
     }
   }
 
+  function onVisibilityRefresh() {
+    if (!document.hidden && autoRefreshOn()) { softRefreshDetail(); }
+  }
+
   function bindAutoRefresh() {
     var button = document.getElementById("host-auto-refresh");
     if (!button) { return; }
@@ -1059,10 +1111,9 @@
         setAutoRefresh(!autoRefreshOn());
         applyAutoRefresh();
       });
-      document.addEventListener("visibilitychange", function () {
-        if (!document.hidden && autoRefreshOn()) { softRefreshDetail(); }
-      });
     }
+    // visibilitychange 挂在 document 上：用登记去重，避免每次软刷新重复添加。
+    addGlobalListener(document, "visibilitychange", onVisibilityRefresh);
     applyAutoRefresh();
   }
 

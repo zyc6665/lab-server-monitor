@@ -989,3 +989,16 @@ def test_put_user_monitoring_rejects_out_of_range_interval(client):
     )
     assert resp.status_code == 400
     assert "占用统计间隔" in resp.get_json()["error"]
+
+
+def test_test_ssh_rejects_internal_target(client, monkeypatch):
+    """SSRF guard: a loopback/private target must be refused before dialling."""
+    monkeypatch.delenv("SSRF_ALLOW_PRIVATE", raising=False)
+    monkeypatch.delenv("SERVERMONITOR_ALLOW_PRIVATE_TARGETS", raising=False)
+    resp = client.post(
+        "/api/settings/test-ssh",
+        json={"host": "127.0.0.1", "port": 22, "username": "u"},
+    )
+    body = resp.get_json()
+    assert body["ok"] is False
+    assert "内网" in body["detail"]

@@ -157,6 +157,41 @@ test('apply-update.ps1 removes the downloaded package after a successful update'
   assert.match(applyUpdate, /StartsWith\([^\n]*OrdinalIgnoreCase/i);
 });
 
+test('apply-update.ps1 rejects zip entries that escape the staging directory', () => {
+  // Enumerate entries via System.IO.Compression.ZipFile before extracting.
+  assertContains(applyUpdate, 'System.IO.Compression', 'ZipFile assembly');
+  assertContains(applyUpdate, 'ZipFile', 'ZipFile type');
+  assertContains(applyUpdate, 'OpenRead', 'archive opened read-only');
+  assertContains(applyUpdate, '.Entries', 'entries enumerated');
+  // Reject traversal (..), rooted/absolute and drive-letter paths.
+  assertContains(applyUpdate, '..', 'dot-dot segment check');
+  assertContains(applyUpdate, 'IsPathRooted', 'rooted path check');
+  assertContains(applyUpdate, '^[A-Za-z]', 'drive-letter prefix check');
+  // The validation must run BEFORE extraction.
+  const guardAt = applyUpdate.indexOf('ZipFile');
+  const expandAt = applyUpdate.indexOf('Expand-Archive');
+  assert.ok(guardAt !== -1 && expandAt !== -1, 'both guard and Expand-Archive present');
+  assert.ok(guardAt < expandAt, 'entry validation must precede Expand-Archive');
+});
+
+// ---------------------------------------------------------------------------
+// scripts/after-pack.js — electron-builder afterPack fuse hardening.
+// ---------------------------------------------------------------------------
+
+const afterPackPath = path.join(scriptsDir, 'after-pack.js');
+
+test('after-pack.js exists, hardens fuses and is callable as an afterPack hook', () => {
+  assert.ok(fs.existsSync(afterPackPath), `expected after-pack.js to exist: ${afterPackPath}`);
+  const src = fs.readFileSync(afterPackPath, 'utf8');
+  assertContains(src, 'flipFuses', 'flipFuses call');
+  assertContains(src, 'RunAsNode', 'RunAsNode fuse');
+  assertContains(src, 'EnableNodeCliInspectArguments', 'EnableNodeCliInspectArguments fuse');
+  assertContains(src, '@electron/fuses', '@electron/fuses import');
+
+  const hook = require(afterPackPath);
+  assert.equal(typeof hook, 'function', 'after-pack.js must export a function');
+});
+
 test('apply-update.ps1 never deletes a package outside the app updates directory', () => {
   assert.match(applyUpdate, /if\s*\(\s*\$zipFull\.StartsWith\(\$updatesRoot/i);
 });

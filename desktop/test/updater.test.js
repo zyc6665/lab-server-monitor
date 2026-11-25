@@ -87,12 +87,12 @@ test('install falls back to the downloaded path after download', async () => {
           tag_name: 'v1.5.1',
           assets: [
             {
-              name: 'package.zip',
+              name: 'lab-server-monitor-Windows-x64-v1.5.1.zip',
               url: 'https://api.github.com/repos/zyc6665/lab-server-monitor/releases/assets/1',
               size: content.length,
             },
             {
-              name: 'package.zip.sha256',
+              name: 'lab-server-monitor-Windows-x64-v1.5.1.zip.sha256',
               url: 'https://api.github.com/repos/zyc6665/lab-server-monitor/releases/assets/2',
             },
           ],
@@ -100,7 +100,7 @@ test('install falls back to the downloaded path after download', async () => {
       };
     }
     if (String(url).endsWith('/assets/2')) {
-      return { ok: true, status: 200, text: async () => `${digest}  package.zip\n` };
+      return { ok: true, status: 200, text: async () => `${digest}  lab-server-monitor-Windows-x64-v1.5.1.zip\n` };
     }
     return { ok: true, status: 200, arrayBuffer: async () => content };
   };

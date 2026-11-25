@@ -184,18 +184,12 @@ def api_users_plan():
             row.get("username") == account and row.get("state") == "present"
             for row in rows
         )
-        groups = next(
-            (row.get("groups") or [] for row in rows if row.get("username") == account),
-            [],
-        )
-        docker_group = bool(groups) or True
         plan = admin.build_plan(
             operation,
             host_name=server.name,
             account=account,
             password=payload.get("password") or None,
             account_exists=account_exists,
-            docker_group=docker_group,
             data_supported=True,
             sudo_configured=bool(server.sudo_password),
             with_docker=bool(payload.get("with_docker", True)),
@@ -351,7 +345,7 @@ def api_users_operations():
     host_name = (request.args.get("host") or "").strip()
     if host_name and host_name not in {server.name for server in config.servers}:
         return jsonify({"error": "unknown_host"}), 404
-    limit = _as_int(request.args.get("limit"), 20)
+    limit = max(1, min(_as_int(request.args.get("limit"), 20), 200))
     items = storage.list_user_operations(
         _db_path(app), host_name=host_name or None, limit=limit
     )

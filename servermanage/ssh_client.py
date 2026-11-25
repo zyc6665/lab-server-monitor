@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import base64
+import hashlib
 import io
 import json
 import logging
+import socket
 import threading
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable
@@ -42,6 +45,34 @@ _SUDO_UNAVAILABLE_MARKERS = (
     "is not allowed to",
     "may not run sudo",
 )
+
+
+# One bounded reconnect attempt covers the common "transient handshake hiccup"
+# case (host briefly busy, network blip) without ever retrying an auth failure.
+_CONNECT_RETRY_BACKOFF = 1.0  # seconds
+
+
+def _is_transient_connect_error(exc: BaseException) -> bool:
+    """True for socket/SSH-transport errors that are worth one retry.
+
+    Authentication problems are *not* transient: retrying just burns the login
+    attempt budget and hides the real "wrong password" signal from the user.
+    """
+    if isinstance(
+        exc, (paramiko.AuthenticationException, paramiko.BadAuthenticationType)
+    ):
+        return False
+    return isinstance(
+        exc,
+        (
+            paramiko.SSHException,
+            socket.timeout,
+            TimeoutError,
+            ConnectionError,
+            EOFError,
+            OSError,
+        ),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -211,17 +242,42 @@ def _execute_read_first(stdout, stderr) -> CommandResult:
     )
 
 
+_INLINE_KEY_CACHE: dict[str, paramiko.PKey] = {}
+_INLINE_KEY_CACHE_LOCK = threading.Lock()
+_INLINE_KEY_CACHE_MAX = 16
+
+
+def _inline_key_cache_key(key_data: str, passphrase: str | None) -> str:
+    digest = hashlib.sha256()
+    digest.update(key_data.encode("utf-8", "surrogatepass"))
+    digest.update(b"\x00")
+    digest.update((passphrase or "").encode("utf-8", "surrogatepass"))
+    return digest.hexdigest()
+
+
 def _load_inline_private_key(key_data: str, passphrase: str | None) -> paramiko.PKey:
     """Load an in-memory private key by trying each concrete paramiko key type.
 
     ``paramiko.PKey.from_private_key`` is the abstract base factory and is broken
     on pinned paramiko 3.5.1, so dispatch to concrete classes instead. Errors are
     re-raised as ``ValueError`` without ever including key material or passphrase.
+
+    A bounded cache keyed by ``sha256(key_data || 0x00 || passphrase)`` avoids
+    re-parsing (and, for encrypted keys, re-decrypting) the same PEM on every
+    poll: :class:`SSHClientWrapper` is rebuilt per round but the key material is
+    stable. Only successful parses are cached, so wrong/missing passphrases keep
+    raising exactly as before.
     """
+    cache_key = _inline_key_cache_key(key_data, passphrase)
+    with _INLINE_KEY_CACHE_LOCK:
+        cached = _INLINE_KEY_CACHE.get(cache_key)
+    if cached is not None:
+        return cached
+
     last_error: Exception | None = None
     for cls in (paramiko.RSAKey, paramiko.Ed25519Key, paramiko.ECDSAKey, paramiko.DSSKey):
         try:
-            return cls.from_private_key(
+            key = cls.from_private_key(
                 io.StringIO(key_data),
                 password=passphrase or None,
             )
@@ -230,6 +286,11 @@ def _load_inline_private_key(key_data: str, passphrase: str | None) -> paramiko.
         except paramiko.SSHException as exc:
             last_error = exc
             continue
+        with _INLINE_KEY_CACHE_LOCK:
+            if len(_INLINE_KEY_CACHE) >= _INLINE_KEY_CACHE_MAX:
+                _INLINE_KEY_CACHE.clear()
+            _INLINE_KEY_CACHE[cache_key] = key
+        return key
     raise ValueError("Invalid SSH private key") from last_error
 
 
@@ -291,10 +352,44 @@ class SSHClientWrapper:
             raise ValueError(f"Unsupported auth type: {self.host.auth.type}")
         return kwargs
 
+    def _apply_keepalive(self, client: paramiko.SSHClient) -> None:
+        """Enable transport keepalive so idle links survive firewalls/NAT.
+
+        Guarded with ``getattr`` because lightweight test doubles do not expose
+        a transport; real ``paramiko.SSHClient`` instances always do.
+        """
+        get_transport = getattr(client, "get_transport", None)
+        if not callable(get_transport):
+            return
+        try:
+            transport = get_transport()
+        except Exception:  # noqa: BLE001 - keepalive is best-effort
+            return
+        if transport is not None:
+            transport.set_keepalive(self.keepalive_interval)
+
     def _get_client(self) -> paramiko.SSHClient:
         if self._client is None:
+            kwargs = self._build_connect_kwargs()
             client = self._client_factory()
-            client.connect(**self._build_connect_kwargs())
+            try:
+                client.connect(**kwargs)
+            except Exception as exc:  # noqa: BLE001 - classify transient vs fatal
+                if not _is_transient_connect_error(exc):
+                    raise
+                LOGGER.warning(
+                    "SSH connect to %s failed (%s); retrying once",
+                    self.host.host,
+                    exc.__class__.__name__,
+                )
+                try:
+                    client.close()
+                except Exception:  # noqa: BLE001 - best-effort teardown
+                    pass
+                time.sleep(_CONNECT_RETRY_BACKOFF)
+                client = self._client_factory()
+                client.connect(**kwargs)
+            self._apply_keepalive(client)
             self._client = client
         return self._client
 
@@ -322,6 +417,9 @@ class SSHClientWrapper:
 
     def run(self, command: str, timeout: int) -> CommandResult:
         client = self._get_client()
+        # Keepalive on the exec path too, not just the interactive shell: long
+        # polling intervals otherwise let idle transports be silently dropped.
+        self._apply_keepalive(client)
         _stdin, stdout, stderr = client.exec_command(command, timeout=timeout)
         return _execute_read_first(stdout, stderr)
 

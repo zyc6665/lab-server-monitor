@@ -1028,7 +1028,7 @@ class AlertEngine:
         when notifications are disabled; no open rows means an empty list.
         """
         try:
-            rows = self._open_alerts()
+            rows = self._open_alerts_for_host(host_name, category)
         except sqlite3.Error:
             LOGGER.exception(
                 "Failed to load open alerts while resolving %s/%s", host_name, category
@@ -1085,7 +1085,7 @@ class AlertEngine:
         remaining = set(active_fingerprints)
         skip = tuple(skip_prefixes)
         try:
-            rows = self._open_alerts()
+            rows = self._open_alerts_for_host(host_name, category)
         except sqlite3.Error:
             LOGGER.exception(
                 "Failed to load open alerts while resolving missing for %s", host_name
@@ -1137,7 +1137,7 @@ class AlertEngine:
         are logged and yield an empty set rather than aborting the cycle.
         """
         try:
-            rows = self._open_alerts()
+            rows = self._open_alerts_for_host(host_name, category)
         except sqlite3.Error:
             LOGGER.exception(
                 "Failed to load open alert fingerprints for %s", host_name
@@ -1175,20 +1175,22 @@ class AlertEngine:
 
     # -- internals ---------------------------------------------------------
 
-    def _open_alerts(self) -> list[dict]:
-        """Return every open alert: both ``active`` and ``acknowledged`` rows.
+    def _open_alerts_for_host(
+        self, host_name: str, category: str | None = None
+    ) -> list[dict]:
+        """Return this host's open alerts, filtered in SQL by host and category.
 
-        ``storage.list_alerts`` keeps its single-status contract, so the two
-        scans are merged here.  ``sqlite3.Error`` propagates to the caller.
+        Both ``active`` and ``acknowledged`` rows count as open.  Filtering by
+        ``host_name`` (and optional ``category``) in SQL avoids the previous
+        full-table scan plus Python-side filtering on every reconciliation call.
+        ``sqlite3.Error`` propagates to the caller.
         """
-        rows: list[dict] = []
-        for status in _OPEN_ALERT_STATUSES:
-            rows.extend(
-                storage.list_alerts(
-                    self._db_path, status=status, limit=_RESOLVE_SCAN_LIMIT
-                )
-            )
-        return rows
+        return storage.list_open_alerts_for_host(
+            host_name,
+            self._db_path,
+            category=category,
+            limit=_RESOLVE_SCAN_LIMIT,
+        )
 
     def _groups_for_host(self, host_name: str) -> list[str]:
         """Resolve a host's group memberships for silence matching."""

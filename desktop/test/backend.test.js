@@ -507,3 +507,56 @@ test('stop() resolves immediately when no backend is running', async () => {
   await controller.stop();
   assert.equal(controller.isRunning(), false);
 });
+
+test('startWithRetry retries once after a startup timeout and then succeeds', async () => {
+  const fsImpl = createFakeFs();
+  const spawnImpl = createFakeSpawn();
+  let spawnCount = 0;
+  spawnImpl.onSpawn = (child) => {
+    spawnCount += 1;
+    if (spawnCount === 1) {
+      // First attempt never publishes runtime.json; let stop() end it cleanly.
+      child.onStdinEnd = () => setImmediate(() => child.emit('exit', 0, null));
+    } else {
+      fsImpl.writeFileSync(
+        RUNTIME_FILE,
+        JSON.stringify({ url: 'http://127.0.0.1:9050', port: 9050 }),
+      );
+    }
+  };
+  const controller = createBackendController({
+    appDir: APP_DIR,
+    executablePath: EXECUTABLE,
+    spawnImpl,
+    fsImpl,
+    startupTimeoutMs: 20,
+    pollIntervalMs: 5,
+  });
+
+  const runtime = await controller.startWithRetry({ attempts: 2 });
+  assert.deepEqual(runtime, { url: 'http://127.0.0.1:9050', port: 9050 });
+  assert.equal(spawnCount, 2, 'expected exactly one retry');
+});
+
+test('startWithRetry gives up after the configured attempts', async () => {
+  const fsImpl = createFakeFs();
+  const spawnImpl = createFakeSpawn();
+  spawnImpl.onSpawn = (child) => {
+    child.onStdinEnd = () => setImmediate(() => child.emit('exit', 0, null));
+    setImmediate(() => child.emit('exit', 2, null));
+  };
+  const controller = createBackendController({
+    appDir: APP_DIR,
+    executablePath: EXECUTABLE,
+    spawnImpl,
+    fsImpl,
+    startupTimeoutMs: 50,
+    pollIntervalMs: 5,
+  });
+
+  await assert.rejects(
+    controller.startWithRetry({ attempts: 2 }),
+    /exited before runtime was ready/,
+  );
+  assert.equal(spawnImpl.calls.length, 2);
+});

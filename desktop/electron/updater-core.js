@@ -4,7 +4,14 @@ const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
 
-const RELEASE_PREFIX = '服务器轮询监测工具-Windows-x64-v';
+// Must match the asset name produced by release-windows.yml (step "Normalise
+// release asset name"), which renames the build artifact to
+// `lab-server-monitor-Windows-x64-v<version>.zip` before publishing.
+const RELEASE_PREFIX = 'lab-server-monitor-Windows-x64-v';
+
+// Hard ceiling for a downloaded update package. The portable build is a few
+// hundred MB at most; anything larger is a red flag (corrupt or hostile asset).
+const MAX_DOWNLOAD_BYTES = 512 * 1024 * 1024;
 
 function versionParts(version) {
   const cleaned = String(version || '')
@@ -54,12 +61,27 @@ function normaliseVersion(tag) {
   return String(tag || '').trim().replace(/^v/i, '');
 }
 
-function findAssets(release) {
+function findAssets(release, options = {}) {
   const assets = Array.isArray(release && release.assets) ? release.assets : [];
-  const zip = assets.find((asset) => {
+  const zips = assets.filter((asset) => {
     const name = String((asset && asset.name) || '');
     return /\.zip$/i.test(name) && !/\.sha256$/i.test(name);
   });
+  const version = options.version ? normaliseVersion(options.version) : '';
+  const expectedName = version ? `${RELEASE_PREFIX}${version}.zip` : '';
+  // Match the exact expected asset name first, then the release prefix, instead
+  // of blindly taking the first `*.zip` (which could pick a wrong artifact).
+  let zip = null;
+  if (expectedName) {
+    zip = zips.find((asset) => String((asset && asset.name) || '') === expectedName) || null;
+  }
+  if (!zip) {
+    zip = zips.find((asset) => String((asset && asset.name) || '').startsWith(RELEASE_PREFIX)) || null;
+  }
+  if (!zip && !version && zips.length === 1) {
+    // Legacy call without a version hint: fall back to the single zip.
+    zip = zips[0];
+  }
   if (!zip) return null;
   const sha =
     assets.find((asset) => String((asset && asset.name) || '') === `${zip.name}.sha256`) ||
@@ -173,7 +195,7 @@ function createUpdaterCore(options = {}) {
       writeCache({ checked_at: now(), result });
       return result;
     }
-    const assets = findAssets(release);
+    const assets = findAssets(release, { version });
     if (!assets || !assets.url) {
       return { status: 'error', message: '最新版本没有可下载的 Windows 绿色包' };
     }
@@ -196,6 +218,40 @@ function createUpdaterCore(options = {}) {
     if (!update || !update.asset_url) {
       throw new Error('缺少更新包下载地址');
     }
+    if (!update.checksum_url) {
+      throw new Error('更新包缺少校验文件地址，已中止更新（fail-closed）');
+    }
+
+    // 1. Resolve the expected checksum BEFORE downloading or applying anything.
+    //    If no usable hash is obtainable we fail closed and never apply the zip.
+    const checksumResponse = await fetchImpl(update.checksum_url, {
+      redirect: 'follow',
+      headers: {
+        Accept: 'application/octet-stream',
+        'User-Agent': 'servermonitor-desktop-updater',
+      },
+      signal: AbortSignal.timeout(60 * 1000),
+    });
+    if (!checksumResponse.ok) {
+      throw new Error(
+        `获取更新包校验文件失败: HTTP ${checksumResponse.status}（fail-closed，已中止更新）`,
+      );
+    }
+    const checksumText = await checksumResponse.text();
+    const checksumMatch = String(checksumText).trim().match(/[a-fA-F0-9]{64}/);
+    const expected = checksumMatch ? checksumMatch[0].toLowerCase() : null;
+    if (!expected) {
+      throw new Error('更新包校验文件格式无效，已中止更新（fail-closed）');
+    }
+
+    // 2. Reject oversized packages before buffering the body into memory.
+    const declaredSize = Number(update.asset_size);
+    if (Number.isFinite(declaredSize) && declaredSize > MAX_DOWNLOAD_BYTES) {
+      throw new Error(
+        `更新包过大（声明 ${declaredSize} 字节，上限 ${MAX_DOWNLOAD_BYTES} 字节）`,
+      );
+    }
+
     const downloadDir = pathImpl.join(updatesDir, 'download');
     fsImpl.mkdirSync(downloadDir, { recursive: true });
     const target = pathImpl.join(downloadDir, update.asset_name || `servermonitor-${update.version}.zip`);
@@ -208,26 +264,28 @@ function createUpdaterCore(options = {}) {
       signal: AbortSignal.timeout(30 * 60 * 1000),
     });
     if (!response.ok) throw new Error(`下载更新包失败: HTTP ${response.status}`);
-    const bytes = Buffer.from(await response.arrayBuffer());
 
-    let expected = null;
-    if (update.checksum_url) {
-      const checksumResponse = await fetchImpl(update.checksum_url, {
-        redirect: 'follow',
-        headers: {
-          Accept: 'application/octet-stream',
-          'User-Agent': 'servermonitor-desktop-updater',
-        },
-        signal: AbortSignal.timeout(60 * 1000),
-      });
-      if (checksumResponse.ok) {
-        const text = await checksumResponse.text();
-        const match = String(text).trim().match(/[a-fA-F0-9]{64}/);
-        expected = match ? match[0].toLowerCase() : null;
-      }
+    const contentLength =
+      response.headers && typeof response.headers.get === 'function'
+        ? Number(response.headers.get('content-length'))
+        : NaN;
+    if (Number.isFinite(contentLength) && contentLength > MAX_DOWNLOAD_BYTES) {
+      throw new Error(
+        `更新包过大（Content-Length ${contentLength} 字节，上限 ${MAX_DOWNLOAD_BYTES} 字节）`,
+      );
     }
+
+    const bytes = Buffer.from(await response.arrayBuffer());
+    if (bytes.length > MAX_DOWNLOAD_BYTES) {
+      throw new Error(
+        `更新包过大（实际 ${bytes.length} 字节，上限 ${MAX_DOWNLOAD_BYTES} 字节）`,
+      );
+    }
+
+    // 3. Verify the hash. Because `expected` is guaranteed above, this is now a
+    //    real gate: without a matching checksum the zip is never written/applied.
     const actual = crypto.createHash('sha256').update(bytes).digest('hex');
-    if (expected && expected !== actual) {
+    if (expected !== actual) {
       throw new Error(`更新包校验失败（期望 ${expected}，实际 ${actual}）`);
     }
     fsImpl.writeFileSync(target, bytes);
@@ -251,4 +309,5 @@ module.exports = {
   findAssets,
   createUpdaterCore,
   RELEASE_PREFIX,
+  MAX_DOWNLOAD_BYTES,
 };

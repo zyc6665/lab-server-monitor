@@ -131,6 +131,7 @@ from servermanage.storage.alerts import (  # noqa: F401
     list_alerts,
     list_alerts_for_host,
     list_recent_alerts_grouped,
+    list_open_alerts_for_host,
     list_silences,
     prune_alert_history,
     prune_alert_silences,

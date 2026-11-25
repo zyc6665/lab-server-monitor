@@ -369,6 +369,10 @@ def persist_host_reports(
 
     with _connect(db_path) as conn:
         conn.row_factory = sqlite3.Row
+        # Take the write lock up front so the metrics insert and the daily
+        # summary read-modify-write below happen atomically and cannot race a
+        # concurrent writer into a lost update.
+        conn.execute("BEGIN IMMEDIATE")
         conn.executemany(
             """
             INSERT INTO host_metrics_history (

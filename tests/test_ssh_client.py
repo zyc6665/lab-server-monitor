@@ -223,3 +223,108 @@ def test_ssh_client_key_auth_without_key_raises():
     wrapper = SSHClientWrapper(host=host, connect_timeout=5)
     with pytest.raises(ValueError, match="SSH key is not configured"):
         wrapper._build_connect_kwargs()
+
+
+class _KeepAliveTransport:
+    def __init__(self):
+        self.interval = None
+
+    def set_keepalive(self, value):
+        self.interval = value
+
+
+class _KeepAliveClient(FakeSSHClient):
+    def __init__(self):
+        super().__init__()
+        self.transport = _KeepAliveTransport()
+
+    def get_transport(self):
+        return self.transport
+
+
+def test_run_sets_transport_keepalive():
+    host = HostConfig(
+        name="gpu-01",
+        host="10.0.0.1",
+        port=22,
+        username="root",
+        auth=AuthConfig(type="password", password="secret"),
+    )
+    client = _KeepAliveClient()
+    wrapper = SSHClientWrapper(
+        host=host,
+        connect_timeout=10,
+        keepalive_interval=45,
+        client_factory=lambda: client,
+    )
+    wrapper.run("hostname", timeout=20)
+    wrapper.close()
+    assert client.transport.interval == 45
+
+
+class _FlakyClient(FakeSSHClient):
+    def __init__(self):
+        super().__init__()
+        self.failures_left = 1
+
+    def connect(self, **kwargs):
+        if self.failures_left > 0:
+            self.failures_left -= 1
+            self.connect_calls += 1
+            raise paramiko.SSHException("transient handshake failure")
+        return super().connect(**kwargs)
+
+
+def test_transient_connect_error_is_retried_once(monkeypatch):
+    import servermanage.ssh_client as ssh_client_mod
+
+    monkeypatch.setattr(ssh_client_mod, "_CONNECT_RETRY_BACKOFF", 0)
+    host = HostConfig(
+        name="gpu-01",
+        host="10.0.0.1",
+        port=22,
+        username="root",
+        auth=AuthConfig(type="password", password="secret"),
+    )
+    client = _FlakyClient()
+    wrapper = SSHClientWrapper(
+        host=host, connect_timeout=10, client_factory=lambda: client
+    )
+    result = wrapper.run("hostname", timeout=20)
+    wrapper.close()
+    assert result.stdout == "gpu-01"
+    assert client.connect_calls == 2
+
+
+class _AuthFailClient(FakeSSHClient):
+    def connect(self, **kwargs):
+        self.connect_calls += 1
+        raise paramiko.AuthenticationException("bad password")
+
+
+def test_auth_failure_is_not_retried(monkeypatch):
+    import servermanage.ssh_client as ssh_client_mod
+
+    monkeypatch.setattr(ssh_client_mod, "_CONNECT_RETRY_BACKOFF", 0)
+    host = HostConfig(
+        name="gpu-01",
+        host="10.0.0.1",
+        port=22,
+        username="root",
+        auth=AuthConfig(type="password", password="bad"),
+    )
+    client = _AuthFailClient()
+    wrapper = SSHClientWrapper(
+        host=host, connect_timeout=10, client_factory=lambda: client
+    )
+    with pytest.raises(paramiko.AuthenticationException):
+        wrapper.run("hostname", timeout=20)
+    assert client.connect_calls == 1
+
+
+def test_inline_private_key_parse_is_cached(plain_pem):
+    from servermanage.ssh_client import _load_inline_private_key
+
+    first = _load_inline_private_key(plain_pem, None)
+    second = _load_inline_private_key(plain_pem, None)
+    assert first is second

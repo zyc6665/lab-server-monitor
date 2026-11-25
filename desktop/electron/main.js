@@ -350,8 +350,9 @@ async function startBackendAndLoad() {
     },
   });
 
-  await backend.start();
-  const runtime = await backend.waitForRuntime();
+  // Retry once with a longer window before giving up: the first cold start on a
+  // slow / antivirus-scanned machine can exceed the default 30s timeout.
+  const runtime = await backend.startWithRetry({ attempts: 2 });
   currentRuntimeUrl = runtime.url;
   sendBackendState('running');
 

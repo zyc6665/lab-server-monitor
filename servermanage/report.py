@@ -28,7 +28,7 @@ _VIRTUAL_FILESYSTEMS = {
 def _build_environment() -> Environment:
     return Environment(
         loader=FileSystemLoader(str(TEMPLATE_DIR)),
-        autoescape=select_autoescape(enabled_extensions=("html", "xml")),
+        autoescape=select_autoescape(enabled_extensions=("html", "xml", "j2")),
         trim_blocks=True,
         lstrip_blocks=True,
     )
