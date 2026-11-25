@@ -10,6 +10,14 @@ import path from 'node:path';
 // backend/ directory (this test lives in backend/test/).
 const backendDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
+// On Windows a killed child can still hold its cwd / open handles for a short
+// window, making a recursive rm of the temp dir fail with EBUSY. Wait for the
+// process to actually exit before cleaning up.
+function waitForExit(child: ChildProcess): Promise<void> {
+  if (child.exitCode !== null || child.signalCode !== null) return Promise.resolve();
+  return new Promise<void>((resolve) => child.once('exit', () => resolve()));
+}
+
 describe('bundled CLI smoke', () => {
   let child: ChildProcess | undefined;
 
@@ -22,9 +30,10 @@ describe('bundled CLI smoke', () => {
     });
   }, 120_000);
 
-  afterAll(() => {
-    if (child && !child.killed) {
+  afterAll(async () => {
+    if (child && child.exitCode === null) {
       child.kill();
+      await waitForExit(child);
     }
   });
 
@@ -113,10 +122,11 @@ describe('packaged layout (no package.json on disk)', () => {
       const expectedVersion = JSON.parse(readFileSync(path.join(backendDir, 'package.json'), 'utf8')).version as string;
       expect(body.version).toBe(expectedVersion);
     } finally {
-      if (child && !child.killed) {
+      if (child && child.exitCode === null) {
         child.kill();
+        await waitForExit(child);
       }
-      await rm(root, { recursive: true, force: true });
+      await rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
     }
   }, 60_000);
 });
