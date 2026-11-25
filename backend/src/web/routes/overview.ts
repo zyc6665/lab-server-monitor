@@ -829,7 +829,7 @@ interface OverviewData {
   capacity: Obj[];
 }
 
-function buildOverview(db: SqliteDatabase, config: AppConfig): OverviewData {
+export function buildOverview(db: SqliteDatabase, config: AppConfig): OverviewData {
   const now = new Date();
   const settings = readOverviewSettings(db);
   const timezone = settings.timezone;
@@ -1048,7 +1048,7 @@ function formatFixedNumber(value: number, digits: number): string {
   return negative ? `-${text}` : text;
 }
 
-function buildHostReport(detail: HostDetail, generatedAt: Date, timezone: string, includeHeading: boolean): string {
+export function buildHostReport(detail: HostDetail, generatedAt: Date, timezone: string, includeHeading: boolean): string {
   const metrics = detail.metrics;
   const lines: string[] = [];
   if (includeHeading) {
@@ -1246,7 +1246,7 @@ function fmtWithDefault(row: Obj, key: string): string {
   return '—';
 }
 
-function buildHostDetail(
+export function buildHostDetail(
   name: string,
   config: AppConfig,
   snapshot: HostSnapshot | undefined,
@@ -1521,4 +1521,57 @@ export function registerOverviewRoutes(app: Express, deps: OverviewRouteDeps): v
     );
     res.status(200).send(`\ufeff${text}`);
   });
+}
+
+// ---------------------------------------------------------------------------
+// Reusable builder factory (for the composition root / hosts route)
+// ---------------------------------------------------------------------------
+
+/** Builder callbacks shaped like the optional `HostsRouteDeps` overrides. */
+export interface OverviewBuilders {
+  buildOverview: () => Obj;
+  buildHostDetail: (name: string) => Obj | null;
+  buildHostReport: (detail: Obj, generatedAt: Date) => string;
+}
+
+/**
+ * Binds the overview builders to a `db` + `config` pair so another route module
+ * (notably `hosts.ts`) can inject them instead of using its fallback stubs.
+ *
+ * Logic is identical to the private builders used by the overview routes; only
+ * the arguments are closed over.
+ */
+export function createOverviewBuilders(db: SqliteDatabase, config: AppConfig): OverviewBuilders {
+  return {
+    buildOverview: () => buildOverview(db, config) as unknown as Obj,
+    buildHostDetail: (name: string): Obj | null => {
+      const server = config.servers.find((entry) => entry.name === name);
+      if (!server) {
+        return null;
+      }
+      const settings = readOverviewSettings(db);
+      const timezone = settings.timezone;
+      const snapshot = getAllHostSnapshots(db).find((item) => item.host_name === name);
+      const disk = getAllDiskHealth(db).find((item) => item.host_name === name);
+      const grouped = listRecentAlertsGrouped(db, { perHost: 20 });
+      const localizedAlerts = (grouped[name] ?? []).map((alert: AlertRow) => ({
+        ...alert,
+        created_at: toLocalIso(alert.created_at, timezone),
+      }));
+      const checks = getAllHostCheckResults(db)[name] ?? [];
+      return buildHostDetail(
+        name,
+        config,
+        snapshot,
+        disk,
+        localizedAlerts,
+        checks,
+        timezone,
+      ) as unknown as Obj;
+    },
+    buildHostReport: (detail: Obj, generatedAt: Date): string => {
+      const settings = readOverviewSettings(db);
+      return buildHostReport(detail as unknown as HostDetail, generatedAt, settings.timezone, true);
+    },
+  };
 }

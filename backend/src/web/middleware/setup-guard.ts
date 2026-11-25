@@ -17,14 +17,23 @@ import type { RequestHandler } from 'express';
 import { isApiRequest, isStaticRequest } from './paths';
 
 export interface SetupGuardOptions {
-  /** Whether first-run setup is still pending. */
-  required: boolean;
+  /**
+   * Whether first-run setup is still pending.
+   *
+   * May be a predicate: the Python oracle re-reads `setup_required` from the DB
+   * on every request, so after the admin credential is created the same app
+   * instance must stop gating. A function value is evaluated per-request.
+   */
+  required: boolean | (() => boolean);
 }
 
 /** Builds the setup-guard middleware. */
 export function setupGuard(options: SetupGuardOptions): RequestHandler {
+  const isRequired = typeof options.required === 'function'
+    ? options.required
+    : () => options.required as boolean;
   return (req, res, next) => {
-    if (!options.required) {
+    if (!isRequired()) {
       return next();
     }
     const path = req.path;

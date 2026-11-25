@@ -6,6 +6,9 @@ import { mkdir, rm, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 
 import { APP_VERSION } from './version';
+import type { AppConfig } from './config/config';
+
+type SqliteDatabase = import('better-sqlite3').Database;
 
 /** Builds the Express app with the P0 system routes. */
 export function createApp(): Express {
@@ -28,6 +31,16 @@ export interface StartServerOptions {
    * listening and removed again by {@link StartedServer.close}.
    */
   runtimePath?: string;
+  /**
+   * Optional open SQLite handle. When supplied together with {@link config},
+   * the server assembles the full P2 web app via `createServerApp` instead of
+   * the P0 health-only app. When either is omitted the behaviour is unchanged
+   * (health endpoint only) — this keeps the Electron utilityProcess boot and
+   * the packaged `main.cjs` smoke test working without a database.
+   */
+  db?: SqliteDatabase;
+  /** Optional resolved runtime config; required alongside {@link db}. */
+  config?: AppConfig;
 }
 
 export interface StartedServer {
@@ -42,7 +55,19 @@ export interface StartedServer {
  */
 export async function startServer(opts: StartServerOptions = {}): Promise<StartedServer> {
   const requestedPort = opts.port ?? 0;
-  const app = createApp();
+
+  // Full composition when a database + config are injected; otherwise the
+  // P0 health-only app (default Electron boot). The composition module is
+  // imported lazily so the health-only bundle never loads the native
+  // better-sqlite3 / @primno/dpapi modules at startup.
+  let app: Express;
+  if (opts.db && opts.config) {
+    const { createServerApp } = await import('./web/composition');
+    app = createServerApp({ db: opts.db, config: opts.config });
+  } else {
+    app = createApp();
+  }
+
   const server: Server = createServer(app);
 
   await new Promise<void>((resolve, reject) => {

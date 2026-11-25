@@ -107,7 +107,9 @@ export function createWebApp(options: CreateWebAppOptions): Express {
   app.use(express.urlencoded({ extended: false }));
 
   // ① setup -> ② csrf -> ③ auth -> ④ usermode
-  app.use(setupGuard({ required: resolved.setupRequired }));
+  // Re-read the setup state per request so a freshly created admin credential
+  // unblocks the same app instance (the Python oracle reads it dynamically too).
+  app.use(setupGuard({ required: () => publicSettings(db).setup_required === true }));
   app.use(csrf(session));
   app.use(auth(session, { enabled: resolved.authEnabled }));
   app.use(usermode({ mode: resolved.mode }));

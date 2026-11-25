@@ -14,9 +14,10 @@ await build({
   format: 'cjs',
   bundle: true,
   target: 'node22',
-  // P1 will use the native better-sqlite3 module; keep it external so it is
-  // never pulled into the bundle.
-  external: ['better-sqlite3'],
+  // P1/P2 use native modules; keep them external so they are never pulled into
+  // the bundle. The composition root is imported lazily (health-only boots do
+  // not require them), so the packaged main.cjs still starts without a DB.
+  external: ['better-sqlite3', '@primno/dpapi'],
   entryPoints: ['src/server.ts'],
   outfile: 'dist/main.cjs',
   sourcemap: false,
