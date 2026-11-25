@@ -4,6 +4,10 @@ packages:
 # pnpm >= 10 reads the build-script allow-list from here (not package.json).
 # esbuild ships a postinstall; better-sqlite3 uses prebuilt binaries but is
 # listed too so a source build is permitted on platforms without prebuilds.
+# @primno/dpapi declares `"gypfile": true` but ships prebuilt N-API binaries and
+# an `install` script that is a no-op (`exit 0`), so allowing its build scripts
+# does NOT require MSVC/Visual C++ build tools.
 allowBuilds:
   esbuild: true
   better-sqlite3: true
+  '@primno/dpapi': true

@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@primno/dpapi": "^2.0.1",
     "better-sqlite3": "^13.2.0",
     "express": "^5.3.0"
   },
