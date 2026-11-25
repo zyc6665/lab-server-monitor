@@ -140,11 +140,46 @@ function hostReport(overrides: Partial<HostReport> = {}): HostReport {
 
 /** Stub deps that keep every task inert except the parts under test. */
 function inertDeps(overrides: Partial<SchedulerWiringDeps> = {}): SchedulerWiringDeps {
+  const fakeRunner = {
+    run: async () => ({ exitStatus: 0, stdout: '', stderr: '' }),
+    runSudo: async () => ({ exitStatus: 0, stdout: '', stderr: '' }),
+    close: () => undefined,
+  };
   return {
     collectAllHosts: async () => [],
     persistReports: () => undefined,
     pruneRetention: () => ({}),
     cleanupLogs: () => ({ deleted: 0, bytes: 0 }),
+    // Keep the P5 disk-poll / user-scan tasks inert (no SSH, no wall clock).
+    createDiskRunner: () => fakeRunner,
+    collectDisk: async (host) => ({
+      host_name: host.name,
+      collected_at: '2026-01-09T09:00:00.000Z',
+      status: 'ok',
+      message: '',
+      controllers: [],
+      virtual_drives: [],
+      physical_drives: [],
+    }),
+    saveDisk: () => undefined,
+    evaluateDisk: () => [],
+    pruneDisk: () => ({}),
+    diskAlertEngine: { process: async () => [], resolve_missing: () => undefined },
+    runUserScan: async () => ({
+      hosts_total: 0,
+      hosts_done: 0,
+      hosts_failed: 0,
+      accounts: 0,
+      errors: {},
+      started_at: '2026-01-09T09:00:00.000Z',
+      finished_at: '2026-01-09T09:00:01.000Z',
+      running: false,
+      current_host: null,
+      current_account: null,
+      next_account: null,
+      accounts_done: 0,
+      accounts_total: 0,
+    }),
     ...overrides,
   };
 }
@@ -167,8 +202,10 @@ describe('buildScheduledTasks — task set and cadences', () => {
     const tasks = buildScheduledTasks({ db, config, deps: inertDeps() });
     expect(tasks.map((task) => task.name)).toEqual([
       'collect',
+      'disk-poll',
       'daily-report',
       'weekly-report',
+      'user-scan',
       'prune',
     ]);
 
@@ -189,7 +226,7 @@ describe('buildScheduledTasks — task set and cadences', () => {
     const { db } = freshDb();
     saveAppSettings(db, 'report', { daily_enabled: false, weekly: { enabled: false } });
     const tasks = buildScheduledTasks({ db, config: makeConfig(), deps: inertDeps() });
-    expect(tasks.map((task) => task.name)).toEqual(['collect', 'prune']);
+    expect(tasks.map((task) => task.name)).toEqual(['collect', 'disk-poll', 'prune']);
   });
 
   it('honours a custom poll interval, timezone-driven calendar times remain configurable', () => {
@@ -342,8 +379,10 @@ describe('runPending catch-up semantics', () => {
 
     await expect(scheduler.runPending()).resolves.toEqual([
       'collect',
+      'disk-poll',
       'daily-report',
       'weekly-report',
+      'user-scan',
       'prune',
     ]);
     // Nothing is due again at the same instant.

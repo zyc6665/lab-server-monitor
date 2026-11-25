@@ -34,6 +34,8 @@ import { setAdminPassword } from '../../src/web/routes/auth';
 import { buildDefaultDeps, createServerApp } from '../../src/web/composition';
 import type { SessionManager } from '../../src/web/session';
 import { cleanupStorageTests, freshDb, type FreshDb } from '../storage-helpers';
+import { saveAppSettings } from '../../src/storage/settings';
+import { getCollectionStatusRegistry } from '../../src/runtime/collection-status';
 
 const ADMIN_PASSWORD = 'admin-test-pw';
 
@@ -120,16 +122,24 @@ describe('buildDefaultDeps — P3 collection wiring', () => {
     expect(typeof deps.pages?.buildComputeSummary).toBe('function');
   });
 
-  it('exposes availability hooks and leaves remaining P4/P5 hooks undefined', () => {
+  it('wires P5 collection + users monitor/admin hooks', async () => {
     const fresh = freshDb();
     const deps = buildDefaultDeps(fresh.db, makeConfig([makeServer({ name: 'a', host: PUBLIC_HOST })]));
 
     // P4 Task 7 migrated availability checks into the composition root.
     expect(typeof deps.hosts?.runHostChecks).toBe('function');
     expect(typeof deps.hosts?.prepareHostCheck).toBe('function');
-    expect(deps.hosts?.collectHosts).toBeUndefined();
-    expect(deps.hosts?.collectionStatus).toBeUndefined();
-    expect(deps.users?.monitorService ?? undefined).toBeUndefined();
+    // P5 Task 11b wires on-demand collection + its shared status registry.
+    expect(typeof deps.hosts?.collectHosts).toBe('function');
+    expect(typeof deps.hosts?.collectionStatus).toBe('function');
+    const statuses = await deps.hosts!.collectionStatus!(['a']);
+    expect(statuses['a']).toMatchObject({ state: 'unknown' });
+    // P5 Task 11b wires the users monitor service + plan-only admin API.
+    expect(typeof deps.users?.monitorService?.refresh_users).toBe('function');
+    expect(typeof deps.users?.monitorService?.user_scan_status).toBe('function');
+    expect(typeof deps.users?.admin?.buildPlan).toBe('function');
+    expect(typeof deps.users?.admin?.publicPlan).toBe('function');
+    expect(typeof deps.users?.admin?.AdminPlanError).toBe('function');
   });
 
   it('maps a key-auth host with no key material to a failure ProbeResult (no dial)', async () => {
@@ -230,5 +240,81 @@ describe('createServerApp — P3 assembly', () => {
     expect(res.status).toBe(200);
     expect(res.body).toEqual({ ok: true, status: 'ok', message: 'fake-probe' });
     expect(calls).toHaveLength(1);
+  });
+});
+
+describe('createServerApp — P5 Task 11b wiring', () => {
+  /** Builds an app with write access enabled and a writable `alpha` host. */
+  function setupWritableApp(options: { deps?: Record<string, unknown>; servers?: HostConfig[] } = {}) {
+    const fresh = freshDb();
+    setAdminPassword(fresh.db, { newPassword: ADMIN_PASSWORD, username: 'admin' });
+    saveAppSettings(fresh.db, 'user_monitoring', { enabled: true, write_enabled: true });
+    const servers =
+      options.servers ??
+      [
+        makeServer({
+          name: 'alpha',
+          host: PUBLIC_HOST,
+          allow_user_write: true,
+          sudo_password: 's3cret',
+        }),
+      ];
+    const app = createServerApp({
+      db: fresh.db,
+      config: makeConfig(servers),
+      mountStatic: false,
+      deps: options.deps as never,
+    });
+    return { fresh, app };
+  }
+
+  it('previews an account plan through the wired admin API', async () => {
+    const { app } = setupWritableApp();
+    const res = await request(app)
+      .post('/api/users/plan')
+      .set('Cookie', loginCookie(app, 'csrf'))
+      .set('X-CSRF-Token', 'csrf')
+      .send({ host: 'alpha', account: 'newuser', operation: 'create' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
+    expect(typeof res.body.plan).toBe('object');
+    expect(typeof res.body.plan.plan_hash).toBe('string');
+  });
+
+  it('returns 503 from the plan route when the admin collaborator is absent', async () => {
+    const { app } = setupWritableApp({ deps: { users: { admin: null } } });
+    const res = await request(app)
+      .post('/api/users/plan')
+      .set('Cookie', loginCookie(app, 'csrf'))
+      .set('X-CSRF-Token', 'csrf')
+      .send({ host: 'alpha', account: 'newuser', operation: 'create' });
+
+    expect(res.status).toBe(503);
+    expect(res.body.error).toBe('unavailable');
+  });
+
+  it('rejects an unknown execution plan with 410 plan_expired', async () => {
+    const { app } = setupWritableApp();
+    const res = await request(app)
+      .post('/api/users/execute')
+      .set('Cookie', loginCookie(app, 'csrf'))
+      .set('X-CSRF-Token', 'csrf')
+      .send({ plan_hash: 'does-not-exist' });
+
+    expect(res.status).toBe(410);
+    expect(res.body.error).toBe('plan_expired');
+  });
+
+  it('serves collection status from the shared registry', async () => {
+    const { fresh, app } = setupWritableApp();
+    getCollectionStatusRegistry(fresh.db).markRunning(['alpha']);
+
+    const res = await request(app)
+      .get('/api/settings/hosts/collection-status?names=alpha')
+      .set('Cookie', loginCookie(app));
+
+    expect(res.status).toBe(200);
+    expect(res.body.statuses).toMatchObject({ alpha: { state: 'running' } });
   });
 });

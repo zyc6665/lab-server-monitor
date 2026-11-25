@@ -36,7 +36,19 @@ import {
 import { SshClient, type SshConnectConfig } from '../collect/ssh-client';
 import type { CommandResult } from '../collect/types';
 import { coerceHostCheckConfig, runHostChecks, type CheckRunner } from '../runtime/availability';
+import { collectHostsNow } from '../runtime/wiring';
+import { getCollectionStatusRegistry } from '../runtime/collection-status';
 import { getAllHostSnapshots } from '../storage/hosts';
+import { getAllUserScanStates } from '../storage/users';
+import {
+  AdminPlanError,
+  buildPlan as adminBuildPlan,
+  publicPlan as adminPublicPlan,
+  validateAccountName as adminValidateAccountName,
+  type AdminPlan,
+  type BuildPlanParams,
+} from '../users/admin';
+import { runUserScan, type ScanSummary } from '../users/collection';
 import { createWebApp } from './app';
 import { registerAuthRoutes, type AuthRouteDeps } from './routes/auth';
 import {
@@ -47,7 +59,7 @@ import {
 import { registerHostsRoutes, type HostsRouteDeps } from './routes/hosts';
 import { registerSettingsRoutes, type SettingsRouteDeps } from './routes/settings';
 import { registerAlertsRoutes, type AlertsRouteDeps } from './routes/alerts';
-import { registerUsersRoutes, type UsersRouteDeps } from './routes/users';
+import { registerUsersRoutes, type UsersRouteDeps, type UsersAdminApi, type UsersMonitorService } from './routes/users';
 import { registerSystemRoutes, type SystemRouteDeps } from './routes/system';
 import { registerPagesRoutes, type PagesRouteDeps } from './routes/pages';
 import { registerDiskHealthRoutes, type DiskHealthRouteDeps } from './routes/disk-health';
@@ -300,6 +312,134 @@ function createComputeSummaryBuilder(): (db: SqliteDatabase, config: AppConfig) 
     });
 }
 
+/** Per-database in-flight user scan state (shared across route requests). */
+interface UsersMonitorState {
+  running: boolean;
+  status: ScanSummary | null;
+  promise: Promise<unknown> | null;
+}
+
+const usersMonitorStates = new WeakMap<object, UsersMonitorState>();
+
+function getUsersMonitorState(db: object): UsersMonitorState {
+  let state = usersMonitorStates.get(db);
+  if (!state) {
+    state = { running: false, status: null, promise: null };
+    usersMonitorStates.set(db, state);
+  }
+  return state;
+}
+
+/** ScanSummary-compatible snapshot derived from persisted `user_scan_state` rows. */
+function persistedUserScanStatus(db: SqliteDatabase): Record<string, unknown> {
+  const states = getAllUserScanStates(db);
+  const names = Object.keys(states);
+  const errors: Record<string, string> = {};
+  let done = 0;
+  for (const name of names) {
+    const state = states[name];
+    if (state && state.last_scan_at) {
+      done += 1;
+    }
+    if (state && state.last_error) {
+      errors[name] = state.last_error;
+    }
+  }
+  return {
+    running: false,
+    started_at: null,
+    finished_at: null,
+    hosts_total: names.length,
+    hosts_done: done,
+    hosts_failed: Object.keys(errors).length,
+    accounts: 0,
+    current_host: null,
+    current_account: null,
+    next_account: null,
+    accounts_done: 0,
+    accounts_total: 0,
+    errors,
+  };
+}
+
+/**
+ * Builds the `monitorService` for the users routes (P5 Task 11b).
+ *
+ * `refresh_users` starts {@link runUserScan} in the background, mirroring
+ * `ServerMonitor.refresh_users` (non-blocking; idempotent while a scan runs).
+ * `user_scan_status` returns the in-flight `ScanSummary`, or when idle a
+ * ScanSummary-compatible snapshot derived from `storage/users` scan state.
+ */
+function createUsersMonitorService(db: SqliteDatabase, config: AppConfig): UsersMonitorService {
+  const state = getUsersMonitorState(db);
+
+  return {
+    refresh_users: async (options?: { force_usage?: boolean }) => {
+      if (state.running) {
+        return { ok: true, started: false, reason: 'already_running' };
+      }
+      state.running = true;
+      const forceUsage = options?.force_usage === true;
+      state.promise = (async () => {
+        try {
+          state.status = await runUserScan({ db, config, forceUsage });
+        } catch (error) {
+          state.status = null;
+          console.error('用户扫描失败', error);
+        } finally {
+          state.running = false;
+        }
+      })();
+      return { ok: true, started: true };
+    },
+    user_scan_status: () => {
+      if (state.running) {
+        return { ...(state.status ?? {}), running: true };
+      }
+      if (state.status) {
+        return { ...state.status, running: false };
+      }
+      return persistedUserScanStatus(db);
+    },
+  };
+}
+
+/**
+ * Builds the `admin` planner API for the users routes (P5 Task 11b).
+ *
+ * The route calls `buildPlan(operation, options)` with camelCase option keys;
+ * this adapter maps them onto the `users/admin.ts` snake_case {@link
+ * BuildPlanParams}. `AdminPlanError`/`validateAccountName`/`publicPlan` are the
+ * real planner helpers, so plan preview works end-to-end. Actually executing a
+ * plan is intentionally left unwired (see the module docs): `executePlan` is
+ * synchronous while `SshClient` is async and no production `PlanRunner` exists.
+ */
+function createUsersAdmin(): UsersAdminApi {
+  return {
+    AdminPlanError,
+    validateAccountName: (value: unknown) => adminValidateAccountName(value),
+    buildPlan: (operation: string, options: Record<string, unknown>) => {
+      const params: BuildPlanParams = {
+        operation,
+        host_name: typeof options['hostName'] === 'string' ? (options['hostName'] as string) : '',
+        account: typeof options['account'] === 'string' ? (options['account'] as string) : '',
+        password:
+          typeof options['password'] === 'string'
+            ? (options['password'] as string)
+            : null,
+        account_exists: Boolean(options['accountExists']),
+        data_supported: options['dataSupported'] !== false,
+        sudo_configured: Boolean(options['sudoOk']),
+        with_docker: options['withDocker'] !== false,
+        with_data: options['withData'] !== false,
+      };
+      return adminBuildPlan(params) as unknown as Record<string, unknown>;
+    },
+    publicPlan: (plan: Record<string, unknown>) =>
+      adminPublicPlan(plan as unknown as AdminPlan) as unknown as Record<string, unknown>,
+  };
+}
+
 /**
  * Builds a {@link CompositionDeps} value with the cross-module wiring that can
  * be derived purely from `db` + `config`.
@@ -326,6 +466,15 @@ export function buildDefaultDeps(db: SqliteDatabase, config: AppConfig): Composi
           timeoutMs: readSshSettings(db).commandTimeoutSec * 1000,
         }),
       prepareHostCheck: (payload: Record<string, unknown>) => coerceHostCheckConfig(payload),
+      collectHosts: async (names: string[]) => {
+        await collectHostsNow(db, config, names);
+      },
+      collectionStatus: (names: string[] | null) =>
+        getCollectionStatusRegistry(db).snapshot(names),
+    },
+    users: {
+      monitorService: createUsersMonitorService(db, config),
+      admin: createUsersAdmin(),
     },
     pages: {
       buildComputeSummary: createComputeSummaryBuilder(),
@@ -362,7 +511,13 @@ export function createServerApp(opts: CreateServerAppOptions): Express {
       });
       registerSettingsRoutes(app, { ...overrides.settings, db, config, appVersion });
       registerAlertsRoutes(app, { ...overrides.alerts, db, config, appVersion });
-      registerUsersRoutes(app, { ...overrides.users, db, config, appVersion });
+      registerUsersRoutes(app, {
+        ...defaults.users,
+        ...overrides.users,
+        db,
+        config,
+        appVersion,
+      });
       registerSystemRoutes(app, { ...overrides.system, db, config, appVersion });
       registerPagesRoutes(app, {
         ...defaults.pages,

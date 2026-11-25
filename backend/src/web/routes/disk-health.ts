@@ -21,6 +21,7 @@ import type { Express } from 'express';
 import type { AppConfig, HostConfig } from '../../config/config';
 import { loadEffectiveSettings } from '../../config/service';
 import { getAllDiskHealth, type DiskHealthSnapshot } from '../../storage/disk';
+import { aggregateDiskHealth, diskReportFromSnapshot } from '../../disk/report';
 import { anchor as anchorSlug, createTemplating, type Templating } from '../templating';
 import { ENDPOINTS } from './registry';
 
@@ -83,22 +84,16 @@ function roundTo(value: number, digits: number): number {
 
 /** `_disk_health_summary`: per-drive healthy/warning/critical counts + status. */
 export function diskHealthSummary(health: DiskHealthSnapshot | undefined): DiskHealthCounts {
-  const counts = { healthy: 0, warning: 0, critical: 0 };
-  if (!health) {
-    return { status: 'unknown', ...counts };
-  }
-  for (const raw of health.physical_drives ?? []) {
-    const drive = asObj(raw);
-    const value = String(drive.health ?? '').toLowerCase();
-    if (value === 'healthy') {
-      counts.healthy += 1;
-    } else if (value === 'warning') {
-      counts.warning += 1;
-    } else if (value === 'critical') {
-      counts.critical += 1;
-    }
-  }
-  return { status: String(health.status || 'unknown'), ...counts };
+  // Unified with the scheduler's aggregation口径: reconstruct a report from the
+  // persisted snapshot, then let `aggregateDiskHealth` count it. This keeps the
+  // page totals identical to what the disk-poll task/alerts see.
+  const { summary } = aggregateDiskHealth(health ? diskReportFromSnapshot(health) : null);
+  return {
+    status: summary.status,
+    healthy: summary.healthy,
+    warning: summary.warning,
+    critical: summary.critical,
+  };
 }
 
 /**
