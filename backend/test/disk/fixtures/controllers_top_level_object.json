@@ -1,0 +1,42 @@
+{
+"Controllers":[
+{
+	"Command Status" : {
+		"CLI Version" : "007.2705.0000.0000 August 24, 2023",
+		"Operating system" : "Linux 5.4.0-216-generic",
+		"Controller" : 0,
+		"Status" : "Success",
+		"Description" : "Show Controller Information Succeeded."
+	},
+	"Response Data" : {
+		"Product Name" : "PERC H730 Mini",
+		"FW Version" : "25.5.6.0001",
+		"Cachevault_Info" : [
+			{
+				"Type" : "CVPM02",
+				"State" : "Optimal"
+			}
+		]
+	}
+},
+{
+	"Command Status" : {
+		"CLI Version" : "007.2705.0000.0000 August 24, 2023",
+		"Operating system" : "Linux 5.4.0-216-generic",
+		"Controller" : 1,
+		"Status" : "Success",
+		"Description" : "Show Controller Information Succeeded."
+	},
+	"Response Data" : {
+		"Product Name" : "MegaRAID SAS 9361-8i",
+		"FW Version" : "4.680.00-8561",
+		"BBU_Info" : [
+			{
+				"Type" : "iBBU",
+				"State" : ""
+			}
+		]
+	}
+}
+]
+}

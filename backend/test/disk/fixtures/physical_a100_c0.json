@@ -1,0 +1,490 @@
+{
+"Controllers":[
+{
+	"Command Status" : {
+		"CLI Version" : "007.2705.0000.0000 August 24, 2023",
+		"Operating system" : "Linux 5.4.0-216-generic",
+		"Controller" : 0,
+		"Status" : "Success",
+		"Description" : "Show Drive Information Succeeded."
+	},
+	"Response Data" : {
+		"Drive /c0/e252/s0" : [
+			{
+				"EID:Slt" : "252:0",
+				"DID" : 9,
+				"State" : "Onln",
+				"DG" : 0,
+				"Size" : "931.000 GB",
+				"Intf" : "SATA",
+				"Med" : "SSD",
+				"SED" : "N",
+				"PI" : "N",
+				"SeSz" : "512B",
+				"Model" : "Samsung SSD 870 EVO 1TB",
+				"Sp" : "U",
+				"Type" : "-"
+			}
+		],
+		"Drive /c0/e252/s0 - Detailed Information" : {
+			"Drive /c0/e252/s0 State" : {
+				"Shield Counter" : 0,
+				"Media Error Count" : 0,
+				"Other Error Count" : 0,
+				"Drive Temperature" : " 27C (80.60 F)",
+				"Predictive Failure Count" : 0,
+				"S.M.A.R.T alert flagged by drive" : "No"
+			},
+			"Drive /c0/e252/s0 Device attributes" : {
+				"SN" : "S6PVNX0T205787W     ",
+				"Manufacturer Id" : "ATA     ",
+				"Model Number" : "Samsung SSD 870 EVO 1TB",
+				"NAND Vendor" : "NA",
+				"WWN" : "5002538F4222591F",
+				"Firmware Revision" : "SVT02B6Q",
+				"Raw size" : "931.512 GB [0x74706db0 Sectors]",
+				"Coerced size" : "931.000 GB [0x74600000 Sectors]",
+				"Non Coerced size" : "931.012 GB [0x74606db0 Sectors]",
+				"Device Speed" : "6.0Gb/s",
+				"Link Speed" : "6.0Gb/s",
+				"NCQ setting" : "Enabled",
+				"Write Cache" : "N/A",
+				"Logical Sector Size" : "512B",
+				"Physical Sector Size" : "512B",
+				"Connector Name" : "Port 0 - 3 x1"
+			},
+			"Drive /c0/e252/s0 Policies/Settings" : {
+				"Drive position" : "DriveGroup:0, Span:0, Row:0",
+				"Enclosure position" : "1",
+				"Connected Port Number" : "0(path0) ",
+				"Sequence Number" : 2,
+				"Commissioned Spare" : "No",
+				"Emergency Spare" : "No",
+				"Last Predictive Failure Event Sequence Number" : 0,
+				"Successful diagnostics completion on" : "N/A",
+				"FDE Type" : "None",
+				"SED Capable" : "No",
+				"SED Enabled" : "No",
+				"Secured" : "No",
+				"Cryptographic Erase Capable" : "No",
+				"Sanitize Support" : "Not supported",
+				"Locked" : "No",
+				"Needs EKM Attention" : "No",
+				"PI Eligible" : "No",
+				"Drive is formatted for PI" : "No",
+				"PI type" : "No PI",
+				"Number of bytes of user data in LBA" : "0 KB",
+				"Certified" : "No",
+				"Wide Port Capable" : "No",
+				"Multipath" : "No",
+				"Port Information" : [
+					{
+						"Port" : 0,
+						"Status" : "Active",
+						"Linkspeed" : "6.0Gb/s",
+						"SAS address" : "0x4433221100000000"
+					}
+				]
+			},
+			"Inquiry Data" : "40 00 ff 3f 37 c8 10 00 00 00 00 00 3f 00 00 00 00 00 00 00 36 53 56 50 58 4e 54 30 30 32 37 35 37 38 20 57 20 20 20 20 00 00 00 00 00 00 56 53 30 54 42 32 51 36 61 53 73 6d 6e 75 20 67 53 53 20 44 37 38 20 30 56 45 20 4f 54 31 20 42 20 20 20 20 20 20 20 20 20 20 20 20 20 20 20 20 01 80 01 40 00 2f 00 40 00 02 00 02 07 00 ff 3f 10 00 3f 00 10 fc fb 00 01 01 ff ff ff 0f 00 00 07 00 "
+		},
+		"Drive /c0/e252/s1" : [
+			{
+				"EID:Slt" : "252:1",
+				"DID" : 11,
+				"State" : "Onln",
+				"DG" : 0,
+				"Size" : "931.000 GB",
+				"Intf" : "SATA",
+				"Med" : "SSD",
+				"SED" : "N",
+				"PI" : "N",
+				"SeSz" : "512B",
+				"Model" : "Samsung SSD 870 EVO 1TB",
+				"Sp" : "U",
+				"Type" : "-"
+			}
+		],
+		"Drive /c0/e252/s1 - Detailed Information" : {
+			"Drive /c0/e252/s1 State" : {
+				"Shield Counter" : 0,
+				"Media Error Count" : 0,
+				"Other Error Count" : 0,
+				"Drive Temperature" : " 26C (78.80 F)",
+				"Predictive Failure Count" : 0,
+				"S.M.A.R.T alert flagged by drive" : "No"
+			},
+			"Drive /c0/e252/s1 Device attributes" : {
+				"SN" : "S6PVNX0T200870D     ",
+				"Manufacturer Id" : "ATA     ",
+				"Model Number" : "Samsung SSD 870 EVO 1TB",
+				"NAND Vendor" : "NA",
+				"WWN" : "5002538F42223C1B",
+				"Firmware Revision" : "SVT02B6Q",
+				"Raw size" : "931.512 GB [0x74706db0 Sectors]",
+				"Coerced size" : "931.000 GB [0x74600000 Sectors]",
+				"Non Coerced size" : "931.012 GB [0x74606db0 Sectors]",
+				"Device Speed" : "6.0Gb/s",
+				"Link Speed" : "6.0Gb/s",
+				"NCQ setting" : "Enabled",
+				"Write Cache" : "N/A",
+				"Logical Sector Size" : "512B",
+				"Physical Sector Size" : "512B",
+				"Connector Name" : "Port 0 - 3 x1"
+			},
+			"Drive /c0/e252/s1 Policies/Settings" : {
+				"Drive position" : "DriveGroup:0, Span:0, Row:1",
+				"Enclosure position" : "0",
+				"Connected Port Number" : "1(path0) ",
+				"Sequence Number" : 2,
+				"Commissioned Spare" : "No",
+				"Emergency Spare" : "No",
+				"Last Predictive Failure Event Sequence Number" : 0,
+				"Successful diagnostics completion on" : "N/A",
+				"FDE Type" : "None",
+				"SED Capable" : "No",
+				"SED Enabled" : "No",
+				"Secured" : "No",
+				"Cryptographic Erase Capable" : "No",
+				"Sanitize Support" : "Not supported",
+				"Locked" : "No",
+				"Needs EKM Attention" : "No",
+				"PI Eligible" : "No",
+				"Drive is formatted for PI" : "No",
+				"PI type" : "No PI",
+				"Number of bytes of user data in LBA" : "0 KB",
+				"Certified" : "No",
+				"Wide Port Capable" : "No",
+				"Multipath" : "No",
+				"Port Information" : [
+					{
+						"Port" : 0,
+						"Status" : "Active",
+						"Linkspeed" : "6.0Gb/s",
+						"SAS address" : "0x4433221101000000"
+					}
+				]
+			},
+			"Inquiry Data" : "40 00 ff 3f 37 c8 10 00 00 00 00 00 3f 00 00 00 00 00 00 00 36 53 56 50 58 4e 54 30 30 32 38 30 30 37 20 44 20 20 20 20 00 00 00 00 00 00 56 53 30 54 42 32 51 36 61 53 73 6d 6e 75 20 67 53 53 20 44 37 38 20 30 56 45 20 4f 54 31 20 42 20 20 20 20 20 20 20 20 20 20 20 20 20 20 20 20 01 80 01 40 00 2f 00 40 00 02 00 02 07 00 ff 3f 10 00 3f 00 10 fc fb 00 01 01 ff ff ff 0f 00 00 07 00 "
+		},
+		"Drive /c0/e252/s2" : [
+			{
+				"EID:Slt" : "252:2",
+				"DID" : 6,
+				"State" : "Onln",
+				"DG" : 1,
+				"Size" : "7.276 TB",
+				"Intf" : "SATA",
+				"Med" : "HDD",
+				"SED" : "N",
+				"PI" : "N",
+				"SeSz" : "512B",
+				"Model" : "HGST HUS728T8TALE6L4",
+				"Sp" : "U",
+				"Type" : "-"
+			}
+		],
+		"Drive /c0/e252/s2 - Detailed Information" : {
+			"Drive /c0/e252/s2 State" : {
+				"Shield Counter" : 0,
+				"Media Error Count" : 0,
+				"Other Error Count" : 0,
+				"Drive Temperature" : " 31C (87.80 F)",
+				"Predictive Failure Count" : 0,
+				"S.M.A.R.T alert flagged by drive" : "No"
+			},
+			"Drive /c0/e252/s2 Device attributes" : {
+				"SN" : "VYG2DT9M            ",
+				"Manufacturer Id" : "ATA     ",
+				"Model Number" : "HGST HUS728T8TALE6L4",
+				"NAND Vendor" : "NA",
+				"WWN" : "5000CCA0C6C118BB",
+				"Firmware Revision" : "V8GAW4J0",
+				"Raw size" : "7.277 TB [0x3a3812ab0 Sectors]",
+				"Coerced size" : "7.276 TB [0x3a3710000 Sectors]",
+				"Non Coerced size" : "7.276 TB [0x3a3712ab0 Sectors]",
+				"Device Speed" : "6.0Gb/s",
+				"Link Speed" : "6.0Gb/s",
+				"NCQ setting" : "Enabled",
+				"Write Cache" : "N/A",
+				"Logical Sector Size" : "512B",
+				"Physical Sector Size" : "4 KB",
+				"Connector Name" : "Port 0 - 3 x1"
+			},
+			"Drive /c0/e252/s2 Policies/Settings" : {
+				"Drive position" : "DriveGroup:1, Span:0, Row:0",
+				"Enclosure position" : "0",
+				"Connected Port Number" : "2(path0) ",
+				"Sequence Number" : 2,
+				"Commissioned Spare" : "No",
+				"Emergency Spare" : "No",
+				"Last Predictive Failure Event Sequence Number" : 0,
+				"Successful diagnostics completion on" : "N/A",
+				"FDE Type" : "None",
+				"SED Capable" : "No",
+				"SED Enabled" : "No",
+				"Secured" : "No",
+				"Cryptographic Erase Capable" : "No",
+				"Sanitize Support" : "Not supported",
+				"Locked" : "No",
+				"Needs EKM Attention" : "No",
+				"PI Eligible" : "No",
+				"Drive is formatted for PI" : "No",
+				"PI type" : "No PI",
+				"Number of bytes of user data in LBA" : "0 KB",
+				"Certified" : "No",
+				"Wide Port Capable" : "No",
+				"Multipath" : "No",
+				"Port Information" : [
+					{
+						"Port" : 0,
+						"Status" : "Active",
+						"Linkspeed" : "6.0Gb/s",
+						"SAS address" : "0x4433221102000000"
+					}
+				]
+			},
+			"Inquiry Data" : "5a 04 ff 3f 37 c8 10 00 00 00 00 00 3f 00 00 00 00 00 00 00 59 56 32 47 54 44 4d 39 20 20 20 20 20 20 20 20 20 20 20 20 03 00 00 00 38 00 38 56 41 47 34 57 30 4a 47 48 54 53 48 20 53 55 32 37 54 38 54 38 4c 41 36 45 34 4c 20 20 20 20 20 20 20 20 20 20 20 20 20 20 20 20 20 20 20 20 10 80 00 40 00 2f 00 40 00 02 00 02 07 00 ff 3f 10 00 3f 00 10 fc fb 00 00 59 ff ff ff 0f 00 00 07 00 "
+		},
+		"Drive /c0/e252/s3" : [
+			{
+				"EID:Slt" : "252:3",
+				"DID" : 7,
+				"State" : "Onln",
+				"DG" : 1,
+				"Size" : "7.276 TB",
+				"Intf" : "SATA",
+				"Med" : "HDD",
+				"SED" : "N",
+				"PI" : "N",
+				"SeSz" : "512B",
+				"Model" : "HGST HUS728T8TALE6L4",
+				"Sp" : "U",
+				"Type" : "-"
+			}
+		],
+		"Drive /c0/e252/s3 - Detailed Information" : {
+			"Drive /c0/e252/s3 State" : {
+				"Shield Counter" : 0,
+				"Media Error Count" : 0,
+				"Other Error Count" : 0,
+				"Drive Temperature" : " 31C (87.80 F)",
+				"Predictive Failure Count" : 0,
+				"S.M.A.R.T alert flagged by drive" : "No"
+			},
+			"Drive /c0/e252/s3 Device attributes" : {
+				"SN" : "VYG32K3M            ",
+				"Manufacturer Id" : "ATA     ",
+				"Model Number" : "HGST HUS728T8TALE6L4",
+				"NAND Vendor" : "NA",
+				"WWN" : "5000CCA0C6C166B1",
+				"Firmware Revision" : "V8GAW4J0",
+				"Raw size" : "7.277 TB [0x3a3812ab0 Sectors]",
+				"Coerced size" : "7.276 TB [0x3a3710000 Sectors]",
+				"Non Coerced size" : "7.276 TB [0x3a3712ab0 Sectors]",
+				"Device Speed" : "6.0Gb/s",
+				"Link Speed" : "6.0Gb/s",
+				"NCQ setting" : "Enabled",
+				"Write Cache" : "N/A",
+				"Logical Sector Size" : "512B",
+				"Physical Sector Size" : "4 KB",
+				"Connector Name" : "Port 0 - 3 x1"
+			},
+			"Drive /c0/e252/s3 Policies/Settings" : {
+				"Drive position" : "DriveGroup:1, Span:0, Row:1",
+				"Enclosure position" : "0",
+				"Connected Port Number" : "3(path0) ",
+				"Sequence Number" : 2,
+				"Commissioned Spare" : "No",
+				"Emergency Spare" : "No",
+				"Last Predictive Failure Event Sequence Number" : 0,
+				"Successful diagnostics completion on" : "N/A",
+				"FDE Type" : "None",
+				"SED Capable" : "No",
+				"SED Enabled" : "No",
+				"Secured" : "No",
+				"Cryptographic Erase Capable" : "No",
+				"Sanitize Support" : "Not supported",
+				"Locked" : "No",
+				"Needs EKM Attention" : "No",
+				"PI Eligible" : "No",
+				"Drive is formatted for PI" : "No",
+				"PI type" : "No PI",
+				"Number of bytes of user data in LBA" : "0 KB",
+				"Certified" : "No",
+				"Wide Port Capable" : "No",
+				"Multipath" : "No",
+				"Port Information" : [
+					{
+						"Port" : 0,
+						"Status" : "Active",
+						"Linkspeed" : "6.0Gb/s",
+						"SAS address" : "0x4433221103000000"
+					}
+				]
+			},
+			"Inquiry Data" : "5a 04 ff 3f 37 c8 10 00 00 00 00 00 3f 00 00 00 00 00 00 00 59 56 33 47 4b 32 4d 33 20 20 20 20 20 20 20 20 20 20 20 20 03 00 00 00 38 00 38 56 41 47 34 57 30 4a 47 48 54 53 48 20 53 55 32 37 54 38 54 38 4c 41 36 45 34 4c 20 20 20 20 20 20 20 20 20 20 20 20 20 20 20 20 20 20 20 20 10 80 00 40 00 2f 00 40 00 02 00 02 07 00 ff 3f 10 00 3f 00 10 fc fb 00 00 59 ff ff ff 0f 00 00 07 00 "
+		},
+		"Drive /c0/e252/s4" : [
+			{
+				"EID:Slt" : "252:4",
+				"DID" : 10,
+				"State" : "Onln",
+				"DG" : 1,
+				"Size" : "7.276 TB",
+				"Intf" : "SATA",
+				"Med" : "HDD",
+				"SED" : "N",
+				"PI" : "N",
+				"SeSz" : "512B",
+				"Model" : "HGST HUS728T8TALE6L4",
+				"Sp" : "U",
+				"Type" : "-"
+			}
+		],
+		"Drive /c0/e252/s4 - Detailed Information" : {
+			"Drive /c0/e252/s4 State" : {
+				"Shield Counter" : 0,
+				"Media Error Count" : 0,
+				"Other Error Count" : 0,
+				"Drive Temperature" : " 32C (89.60 F)",
+				"Predictive Failure Count" : 0,
+				"S.M.A.R.T alert flagged by drive" : "No"
+			},
+			"Drive /c0/e252/s4 Device attributes" : {
+				"SN" : "VYG0B66R            ",
+				"Manufacturer Id" : "ATA     ",
+				"Model Number" : "HGST HUS728T8TALE6L4",
+				"NAND Vendor" : "NA",
+				"WWN" : "5000CCA0C6C02A0B",
+				"Firmware Revision" : "V8GAW4J0",
+				"Raw size" : "7.277 TB [0x3a3812ab0 Sectors]",
+				"Coerced size" : "7.276 TB [0x3a3710000 Sectors]",
+				"Non Coerced size" : "7.276 TB [0x3a3712ab0 Sectors]",
+				"Device Speed" : "6.0Gb/s",
+				"Link Speed" : "6.0Gb/s",
+				"NCQ setting" : "Enabled",
+				"Write Cache" : "N/A",
+				"Logical Sector Size" : "512B",
+				"Physical Sector Size" : "4 KB",
+				"Connector Name" : "Port 4 - 7 x1"
+			},
+			"Drive /c0/e252/s4 Policies/Settings" : {
+				"Drive position" : "DriveGroup:1, Span:0, Row:2",
+				"Enclosure position" : "0",
+				"Connected Port Number" : "4(path0) ",
+				"Sequence Number" : 2,
+				"Commissioned Spare" : "No",
+				"Emergency Spare" : "No",
+				"Last Predictive Failure Event Sequence Number" : 0,
+				"Successful diagnostics completion on" : "N/A",
+				"FDE Type" : "None",
+				"SED Capable" : "No",
+				"SED Enabled" : "No",
+				"Secured" : "No",
+				"Cryptographic Erase Capable" : "No",
+				"Sanitize Support" : "Not supported",
+				"Locked" : "No",
+				"Needs EKM Attention" : "No",
+				"PI Eligible" : "No",
+				"Drive is formatted for PI" : "No",
+				"PI type" : "No PI",
+				"Number of bytes of user data in LBA" : "0 KB",
+				"Certified" : "No",
+				"Wide Port Capable" : "No",
+				"Multipath" : "No",
+				"Port Information" : [
+					{
+						"Port" : 0,
+						"Status" : "Active",
+						"Linkspeed" : "6.0Gb/s",
+						"SAS address" : "0x4433221104000000"
+					}
+				]
+			},
+			"Inquiry Data" : "5a 04 ff 3f 37 c8 10 00 00 00 00 00 3f 00 00 00 00 00 00 00 59 56 30 47 36 42 52 36 20 20 20 20 20 20 20 20 20 20 20 20 03 00 00 00 38 00 38 56 41 47 34 57 30 4a 47 48 54 53 48 20 53 55 32 37 54 38 54 38 4c 41 36 45 34 4c 20 20 20 20 20 20 20 20 20 20 20 20 20 20 20 20 20 20 20 20 10 80 00 40 00 2f 00 40 00 02 00 02 07 00 ff 3f 10 00 3f 00 10 fc fb 00 00 59 ff ff ff 0f 00 00 07 00 "
+		},
+		"Drive /c0/e252/s5" : [
+			{
+				"EID:Slt" : "252:5",
+				"DID" : 8,
+				"State" : "Onln",
+				"DG" : 1,
+				"Size" : "7.276 TB",
+				"Intf" : "SATA",
+				"Med" : "HDD",
+				"SED" : "N",
+				"PI" : "N",
+				"SeSz" : "512B",
+				"Model" : "HGST HUS728T8TALE6L4",
+				"Sp" : "U",
+				"Type" : "-"
+			}
+		],
+		"Drive /c0/e252/s5 - Detailed Information" : {
+			"Drive /c0/e252/s5 State" : {
+				"Shield Counter" : 0,
+				"Media Error Count" : 0,
+				"Other Error Count" : 0,
+				"Drive Temperature" : " 30C (86.00 F)",
+				"Predictive Failure Count" : 0,
+				"S.M.A.R.T alert flagged by drive" : "No"
+			},
+			"Drive /c0/e252/s5 Device attributes" : {
+				"SN" : "VYG321HM            ",
+				"Manufacturer Id" : "ATA     ",
+				"Model Number" : "HGST HUS728T8TALE6L4",
+				"NAND Vendor" : "NA",
+				"WWN" : "5000CCA0C6C164CD",
+				"Firmware Revision" : "V8GAW4J0",
+				"Raw size" : "7.277 TB [0x3a3812ab0 Sectors]",
+				"Coerced size" : "7.276 TB [0x3a3710000 Sectors]",
+				"Non Coerced size" : "7.276 TB [0x3a3712ab0 Sectors]",
+				"Device Speed" : "6.0Gb/s",
+				"Link Speed" : "6.0Gb/s",
+				"NCQ setting" : "Enabled",
+				"Write Cache" : "N/A",
+				"Logical Sector Size" : "512B",
+				"Physical Sector Size" : "4 KB",
+				"Connector Name" : "Port 4 - 7 x1"
+			},
+			"Drive /c0/e252/s5 Policies/Settings" : {
+				"Drive position" : "DriveGroup:1, Span:0, Row:3",
+				"Enclosure position" : "0",
+				"Connected Port Number" : "5(path0) ",
+				"Sequence Number" : 2,
+				"Commissioned Spare" : "No",
+				"Emergency Spare" : "No",
+				"Last Predictive Failure Event Sequence Number" : 0,
+				"Successful diagnostics completion on" : "N/A",
+				"FDE Type" : "None",
+				"SED Capable" : "No",
+				"SED Enabled" : "No",
+				"Secured" : "No",
+				"Cryptographic Erase Capable" : "No",
+				"Sanitize Support" : "Not supported",
+				"Locked" : "No",
+				"Needs EKM Attention" : "No",
+				"PI Eligible" : "No",
+				"Drive is formatted for PI" : "No",
+				"PI type" : "No PI",
+				"Number of bytes of user data in LBA" : "0 KB",
+				"Certified" : "No",
+				"Wide Port Capable" : "No",
+				"Multipath" : "No",
+				"Port Information" : [
+					{
+						"Port" : 0,
+						"Status" : "Active",
+						"Linkspeed" : "6.0Gb/s",
+						"SAS address" : "0x4433221105000000"
+					}
+				]
+			},
+			"Inquiry Data" : "5a 04 ff 3f 37 c8 10 00 00 00 00 00 3f 00 00 00 00 00 00 00 59 56 33 47 31 32 4d 48 20 20 20 20 20 20 20 20 20 20 20 20 03 00 00 00 38 00 38 56 41 47 34 57 30 4a 47 48 54 53 48 20 53 55 32 37 54 38 54 38 4c 41 36 45 34 4c 20 20 20 20 20 20 20 20 20 20 20 20 20 20 20 20 20 20 20 20 10 80 00 40 00 2f 00 40 00 02 00 02 07 00 ff 3f 10 00 3f 00 10 fc fb 00 00 59 ff ff ff 0f 00 00 07 00 "
+		}
+	}
+}
+]
+}
+

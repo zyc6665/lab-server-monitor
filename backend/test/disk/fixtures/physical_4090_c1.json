@@ -1,0 +1,174 @@
+{
+"Controllers":[
+{
+	"Command Status" : {
+		"CLI Version" : "007.2705.0000.0000 August 24, 2023",
+		"Operating system" : "Linux 5.4.0-216-generic",
+		"Controller" : 1,
+		"Status" : "Success",
+		"Description" : "Show Drive Information Succeeded."
+	},
+	"Response Data" : {
+		"Drive /c1/e252/s4" : [
+			{
+				"EID:Slt" : "252:4",
+				"DID" : 0,
+				"State" : "Onln",
+				"DG" : 0,
+				"Size" : "893.750 GB",
+				"Intf" : "SATA",
+				"Med" : "SSD",
+				"SED" : "N",
+				"PI" : "N",
+				"SeSz" : "512B",
+				"Model" : "INTEL SSDSC2KB960GZ",
+				"Sp" : "U",
+				"Type" : "-"
+			}
+		],
+		"Drive /c1/e252/s4 - Detailed Information" : {
+			"Drive /c1/e252/s4 State" : {
+				"Shield Counter" : 0,
+				"Media Error Count" : 0,
+				"Other Error Count" : 0,
+				"Drive Temperature" : " 29C (84.20 F)",
+				"Predictive Failure Count" : 0,
+				"S.M.A.R.T alert flagged by drive" : "No"
+			},
+			"Drive /c1/e252/s4 Device attributes" : {
+				"SN" : "PHYI244402P0960CGN  ",
+				"Manufacturer Id" : "ATA     ",
+				"Model Number" : "INTEL SSDSC2KB960GZ",
+				"NAND Vendor" : "NA",
+				"WWN" : "55CD2E41561CA7F6",
+				"Firmware Revision" : "7CV10120",
+				"Raw size" : "894.252 GB [0x6fc81ab0 Sectors]",
+				"Coerced size" : "893.750 GB [0x6fb80000 Sectors]",
+				"Non Coerced size" : "893.752 GB [0x6fb81ab0 Sectors]",
+				"Device Speed" : "6.0Gb/s",
+				"Link Speed" : "6.0Gb/s",
+				"NCQ setting" : "Enabled",
+				"Write Cache" : "N/A",
+				"Logical Sector Size" : "512B",
+				"Physical Sector Size" : "4 KB",
+				"Connector Name" : "Port 4 - 7 x1"
+			},
+			"Drive /c1/e252/s4 Policies/Settings" : {
+				"Drive position" : "DriveGroup:0, Span:0, Row:0",
+				"Enclosure position" : "1",
+				"Connected Port Number" : "0(path0) ",
+				"Sequence Number" : 2,
+				"Commissioned Spare" : "No",
+				"Emergency Spare" : "No",
+				"Last Predictive Failure Event Sequence Number" : 0,
+				"Successful diagnostics completion on" : "N/A",
+				"FDE Type" : "None",
+				"SED Capable" : "No",
+				"SED Enabled" : "No",
+				"Secured" : "No",
+				"Cryptographic Erase Capable" : "Yes",
+				"Sanitize Support" : "Not supported",
+				"Locked" : "No",
+				"Needs EKM Attention" : "No",
+				"PI Eligible" : "No",
+				"Drive is formatted for PI" : "No",
+				"PI type" : "No PI",
+				"Number of bytes of user data in LBA" : "0 KB",
+				"Certified" : "No",
+				"Wide Port Capable" : "No",
+				"Multipath" : "No",
+				"Port Information" : [
+					{
+						"Port" : 0,
+						"Status" : "Active",
+						"Linkspeed" : "6.0Gb/s",
+						"SAS address" : "0x4433221104000000"
+					}
+				]
+			},
+			"Inquiry Data" : "40 00 ff 3f 37 c8 10 00 00 00 00 00 3f 00 00 00 00 00 00 00 48 50 49 59 34 32 34 34 32 30 30 50 36 39 43 30 4e 47 20 20 00 00 00 00 00 00 43 37 31 56 31 30 30 32 4e 49 45 54 20 4c 53 53 53 44 32 43 42 4b 36 39 47 30 20 5a 20 20 20 20 20 20 20 20 20 20 20 20 20 20 20 20 20 20 20 20 01 80 00 40 00 2f 00 40 00 00 00 00 06 00 ff 3f 10 00 3f 00 10 fc fb 00 01 fd ff ff ff 0f 00 00 07 00 "
+		},
+		"Drive /c1/e252/s5" : [
+			{
+				"EID:Slt" : "252:5",
+				"DID" : 1,
+				"State" : "Onln",
+				"DG" : 0,
+				"Size" : "893.750 GB",
+				"Intf" : "SATA",
+				"Med" : "SSD",
+				"SED" : "N",
+				"PI" : "N",
+				"SeSz" : "512B",
+				"Model" : "INTEL SSDSC2KB960GZ",
+				"Sp" : "U",
+				"Type" : "-"
+			}
+		],
+		"Drive /c1/e252/s5 - Detailed Information" : {
+			"Drive /c1/e252/s5 State" : {
+				"Shield Counter" : 0,
+				"Media Error Count" : 0,
+				"Other Error Count" : 0,
+				"Drive Temperature" : " 29C (84.20 F)",
+				"Predictive Failure Count" : 0,
+				"S.M.A.R.T alert flagged by drive" : "No"
+			},
+			"Drive /c1/e252/s5 Device attributes" : {
+				"SN" : "PHYI328100PM960CGN  ",
+				"Manufacturer Id" : "ATA     ",
+				"Model Number" : "INTEL SSDSC2KB960GZ",
+				"NAND Vendor" : "NA",
+				"WWN" : "55CD2E41564B5181",
+				"Firmware Revision" : "7CV10120",
+				"Raw size" : "894.252 GB [0x6fc81ab0 Sectors]",
+				"Coerced size" : "893.750 GB [0x6fb80000 Sectors]",
+				"Non Coerced size" : "893.752 GB [0x6fb81ab0 Sectors]",
+				"Device Speed" : "6.0Gb/s",
+				"Link Speed" : "6.0Gb/s",
+				"NCQ setting" : "Enabled",
+				"Write Cache" : "N/A",
+				"Logical Sector Size" : "512B",
+				"Physical Sector Size" : "4 KB",
+				"Connector Name" : "Port 4 - 7 x1"
+			},
+			"Drive /c1/e252/s5 Policies/Settings" : {
+				"Drive position" : "DriveGroup:0, Span:0, Row:1",
+				"Enclosure position" : "0",
+				"Connected Port Number" : "1(path0) ",
+				"Sequence Number" : 2,
+				"Commissioned Spare" : "No",
+				"Emergency Spare" : "No",
+				"Last Predictive Failure Event Sequence Number" : 0,
+				"Successful diagnostics completion on" : "N/A",
+				"FDE Type" : "None",
+				"SED Capable" : "No",
+				"SED Enabled" : "No",
+				"Secured" : "No",
+				"Cryptographic Erase Capable" : "Yes",
+				"Sanitize Support" : "Not supported",
+				"Locked" : "No",
+				"Needs EKM Attention" : "No",
+				"PI Eligible" : "No",
+				"Drive is formatted for PI" : "No",
+				"PI type" : "No PI",
+				"Number of bytes of user data in LBA" : "0 KB",
+				"Certified" : "No",
+				"Wide Port Capable" : "No",
+				"Multipath" : "No",
+				"Port Information" : [
+					{
+						"Port" : 0,
+						"Status" : "Active",
+						"Linkspeed" : "6.0Gb/s",
+						"SAS address" : "0x4433221105000000"
+					}
+				]
+			},
+			"Inquiry Data" : "40 00 ff 3f 37 c8 10 00 00 00 00 00 3f 00 00 00 00 00 00 00 48 50 49 59 32 33 31 38 30 30 4d 50 36 39 43 30 4e 47 20 20 00 00 00 00 00 00 43 37 31 56 31 30 30 32 4e 49 45 54 20 4c 53 53 53 44 32 43 42 4b 36 39 47 30 20 5a 20 20 20 20 20 20 20 20 20 20 20 20 20 20 20 20 20 20 20 20 01 80 00 40 00 2f 00 40 00 00 00 00 06 00 ff 3f 10 00 3f 00 10 fc fb 00 01 fd ff ff ff 0f 00 00 07 00 "
+		}
+	}
+}
+]
+}
+
