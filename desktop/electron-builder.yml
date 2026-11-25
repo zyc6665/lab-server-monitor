@@ -4,12 +4,17 @@ directories:
   output: release-electron
 afterPack: scripts/after-pack.js
 files:
-  - electron/**
-  - build/icon.ico
+  - dist/**/*
   - package.json
 extraResources:
-  - from: ../dist/backend/servermonitor-backend
-    to: backend
+  - from: ../backend/dist/main.cjs
+    to: backend/main.cjs
 win:
-  target: dir
+  target: nsis
   icon: build/icon.ico
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  deleteAppDataOnUninstall: false
+artifactName: "ServerMonitor-${version}-Setup.${ext}"

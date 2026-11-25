@@ -2,10 +2,10 @@
   "name": "server-monitor-desktop",
   "version": "0.1.239",
   "private": true,
-  "main": "electron/main.js",
+  "main": "dist/main.cjs",
   "scripts": {
     "start": "electron .",
-    "build": "electron-builder --win",
+    "build": "node scripts/build-main.mjs && electron-builder --win",
     "test": "node --test",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test:unit": "vitest run --config vitest.config.ts",
