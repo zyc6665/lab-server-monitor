@@ -8,6 +8,6 @@
     "typecheck": "pnpm --filter servermonitor-backend typecheck"
   },
   "pnpm": {
-    "onlyBuiltDependencies": ["esbuild"]
+    "onlyBuiltDependencies": ["esbuild", "better-sqlite3"]
   }
 }
