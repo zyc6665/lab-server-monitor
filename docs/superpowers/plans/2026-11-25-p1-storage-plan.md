@@ -1,6 +1,6 @@
 # P1 存储层迁移 · 实施计划（better-sqlite3 复刻 Python `servermanage/storage/*`）
 
-**Goal（本阶段）:** 在 `backend/src/storage/*` 用 `better-sqlite3` 1:1 复刻现有 Python 存储层（21 张表 / 幂等 DDL / 老库迁移 / 仓库 API / 备份校验 / 时间与密钥格式），保证**同一个 SQLite 文件**在 Node 侧读写与 Python 侧逐字节兼容，并提供 Python↔Node 差分对照作为门禁。
+**Goal（本阶段）:** 在 `backend/src/storage/*` 用 `better-sqlite3` 1:1 复刻现有 Python 存储层（20 张表 + 隐式 sqlite_sequence / 幂等 DDL / 老库迁移 / 仓库 API / 备份校验 / 时间与密钥格式），保证**同一个 SQLite 文件**在 Node 侧读写与 Python 侧逐字节兼容，并提供 Python↔Node 差分对照作为门禁。
 
 **Architecture:** 单进程同步访问；每次操作独立打开的语义由「一个进程级 `Database` 句柄 + WAL + busy_timeout」等价实现（不再需要连接池）。写多行/多表处用 `db.transaction(fn).immediate()` 复刻 `BEGIN IMMEDIATE`。所有时间经 `nowIsoUtc()`。
 
@@ -57,12 +57,12 @@
 
 **Files:** `backend/src/storage/schema.ts`、`backend/test/schema.test.ts`。
 
-- [ ] Step 1：把 `base.py:39-370` 的 21 张表 DDL 逐字移植为 `SCHEMA_SQL`（字段名/类型/PK/`NOT NULL`/`DEFAULT`/索引名一致）。
-- [ ] Step 2（失败测试）：全新库 `initSchema(db)` 后断言 `sqlite_master` 含全部 21 表 + 期望索引；重复调用幂等（`IF NOT EXISTS`）。
+- [ ] Step 1：把 `base.py:39-370` 的 20 张表 DDL 逐字移植为 `SCHEMA_SQL`（字段名/类型/PK/`NOT NULL`/`DEFAULT`/索引名一致）。
+- [ ] Step 2（失败测试）：全新库 `initSchema(db)` 后断言 `sqlite_master` 含全部 20 张用户表（+ sqlite_sequence）+ 期望索引；重复调用幂等（`IF NOT EXISTS`）。
 - [ ] Step 3：对每表做 `PRAGMA table_info` 快照测试（列名+顺序+类型）。
-- [ ] Step 4：提交 `feat(p1): full 21-table DDL + idempotent initSchema`。
+- [ ] Step 4：提交 `feat(p1): full 20-table DDL + idempotent initSchema`。
 
-**Acceptance:** 21 表齐全、列定义与 Python 一致、重复 init 无副作用。
+**Acceptance:** 20 张用户表齐全、列定义与 Python 一致、重复 init 无副作用。
 
 ## Task 3: 老库迁移 + 安全网
 
@@ -187,7 +187,7 @@
 **Files:** `docs/superpowers/plans/p1-acceptance.md`。
 
 - [ ] Step 1：跑 `backend` 全量 vitest + `tsc`；跑 Python `pytest`（须 1892 passed / 1 skipped）；跑差分 harness。
-- [ ] Step 2：写验收文档（表：DDL 21/迁移/差分/备份/DPAPI/真实库副本 结果）。
+- [ ] Step 2：写验收文档（表：DDL 20/迁移/差分/备份/DPAPI/真实库副本 结果）。
 - [ ] Step 3：提交 `test(p1): P1 acceptance`；P1 DoD：Node 存储层与 Python 同输入同输出、老库可迁移、备份校验通过、基线绿。
 
 **Acceptance:** 上面全绿且工作树干净。
@@ -196,7 +196,7 @@
 
 ## P1 完成定义（DoD）
 
-1. `backend/src/storage/*` 覆盖 21 表 DDL + 全部仓库 API（签名与 Python 对应函数一一映射）。
+1. `backend/src/storage/*` 覆盖 20 表 DDL + 全部仓库 API（签名与 Python 对应函数一一映射）。
 2. 老库（legacy fixture + 真实库副本）打开即幂等迁移、不丢数据；迁移失败回滚 + 中止启动。
 3. `nowIsoUtc()` 严格 `...+00:00` 6 位微秒；JSON/布尔/密钥格式逐字节兼容；旧 DPAPI blob 可解。
 4. 差分 harness 代表性读路径 diff=0；备份文件通过 `validateBackupDatabase`。
