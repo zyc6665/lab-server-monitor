@@ -1,0 +1,485 @@
+{
+  "daily": [
+    {
+      "name": "baseline-two-hosts",
+      "generated_at": "2024-05-01T09:30:15+00:00",
+      "subject_prefix": "[Server Daily Report]",
+      "reports": [
+        {
+          "host_name": "alpha",
+          "host": "10.0.0.11",
+          "success": true,
+          "metrics": {
+            "hostname": "alpha",
+            "os_pretty_name": "Ubuntu 24.04.1 LTS",
+            "kernel_version": "6.8.0-41-generic",
+            "uptime": "12 days, 3:04",
+            "collected_at": "2024-05-01T09:29:58+00:00",
+            "load_average": { "load_1": 0.52, "load_5": 0.61, "load_15": 0.55 },
+            "cpu_core_count": 16,
+            "cpu_usage_percent": 42.35,
+            "memory": {
+              "total_mb": 65536,
+              "used_mb": 21345,
+              "free_mb": 44191,
+              "shared_mb": 512,
+              "buff_cache_mb": 8192,
+              "available_mb": 42000,
+              "swap_total_mb": 8192,
+              "swap_used_mb": 12,
+              "swap_free_mb": 8180
+            },
+            "disk_usage": [
+              { "filesystem": "/dev/sda1", "size": "500G", "used": "250G", "available": "250G", "percent": "50%", "mountpoint": "/" },
+              { "filesystem": "tmpfs", "size": "32G", "used": "1.2G", "available": "31G", "percent": "4%", "mountpoint": "/run" },
+              { "filesystem": "/dev/sdb1", "size": "2T", "used": "1.5T", "available": "0.5T", "percent": "75%", "mountpoint": "/data" }
+            ],
+            "logged_in_users": [
+              { "username": "alice", "terminal": "pts/0", "login_at": "2024-05-01T08:10:00+00:00", "remote_host": "10.0.0.5" },
+              { "username": "bob", "terminal": "pts/1", "login_at": "2024-05-01T07:00:00+00:00", "remote_host": null }
+            ],
+            "total_processes": 321,
+            "process_counts_by_user": [
+              { "username": "alice", "count": 120, "container_id": null, "container_name": null },
+              { "username": "root", "count": 80, "container_id": "abcdef1234567890ff", "container_name": null },
+              { "username": "svc", "count": 40, "container_id": null, "container_name": "web" },
+              { "username": "nobody", "count": 3, "container_id": null, "container_name": null }
+            ],
+            "top_cpu_processes": [
+              { "username": "alice", "pid": 101, "cpu_percent": 220.5, "mem_percent": 3.2, "elapsed": "01:20:00", "command": "python train.py", "container_id": null, "container_name": "ml" },
+              { "username": "root", "pid": 7, "cpu_percent": 12.0, "mem_percent": 0.5, "elapsed": "10:00", "command": "sshd", "container_id": null, "container_name": null }
+            ],
+            "top_memory_processes": [
+              { "username": "bob", "pid": 202, "cpu_percent": 5.0, "mem_percent": 22.4, "elapsed": "02:00:00", "command": "java -jar app.jar", "container_id": null, "container_name": null }
+            ],
+            "gpu_summary": [
+              { "index": 0, "name": "NVIDIA A100", "utilization_percent": 63.0, "temperature_c": 58, "memory_used_mb": 20480, "memory_total_mb": 40960 },
+              { "index": 1, "name": "NVIDIA A100", "utilization_percent": 71.5, "temperature_c": 61, "memory_used_mb": 30720, "memory_total_mb": 40960 }
+            ],
+            "gpu_processes": [
+              { "index": 0, "pid": 101, "username": "alice", "memory_used_mb": 20480, "command": "python train.py" }
+            ],
+            "net_rx_bytes": 123456789,
+            "net_tx_bytes": 98765432,
+            "containers": [
+              { "name": "web", "image": "nginx:1.25", "state": "running", "status": "Up 2 hours" }
+            ],
+            "thermal_zones": [
+              { "label": "CPU", "celsius": 45.5 },
+              { "label": "Board", "celsius": 0.0 }
+            ]
+          },
+          "errors": [],
+          "checks": [
+            { "name": "ping", "type": "icmp", "target": "10.0.0.1", "status": "ok", "message": "", "latency_ms": 1.2 },
+            { "name": "http", "type": "http", "target": "https://alpha/health", "status": "fail", "message": "timeout", "latency_ms": 5000.0 }
+          ]
+        },
+        {
+          "host_name": "beta",
+          "host": "10.0.0.12",
+          "success": true,
+          "metrics": {
+            "hostname": "beta",
+            "cpu_usage_percent": null
+          },
+          "errors": [],
+          "checks": []
+        }
+      ]
+    },
+    {
+      "name": "empty-report",
+      "generated_at": "2024-05-02T00:00:00+00:00",
+      "subject_prefix": "[Server Daily Report]",
+      "reports": []
+    },
+    {
+      "name": "failed-hosts",
+      "generated_at": "2024-05-03T18:05:09+00:00",
+      "subject_prefix": "[Emergency Daily]",
+      "reports": [
+        {
+          "host_name": "down-a",
+          "host": "10.0.0.21",
+          "success": false,
+          "errors": [
+            { "stage": "ssh", "message": "connection refused" },
+            { "stage": "auth", "message": "bad credentials" }
+          ]
+        },
+        {
+          "host_name": "down-b",
+          "host": "10.0.0.22",
+          "success": false,
+          "errors": []
+        },
+        {
+          "host_name": "ok-c",
+          "host": "10.0.0.23",
+          "success": true,
+          "metrics": {
+            "hostname": "ok-c",
+            "cpu_usage_percent": 10.0,
+            "memory": {
+              "total_mb": 8192,
+              "used_mb": 2048,
+              "free_mb": 6144,
+              "shared_mb": 0,
+              "buff_cache_mb": 512,
+              "available_mb": 6000,
+              "swap_total_mb": 0,
+              "swap_used_mb": 0,
+              "swap_free_mb": 0
+            }
+          },
+          "errors": [],
+          "checks": []
+        }
+      ]
+    },
+    {
+      "name": "no-gpu-multidisk",
+      "generated_at": "2024-05-04T06:00:00+00:00",
+      "subject_prefix": "[Server Daily Report]",
+      "reports": [
+        {
+          "host_name": "storage",
+          "host": "10.0.0.31",
+          "success": true,
+          "metrics": {
+            "hostname": "storage",
+            "cpu_usage_percent": 5.5,
+            "memory": {
+              "total_mb": 1024,
+              "used_mb": 100,
+              "free_mb": 924,
+              "shared_mb": 1,
+              "buff_cache_mb": 64,
+              "available_mb": 900,
+              "swap_total_mb": 2048,
+              "swap_used_mb": 10,
+              "swap_free_mb": 2038
+            },
+            "disk_usage": [
+              { "filesystem": "/dev/md0", "size": "10T", "used": "8.5T", "available": "1.5T", "percent": "85%", "mountpoint": "/data" },
+              { "filesystem": "/dev/md0", "size": "10T", "used": "8.5T", "available": "1.5T", "percent": "85%", "mountpoint": "/data2" },
+              { "filesystem": "overlay", "size": "100G", "used": "90G", "available": "10G", "percent": "90%", "mountpoint": "/var/lib/docker" },
+              { "filesystem": "/dev/nvme0n1p2", "size": "1.5T", "used": "700G", "available": "800G", "percent": "47%", "mountpoint": "/" },
+              { "filesystem": "proc", "size": "0", "used": "0", "available": "0", "percent": "0%", "mountpoint": "/proc" },
+              { "filesystem": "  ", "size": "1T", "used": "0.5T", "available": "0.5T", "percent": "50%", "mountpoint": "/blank" },
+              { "filesystem": "/dev/bad", "size": "not-a-size", "used": "1G", "available": "1G", "percent": "50%", "mountpoint": "/bad" }
+            ],
+            "process_counts_by_user": [],
+            "logged_in_users": [],
+            "gpu_summary": []
+          },
+          "errors": [],
+          "checks": [
+            { "name": "disks", "type": "command", "target": "smartctl", "status": "warn", "message": "one disk hot", "latency_ms": null }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "risk-heavy",
+      "generated_at": "2024-05-05T12:00:00+00:00",
+      "subject_prefix": "[Server Daily Report]",
+      "reports": [
+        {
+          "host_name": "hot-1",
+          "host": "10.0.0.41",
+          "success": true,
+          "metrics": {
+            "hostname": "hot-1",
+            "cpu_usage_percent": 92.4,
+            "memory": {
+              "total_mb": 1000,
+              "used_mb": 950,
+              "free_mb": 50,
+              "shared_mb": 0,
+              "buff_cache_mb": 0,
+              "available_mb": 50,
+              "swap_total_mb": 0,
+              "swap_used_mb": 0,
+              "swap_free_mb": 0
+            },
+            "disk_usage": [
+              { "filesystem": "/dev/sda1", "size": "100G", "used": "90G", "available": "10G", "percent": "90%", "mountpoint": "/" }
+            ],
+            "gpu_summary": [
+              { "index": 0, "name": "RTX 4090", "utilization_percent": 97.0, "temperature_c": 80, "memory_used_mb": 24000, "memory_total_mb": 24576 }
+            ],
+            "top_cpu_processes": [],
+            "top_memory_processes": [],
+            "process_counts_by_user": []
+          },
+          "errors": [
+            { "stage": "gpu", "message": "nvml query failed" }
+          ],
+          "checks": []
+        },
+        {
+          "host_name": "warm-2",
+          "host": "10.0.0.42",
+          "success": true,
+          "metrics": {
+            "hostname": "warm-2",
+            "cpu_usage_percent": 88.0
+          },
+          "errors": [],
+          "checks": []
+        },
+        {
+          "host_name": "dead-3",
+          "host": "10.0.0.43",
+          "success": false,
+          "errors": [
+            { "stage": "connect", "message": "timed out" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "rounding-edges",
+      "generated_at": "2024-05-06T23:59:59.123456+00:00",
+      "subject_prefix": "[Server Daily Report]",
+      "reports": [
+        {
+          "host_name": "rounder",
+          "host": "10.0.0.51",
+          "success": true,
+          "metrics": {
+            "hostname": "rounder",
+            "cpu_usage_percent": 84.95,
+            "memory": {
+              "total_mb": 3000,
+              "used_mb": 1000,
+              "free_mb": 2000,
+              "shared_mb": 0,
+              "buff_cache_mb": 0,
+              "available_mb": 2000,
+              "swap_total_mb": 0,
+              "swap_used_mb": 0,
+              "swap_free_mb": 0
+            },
+            "disk_usage": [
+              { "filesystem": "/dev/x", "size": "1.5G", "used": "0.5G", "available": "1G", "percent": "0.5%", "mountpoint": "/x" },
+              { "filesystem": "/dev/y", "size": "1T", "used": "0.333T", "available": "0.667T", "percent": "33%" , "mountpoint": "/y" }
+            ],
+            "gpu_summary": [
+              { "index": 0, "name": "T4", "utilization_percent": 0.0, "temperature_c": 0, "memory_used_mb": 1, "memory_total_mb": 3 },
+              { "index": 1, "name": "T4", "utilization_percent": 100.0, "temperature_c": 50, "memory_used_mb": 2, "memory_total_mb": 3 }
+            ],
+            "top_cpu_processes": [],
+            "top_memory_processes": [],
+            "process_counts_by_user": []
+          },
+          "errors": [],
+          "checks": []
+        }
+      ]
+    }
+  ],
+  "weekly": [
+    {
+      "name": "mixed-week",
+      "generated_at": "2024-05-06T16:00:00+00:00",
+      "week_start": "2024-04-29",
+      "week_end": "2024-05-05",
+      "subject_prefix": "[Server Weekly Report]",
+      "summaries": [
+        {
+          "host_name": "alpha",
+          "host": "10.0.0.11",
+          "sample_count": 5,
+          "success_count": 5,
+          "cpu_avg": 61.234,
+          "cpu_max": 88.0,
+          "cpu_min": 12.5,
+          "memory_avg_percent": 70.05,
+          "memory_max_percent": 82.2,
+          "disk_avg_percent": 64.4,
+          "disk_max_percent": 75.0,
+          "gpu_util_avg": 55.5,
+          "gpu_util_max": 90.0,
+          "gpu_memory_avg_percent": 62.0,
+          "gpu_memory_max_percent": 80.0,
+          "load_avg": 3.21,
+          "users_avg": 2.4,
+          "processes_avg": 310.5,
+          "daily_points": [
+            { "day": "2024-04-29", "cpu_avg": 50.0, "memory_percent": 60.0, "gpu_util": null },
+            { "day": "2024-04-30", "cpu_avg": 61.0, "memory_percent": 70.0, "gpu_util": 55.0 },
+            { "day": "2024-05-01", "cpu_avg": 72.5, "memory_percent": 80.0, "gpu_util": 66.5 },
+            { "day": "2024-05-02", "cpu_avg": null, "memory_percent": null, "gpu_util": null },
+            { "day": "2024-05-03", "cpu_avg": 88.0, "memory_percent": 82.2, "gpu_util": 90.0 }
+          ],
+          "checks": [
+            { "name": "ping", "type": "icmp", "target": "10.0.0.11", "status": "ok", "message": "", "latency_ms": 0.8 },
+            { "name": "ssh", "type": "tcp", "target": "22", "status": "fail", "message": "refused", "latency_ms": null }
+          ]
+        },
+        {
+          "host_name": "beta",
+          "host": "10.0.0.12",
+          "sample_count": 2,
+          "success_count": 1,
+          "cpu_avg": 12.0,
+          "cpu_max": 20.0,
+          "cpu_min": 4.0,
+          "memory_avg_percent": 35.0,
+          "memory_max_percent": 40.0,
+          "disk_avg_percent": null,
+          "disk_max_percent": null,
+          "gpu_util_avg": null,
+          "gpu_util_max": null,
+          "gpu_memory_avg_percent": null,
+          "gpu_memory_max_percent": null,
+          "load_avg": null,
+          "users_avg": 0.0,
+          "processes_avg": 44.0,
+          "daily_points": [
+            { "day": "2024-04-29", "cpu_avg": 4.0, "memory_percent": 30.0, "gpu_util": null },
+            { "day": "2024-05-01", "cpu_avg": 20.0, "memory_percent": 40.0, "gpu_util": null }
+          ],
+          "checks": []
+        },
+        {
+          "host_name": "gamma",
+          "host": "10.0.0.13",
+          "sample_count": 0,
+          "success_count": 0,
+          "cpu_avg": null,
+          "cpu_max": null,
+          "cpu_min": null,
+          "memory_avg_percent": null,
+          "memory_max_percent": null,
+          "disk_avg_percent": null,
+          "disk_max_percent": null,
+          "gpu_util_avg": null,
+          "gpu_util_max": null,
+          "gpu_memory_avg_percent": null,
+          "gpu_memory_max_percent": null,
+          "load_avg": null,
+          "users_avg": null,
+          "processes_avg": null,
+          "daily_points": [],
+          "checks": []
+        }
+      ],
+      "busy_indices": [0],
+      "idle_indices": [2]
+    },
+    {
+      "name": "empty-week",
+      "generated_at": "2024-05-13T16:00:00+00:00",
+      "week_start": "2024-05-06",
+      "week_end": "2024-05-12",
+      "subject_prefix": "[Server Weekly Report]",
+      "summaries": [],
+      "busy_indices": [],
+      "idle_indices": []
+    },
+    {
+      "name": "gpu-sparse",
+      "generated_at": "2024-05-20T16:00:00+00:00",
+      "week_start": "2024-05-13",
+      "week_end": "2024-05-19",
+      "subject_prefix": "[Server Weekly Report]",
+      "summaries": [
+        {
+          "host_name": "solo",
+          "host": "10.0.0.61",
+          "sample_count": 4,
+          "success_count": 4,
+          "cpu_avg": 0.0,
+          "cpu_max": 0.0,
+          "cpu_min": 0.0,
+          "memory_avg_percent": 0.0,
+          "memory_max_percent": 0.0,
+          "disk_avg_percent": 0.0,
+          "disk_max_percent": 0.0,
+          "gpu_util_avg": 0.0,
+          "gpu_util_max": 0.0,
+          "gpu_memory_avg_percent": 0.0,
+          "gpu_memory_max_percent": 0.0,
+          "load_avg": 0.0,
+          "users_avg": 0.0,
+          "processes_avg": 0.0,
+          "daily_points": [
+            { "day": "2024-05-13", "cpu_avg": 12.0, "memory_percent": 34.0, "gpu_util": null }
+          ],
+          "checks": [
+            { "name": "a", "type": "icmp", "target": "x", "status": "ok", "message": "", "latency_ms": 1.0 },
+            { "name": "b", "type": "icmp", "target": "y", "status": "unknown", "message": "", "latency_ms": null }
+          ]
+        }
+      ],
+      "busy_indices": [],
+      "idle_indices": [0]
+    }
+  ],
+  "charts": [
+    {
+      "name": "three-points",
+      "data_points": [
+        ["2024-04-29", 33.333333333333336],
+        ["2024-04-30", null],
+        ["2024-05-01", 66.0]
+      ],
+      "title": "CPU 使用率 (%)"
+    },
+    {
+      "name": "single-point",
+      "data_points": [["2024-04-29", 10.0]],
+      "title": "内存使用率 (%)"
+    },
+    {
+      "name": "zero-points",
+      "data_points": [],
+      "title": ""
+    },
+    {
+      "name": "above-hundred",
+      "data_points": [
+        ["day-1", 120.5],
+        ["day-2", 150.0],
+        ["day-3", 99.5]
+      ],
+      "title": "Load",
+      "y_max": 100.0
+    },
+    {
+      "name": "custom-size",
+      "data_points": [
+        ["D1", 2.0],
+        ["D2", 4.0],
+        ["D3", 3.0]
+      ],
+      "width": 200,
+      "height": 80,
+      "title": "Custom",
+      "y_max": 5.0
+    },
+    {
+      "name": "short-labels-null",
+      "data_points": [
+        ["A", 5.0],
+        ["B", null],
+        ["C", 7.5],
+        ["D", 2.5]
+      ],
+      "title": "Sparse"
+    },
+    {
+      "name": "scientific-width",
+      "data_points": [
+        ["2024-04-29", 10.0],
+        ["2024-04-30", 20.0]
+      ],
+      "width": 10000000000000000,
+      "title": "Wide"
+    }
+  ]
+}
