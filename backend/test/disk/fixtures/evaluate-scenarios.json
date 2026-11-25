@@ -1,0 +1,117 @@
+{
+  "drives": [
+    {
+      "name": "state_failed_critical",
+      "drive": {"controller": 0, "enclosure": 252, "slot": 0, "model": "ST1000NM", "serial": "S1", "state": "Failed", "media_errors": 0, "other_errors": 0, "predictive_failures": 0, "smart_alert": false, "temperature_c": 40}
+    },
+    {
+      "name": "state_offline_critical",
+      "drive": {"controller": 0, "enclosure": 252, "slot": 1, "model": "ST1000NM", "serial": "S2", "state": "Offline", "media_errors": 0, "other_errors": 0, "predictive_failures": 0, "smart_alert": false, "temperature_c": 40}
+    },
+    {
+      "name": "state_degraded_warning",
+      "drive": {"controller": 0, "enclosure": 252, "slot": 2, "model": "ST1000NM", "serial": "S3", "state": "Degraded", "media_errors": 0, "other_errors": 0, "predictive_failures": 0, "smart_alert": false, "temperature_c": 40}
+    },
+    {
+      "name": "state_rebuild_warning",
+      "drive": {"controller": 0, "enclosure": 252, "slot": 3, "model": "ST1000NM", "serial": "S4", "state": "Rebuild", "media_errors": 0, "other_errors": 0, "predictive_failures": 0, "smart_alert": false, "temperature_c": 40}
+    },
+    {
+      "name": "healthy_optimal",
+      "drive": {"controller": 0, "enclosure": 252, "slot": 4, "model": "ST1000NM", "serial": "S5", "state": "Optimal", "media_errors": 0, "other_errors": 0, "predictive_failures": 0, "smart_alert": false, "temperature_c": 40}
+    },
+    {
+      "name": "predictive_failure",
+      "drive": {"controller": 0, "enclosure": 252, "slot": 5, "model": "ST1000NM", "serial": "S6", "state": "Optimal", "media_errors": 0, "other_errors": 0, "predictive_failures": 2, "smart_alert": false, "temperature_c": 40}
+    },
+    {
+      "name": "smart_failed",
+      "drive": {"controller": 0, "enclosure": 252, "slot": 6, "model": "ST1000NM", "serial": "S7", "state": "Optimal", "media_errors": 0, "other_errors": 0, "predictive_failures": 0, "smart_alert": true, "temperature_c": 40}
+    },
+    {
+      "name": "media_errors_positive",
+      "drive": {"controller": 0, "enclosure": 252, "slot": 7, "model": "ST1000NM", "serial": "S8", "state": "Optimal", "media_errors": 3, "other_errors": 0, "predictive_failures": 0, "smart_alert": false, "temperature_c": 40}
+    },
+    {
+      "name": "other_errors_positive",
+      "drive": {"controller": 0, "enclosure": 252, "slot": 8, "model": "ST1000NM", "serial": "S9", "state": "Optimal", "media_errors": 0, "other_errors": 5, "predictive_failures": 0, "smart_alert": false, "temperature_c": 40}
+    },
+    {
+      "name": "error_increase_media_combined",
+      "drive": {"controller": 0, "enclosure": 252, "slot": 9, "state": "Optimal", "media_errors": 1, "other_errors": 0, "predictive_failures": 0, "smart_alert": false, "temperature_c": 40},
+      "previous": {"controller": 0, "enclosure": 252, "slot": 9, "state": "Optimal", "media_errors": 0, "other_errors": 0}
+    },
+    {
+      "name": "error_increase_other_combined",
+      "drive": {"controller": 0, "enclosure": 252, "slot": 10, "state": "Optimal", "media_errors": 0, "other_errors": 2, "predictive_failures": 0, "smart_alert": false, "temperature_c": 40},
+      "previous": {"controller": 0, "enclosure": 252, "slot": 10, "state": "Optimal", "media_errors": 0, "other_errors": 1}
+    },
+    {
+      "name": "error_increase_only",
+      "drive": {"controller": 0, "enclosure": 252, "slot": 11, "state": "Optimal", "media_errors": 4, "other_errors": 0, "predictive_failures": 0, "smart_alert": false, "temperature_c": 40},
+      "previous": {"controller": 0, "enclosure": 252, "slot": 11, "state": "Optimal", "media_errors": 3, "other_errors": 0},
+      "rules": {"alert_on_media_errors": false, "alert_on_other_errors": false}
+    },
+    {
+      "name": "counters_unchanged_healthy",
+      "drive": {"controller": 0, "enclosure": 252, "slot": 12, "state": "Optimal", "media_errors": 0, "other_errors": 0, "predictive_failures": 0, "smart_alert": false, "temperature_c": 40},
+      "previous": {"controller": 0, "enclosure": 252, "slot": 12, "state": "Optimal", "media_errors": 0, "other_errors": 0}
+    },
+    {
+      "name": "previous_unknown_no_increase",
+      "drive": {"controller": 0, "enclosure": 252, "slot": 13, "state": "Optimal", "media_errors": 0, "other_errors": 0, "predictive_failures": 0, "smart_alert": false, "temperature_c": 40},
+      "previous": null
+    },
+    {
+      "name": "temperature_54",
+      "drive": {"controller": 0, "enclosure": 252, "slot": 14, "state": "Optimal", "media_errors": 0, "other_errors": 0, "predictive_failures": 0, "smart_alert": false, "temperature_c": 54}
+    },
+    {
+      "name": "temperature_55",
+      "drive": {"controller": 0, "enclosure": 252, "slot": 15, "state": "Optimal", "media_errors": 0, "other_errors": 0, "predictive_failures": 0, "smart_alert": false, "temperature_c": 55}
+    },
+    {
+      "name": "temperature_56",
+      "drive": {"controller": 0, "enclosure": 252, "slot": 16, "state": "Optimal", "media_errors": 0, "other_errors": 0, "predictive_failures": 0, "smart_alert": false, "temperature_c": 56}
+    },
+    {
+      "name": "temperature_56_custom_threshold_60",
+      "drive": {"controller": 0, "enclosure": 252, "slot": 17, "state": "Optimal", "media_errors": 0, "other_errors": 0, "predictive_failures": 0, "smart_alert": false, "temperature_c": 56},
+      "temperature_threshold_c": 60
+    },
+    {
+      "name": "rules_media_off",
+      "drive": {"controller": 0, "enclosure": 252, "slot": 18, "state": "Optimal", "media_errors": 3, "other_errors": 0, "predictive_failures": 0, "smart_alert": false, "temperature_c": 40},
+      "rules": {"alert_on_media_errors": false}
+    },
+    {
+      "name": "state_failed_but_rule_off",
+      "drive": {"controller": 0, "enclosure": 252, "slot": 19, "state": "Failed", "media_errors": 0, "other_errors": 0, "predictive_failures": 0, "smart_alert": false, "temperature_c": 40},
+      "rules": {"alert_on_state_not_optimal": false}
+    }
+  ],
+  "virtual_drives": [
+    {"name": "vd_optimal", "vd": {"controller": 0, "vd_id": 0, "raid_level": "RAID1", "state": "Optimal"}},
+    {"name": "vd_optl", "vd": {"controller": 0, "vd_id": 1, "raid_level": "RAID1", "state": "Optl"}},
+    {"name": "vd_online", "vd": {"controller": 0, "vd_id": 2, "raid_level": "RAID5", "state": "Online"}},
+    {"name": "vd_onln", "vd": {"controller": 0, "vd_id": 3, "raid_level": "RAID5", "state": "Onln"}},
+    {"name": "vd_degraded", "vd": {"controller": 0, "vd_id": 4, "raid_level": "RAID5", "state": "Degraded"}},
+    {"name": "vd_partially_degraded", "vd": {"controller": 0, "vd_id": 5, "raid_level": "RAID5", "state": "Partially   Degraded"}},
+    {"name": "vd_rebuild", "vd": {"controller": 0, "vd_id": 6, "raid_level": "RAID5", "state": "Rebuild"}},
+    {"name": "vd_init", "vd": {"controller": 0, "vd_id": 7, "raid_level": "RAID5", "state": "Init"}},
+    {"name": "vd_failed", "vd": {"controller": 0, "vd_id": 8, "raid_level": "RAID5", "state": "Failed"}},
+    {"name": "vd_offline", "vd": {"controller": 0, "vd_id": 9, "raid_level": "RAID5", "state": "Offline"}},
+    {"name": "vd_missing", "vd": {"controller": 0, "vd_id": 10, "raid_level": "RAID5", "state": "Missing"}},
+    {"name": "vd_state_null", "vd": {"controller": 0, "vd_id": 11, "raid_level": "RAID5", "state": null}},
+    {"name": "vd_state_empty", "vd": {"controller": 0, "vd_id": 12, "raid_level": "RAID5", "state": ""}},
+    {"name": "vd_state_unknown_word", "vd": {"controller": 0, "vd_id": 13, "raid_level": "RAID5", "state": "Weird"}}
+  ],
+  "controllers": [
+    {"name": "bbu_failed", "controller": {"controller": 0, "model": "LSI9361", "firmware": "4.0", "bbu_state": "Failed"}},
+    {"name": "bbu_optimal", "controller": {"controller": 0, "model": "LSI9361", "firmware": "4.0", "bbu_state": "Optimal"}},
+    {"name": "bbu_fault_substring", "controller": {"controller": 0, "model": "LSI9361", "firmware": "4.0", "bbu_state": "Fault"}},
+    {"name": "bbu_degraded", "controller": {"controller": 0, "model": "LSI9361", "firmware": "4.0", "bbu_state": "Degraded"}},
+    {"name": "bbu_null", "controller": {"controller": 0, "model": "LSI9361", "firmware": "4.0", "bbu_state": null}},
+    {"name": "bbu_empty", "controller": {"controller": 0, "model": "LSI9361", "firmware": "4.0", "bbu_state": ""}}
+  ]
+}
