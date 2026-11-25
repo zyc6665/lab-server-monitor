@@ -120,11 +120,13 @@ describe('buildDefaultDeps — P3 collection wiring', () => {
     expect(typeof deps.pages?.buildComputeSummary).toBe('function');
   });
 
-  it('leaves the not-yet-migrated P4/P5 hooks undefined', () => {
+  it('exposes availability hooks and leaves remaining P4/P5 hooks undefined', () => {
     const fresh = freshDb();
     const deps = buildDefaultDeps(fresh.db, makeConfig([makeServer({ name: 'a', host: PUBLIC_HOST })]));
 
-    expect(deps.hosts?.runHostChecks).toBeUndefined();
+    // P4 Task 7 migrated availability checks into the composition root.
+    expect(typeof deps.hosts?.runHostChecks).toBe('function');
+    expect(typeof deps.hosts?.prepareHostCheck).toBe('function');
     expect(deps.hosts?.collectHosts).toBeUndefined();
     expect(deps.hosts?.collectionStatus).toBeUndefined();
     expect(deps.users?.monitorService ?? undefined).toBeUndefined();

@@ -21,7 +21,7 @@
  */
 import type { Express } from 'express';
 
-import type { AppConfig, HostConfig } from '../config/config';
+import type { AppConfig, HostCheckConfig, HostConfig } from '../config/config';
 import { buildServers, type HostRunner, type HostRunnerResult } from '../config/hosts';
 import { loadEffectiveSettings } from '../config/service';
 import { hostToSshConnectConfig } from '../collect/collectors';
@@ -34,6 +34,8 @@ import {
   type ProbeRunner,
 } from '../collect/host-probe';
 import { SshClient, type SshConnectConfig } from '../collect/ssh-client';
+import type { CommandResult } from '../collect/types';
+import { coerceHostCheckConfig, runHostChecks, type CheckRunner } from '../runtime/availability';
 import { getAllHostSnapshots } from '../storage/hosts';
 import { createWebApp } from './app';
 import { registerAuthRoutes, type AuthRouteDeps } from './routes/auth';
@@ -259,6 +261,33 @@ function createHostRunner(db: SqliteDatabase): HostRunner {
   };
 }
 
+/**
+ * `hosts.runHostChecks` runner — executes one availability probe command on
+ * `host` over a fresh `SshClient`, closing it afterwards. Mirrors the
+ * `CollectorRunner` shape and receives a millisecond timeout per command.
+ */
+function createCheckRunner(db: SqliteDatabase, host: HostConfig): CheckRunner {
+  return {
+    run: async (command: string, timeoutMs: number): Promise<CommandResult> => {
+      const { connectTimeoutSec, commandTimeoutSec, hostKeyPolicy } = readSshSettings(db);
+      const client = new SshClient(hostToSshConnectConfig(host, connectTimeoutSec, hostKeyPolicy));
+      try {
+        const result = await client.run(
+          command,
+          timeoutMs > 0 ? timeoutMs : commandTimeoutSec * 1000,
+        );
+        return {
+          exitStatus: result.exitStatus,
+          stdout: result.stdout,
+          stderr: result.stderr,
+        };
+      } finally {
+        client.close();
+      }
+    },
+  };
+}
+
 /** `pages.buildComputeSummary` — the migrated compute module over live snapshots. */
 function createComputeSummaryBuilder(): (db: SqliteDatabase, config: AppConfig) => unknown {
   return (db: SqliteDatabase, config: AppConfig): unknown =>
@@ -277,8 +306,10 @@ function createComputeSummaryBuilder(): (db: SqliteDatabase, config: AppConfig) 
  *
  * P3 Task 12 wires the migrated collection layer into the `hosts` routes
  * (`probeHost`, `collectContainerStats`, `runner`) and the `pages` route
- * (`buildComputeSummary`). Everything else still unmigrated (P4/P5) stays
- * `undefined` so its route keeps the documented placeholder behaviour.
+ * (`buildComputeSummary`). P4 Task 7 adds the availability hooks
+ * (`runHostChecks`, `prepareHostCheck`). Everything else still unmigrated
+ * (P4/P5) stays `undefined` so its route keeps the documented placeholder
+ * behaviour.
  */
 export function buildDefaultDeps(db: SqliteDatabase, config: AppConfig): CompositionDeps {
   const overviewBuilders = createOverviewBuilders(db, config);
@@ -290,6 +321,11 @@ export function buildDefaultDeps(db: SqliteDatabase, config: AppConfig): Composi
       probeHost: createProbeHost(db, config),
       collectContainerStats: createCollectContainerStats(db),
       runner: createHostRunner(db),
+      runHostChecks: (host: HostConfig, checks: HostCheckConfig[]) =>
+        runHostChecks(host, checks, createCheckRunner(db, host), {
+          timeoutMs: readSshSettings(db).commandTimeoutSec * 1000,
+        }),
+      prepareHostCheck: (payload: Record<string, unknown>) => coerceHostCheckConfig(payload),
     },
     pages: {
       buildComputeSummary: createComputeSummaryBuilder(),
