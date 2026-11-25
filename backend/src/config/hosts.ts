@@ -1672,6 +1672,18 @@ function parseYamlData(text: string): unknown {
   return parseYamlNode(lines, 0, lines[0].indent).value;
 }
 
+/**
+ * Parse an arbitrary YAML document into plain JS data (maps, lists, scalars).
+ *
+ * Unlike {@link parseYaml} — which validates a *host-import* payload and only
+ * accepts a list or a `{hosts: [...]}` mapping — this returns the raw document
+ * tree without any schema checks. It is used by the first-run config-seed
+ * importer (`runtime/first-run.ts`) to read a legacy `config.yaml`.
+ */
+export function parseYamlDocument(text: string | Buffer): unknown {
+  return parseYamlData(decodeText(text));
+}
+
 function yamlTags(value: unknown): string[] {
   if (Array.isArray(value)) {
     return value.map((item) => String(item).trim()).filter((item) => item.length > 0);

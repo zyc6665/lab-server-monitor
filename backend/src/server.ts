@@ -152,13 +152,108 @@ export async function startServer(opts: StartServerOptions = {}): Promise<Starte
   };
 }
 
+/**
+ * Perform the packaged-desktop startup sequence: resolve the data directory,
+ * import a legacy database / config seed on first run, open the database,
+ * migrate it behind a pre-migration backup, initialise the schema, assemble the
+ * full web app and start listening.
+ *
+ * All native/storage modules are imported lazily here (never at `server.ts`
+ * module load) so the health-only entry point and the bundled `main.cjs` smoke
+ * test keep booting without loading `better-sqlite3`/`@primno/dpapi`. Any
+ * failure — including a failed pre-migration backup — aborts startup: the
+ * database handle is closed and the error is rethrown so the process exits
+ * non-zero without ever serving traffic.
+ */
+async function runBootstrapCli(): Promise<void> {
+  const { resolveRuntimePaths, resolveLegacyCandidates, firstRunImport, migrateWithBackup } =
+    await import('./runtime/first-run');
+  const { openDatabase } = await import('./storage/db');
+  const { initSchema } = await import('./storage/schema');
+  const { loadConfig } = await import('./config/config');
+
+  const resolved = resolveRuntimePaths(process.argv, process.env);
+  await mkdir(resolved.dataDir, { recursive: true });
+
+  const legacyCandidates = resolved.importLegacy
+    ? resolveLegacyCandidates(resolved.dataDir, process.env)
+    : [];
+  const importResult = await firstRunImport({
+    dataDir: resolved.dataDir,
+    dbPath: resolved.dbPath,
+    legacyDbCandidates: legacyCandidates,
+    configSeedPath: resolved.configSeedPath,
+    env: process.env,
+  });
+  for (const message of importResult.messages) {
+    console.log('[first-run] ' + message);
+  }
+
+  // The database is opened only *after* firstRunImport so the atomic legacy
+  // copy can replace the file (a SQLite file cannot be renamed over while a
+  // handle is open on Windows).
+  const db = openDatabase(resolved.dbPath);
+  let started: StartedServer;
+  try {
+    await migrateWithBackup(resolved.dbPath, db);
+    initSchema(db);
+
+    const config = loadConfig({
+      ...process.env,
+      SERVERMONITOR_DATA_DIR: resolved.dataDir,
+    });
+    if (resolved.port !== undefined) {
+      config.port = resolved.port;
+    }
+
+    started = await startServer({
+      port: resolved.port ?? config.port,
+      runtimePath: resolved.runtimePath,
+      db,
+      config,
+    });
+  } catch (err) {
+    try {
+      db.close();
+    } catch {
+      /* best-effort cleanup; the original error is what matters */
+    }
+    throw err;
+  }
+
+  console.log('SERVER_URL=' + started.url);
+}
+
 // CLI entry: when run directly (e.g. `node dist/main.cjs --port 0`), start the
-// server and print its URL so the Electron main process can pick it up.
+// server and print its URL so the Electron main process can pick it up. The
+// full data-directory bootstrap (open DB, first-run import, migrate, compose the
+// web app) only runs when a `--data-dir`/`--import-legacy` flag is present; a
+// bare `--port`/`--runtime` invocation keeps the historical health-only
+// behaviour so the packaged smoke test still passes.
 if (require.main === module) {
-  const argv = process.argv;
-  const portIdx = argv.indexOf('--port');
-  const port = portIdx >= 0 ? Number(argv[portIdx + 1]) : 0;
-  const runtimeIdx = argv.indexOf('--runtime');
-  const runtimePath = runtimeIdx >= 0 ? argv[runtimeIdx + 1] : undefined;
-  startServer({ port, runtimePath }).then((s) => console.log('SERVER_URL=' + s.url));
+  const wantsBootstrap = process.argv.some(
+    (token) =>
+      token === '--data-dir' ||
+      token.startsWith('--data-dir=') ||
+      token === '--import-legacy',
+  );
+
+  if (wantsBootstrap) {
+    runBootstrapCli().catch((err) => {
+      console.error('[server] startup failed:', err);
+      process.exitCode = 1;
+    });
+  } else {
+    const argv = process.argv;
+    const portIdx = argv.indexOf('--port');
+    const port = portIdx >= 0 ? Number(argv[portIdx + 1]) : 0;
+    const runtimeIdx = argv.indexOf('--runtime');
+    const runtimePath = runtimeIdx >= 0 ? argv[runtimeIdx + 1] : undefined;
+    startServer({ port, runtimePath })
+      .then((s) => console.log('SERVER_URL=' + s.url))
+      .catch((err) => {
+        console.error('[server] startup failed:', err);
+        process.exitCode = 1;
+      });
+  }
 }
