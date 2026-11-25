@@ -23,7 +23,9 @@
   },
   "packageManager": "pnpm@12.14.0",
   "pnpm": {
-    "onlyBuiltDependencies": ["esbuild"]
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
   },
   "dependencies": {
     "electron-updater": "^6.8.11"

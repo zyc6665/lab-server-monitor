@@ -52,3 +52,5 @@ ssh/
 .DS_Store
 .idea/
 .vscode/
+desktop/vendor/
+desktop/.vendor-stage/

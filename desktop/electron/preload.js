@@ -30,7 +30,11 @@ contextBridge.exposeInMainWorld('desktopBridge', {
   checkForUpdate: (force) => ipcRenderer.invoke('update:check', Boolean(force)),
   downloadUpdate: (payload) => ipcRenderer.invoke('update:download', payload),
   installUpdate: (payload) => ipcRenderer.invoke('update:install', payload),
-  onBackendState: (callback) => subscribe('desktop:backend-state', callback),
+  onBackendState: (callback) => {
+    const listener = (_event, payload) => callback(payload);
+    ipcRenderer.on('desktop:backend-state', listener);
+    return () => ipcRenderer.removeListener('desktop:backend-state', listener);
+  },
   onUpdateStatus: (callback) => subscribe('update:status', callback),
   // Grouped updater surface (P6 Task3).
   update,

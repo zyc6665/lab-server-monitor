@@ -38,10 +38,13 @@ def test_build_portable_uses_dynamic_version_and_ships_updater():
     assert "apply-update.ps1" in script
 
 
-def test_release_workflow_publishes_zip_and_checksum():
+def test_release_workflow_publishes_nsis_installer_and_metadata():
+    """Single-stack rewrite (B1): releases ship an NSIS installer plus the
+    electron-updater metadata (latest.yml + blockmap), not the old portable zip."""
     workflow = (ROOT / ".github/workflows/release-windows.yml").read_text(encoding="utf-8")
     assert "workflow_dispatch" in workflow
-    assert "release/*.zip" in workflow
-    assert "release/*.zip.sha256" in workflow
+    assert "desktop/release-electron/ServerMonitor-*-Setup.exe" in workflow
+    assert "desktop/release-electron/latest.yml" in workflow
+    assert "desktop/release-electron/*.blockmap" in workflow
     assert "softprops/action-gh-release" in workflow
     assert re.search(r"tags:\s*\n\s*-\s*\"v\*\"", workflow)

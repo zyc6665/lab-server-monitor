@@ -9,6 +9,10 @@ files:
 extraResources:
   - from: ../backend/dist/main.cjs
     to: backend/main.cjs
+  - from: .vendor-stage/pkgs
+    to: backend/node_modules
+    filter:
+      - "**/*"
 win:
   target: nsis
   icon: build/icon.ico

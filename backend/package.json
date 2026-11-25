@@ -5,7 +5,7 @@
   "type": "commonjs",
   "main": "dist/server.js",
   "scripts": {
-    "build": "node build.mjs",
+    "build": "node build.mjs && node scripts/stage-vendor.mjs",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },
