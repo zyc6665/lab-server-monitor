@@ -1,7 +1,6 @@
 # 服务器 HTML 日报巡检工具
 
-这是一个给多台 Linux 服务器做日报巡检的 Docker 工具喵～
-
+Windows 桌面客户端版的服务器巡检工具：对多台 Linux 服务器做每日巡检，采集资源指标并生成 HTML 日报邮件。绿色包解压即用，**不依赖 Docker，也不需要单独安装 Python**。
 
 ## 版本与更新记录
 
@@ -18,510 +17,34 @@
 > 版本线自 v0.1.237 起已归一（决策 A：留在 `0.1.x` 线）：历史桌面端 `v1.x` Release 已在 GitHub 标记为 **prerelease**，
 > `desktop/electron/updater-core.js` 只认非 prerelease/draft、且与当前 major 一致的 Release，不再出现「已是最新却提示更新」的循环。详见 [docs/VERSIONING.md](docs/VERSIONING.md)。
 
-它会做这些事：
+## 它做什么
 
-- 通过 SSH 连接多台服务器
+- 通过 SSH 连接多台 Linux 服务器
 - 采集 CPU、内存、磁盘、在线用户、进程、NVIDIA GPU 信息
-- 每天定时发一封 HTML 邮件到指定收件人
-- 容器常驻，容器内用 `supercronic` 定时执行
-
-这份 README 不讲太多原理，只讲怎么一步一步部署成功喵～
+- 每天定时把一封 HTML 巡检日报发送到指定收件人
+- Electron 桌面窗口 + 内置调度器 + 本地 Web 看板；关闭窗口后驻留系统托盘，后台继续监测
+- 凭据（SSH 密码/私钥、邮箱密码、Webhook）用当前 Windows 账户的 DPAPI 加密后保存在本地数据库，界面不回显明文
 
 ## 你需要提前准备什么
 
-在开始之前，主人先准备好这些东西：
-
-- 一台已经安装好 Docker 和 Docker Compose 的机器
-- 一个可以发邮件的 SMTP 邮箱账号
-- 这个邮箱对应的 SMTP 授权码或密码
+- 一台 Windows 11 电脑（运行绿色包）
+- 一个可发邮件的 SMTP 邮箱账号，以及对应的 SMTP 授权码
 - 至少一台能通过 SSH 登录的 Linux 服务器
-- 如果要用私钥登录，再准备一个私钥文件
+- 如果用私钥登录，再准备一个私钥文件
 
-如果这些还没准备好，先不要往后走，不然后面大概率会卡住喵～
+## 快速开始（Windows 绿色包）
 
-## 第 1 步：把项目放到一台机器上
+### 1. 解压并保持目录完整
 
-把项目放到一台准备长期运行的机器上，例如：
-
-```bash
-mkdir -p "/opt/servermanage"
-cd "/opt/servermanage"
-```
-
-如果项目代码已经在这里了，就直接进入项目目录：
-
-```bash
-cd "/opt/servermanage"
-```
-
-## 第 2 步：准备目录和配置文件
-
-在项目根目录执行：
-
-```bash
-mkdir -p "ssh"
-cp "config.yaml.example" "config.yaml"
-cp ".env.example" ".env"
-```
-
-做完后，目录至少应该像这样：
-
-```text
-.
-├── config.yaml
-├── .env
-├── ssh/
-│   └── id_rsa
-├── Dockerfile
-├── docker-compose.yml
-└── docker/
-    └── entrypoint.sh
-```
-
-说明：
-
-- `config.yaml`：主配置文件
-- `.env`：放密码和授权码
-- `ssh/`：放私钥
-
-如果主人不用私钥登录，`ssh/` 目录可以先保留空着喵～
-
-## 第 3 步：修改 config.yaml
-
-打开 `config.yaml`，重点改下面几块。
-
-### 3.1 修改邮箱配置
-
-把这一段改成自己的 SMTP 信息：
-
-```yaml
-smtp:
-  host: "smtp.example.com"
-  port: 465
-  username: "monitor@example.com"
-  password_env: "SMTP_PASSWORD"
-  use_ssl: true
-  from_addr: "monitor@example.com"
-  to_addrs:
-    - "ops@example.com"
-    - "admin@example.com"
-```
-
-每个字段是什么意思：
-
-- `host`：SMTP 服务器地址
-- `port`：SMTP 端口
-- `username`：发件邮箱账号
-- `password_env`：密码对应的环境变量名，不直接写密码
-- `use_ssl`：大多数 465 端口填 `true`
-- `from_addr`：发件人邮箱
-- `to_addrs`：收件人列表，可以写多个
-
-如果主人想指定邮件发送对象，就改 `to_addrs`：
-
-```yaml
-to_addrs:
-  - "alice@example.com"
-  - "bob@example.com"
-```
-
-### 3.2 修改服务器列表
-
-这个项目支持两种登录方式混用：
-
-- 密码登录
-- 私钥登录
-
-#### 密码登录示例
-
-```yaml
-- name: "prod-gpu-01"
-  host: "10.10.0.11"
-  port: 22
-  username: "root"
-  auth:
-    type: "password"
-    password_env: "PROD_GPU_01_SSH_PASSWORD"
-```
-
-这里要改的只有：
-
-- `name`：自己起一个名字
-- `host`：服务器 IP
-- `username`：SSH 用户名
-- `password_env`：这个服务器密码在 `.env` 里的变量名
-
-#### 私钥登录示例
-
-```yaml
-- name: "prod-gpu-02"
-  host: "10.10.0.12"
-  port: 22
-  username: "ops"
-  auth:
-    type: "key"
-    key_path: "/app/ssh/id_rsa"
-    passphrase_env: "PROD_GPU_02_KEY_PASSPHRASE"
-```
-
-注意这里的私钥路径一定是：
-
-```yaml
-key_path: "/app/ssh/id_rsa"
-```
-
-为什么不是宿主机路径？
-
-因为 Docker 容器里只能看到容器内路径。当前 `docker-compose.yml` 会把宿主机的 `./ssh` 挂载到容器里的 `/app/ssh`，所以私钥路径必须写容器内路径喵～
-
-如果私钥本身带口令，还要再加一项：
-
-```yaml
-passphrase_env: "PROD_GPU_02_KEY_PASSPHRASE"
-```
-
-这个字段表示：
-
-- 私钥文件本身的解锁口令不直接写进 `config.yaml`
-- 真实口令放在 `.env`
-- 容器启动时从环境变量读取
-
-如果主人使用的是无口令私钥，这个字段可以省略喵～
-
-### 3.3 一份最小可用的 config.yaml 示例
-
-如果主人只想照着改，可以直接参考这份模板：
-
-```yaml
-smtp:
-  host: "smtp.qq.com"
-  port: 465
-  username: "your_mail@qq.com"
-  password_env: "SMTP_PASSWORD"
-  use_ssl: true
-  from_addr: "your_mail@qq.com"
-  to_addrs:
-    - "admin1@example.com"
-    - "admin2@example.com"
-
-ssh:
-  connect_timeout: 10
-  command_timeout: 20
-
-report:
-  subject_prefix: "[Server Daily Report]"
-  include_failed_hosts: true
-
-servers:
-  - name: "gpu-01"
-    host: "10.10.0.11"
-    port: 22
-    username: "root"
-    auth:
-      type: "password"
-      password_env: "GPU_01_PASSWORD"
-
-  - name: "gpu-02"
-    host: "10.10.0.12"
-    port: 22
-    username: "ops"
-    auth:
-      type: "key"
-      key_path: "/app/ssh/id_rsa"
-      passphrase_env: "GPU_02_KEY_PASSPHRASE"
-```
-
-## 第 4 步：修改 .env
-
-打开 `.env`，把里面的值改成真实的：
-
-```bash
-SMTP_PASSWORD="你的SMTP授权码"
-PROD_GPU_01_SSH_PASSWORD="你的SSH密码"
-PROD_GPU_02_KEY_PASSPHRASE="你的私钥口令"
-```
-
-如果 `config.yaml` 里还有别的 `password_env` 或 `passphrase_env`，这里也要加上对应变量，例如：
-
-```bash
-GPU_01_PASSWORD="服务器1密码"
-GPU_03_PASSWORD="服务器3密码"
-GPU_02_KEY_PASSPHRASE="服务器2私钥口令"
-```
-
-规则很简单：
-
-- `config.yaml` 里写了什么 `password_env`
-- `.env` 里就必须有同名变量
-- `config.yaml` 里写了什么 `passphrase_env`
-- `.env` 里也必须有同名变量
-
-不然容器启动后会直接报错喵～
-
-## 第 5 步：如果用私钥，把私钥文件放到 ssh/ 目录
-
-如果主人使用私钥登录，把私钥放到：
-
-```bash
-ssh/id_rsa
-```
-
-例如：
-
-```bash
-cp "/root/.ssh/id_rsa" "./ssh/id_rsa"
-chmod 600 "./ssh/id_rsa"
-```
-
-如果主人只用密码登录，这一步可以跳过。
-
-## 第 6 步：启动容器
-
-在项目根目录执行：
-
-```bash
-docker compose up -d --build
-```
-
-这一步会做三件事：
-
-- 构建镜像
-- 启动容器
-- 在容器里启动 `supercronic`
-
-## 第 7 步：检查有没有启动成功
-
-先看容器状态：
-
-```bash
-docker compose ps
-```
-
-如果正常，应该能看到 `servermanage` 处于运行状态。
-
-再看日志：
-
-```bash
-docker compose logs -f servermanage
-```
-
-正常情况下，主人应该能看到类似：
-
-- 已生成 supercronic 任务
-- 当前 cron 表达式
-- 到时间后执行巡检脚本
-
-如果这里已经报错，先不要继续，直接看下面的“常见报错怎么处理”喵～
-
-## 第 8 步：修改每天什么时候发送
-
-打开 `docker-compose.yml`，找到：
-
-```yaml
-environment:
-  TZ: Asia/Shanghai
-  CRON_SCHEDULE: "0 9 * * *"
-```
-
-这表示：
-
-- 使用 `Asia/Shanghai` 时区
-- 每天早上 `09:00` 执行一次
-
-常见例子：
-
-- 每天早上 8 点：`0 8 * * *`
-- 每天晚上 9 点：`0 21 * * *`
-- 每 6 小时一次：`0 */6 * * *`
-
-改完后重启容器：
-
-```bash
-docker compose up -d
-```
-
-## 第 9 步：怎么看邮件有没有发成功
-
-先看容器日志：
-
-```bash
-docker compose logs -f servermanage
-```
-
-如果脚本执行成功，一般至少说明：
-
-- 配置加载成功
-- SSH 已经能连到服务器
-- 邮件发送流程已经走通
-
-然后去收件箱看邮件。
-
-如果收件箱没有，再看：
-
-- 垃圾邮件箱
-- SMTP 配置是不是对的
-- 收件人是不是写错了
-
-## 常见报错怎么处理
-
-### 1. SMTP 认证失败
-
-常见原因：
-
-- `smtp.host` 写错
-- `smtp.port` 写错
-- `username` 写错
-- `.env` 里的 `SMTP_PASSWORD` 不是授权码
-
-处理方法：
-
-1. 确认邮箱服务商的 SMTP 地址和端口
-2. 确认 `SMTP_PASSWORD` 填的是授权码，不是网页登录密码
-3. 重启容器后再看日志
-
-### 2. SSH 登录失败
-
-常见原因：
-
-- 服务器 IP 写错
-- 用户名写错
-- 22 端口不通
-- 密码变量没写到 `.env`
-- 私钥没挂进去
-- 私钥口令变量没写到 `.env`
-
-处理方法：
-
-1. 检查 `config.yaml` 里的 `host`、`username`
-2. 检查 `.env` 里是否存在对应的 `password_env`
-3. 如果用了 `passphrase_env`，检查 `.env` 里是否存在对应变量
-4. 如果用私钥，确认宿主机有 `./ssh/id_rsa`
-5. 确认 `config.yaml` 里的私钥路径写的是 `/app/ssh/id_rsa`
-
-### 3. 私钥路径错误
-
-如果日志里看到类似：
-
-```text
-SSH key path does not exist: /app/ssh/id_rsa
-```
-
-说明：
-
-- 宿主机上没有 `./ssh/id_rsa`
-- 或者没有正确挂载进容器
-
-处理方法：
-
-```bash
-ls -l "./ssh"
-```
-
-确认 `id_rsa` 确实存在。
-
-### 4. 收不到邮件
-
-先检查：
-
-- `to_addrs` 是否写对
-- 发件邮箱是否真的发出去了
-- 收件箱垃圾邮件
-- 容器日志里有没有 SMTP 报错
-
-### 5. 容器能启动，但连不到目标服务器
-
-这通常是网络问题，不是脚本问题。
-
-处理方法：
-
-- 默认先用 Docker bridge 网络
-- 如果宿主机能 SSH，容器不能 SSH，再考虑把 `docker-compose.yml` 里的 `network_mode` 改成 `host`
-
-## 常用命令
-
-启动：
-
-```bash
-docker compose up -d --build
-```
-
-查看状态：
-
-```bash
-docker compose ps
-```
-
-查看日志：
-
-```bash
-docker compose logs -f servermanage
-```
-
-重启：
-
-```bash
-docker compose restart servermanage
-```
-
-停止：
-
-```bash
-docker compose down
-```
-
-## 最后再提醒一次
-
-真正要改的文件只有这几个：
-
-- `config.yaml`
-- `.env`
-- `ssh/id_rsa`（如果用私钥）
-- `docker-compose.yml` 里的 `CRON_SCHEDULE`（如果要改定时）
-
-只要这几个地方改对，大多数情况下就能跑起来喵～
-
----
-
-## Windows PC 绿色包（免 Docker）
-
-除上面的 Docker 部署外，本项目还提供 **Windows 11 桌面版绿色包**：Electron 客户端，内置 Python 后台 sidecar，解压即用，不依赖 Docker，
-也不需要安装 Python。无边框窗口、左侧导航、系统托盘，关闭窗口后继续在后台监测。
-桌面版为**纯单机客户端**，不再提供局域网浏览器访问。
-
-> 版本号说明：桌面端对外发布版本为 GitHub Release 的 `v*` 标签（程序包为 `0.1.x` 线），两套编号的对应关系与发布约定见
-> [docs/VERSIONING.md](docs/VERSIONING.md)，历史版本见 [CHANGELOG.md](CHANGELOG.md)。
-
-### 和 Docker 版的区别
-
-| 项目 | Docker 版（旧） | Windows 桌面客户端 |
-| --- | --- | --- |
-| 运行方式 | `supercronic` 定时执行日报 | Electron 窗口 + 内置调度器 + 本地 Web 看板 |
-| 配置文件 | 根目录 `config.yaml` / `.env` | `config/config.yaml` / `config/.env`（可选） |
-| 数据库 | 容器内 `data/servermanage.db` | `data/servermonitor.db` |
-| 登录方式 | 私钥或密码 | 首次 `/setup` 设置管理员密码 |
-| 启停 | `docker compose up/down` | `启动.bat` / 托盘退出 / `停止.bat` |
-| 程序结构 | 单体容器 | `servermonitor.exe`（Electron）+ `resources\backend\servermonitor-backend.exe`（Python sidecar） |
-
-### 一、构建绿色包（开发者，可选）
-
-在装有 Node.js/pnpm 与 Python 3.11+ 的 Windows 上，于项目根目录执行：
-
-```powershell
-pwsh desktop/scripts/build-portable.ps1
-```
-
-脚本会构建 Python 后端 sidecar、执行 `pnpm install` 与 `pnpm run build`（electron-builder），
-把产物组装到 `desktop/build/portable/servermonitor/`，并压缩为
-`release/服务器轮询监测工具-Windows-x64-v<版本号>.zip`。
-
-### 二、解压后的目录结构
+解压 `release/服务器轮询监测工具-Windows-x64-v<版本号>.zip` 后，目录结构如下：
 
 ```text
 服务器轮询监测工具/
 ├── servermonitor.exe                            # Electron 主程序（入口）
 ├── resources\backend\servermonitor-backend.exe  # Python 后台 sidecar
 ├── config\
-│   ├── config.yaml                              # 首次运行由 config.yaml.example 生成
+│   ├── config.yaml.example                      # 首次运行据此生成 config.yaml
+│   ├── config.yaml                              # 首次运行自动生成
 │   └── .env                                     # 可选
 ├── data\                                        # servermonitor.db、runtime.json、electron\
 ├── logs\                                        # servermonitor.log、desktop.log
@@ -531,28 +54,72 @@ pwsh desktop/scripts/build-portable.ps1
 └── 使用说明.txt
 ```
 
-> 解压后请保持目录完整，不要把 `servermonitor.exe` 单独移动；`resources`、`config`、
-> `data`、`logs` 必须与它位于同一目录。
+> 解压后请保持目录完整，不要把 `servermonitor.exe` 单独移动；`resources`、`config`、`data`、`logs` 必须与它位于同一目录。
 
-### 三、启动 / 停止 / 开机自启
+### 2. 启动 / 停止 / 开机自启
 
-- **启动**：双击 `启动.bat`（或直接双击 `servermonitor.exe`），显示独立主窗口；
-  首次启动自动进入 `/setup`（初始化管理员），登录后在「设置」页添加主机。
-  关闭窗口 = 最小化到系统托盘，后台继续监测；托盘菜单提供 显示主窗口 / 打开日志目录 /
-  复制看板地址 / 退出。
-- **停止**：优先用托盘「退出」（会先优雅停止后台服务）；也可双击 `停止.bat` 强制结束
-  `servermonitor.exe` 与 `servermonitor-backend.exe`。
-- **开机自启**：右键 `注册开机自启.ps1` →「使用 PowerShell 运行」。脚本创建计划任务
-  `ServerMonitorDashboard`（登录时触发），直接执行 `servermonitor.exe --start-hidden`，
-  只在托盘运行、不弹窗口；可重复运行（先删除同名任务），权限不足时回退到「启动」文件夹快捷方式。
+- **启动**：双击 `启动.bat`（或直接双击 `servermonitor.exe`），显示独立主窗口；首次启动自动进入 `/setup` 初始化管理员密码。关闭窗口 = 最小化到系统托盘，后台继续监测；托盘菜单提供 显示主窗口 / 打开日志目录 / 复制看板地址 / 退出。
+- **停止**：优先用托盘「退出」（会先优雅停止后台服务）；也可双击 `停止.bat` 强制结束 `servermonitor.exe` 与 `servermonitor-backend.exe`。
+- **开机自启**：右键 `注册开机自启.ps1` →「使用 PowerShell 运行」。脚本创建计划任务 `ServerMonitorDashboard`（登录时触发），直接执行 `servermonitor.exe --start-hidden`，只在托盘运行、不弹窗口；可重复运行（先删除同名任务），权限不足时回退到「启动」文件夹快捷方式。
 
-> `config\.env` 可选：不建也能启动，凭据在「设置」页填写后用 DPAPI 加密入库。
+### 3. 首次使用：设置管理员并添加主机
 
-### 四、网页在线设置
+1. 首次启动自动跳转 `/setup`，设置管理员密码后登录。
+2. 进入「设置」页，在「主机」里添加要巡检的服务器：填写名称、地址、SSH 用户名，以及密码或私钥（凭据用 DPAPI 加密保存在本地，界面不回显原文）。
+3. 在「通知 / 报告」里填写 SMTP 账号与收件人，设定每日发送时间。
+4. 回到「概览」即可看到各主机状态；到点后自动发送 HTML 日报邮件。
 
-启动后进入「设置」页即可修改主机与 SSH、监控与存储、通知、报告、磁盘健康、看板与安全等，
-全部在浏览器里完成，无需手工编辑配置文件；敏感值（SSH 密码/私钥、邮箱密码、Webhook 地址）
-用当前 Windows 账户的 DPAPI 加密保存在 `data\servermonitor.db`，界面永不回显原文。
+### 4. 网页在线设置
 
----
+启动后进入「设置」页即可修改主机与 SSH、监控与存储、通知、报告、磁盘健康、看板与安全等，全部在浏览器里完成，无需手工编辑配置文件；敏感值（SSH 密码/私钥、邮箱密码、Webhook 地址）用当前 Windows 账户的 DPAPI 加密保存在 `data\servermonitor.db`，界面永不回显原文。
 
+## 构建绿色包（开发者，可选）
+
+在装有 Node.js / pnpm 与 Python 3.11+ 的 Windows 上，于项目根目录执行：
+
+```powershell
+pwsh desktop/scripts/build-portable.ps1
+```
+
+脚本会构建 Python 后端 sidecar、执行 `pnpm install` 与 `pnpm run build`（electron-builder），把产物组装到 `desktop/build/portable/servermonitor/`，并压缩为 `release/服务器轮询监测工具-Windows-x64-v<版本号>.zip`。
+
+## 高级：用配置文件初始化（可选）
+
+软件默认在「设置」页完成全部配置；如需批量部署，也可以先用配置文件做种子：
+
+1. 复制 `config/config.yaml.example` 为 `config/config.yaml`；
+2. （可选）复制 `config/.env.example` 为 `config/.env`，填写 SMTP/SSH 密码等敏感值；
+3. 首次启动后这些值会被读入，之后仍可在「设置」页修改并保存到 SQLite。
+
+`config.yaml` 中形如 `*_env` 的字段填的是“环境变量名”，真实密码放 `config/.env`，不要把明文写进 `config.yaml`；`config/.env` 是可选的。
+
+## 常见报错怎么处理
+
+### 1. SMTP 认证失败
+
+常见原因：`smtp.host` / `smtp.port` 写错、账号写错、密码填的是网页登录密码而不是 **SMTP 授权码**。
+
+处理：在「设置 → 通知」核对 SMTP 地址、端口（多数 465 用 SSL）与授权码；保存后重试发送测试邮件。
+
+### 2. SSH 登录失败
+
+常见原因：服务器地址或用户名写错、22 端口不通、密码/私钥不对、防火墙拦截。
+
+处理：先在电脑上用 `ssh 用户名@地址` 手动验证能登录，再回「设置 → 主机」核对字段。
+
+### 3. 私钥不存在 / 无法读取
+
+日志出现类似 `SSH key path does not exist: <路径>` 时，说明设置里填的私钥路径在该 Windows 电脑上不存在。请改成真实路径（例如 `C:\Users\你\.ssh\id_rsa`），并确认文件可读；私钥带口令时同时填入口令。
+
+### 4. 收不到邮件
+
+先检查：收件人是否写对、垃圾邮件箱、SMTP 是否报错（看 `logs\servermonitor.log`）、发送时间是否已到。
+
+### 5. 打不开看板 / 端口被占用
+
+用托盘菜单「复制看板地址」获取当前看板地址；若该端口被其它程序占用，关闭占用程序后重新启动客户端即可。
+
+## 最后提醒
+
+- 需要长期保留的是 `config\`、`data\`、`logs\` 三个目录；升级版本时先备份这三处。
+- 换电脑后，已用 DPAPI 加密的敏感值无法解密，需要在「设置」页重新填写。

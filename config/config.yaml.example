@@ -4,7 +4,6 @@
 #
 # 用法：复制本文件为 config/config.yaml，复制 config/.env.example 为
 #       config/.env（可选），填写真实值后双击 启动.bat。
-#       （旧版 Docker 部署请继续使用仓库根目录的 config.yaml.example）
 #
 # 说明：所有形如 *_env 的字段都写“环境变量名”，真实密码放在 config/.env 中，
 #       不要把明文密码写进本文件。config/.env 是**可选**的：不建也能启动，
