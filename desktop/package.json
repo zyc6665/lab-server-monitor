@@ -6,12 +6,17 @@
   "scripts": {
     "start": "electron .",
     "build": "electron-builder --win",
-    "test": "node --test"
+    "test": "node --test",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test:unit": "vitest run --config vitest.config.ts"
   },
   "devDependencies": {
     "@electron/fuses": "^1.8.0",
+    "@types/node": "^22.20.5",
     "electron": "45.2.3",
-    "electron-builder": "^26.18.0"
+    "electron-builder": "^26.18.0",
+    "typescript": "^5.9.3",
+    "vitest": "^5.1.1"
   },
   "packageManager": "pnpm@12.14.0"
 }
