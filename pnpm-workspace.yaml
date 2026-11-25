@@ -11,3 +11,8 @@ allowBuilds:
   esbuild: true
   better-sqlite3: true
   '@primno/dpapi': true
+  # ssh2 ships an optional native `cpu-features` accelerator. The pure-JS
+  # fallback is fully functional, so we deliberately skip the native build
+  # (avoids requiring MSVC build tools on Windows).
+  ssh2: false
+  cpu-features: false
