@@ -68,3 +68,11 @@ export async function startServer(opts: StartServerOptions = {}): Promise<Starte
       }),
   };
 }
+
+// CLI entry: when run directly (e.g. `node dist/main.cjs --port 0`), start the
+// server and print its URL so the Electron main process can pick it up.
+if (require.main === module) {
+  const i = process.argv.indexOf('--port');
+  const port = i >= 0 ? Number(process.argv[i + 1]) : 0;
+  startServer({ port }).then((s) => console.log('SERVER_URL=' + s.url));
+}

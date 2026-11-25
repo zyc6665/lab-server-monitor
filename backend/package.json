@@ -5,6 +5,7 @@
   "type": "commonjs",
   "main": "dist/server.js",
   "scripts": {
+    "build": "node build.mjs",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },
@@ -14,6 +15,7 @@
   "devDependencies": {
     "@types/express": "^5.0.6",
     "@types/node": "^22.20.5",
+    "esbuild": "^0.28.2",
     "typescript": "^5.9.3",
     "vitest": "^5.1.1"
   }
