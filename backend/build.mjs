@@ -15,9 +15,12 @@ await build({
   bundle: true,
   target: 'node22',
   // P1/P2 use native modules; keep them external so they are never pulled into
-  // the bundle. The composition root is imported lazily (health-only boots do
-  // not require them), so the packaged main.cjs still starts without a DB.
-  external: ['better-sqlite3', '@primno/dpapi'],
+  // the bundle. P3 collection adds ssh2 (which itself lazily require()s the
+  // optional native cpu-features binding), so it must stay external too: the
+  // packaged runtime resolves it from node_modules instead of esbuild trying to
+  // inline a .node binary. The composition root is imported lazily (health-only
+  // boots do not require them), so the packaged main.cjs still starts without a DB.
+  external: ['better-sqlite3', '@primno/dpapi', 'ssh2'],
   entryPoints: ['src/server.ts'],
   outfile: 'dist/main.cjs',
   sourcemap: false,
