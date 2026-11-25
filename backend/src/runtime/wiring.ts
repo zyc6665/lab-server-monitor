@@ -15,10 +15,10 @@
  *   `saveHostCheckResults`). All collaborators are injectable through
  *   {@link SchedulerWiringDeps} so tests never touch SSH or the real clock.
  * - `daily-report` / `weekly-report` — calendar tasks driven by
- *   `report.daily_time` and `report.weekly.{time,weekday}`. The P5 report
- *   generation/email pipeline is **not migrated yet**, so these are registered
- *   as placeholders that return `'skipped: report not migrated'` (see
- *   `TODO(P5)` below).
+ *   `report.daily_time` and `report.weekly.{time,weekday}`. They run the P5
+ *   report pipeline: assemble (`report/assemble.ts`), render
+ *   (`report/render.ts`), and email (`alerts/mailer.ts`). All three
+ *   collaborators are injectable via {@link SchedulerWiringDeps}.
  * - `prune` — hourly (3600 s, mirroring the oracle `retention_cleanup`
  *   cadence) retention + log cleanup: `pruneRetention` from
  *   `storage/runtime.ts` and `cleanupLogs` from `runtime/maintenance.ts`.
@@ -63,6 +63,28 @@ import {
   type RetentionConfig,
   type RetentionCounts,
 } from '../storage/runtime';
+import {
+  buildDailyReport,
+  DEFAULT_BUSY_THRESHOLD,
+  DEFAULT_IDLE_THRESHOLD,
+  DEFAULT_WEEKLY_SUBJECT_PREFIX,
+  generateWeeklyReport,
+  type WeeklyReportConfigLike,
+} from '../report/assemble';
+import {
+  renderReport as defaultRenderReport,
+  type ReportVariant,
+} from '../report/render';
+import type { DailyReport, RenderedReport, WeeklyReport } from '../report/model';
+import {
+  buildMessage,
+  sendReport as defaultSendReport,
+  type MailMessage,
+  type SendReportOptions,
+  type SmtpConfig,
+} from '../alerts/mailer';
+import { readSecretText } from '../config/admin';
+import { SECRET_SMTP_PASSWORD } from '../config/secrets';
 
 type SqliteDatabase = import('better-sqlite3').Database;
 
@@ -84,6 +106,19 @@ export type CleanupLogsFn = (
   now?: Date | null,
 ) => CleanupResult;
 
+/** Renders a report to subject/text/html (`report/render.ts` `renderReport`). */
+export type RenderReportFn = (
+  report: DailyReport | WeeklyReport,
+  variant: ReportVariant,
+) => RenderedReport;
+
+/** Delivers a rendered message (`alerts/mailer.ts` `sendReport`). */
+export type SendReportFn = (
+  smtp: SmtpConfig,
+  message: MailMessage,
+  options?: SendReportOptions,
+) => Promise<void>;
+
 /**
  * Optional collaborators for {@link buildScheduledTasks}. Every field defaults
  * to the real implementation; tests override the ones that would otherwise
@@ -104,7 +139,11 @@ export interface SchedulerWiringDeps {
   ) => RetentionCounts;
   /** Replacement for `runtime/maintenance.ts` `cleanupLogs`. */
   cleanupLogs?: CleanupLogsFn;
-  /** Injectable clock (defaults to `() => new Date()`); used by `prune`. */
+  /** Replacement for `report/render.ts` `renderReport` (report tasks). */
+  renderReport?: RenderReportFn;
+  /** Replacement for `alerts/mailer.ts` `sendReport` (report tasks). */
+  sendReport?: SendReportFn;
+  /** Injectable clock (defaults to `() => new Date()`); used by `prune` + reports. */
   now?: () => Date;
 }
 
@@ -165,6 +204,11 @@ function readNumber(obj: Record<string, unknown>, key: string): number | undefin
 function readBoolean(obj: Record<string, unknown>, key: string, fallback: boolean): boolean {
   const value = obj[key];
   return typeof value === 'boolean' ? value : fallback;
+}
+
+function readStringArray(obj: Record<string, unknown>, key: string): string[] {
+  const value = obj[key];
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
 }
 
 // ---------------------------------------------------------------------------
@@ -363,17 +407,164 @@ function buildCollectTask(
   };
 }
 
-function buildReportTask(
-  name: string,
+/**
+ * Builds the SMTP client config from the `smtp` settings section, or `null`
+ * when no host is configured (the oracle's `config.smtp is None` branch). The
+ * password is read from the encrypted secret store, matching `secrets.py`.
+ */
+function resolveSmtpConfig(db: SqliteDatabase, settings: Settings): SmtpConfig | null {
+  const smtp = section(settings, 'smtp');
+  const host = readString(smtp, 'host', '').trim();
+  if (host === '') {
+    return null;
+  }
+  return {
+    host,
+    port: readNumber(smtp, 'port') ?? 587,
+    username: readString(smtp, 'username', ''),
+    password: readSecretText(db, SECRET_SMTP_PASSWORD) ?? '',
+    useSsl: readBoolean(smtp, 'use_ssl', false),
+    fromAddr: readString(smtp, 'from_addr', ''),
+    toAddrs: readStringArray(smtp, 'to_addrs'),
+  };
+}
+
+/**
+ * `daily-report` task — ports `app.py::run_daily_report`: collect a fresh
+ * snapshot, persist it, build the `DailyReport`, email the technical variant,
+ * then (when enabled) a second executive variant to its own recipients.
+ */
+function buildDailyReportTask(
+  db: SqliteDatabase,
+  config: AppConfig,
+  settings: Settings,
+  deps: SchedulerWiringDeps,
   calendar: CalendarSpec,
 ): ScheduledTask {
+  const report = section(settings, 'report');
+  const monitoring = section(settings, 'monitoring');
+  const subjectPrefix = readString(report, 'subject_prefix', '[Server Daily Report]');
+
+  const collectHosts = deps.collectAllHosts ?? defaultCollectAllHosts;
+  const persist = deps.persistReports ?? defaultPersistReports;
+  const render = deps.renderReport ?? defaultRenderReport;
+  const send = deps.sendReport ?? defaultSendReport;
+  const clock = deps.now ?? (() => new Date());
+
   return {
-    name,
+    name: 'daily-report',
     calendar,
-    // TODO(P5): generate + email the report once the P5 report pipeline is
-    // migrated. Until then the slot is consumed so catch-up semantics stay
-    // observable (the task still records a run in `task_state`).
-    run: () => 'skipped: report not migrated',
+    run: async () => {
+      const collectorConfig = buildCollectorConfig(config, settings);
+      const options: CollectAllOptions = {
+        runHostChecks: deps.runHostChecks ?? collectorRunHostChecks,
+      };
+      const reports = await collectHosts(collectorConfig, options);
+      const generatedAt = clock().toISOString();
+      const daily = buildDailyReport(reports, { generatedAt, subjectPrefix });
+
+      // Python persists first (`storage.enabled`), then bails out on missing SMTP.
+      const tz = readString(monitoring, 'timezone', 'UTC');
+      persist(db, reports.map(toStorageReport), { diskMounts: diskMountsByHost(config), tz });
+
+      const smtp = resolveSmtpConfig(db, settings);
+      if (!smtp) {
+        return 'skipped: smtp not configured';
+      }
+
+      const rendered = render(daily, 'technical');
+      await send(
+        smtp,
+        buildMessage({
+          subject: rendered.subject,
+          fromAddr: smtp.fromAddr,
+          toAddrs: smtp.toAddrs,
+          textBody: rendered.textBody,
+          htmlBody: rendered.htmlBody,
+        }),
+      );
+
+      const executive = asSection(report['executive']);
+      if (readBoolean(executive, 'enabled', false)) {
+        const executivePrefix = readString(executive, 'subject_prefix', '[Leader Summary]');
+        const executiveReport = buildDailyReport(reports, {
+          generatedAt,
+          subjectPrefix: executivePrefix,
+        });
+        const executiveRendered = render(executiveReport, 'executive');
+        const executiveTo = readStringArray(executive, 'to_addrs');
+        await send(
+          smtp,
+          buildMessage({
+            subject: executiveRendered.subject,
+            fromAddr: smtp.fromAddr,
+            // Python `to_addrs or smtp.to_addrs`: an empty list falls back.
+            toAddrs: executiveTo.length > 0 ? executiveTo : smtp.toAddrs,
+            textBody: executiveRendered.textBody,
+            htmlBody: executiveRendered.htmlBody,
+          }),
+        );
+      }
+
+      return `sent daily report: ${rendered.subject}`;
+    },
+  };
+}
+
+/**
+ * `weekly-report` task — ports `app.py::run_weekly_report`: generate the weekly
+ * aggregate from the DB, render the `weekly` variant, then email it. Note the
+ * oracle renders *before* the SMTP-presence check, so we do too.
+ */
+function buildWeeklyReportTask(
+  db: SqliteDatabase,
+  settings: Settings,
+  deps: SchedulerWiringDeps,
+  calendar: CalendarSpec,
+): ScheduledTask {
+  const report = section(settings, 'report');
+  const weeklySettings = asSection(report['weekly']);
+  const monitoring = section(settings, 'monitoring');
+  const tz = readString(monitoring, 'timezone', 'UTC') || 'UTC';
+
+  const weeklyConfig: WeeklyReportConfigLike = {
+    enabled: readBoolean(weeklySettings, 'enabled', true),
+    subjectPrefix: readString(weeklySettings, 'subject_prefix', DEFAULT_WEEKLY_SUBJECT_PREFIX),
+    busyThreshold: readNumber(weeklySettings, 'busy_threshold') ?? DEFAULT_BUSY_THRESHOLD,
+    idleThreshold: readNumber(weeklySettings, 'idle_threshold') ?? DEFAULT_IDLE_THRESHOLD,
+    time: readString(weeklySettings, 'time', '16:00'),
+    weekday: readNumber(weeklySettings, 'weekday') ?? 4,
+  };
+
+  const render = deps.renderReport ?? defaultRenderReport;
+  const send = deps.sendReport ?? defaultSendReport;
+  const clock = deps.now ?? (() => new Date());
+
+  return {
+    name: 'weekly-report',
+    calendar,
+    run: async () => {
+      const weeklyReport = generateWeeklyReport(db, { config: weeklyConfig, tz, now: clock() });
+      const rendered = render(weeklyReport, 'weekly');
+
+      const smtp = resolveSmtpConfig(db, settings);
+      if (!smtp) {
+        return 'skipped: smtp not configured';
+      }
+
+      await send(
+        smtp,
+        buildMessage({
+          subject: rendered.subject,
+          fromAddr: smtp.fromAddr,
+          toAddrs: smtp.toAddrs,
+          textBody: rendered.textBody,
+          htmlBody: rendered.htmlBody,
+        }),
+      );
+
+      return `sent weekly report: ${rendered.subject}`;
+    },
   };
 }
 
@@ -418,7 +609,7 @@ export function buildScheduledTasks(options: BuildScheduledTasksOptions): Schedu
   const weekly = asSection(report['weekly']);
   if (readBoolean(report, 'daily_enabled', true)) {
     tasks.push(
-      buildReportTask('daily-report', {
+      buildDailyReportTask(db, config, settings, deps, {
         kind: 'daily',
         hhmm: readString(report, 'daily_time', '09:00'),
       }),
@@ -426,7 +617,7 @@ export function buildScheduledTasks(options: BuildScheduledTasksOptions): Schedu
   }
   if (readBoolean(weekly, 'enabled', true)) {
     tasks.push(
-      buildReportTask('weekly-report', {
+      buildWeeklyReportTask(db, settings, deps, {
         kind: 'weekly',
         hhmm: readString(weekly, 'time', '16:00'),
         weekday: readNumber(weekly, 'weekday') ?? 4,

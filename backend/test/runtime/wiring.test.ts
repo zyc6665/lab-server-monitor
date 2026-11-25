@@ -206,11 +206,24 @@ describe('buildScheduledTasks — task set and cadences', () => {
     });
   });
 
-  it('daily/weekly report placeholders report they are not migrated yet', async () => {
+  it('daily/weekly report tasks skip email when SMTP is not configured', async () => {
     const { db } = freshDb();
-    const tasks = buildScheduledTasks({ db, config: makeConfig(), deps: inertDeps() });
-    await expect(Promise.resolve(taskNamed(tasks, 'daily-report').run())).resolves.toBe('skipped: report not migrated');
-    await expect(Promise.resolve(taskNamed(tasks, 'weekly-report').run())).resolves.toBe('skipped: report not migrated');
+    const renderCalls: string[] = [];
+    const deps = inertDeps({
+      renderReport: (_report, variant) => {
+        renderCalls.push(variant);
+        return { subject: variant, textBody: '', htmlBody: '' };
+      },
+    });
+    const tasks = buildScheduledTasks({ db, config: makeConfig(), deps });
+    await expect(Promise.resolve(taskNamed(tasks, 'daily-report').run())).resolves.toBe(
+      'skipped: smtp not configured',
+    );
+    await expect(Promise.resolve(taskNamed(tasks, 'weekly-report').run())).resolves.toBe(
+      'skipped: smtp not configured',
+    );
+    // Daily bails before rendering; weekly renders first (oracle order).
+    expect(renderCalls).toEqual(['weekly']);
   });
 });
 
@@ -319,7 +332,10 @@ describe('runPending catch-up semantics', () => {
     // Friday 2026-01-09 17:00 UTC — both the 09:00 daily slot and the Friday
     // 16:00 weekly slot are already in the past, so both catch up now.
     const now = wall(2026, 1, 9, 17, 0);
-    const deps = inertDeps({ now: () => now });
+    const deps = inertDeps({
+      now: () => now,
+      renderReport: (_report, variant) => ({ subject: variant, textBody: '', htmlBody: '' }),
+    });
 
     const tasks = buildScheduledTasks({ db, config, deps });
     const scheduler = new Scheduler(tasks, { db, tz: 'UTC', now: () => now });
