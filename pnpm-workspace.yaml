@@ -1,2 +1,9 @@
 packages:
   - backend
+
+# pnpm >= 10 reads the build-script allow-list from here (not package.json).
+# esbuild ships a postinstall; better-sqlite3 uses prebuilt binaries but is
+# listed too so a source build is permitted on platforms without prebuilds.
+allowBuilds:
+  esbuild: true
+  better-sqlite3: true
