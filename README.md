@@ -5,18 +5,18 @@
 
 ## 版本与更新记录
 
-- **更新历史**：完整版本记录已独立到 [CHANGELOG.md](CHANGELOG.md)（含 v0.1.7–v0.1.236 与桌面端 v1.2–v1.6）。
+- **更新历史**：完整版本记录已独立到 [CHANGELOG.md](CHANGELOG.md)（含 v0.1.7–v0.1.238 与桌面端 v1.2–v1.6）。
 - **版本号规则**：程序包版本以 `pyproject.toml` / `desktop/package.json` / `servermanage/__init__.py` 三处为准，由 `tools/bump_version.py` 同步；桌面客户端对外发布版本对应 GitHub Release 标签 `v*`。
-- **当前版本**：程序包 `0.1.236`；最近一次对外发布为桌面端 `v1.6.1`（详见 [docs/VERSIONING.md](docs/VERSIONING.md)）。
+- **当前版本**：程序包 `0.1.238`，最新对外发布标签 `v0.1.238`（详见 [docs/VERSIONING.md](docs/VERSIONING.md)）。
 
 | 渠道 | 版本标识来源 | 当前值 |
 | --- | --- | --- |
-| 程序包（pyproject / package.json / `__version__`） | 仓库内三处同步文件 | `0.1.236` |
-| 本地绿色包产物 | `release/服务器轮询监测工具-Windows-x64-v*.zip` | `v0.1.236` |
-| 对外发布（GitHub Releases） | `release-windows.yml` 打的 `v*` 标签 | `v1.6.1` |
+| 程序包（pyproject / package.json / `__version__`） | 仓库内三处同步文件 | `0.1.238` |
+| 本地绿色包产物 | `release/服务器轮询监测工具-Windows-x64-v*.zip` | `v0.1.238` |
+| 对外发布（GitHub Releases） | `release-windows.yml` 打的 `v*` 标签 | `v0.1.238` |
 
-> 两套版本号（0.1.236 与 1.6.1）尚未归一：界面与自动更新以程序包版本参与比较，
-> 与线上 `v*` 标签不同线会导致「已是最新却提示可更新」。处理建议见 docs/VERSIONING.md。
+> 版本线自 v0.1.237 起已归一（决策 A：留在 `0.1.x` 线）：历史桌面端 `v1.x` Release 已在 GitHub 标记为 **prerelease**，
+> `desktop/electron/updater-core.js` 只认非 prerelease/draft、且与当前 major 一致的 Release，不再出现「已是最新却提示更新」的循环。详见 [docs/VERSIONING.md](docs/VERSIONING.md)。
 
 它会做这些事：
 

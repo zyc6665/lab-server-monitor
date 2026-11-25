@@ -47,12 +47,12 @@
 本文件记录项目的完整版本历史，**最新版本在最前面**。使用与部署说明请回到 [README.md](README.md)。
 
 - 桌面客户端发布线：v1.6 → v1.2（见下文「桌面客户端版本」）
-- 程序包版本线：v0.1.236 → v0.1.7，以及更早的 v0.7.x / v0.4.x / v0.1.x（见下文「早期版本」）
+- 程序包版本线：v0.1.238 → v0.1.7，以及更早的 v0.7.x / v0.4.x / v0.1.x（见下文「早期版本」）
 
 ## 版本号说明
 
 程序包版本以 `pyproject.toml`、`desktop/package.json`、`servermanage/__init__.py` 三处为准（`tools/bump_version.py` 同步），
-桌面端对外发布版本对应 GitHub Release 的 `v*` 标签。当前程序包为 `0.1.236`，最近发布为 `v1.6.1`，两者尚未归一。
+桌面端对外发布版本对应 GitHub Release 的 `v*` 标签。当前程序包为 `0.1.238`，最新发布标签 `v0.1.238`；版本线自 v0.1.237 起已归一在 `0.1.x`（历史 `v1.x` 已标 prerelease，详见 [docs/VERSIONING.md](docs/VERSIONING.md)）。
 
 ## 近期版本要点
 
