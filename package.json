@@ -6,5 +6,8 @@
   "scripts": {
     "test": "pnpm --filter servermonitor-backend test",
     "typecheck": "pnpm --filter servermonitor-backend typecheck"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": ["esbuild"]
   }
 }

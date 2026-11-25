@@ -61,6 +61,38 @@ jobs:
           if ($configured) { ruff check . } else { Write-Host 'ruff is not configured; skipping ruff check' }
         shell: pwsh
 
+  backend-node:
+    name: Node backend (vitest)
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Enable pnpm
+        run: corepack enable && corepack prepare pnpm@12.14.0 --activate
+        shell: pwsh
+
+      - name: Install (workspace)
+        run: pnpm install --frozen-lockfile
+        shell: pwsh
+
+      - name: Typecheck
+        run: pnpm --filter servermonitor-backend typecheck
+        shell: pwsh
+
+      - name: Test
+        run: pnpm --filter servermonitor-backend test
+        shell: pwsh
+
+      - name: Build bundle
+        run: pnpm --filter servermonitor-backend build
+        shell: pwsh
+
   desktop:
     name: Electron desktop (node:test)
     runs-on: windows-latest
@@ -86,6 +118,18 @@ jobs:
 
       - name: Run tests
         run: pnpm test
+        shell: pwsh
+
+      - name: Typecheck (ts)
+        run: pnpm typecheck
+        shell: pwsh
+
+      - name: Unit tests (vitest)
+        run: pnpm test:unit
+        shell: pwsh
+
+      - name: Build main bundle
+        run: pnpm build:main
         shell: pwsh
 
       - name: pnpm audit (non-blocking)
