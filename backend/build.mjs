@@ -20,7 +20,7 @@ await build({
   // packaged runtime resolves it from node_modules instead of esbuild trying to
   // inline a .node binary. The composition root is imported lazily (health-only
   // boots do not require them), so the packaged main.cjs still starts without a DB.
-  external: ['better-sqlite3', '@primno/dpapi', 'ssh2'],
+  external: ['better-sqlite3', '@primno/dpapi', 'ssh2', 'nodemailer'],
   entryPoints: ['src/server.ts'],
   outfile: 'dist/main.cjs',
   sourcemap: false,
