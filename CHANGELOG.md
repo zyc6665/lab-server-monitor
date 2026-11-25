@@ -1,5 +1,17 @@
 # 更新日志
 
+## v0.1.239 点状加固与「软件单线」收敛
+
+承接 v0.1.238，本轮做两件事：按 P0–P3 清单做非重构的点状加固，并把项目收敛为纯 Windows 软件单线（不再提供 Docker 部署）。
+
+- **后端加固**：报告模板显式 autoescape（含 `j2` 模板）；metrics/alerts 增加复合索引，历史与告警清理改为有界分块删除，多张写入表改用 `BEGIN IMMEDIATE` 缓解 SQLite 写锁；告警开放列表改为按主机查询（去掉 10 万行全表扫描）；登录失败限流加锁、按可信 `X-Forwarded-For` 取客户端 IP、失败表容量封顶；新增 SSRF 防护（默认拒绝 loopback/私网/链路本地目标，可用开关放行）；SSH 采集尊重 `connect_timeout` 并对瞬态错误重试一次（不重试认证失败），连接加 keepalive、私钥解析加缓存；CSRF 在认证会话激活时强制校验；会话 Cookie 增加 Secure 开关。
+- **前端加固**：主机详情页的全局监听器改为按目标幂等注册/移除，修复反复进出页面导致的监听器泄漏；自动刷新加防重入，刷新后恢复滚动与焦点；11 处静默 `catch` 改为可见错误提示；主机关键字过滤加防抖；表格排序改用 `aria-sort` + roving tabindex，修复表头 role 覆盖。
+- **桌面加固**：自动更新改为 fail-closed（缺校验值/非 200/非法哈希一律不下载不应用），下载设 512MB 上限，安装 zip 拒绝 `..` 与绝对路径条目；构建注入 Electron fuses（关闭 RunAsNode / 关闭 NODE_OPTIONS 检视、开启 cookie 加密）；后端 sidecar 启动失败自动重试一次。
+- **CI**：发布工作流新增前置 `test` job（pytest + 版本一致性检查 + 桌面端测试），构建依赖其通过；CI 增加 pip-audit / ruff / `pnpm audit`（不阻断）。
+- **移除 Docker 部署线**：删除 `Dockerfile`、`docker-compose.yml`、`docker/entrypoint.sh`、旧版根目录 `config.yaml.example` / `.env.example` 及 readme-docker-guide 计划；README 重写为 Windows 绿色包软件单线指南（配置改走网页「设置」页，凭据 DPAPI 加密）。
+
+校验：1892 passed / 1 skipped（Python），Node 94 passed。
+
 ## v0.1.238 第一阶段架构计划完成（M1–M6 收尾）
 
 承接 v0.1.237（M0–M3 起步），本轮把计划中剩余里程碑全部落地：
@@ -47,12 +59,12 @@
 本文件记录项目的完整版本历史，**最新版本在最前面**。使用与部署说明请回到 [README.md](README.md)。
 
 - 桌面客户端发布线：v1.6 → v1.2（见下文「桌面客户端版本」）
-- 程序包版本线：v0.1.238 → v0.1.7，以及更早的 v0.7.x / v0.4.x / v0.1.x（见下文「早期版本」）
+- 程序包版本线：v0.1.239 → v0.1.7，以及更早的 v0.7.x / v0.4.x / v0.1.x（见下文「早期版本」）
 
 ## 版本号说明
 
 程序包版本以 `pyproject.toml`、`desktop/package.json`、`servermanage/__init__.py` 三处为准（`tools/bump_version.py` 同步），
-桌面端对外发布版本对应 GitHub Release 的 `v*` 标签。当前程序包为 `0.1.238`，最新发布标签 `v0.1.238`；版本线自 v0.1.237 起已归一在 `0.1.x`（历史 `v1.x` 已标 prerelease，详见 [docs/VERSIONING.md](docs/VERSIONING.md)）。
+桌面端对外发布版本对应 GitHub Release 的 `v*` 标签。当前程序包为 `0.1.239`，最新发布标签 `v0.1.239`；版本线自 v0.1.237 起已归一在 `0.1.x`（历史 `v1.x` 已标 prerelease，详见 [docs/VERSIONING.md](docs/VERSIONING.md)）。
 
 ## 近期版本要点
 
