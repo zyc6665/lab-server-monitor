@@ -59,6 +59,7 @@ function setup(options: {
   servers?: HostConfig[];
   userMode?: boolean;
   deps?: Partial<SystemRouteDeps>;
+  config?: Partial<AppConfig>;
 } = {}): Harness {
   const fresh = freshDb();
   setAdminPassword(fresh.db, { newPassword: 'admin-secret', username: 'admin' });
@@ -68,6 +69,7 @@ function setup(options: {
   const root = mkdtempSync(path.join(tmpdir(), 'sm-system-'));
   createdRoots.push(root);
   const config = makeConfig(options.servers ?? []);
+  Object.assign(config, options.config ?? {});
   const app = createWebApp({
     db: fresh.db,
     config,
@@ -218,6 +220,31 @@ describe('GET /api/system/storage', () => {
     expect(res.status).toBe(200);
     expect(res.body).toEqual({ usage, db_path: h.fresh.dbPath, log_retention_hours: 24 });
   });
+
+  it('derives sizes from config dirs instead of walking the data dir parent', async () => {
+    // Regression: with a user-chosen data dir such as D:\ServerMonitorData the
+    // old code used dirname(dirname(dbPath)) => "D:\" and walked the entire
+    // drive, freezing every page load that opened the storage panel.
+    const dirRoot = mkdtempSync(path.join(tmpdir(), 'sm-storage-'));
+    createdRoots.push(dirRoot);
+    const dataDir = path.join(dirRoot, 'data');
+    const logDir = path.join(dirRoot, 'logs');
+    mkdirSync(path.join(dataDir, 'updates'), { recursive: true });
+    mkdirSync(path.join(dataDir, 'electron'), { recursive: true });
+    mkdirSync(logDir, { recursive: true });
+    writeFileSync(path.join(dataDir, 'updates', 'pkg.zip'), Buffer.alloc(5));
+    writeFileSync(path.join(dataDir, 'electron', 'cache.bin'), Buffer.alloc(7));
+    writeFileSync(path.join(logDir, 'servermonitor.log'), Buffer.alloc(3));
+
+    const h = setup({ config: { dataDir, logDir } });
+    const res = await request(h.app).get('/api/system/storage').set('Cookie', h.cookie);
+    expect(res.status).toBe(200);
+    expect(res.body.usage.logs).toBe(3);
+    expect(res.body.usage.updates).toBe(5);
+    expect(res.body.usage.electron).toBe(7);
+    expect(res.body.usage.total).toBe(12);
+    expect(res.body.usage.total).toBeLessThan(10_000);
+  });
 });
 
 describe('POST /api/system/maintenance', () => {
@@ -287,9 +314,8 @@ describe('POST /api/system/maintenance', () => {
   });
 
   it('deletes rotated .log.N files with the default logs handler', async () => {
-    // Build a db whose grandparent directory is a temp root, so the route's
-    // `appDir = dirname(dirname(db.name))` resolves to `<root>` and its logs
-    // directory is `<root>/logs`.
+    // The default handler resolves the log directory from the effective config
+    // (config.logDir), matching the single-stack layout.
     const root = mkdtempSync(path.join(tmpdir(), 'sm-system-logs-'));
     createdRoots.push(root);
     const dataDir = path.join(root, 'data');
@@ -309,6 +335,9 @@ describe('POST /api/system/maintenance', () => {
       writeFileSync(path.join(logsDir, 'servermonitor.log'), 'live');
 
       const config = makeConfig();
+      config.dbPath = db.name;
+      config.dataDir = dataDir;
+      config.logDir = logsDir;
       const app = createWebApp({
         db,
         config,

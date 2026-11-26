@@ -23,6 +23,8 @@ const update = {
 
 contextBridge.exposeInMainWorld('desktopBridge', {
   isDesktop: true,
+  windowAction: (action: 'minimize' | 'maximize' | 'close') =>
+    ipcRenderer.invoke('window:action', action),
   checkForUpdate: (force?: boolean) => ipcRenderer.invoke('update:check', Boolean(force)),
   downloadUpdate: (payload?: unknown) => ipcRenderer.invoke('update:download', payload),
   installUpdate: (payload?: unknown) => ipcRenderer.invoke('update:install', payload),

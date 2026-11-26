@@ -31,7 +31,7 @@
  */
 import { mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { join } from 'node:path';
 
 import type { Express, NextFunction, Request, RequestHandler, Response } from 'express';
 
@@ -366,16 +366,18 @@ function defaultReadRuntimeState(filePath: string): Obj | null {
   }
 }
 
-/** Disk-usage snapshot matching `maintenance.storage_usage(db_path)`. */
-function defaultStorageUsage(db: SqliteDatabase): StorageUsage {
-  const dbPath = db.name;
-  const appDir = dirname(dirname(dbPath));
+/** Disk-usage snapshot. In the single-stack layout the data/log directories are
+ * user-configurable and no longer live under `{app_dir}/data`, so the sizes are
+ * derived from the effective config instead of `dirname(dirname(dbPath))` —
+ * otherwise `total` would walk the entire drive that hosts the data directory. */
+function defaultStorageUsage(db: SqliteDatabase, config: AppConfig): StorageUsage {
+  const dataDir = config.dataDir;
   return {
-    database: directorySize(dbPath),
-    logs: directorySize(join(appDir, 'logs')),
-    updates: directorySize(join(appDir, 'data', 'updates')),
-    electron: directorySize(join(appDir, 'data', 'electron')),
-    total: directorySize(appDir),
+    database: directorySize(config.dbPath || db.name),
+    logs: directorySize(config.logDir),
+    updates: directorySize(join(dataDir, 'updates')),
+    electron: directorySize(join(dataDir, 'electron')),
+    total: directorySize(dataDir),
   };
 }
 
@@ -598,7 +600,7 @@ export function registerSystemRoutes(app: Express, deps: SystemRouteDeps): void 
     ?? config.runtimePath
     ?? join(config.dataDir || 'data', 'runtime.json');
   const usage = (): StorageUsage =>
-    deps.storageUsage ? deps.storageUsage(db) : defaultStorageUsage(db);
+    deps.storageUsage ? deps.storageUsage(db) : defaultStorageUsage(db, config);
   const diagnostics = (): Diagnostics =>
     deps.diagnostics ? deps.diagnostics(db, config) : buildDiagnostics(db, config, now().getTime());
 
@@ -648,20 +650,18 @@ export function registerSystemRoutes(app: Express, deps: SystemRouteDeps): void 
   app.post(ENDPOINTS.api_system_maintenance, (req: Request, res: Response) => {
     const payload = isPlainObject(req.body) ? req.body : {};
     const target = String(payload.target ?? '').trim();
-    const dbPath = db.name;
-    const appDir = dirname(dirname(dbPath));
     const targets: Partial<MaintenanceTargets> = deps.maintenanceTargets ?? {};
 
     let result: unknown;
     switch (target) {
       case 'logs':
-        result = (targets.logs ?? cleanupLogs)(join(appDir, 'logs'));
+        result = (targets.logs ?? cleanupLogs)(config.logDir);
         break;
       case 'updates':
-        result = (targets.updates ?? ((dir) => cleanupUpdates(dir, 0)))(join(appDir, 'data', 'updates'));
+        result = (targets.updates ?? ((dir) => cleanupUpdates(dir, 0)))(join(config.dataDir, 'updates'));
         break;
       case 'cache':
-        result = (targets.cache ?? cleanupElectronCache)(join(appDir, 'data', 'electron'));
+        result = (targets.cache ?? cleanupElectronCache)(join(config.dataDir, 'electron'));
         break;
       case 'database':
         result = (targets.database ?? maintainDatabase)(db);

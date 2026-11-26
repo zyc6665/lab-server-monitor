@@ -219,6 +219,11 @@ function createWindow(): BrowserWindow {
     width: 1200,
     height: 800,
     show: false,
+    // The page renders its own title bar (servermanage base.html `#app-titlebar`)
+    // with working window controls, so the OS frame must be off — otherwise the
+    // user sees two stacked title bars and an extra default menu.
+    frame: false,
+    autoHideMenuBar: true,
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
@@ -370,7 +375,38 @@ function requestGracefulShutdown(): Promise<'graceful' | 'forced'> {
   }).run();
 }
 
+/** Wire the custom title bar's window buttons (minimize/maximize/close). */
+function registerWindowControls(): void {
+  ipcMain.handle('window:action', (event, action: unknown) => {
+    const target = BrowserWindow.fromWebContents(event.sender) ?? win;
+    if (!target) {
+      return { ok: false };
+    }
+    switch (action) {
+      case 'minimize':
+        target.minimize();
+        break;
+      case 'maximize':
+        if (target.isMaximized()) {
+          target.unmaximize();
+        } else {
+          target.maximize();
+        }
+        break;
+      case 'close':
+        target.close();
+        break;
+      default:
+        return { ok: false };
+    }
+    return { ok: true, maximized: target.isMaximized() };
+  });
+}
+
 async function main(): Promise<void> {
+  // No native application menu — the in-page title bar is the only chrome.
+  Menu.setApplicationMenu(null);
+  registerWindowControls();
   initDataDir();
   const importLegacy = computeImportLegacy();
 
