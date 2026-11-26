@@ -29,7 +29,9 @@ backup_*/
 # Local configuration and secrets
 .env
 config.yaml
-ssh/
+/ssh/
+!backend/src/ssh/
+!backend/test/ssh/
 
 # IDE and OS files
 .DS_Store
