@@ -1,5 +1,11 @@
 # 更新日志
 
+## v0.2.10 主机列表与采集修复
+
+- **修复「已导入主机但显示共 0 台 / 采集时暂无可采集主机」**：数据库已是主机清单的唯一来源（设计 §7.7），但运行时 `config.servers` 只来自配置文件，安装版没有配置文件，导致概览、主机页与后台采集任务拿到的主机列表恒为空。现在在组合根启动时以及每次新增/修改/删除/复制/导入主机后，都用 `buildServers(db)` 重新填充 `config.servers`，概览、主机页、巡检与采集立即生效，无需重启。
+- 新增回归测试 `backend/test/web/hosts-from-db.test.ts`：数据库导入主机（配置文件为空）后，`config.servers` 被填充、`/api/overview` 与 `/hosts` 页面显示主机、API 新增主机后无需重启即可见。
+- 版本号三处同步至 0.2.10。
+
 ## v0.2.9 概览趋势与首页统计修复
 
 - **修复概览页「趋势数据加载失败 / 告警趋势加载失败」红色提示**：`backend/assets/web/static/pages/trend-chart.js` 在从 `app.js` 拆分（M2）时遗漏了 SVG 命名空间常量 `OVERVIEW_SVG_NS` 与 `overviewNumbers` 导入，`app.js` 也漏导入 `overviewSvgEl`，导致绘制趋势图时抛 `ReferenceError`，被 `.catch` 当作网络失败弹提示。已补齐定义与导入。

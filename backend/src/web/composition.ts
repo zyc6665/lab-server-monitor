@@ -22,7 +22,7 @@
 import type { Express } from 'express';
 
 import type { AppConfig, HostCheckConfig, HostConfig } from '../config/config';
-import { buildServers, type HostRunner, type HostRunnerResult } from '../config/hosts';
+import { buildServers, hasStoredHosts, type HostRunner, type HostRunnerResult } from '../config/hosts';
 import { loadEffectiveSettings } from '../config/service';
 import { hostToSshConnectConfig } from '../collect/collectors';
 import { collectContainerStats } from '../collect/container-stats';
@@ -492,6 +492,23 @@ export function createServerApp(opts: CreateServerAppOptions): Express {
   const { db, config } = opts;
   const appVersion = config.appVersion;
   const overrides = opts.deps ?? {};
+
+  // The database is the authoritative host inventory (design §7.7). `config.servers`
+  // only carries config-file servers, which are imported into the DB on first run, so
+  // it can be empty in a packaged install. Rebuild it from the DB before composing and
+  // whenever a host mutation happens, so overview/collection/checks see the live list.
+  const baseServers = Array.isArray(config.servers) ? config.servers.slice() : [];
+  const refreshConfig = (): void => {
+    // Until a `hosts` section exists in the DB, config-file servers remain the source.
+    if (!hasStoredHosts(db)) { return; }
+    try {
+      config.servers = buildServers(db, { baseServers });
+    } catch {
+      /* keep the previous list if the stored entries cannot be materialised */
+    }
+  };
+  refreshConfig();
+
   const defaults = buildDefaultDeps(db, config);
 
   return createWebApp({
@@ -508,6 +525,8 @@ export function createServerApp(opts: CreateServerAppOptions): Express {
         db,
         config,
         appVersion,
+        refreshConfig,
+        currentServers: () => config.servers,
       });
       registerSettingsRoutes(app, { ...overrides.settings, db, config, appVersion });
       registerAlertsRoutes(app, { ...overrides.alerts, db, config, appVersion });

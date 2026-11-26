@@ -275,7 +275,6 @@ describe('createServerApp — P5 Task 11b wiring', () => {
       .set('Cookie', loginCookie(app, 'csrf'))
       .set('X-CSRF-Token', 'csrf')
       .send({ host: 'alpha', account: 'newuser', operation: 'create' });
-
     expect(res.status).toBe(200);
     expect(res.body.ok).toBe(true);
     expect(typeof res.body.plan).toBe('object');

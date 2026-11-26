@@ -801,6 +801,15 @@ function applyHostSudoPassword(
 // ---------------------------------------------------------------------------
 
 /** Masked host inventory (empty when nothing has been stored yet). */
+/**
+ * True when the database holds an explicit `hosts` section (even an empty one).
+ * When no section exists yet the DB is not authoritative for hosts, and callers
+ * should fall back to `baseServers` (config-file hosts) rather than an empty list.
+ */
+export function hasStoredHosts(db: SqliteDatabase): boolean {
+  return readHostEntries(db) !== null;
+}
+
 export function listHosts(db: SqliteDatabase, options: HostsOptions = {}): PublicHostEntry[] {
   const context = makeContext(db, options);
   const baseByName = new Map<string, HostConfig>();
