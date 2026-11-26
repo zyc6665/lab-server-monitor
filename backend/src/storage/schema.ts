@@ -183,6 +183,32 @@ export const CREATE_STATEMENTS: string[] = [
     ON host_daily_summary(day);`,
 
   // --- base.py:_CREATE_SETTINGS_TABLES_SQL ---------------------------------
+  `CREATE TABLE IF NOT EXISTS task_runs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    task TEXT NOT NULL,
+    trigger TEXT NOT NULL,
+    started_at TEXT NOT NULL,
+    finished_at TEXT,
+    status TEXT NOT NULL,
+    error TEXT,
+    duration_ms INTEGER
+);`,
+  `CREATE INDEX IF NOT EXISTS idx_task_runs_task_started
+    ON task_runs(task, started_at);`,
+  `CREATE INDEX IF NOT EXISTS idx_task_runs_started
+    ON task_runs(started_at);`,
+  `CREATE TABLE IF NOT EXISTS alert_delivery_failures (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    alert_id INTEGER NOT NULL,
+    channel TEXT NOT NULL,
+    target TEXT,
+    error TEXT,
+    at TEXT NOT NULL
+);`,
+  `CREATE INDEX IF NOT EXISTS idx_alert_delivery_failures_alert
+    ON alert_delivery_failures(alert_id);`,
+  `CREATE INDEX IF NOT EXISTS idx_alert_delivery_failures_at
+    ON alert_delivery_failures(at);`,
   `CREATE TABLE IF NOT EXISTS app_settings (
     section TEXT PRIMARY KEY,
     payload TEXT NOT NULL,

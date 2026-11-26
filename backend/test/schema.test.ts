@@ -53,8 +53,15 @@ function tableInfo(db: SqliteDb, table: string): ColumnInfo[] {
   return db.prepare(`PRAGMA table_info(${table})`).all() as ColumnInfo[];
 }
 
-/** The exact set of user tables created by base.py's DDL (sqlite_ sequence excluded). */
+/**
+ * The exact set of user tables created by the DDL (sqlite_sequence excluded).
+ *
+ * The 20 base tables mirror `base.py`; `alert_delivery_failures` and
+ * `task_runs` are Node-only P1 additions (not part of the frozen Python
+ * oracle), so read-diff comparisons stay on the oracle subset.
+ */
 const EXPECTED_TABLES = [
+  'alert_delivery_failures',
   'alert_silences',
   'alerts',
   'app_secrets',
@@ -73,12 +80,15 @@ const EXPECTED_TABLES = [
   'host_user_snapshot',
   'host_user_usage_history',
   'ssh_audit_sessions',
+  'task_runs',
   'task_state',
   'user_operations',
 ];
 
-/** Every `CREATE INDEX IF NOT EXISTS` name from base.py. */
+/** Every `CREATE INDEX IF NOT EXISTS` name (base.py + Node-only P1 tables). */
 const EXPECTED_INDEXES = [
+  'idx_alert_delivery_failures_alert',
+  'idx_alert_delivery_failures_at',
   'idx_alert_silences_ends_at',
   'idx_alerts_created_at',
   'idx_alerts_fingerprint',
@@ -94,25 +104,27 @@ const EXPECTED_INDEXES = [
   'idx_host_metrics_history_host_collected',
   'idx_host_user_snapshot_host',
   'idx_ssh_audit_started_at',
+  'idx_task_runs_started',
+  'idx_task_runs_task_started',
   'idx_user_usage_history',
 ];
 
 describe('schema DDL constants', () => {
-  it('contains 20 CREATE TABLE and 16 CREATE INDEX statements (36 total)', () => {
+  it('contains 22 CREATE TABLE and 20 CREATE INDEX statements (42 total)', () => {
     const tables = CREATE_STATEMENTS.filter((sql) =>
       /^CREATE TABLE IF NOT EXISTS/i.test(sql.trim()),
     );
     const indexes = CREATE_STATEMENTS.filter((sql) =>
       /^CREATE INDEX IF NOT EXISTS/i.test(sql.trim()),
     );
-    expect(CREATE_STATEMENTS).toHaveLength(36);
-    expect(tables).toHaveLength(20);
-    expect(indexes).toHaveLength(16);
+    expect(CREATE_STATEMENTS).toHaveLength(42);
+    expect(tables).toHaveLength(22);
+    expect(indexes).toHaveLength(20);
   });
 });
 
 describe('initSchema on a fresh database', () => {
-  it('creates exactly the 20 expected tables', () => {
+  it('creates exactly the 22 expected tables', () => {
     const db = freshDb();
     initSchema(db);
     const rows = db
