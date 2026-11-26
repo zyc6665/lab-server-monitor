@@ -30,16 +30,26 @@
 !macro customCheckAppRunning
   sm_check_again:
   !insertmacro SM_IsRunning
-  StrCmp $R0 "0" 0 sm_check_ok
-    IfSilent sm_check_kill
-    MessageBox MB_RETRYCANCEL|MB_ICONEXCLAMATION "${PRODUCT_NAME} 正在运行。请先在托盘图标右键选择“退出”，然后点击“重试”。" IDRETRY sm_check_again
-    Quit
-  sm_check_kill:
-    ; Silent mode: cannot prompt; stop the app so files are not locked.
+  StrCmp $R0 "0" sm_check_running sm_check_ok
+  sm_check_running:
+    ; The app must be closed before its files can be replaced. Do it for the
+    ; user instead of bouncing them back to the tray: first ask it to exit
+    ; gracefully, then force-terminate the whole tree. This also clears the
+    ; stale 0.1.x `servermonitor.exe` sidecar when upgrading an old install.
     nsExec::Exec `"$SYSDIR\taskkill.exe" /IM "${APP_EXECUTABLE_FILENAME}" /T`
-    Sleep 3000
-    nsExec::Exec `"$SYSDIR\taskkill.exe" /F /IM "${APP_EXECUTABLE_FILENAME}" /T`
-    Sleep 500
+    nsExec::Exec `"$SYSDIR\taskkill.exe" /IM "servermonitor.exe" /T`
+    Sleep 2500
+    !insertmacro SM_IsRunning
+    StrCmp $R0 "0" 0 sm_check_ok
+      nsExec::Exec `"$SYSDIR\taskkill.exe" /F /IM "${APP_EXECUTABLE_FILENAME}" /T`
+      nsExec::Exec `"$SYSDIR\taskkill.exe" /F /IM "servermonitor.exe" /T`
+      Sleep 1000
+      !insertmacro SM_IsRunning
+      StrCmp $R0 "0" 0 sm_check_ok
+        ; Still running after force kill — only now bother the user.
+        IfSilent sm_check_ok
+        MessageBox MB_RETRYCANCEL|MB_ICONEXCLAMATION "${PRODUCT_NAME} 正在运行且无法自动关闭。请用任务管理器结束后点击“重试”。" IDRETRY sm_check_again
+        Quit
   sm_check_ok:
 !macroend
 

@@ -234,6 +234,12 @@ function createWindow(): BrowserWindow {
     }
   });
   w.on('close', (e) => {
+    // While the app is quitting (tray 退出 / update install), let the window
+    // actually close — otherwise Electron's quit sequence stalls and the app
+    // stays resident in the tray forever. A normal close just hides to tray.
+    if (quitting) {
+      return;
+    }
     e.preventDefault();
     w.hide();
   });
@@ -415,13 +421,17 @@ if (!app.requestSingleInstanceLock()) {
     // force-killed after the 7s budget) so SQLite is never left half-written.
     event.preventDefault();
     shuttingDown = true;
+    // Hard guarantee: even if graceful shutdown wedges, exit within budget so
+    // 退出 and update-install always terminate the app.
+    const forceExit = setTimeout(() => app.exit(0), 8500);
     void requestGracefulShutdown()
       .catch((error) => {
         // eslint-disable-next-line no-console
         console.warn(`[main] backend shutdown failed: ${String(error)}`);
       })
       .finally(() => {
-        app.quit();
+        clearTimeout(forceExit);
+        app.exit(0);
       });
   });
 
