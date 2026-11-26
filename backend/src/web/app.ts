@@ -21,6 +21,7 @@ import { DEFAULT_SESSION_LIFETIME_HOURS, SessionManager, resolveSessionSecret } 
 import { setupGuard } from './middleware/setup-guard';
 import { csrf } from './middleware/csrf';
 import { auth } from './middleware/auth';
+import { registerOpsMiddleware } from './ops-middleware';
 import { usermode, type ViewMode } from './middleware/usermode';
 import { errorHandler, notFoundHandler, type ErrorLogger } from './middleware/errors';
 
@@ -105,6 +106,13 @@ export function createWebApp(options: CreateWebAppOptions): Express {
   // Body parsing must precede CSRF (it reads the `_csrf` form field).
   app.use(express.json());
   app.use(express.urlencoded({ extended: false }));
+
+  // Operational middleware: coarse rate limit, request audit, slow-request log.
+  registerOpsMiddleware(app, {
+    db,
+    config: config ?? ({ logDir: '' } as AppConfig),
+    disableRateLimit: process.env.SERVERMONITOR_DISABLE_RATELIMIT === '1',
+  });
 
   // ① setup -> ② csrf -> ③ auth -> ④ usermode
   // Re-read the setup state per request so a freshly created admin credential

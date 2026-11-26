@@ -88,6 +88,8 @@ export const ENDPOINTS = {
   api_system_host_keys: '/api/system/host-keys',
   api_system_host_key_forget: '/api/system/host-keys/{hostname}',
   api_system_health: '/api/system/health',
+  api_system_endpoints: '/api/system/endpoints',
+  api_system_audit: '/api/system/audit',
   api_system_storage: '/api/system/storage',
   api_system_maintenance: '/api/system/maintenance',
   api_system_backup: '/api/system/backup',

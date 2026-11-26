@@ -239,6 +239,17 @@ export const CREATE_STATEMENTS: string[] = [
     data_dir_bytes INTEGER NOT NULL,
     created_at TEXT NOT NULL
 );`,
+  `CREATE TABLE IF NOT EXISTS audit_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    actor TEXT,
+    action TEXT NOT NULL,
+    target TEXT,
+    ip TEXT,
+    at TEXT NOT NULL,
+    result TEXT
+);`,
+  `CREATE INDEX IF NOT EXISTS idx_audit_log_at ON audit_log (at);`,
+  `CREATE INDEX IF NOT EXISTS idx_audit_log_action ON audit_log (action);`,
   `CREATE TABLE IF NOT EXISTS app_settings (
     section TEXT PRIMARY KEY,
     payload TEXT NOT NULL,

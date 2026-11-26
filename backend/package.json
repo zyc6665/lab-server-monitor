@@ -1,13 +1,16 @@
 {
   "name": "servermonitor-backend",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "private": true,
   "type": "commonjs",
   "main": "dist/server.js",
   "scripts": {
     "build": "node build.mjs && node scripts/stage-vendor.mjs",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "lint": "node scripts/lint.mjs",
+    "bench": "node scripts/bench.mjs",
+    "api:doc": "node scripts/gen-api-doc.mjs"
   },
   "dependencies": {
     "@primno/dpapi": "^2.0.1",

@@ -49,6 +49,8 @@ import { getAllDiskHealth } from '../../storage/disk';
 import { countActiveCriticalAlerts } from '../../storage/alerts';
 import { getAllHostSnapshots } from '../../storage/hosts';
 import { listStorageSamples } from '../../storage/storage-samples';
+import { listAudit } from '../../storage/audit';
+import { ENDPOINTS } from './registry';
 import { listTaskStates } from '../../storage/tasks';
 import {
   backupDatabase,
@@ -56,7 +58,6 @@ import {
   systemStats,
 } from '../../storage/runtime';
 import { cleanupLogs as runCleanupLogs } from '../../runtime/maintenance';
-import { ENDPOINTS } from './registry';
 
 type SqliteDatabase = import('better-sqlite3').Database;
 type Obj = Record<string, unknown>;
@@ -636,6 +637,23 @@ export function registerSystemRoutes(app: Express, deps: SystemRouteDeps): void 
       diagnostics: diagnostics(),
       ...stats,
     });
+  });
+
+  // GET /api/system/endpoints ------------------------------------------------
+  app.get(ENDPOINTS.api_system_endpoints, (_req: Request, res: Response) => {
+    const endpoints = Object.entries(ENDPOINTS)
+      .map(([name, path]) => ({ name, path }))
+      .sort((a, b) => a.path.localeCompare(b.path));
+    res.json({ endpoints });
+  });
+
+  // GET /api/system/audit ----------------------------------------------------
+  app.get(ENDPOINTS.api_system_audit, (req: Request, res: Response) => {
+    const actor = String(req.query['actor'] ?? '').trim() || undefined;
+    const action = String(req.query['action'] ?? '').trim() || undefined;
+    const raw = Number.parseInt(String(req.query['limit'] ?? '100'), 10);
+    const limit = Number.isFinite(raw) ? Math.max(1, Math.min(500, raw)) : 100;
+    res.json({ entries: listAudit(db, { actor, action, limit }) });
   });
 
   // GET /api/system/storage --------------------------------------------------
