@@ -1,0 +1,23 @@
+{
+  "host": { "name": "web-01", "host": "10.0.0.20" },
+  "stages": {
+    "hostname": "web-01\n",
+    "os_release": "Debian GNU/Linux 12 (bookworm)\n",
+    "kernel": "6.1.0-18-amd64\n",
+    "uptime": " 18:05:42 up  3 days,  1 user,  load average: 1.10, 0.90, 0.75\n",
+    "cpu_cores": "8\n",
+    "cpu_usage": "23.5\n",
+    "memory": "              total        used        free      shared  buff/cache   available\nMem:           32000       18000        4000         256        9400       13744\nSwap:           2048         256        1792\n",
+    "disk": "Filesystem      Size  Used Avail Use% Mounted on\noverlay          100G   35G   65G  35% /\n/dev/sda1        500G  200G  300G  40% /data\n",
+    "net": "555555 666666\n",
+    "thermal": "acpitz\t41000\ncoretemp\t62000\nnvme\t52000\n",
+    "who": "ops      pts/2        2026-03-26 10:00 (172.16.5.9)\n",
+    "total_processes": "211\n",
+    "pid_user_map": "12345 root python /app/train_server.py\n23456 app /usr/local/bin/gunicorn app:app\n34567 postgres postgres: writer process\n45678 redis redis-server *:6379\n",
+    "docker_containers": "3fa4c1b92e103fa4c1b92e103fa4c1b92e103fa4c1b92e103fa4c1b92e10\tzhangz-train\na7b9c2d4e6f8a7b9c2d4e6f8a7b9c2d4e6f8a7b9c2d4e6f8a7b9c2d4e6f8\tweb-backend\n",
+    "pid_container_map": "12345\t12:devices:/docker/3fa4c1b92e103fa4c1b92e103fa4c1b92e103fa4c1b92e103fa4c1b92e10\n23456\t0::/system.slice/docker-a7b9c2d4e6f8a7b9c2d4e6f8a7b9c2d4e6f8a7b9c2d4e6f8a7b9c2d4e6f8.scope\n",
+    "docker_status": "zhangz-train\tpytorch/pytorch:2.3.0\trunning\tUp 2 days\nweb-backend\tnginx:1.25-alpine\trunning\tUp 5 hours\n",
+    "top_cpu": "root 12345 245.0 22.5 2-03:10:05 python /app/train_server.py\napp 23456 15.2 3.1 05:12:30 /usr/local/bin/gunicorn app:app\npostgres 34567 2.5 8.0 10:00:00 postgres: writer process\n",
+    "top_memory": "root 12345 245.0 22.5 2-03:10:05 python /app/train_server.py\npostgres 34567 2.5 18.7 10:00:00 postgres: writer process\napp 23456 15.2 9.4 05:12:30 /usr/local/bin/gunicorn app:app\n"
+  }
+}

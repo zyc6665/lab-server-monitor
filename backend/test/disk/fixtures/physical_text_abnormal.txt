@@ -1,0 +1,15 @@
+Note: This is a storcli dump captured mid-run with console noise.
+some random banner === text that is not a key/value line
+Drive /c0/e252/s12 State :
+Media Error Count = 2
+Other Error Count = 0
+Predictive Failure Count = 0
+S.M.A.R.T alert flagged by drive = Yes
+Drive Temperature = 38C (100.40 F)
+garbage line without equals sign at all
+= leading equals with empty key
+Drive /c0/e252/s13 - Detailed Information :
+Shield Counter = 4
+Invalid Line With Equals = whatever
+Model Number = HGST HUH721010AL
+SN = 7LGCXXXX

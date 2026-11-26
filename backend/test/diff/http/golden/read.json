@@ -1,0 +1,1919 @@
+{
+  "_commit": "1ca108c",
+  "_source": "read.json",
+  "entries": {
+    "generatedAtMs": 1795664117000,
+    "responses": [
+      {
+        "content_type": "application/json",
+        "json": {
+          "error": "unauthorized"
+        },
+        "name": "anon_get_overview",
+        "set_cookie": false,
+        "status": 401,
+        "text": null
+      },
+      {
+        "content_type": "text/html",
+        "json": null,
+        "name": "anon_get_login_page",
+        "set_cookie": true,
+        "status": 200,
+        "text": null
+      },
+      {
+        "content_type": "application/json",
+        "json": {
+          "error": "unauthorized"
+        },
+        "name": "anon_get_settings",
+        "set_cookie": false,
+        "status": 401,
+        "text": null
+      },
+      {
+        "content_type": "text/html",
+        "json": null,
+        "name": "login",
+        "set_cookie": true,
+        "status": 302,
+        "text": null
+      },
+      {
+        "content_type": "application/json",
+        "json": {
+          "capacity": [
+            {
+              "host": "10.0.0.11",
+              "host_name": "host-a",
+              "metrics": [
+                {
+                  "current": 31.25,
+                  "days_to_threshold": null,
+                  "key": "memory",
+                  "label": "内存",
+                  "slope_per_day": 0,
+                  "status": "stable",
+                  "threshold": 80
+                },
+                {
+                  "current": 58,
+                  "days_to_threshold": null,
+                  "key": "disk",
+                  "label": "磁盘",
+                  "slope_per_day": 0,
+                  "status": "stable",
+                  "threshold": 85
+                },
+                {
+                  "current": 25,
+                  "days_to_threshold": null,
+                  "key": "gpu_memory",
+                  "label": "GPU 显存",
+                  "slope_per_day": 0,
+                  "status": "stable",
+                  "threshold": 80
+                }
+              ]
+            },
+            {
+              "host": "10.0.0.12",
+              "host_name": "host-b",
+              "metrics": [
+                {
+                  "current": null,
+                  "days_to_threshold": null,
+                  "key": "memory",
+                  "label": "内存",
+                  "slope_per_day": null,
+                  "status": "insufficient_data",
+                  "threshold": 80
+                },
+                {
+                  "current": null,
+                  "days_to_threshold": null,
+                  "key": "disk",
+                  "label": "磁盘",
+                  "slope_per_day": null,
+                  "status": "insufficient_data",
+                  "threshold": 85
+                },
+                {
+                  "current": null,
+                  "days_to_threshold": null,
+                  "key": "gpu_memory",
+                  "label": "GPU 显存",
+                  "slope_per_day": null,
+                  "status": "insufficient_data",
+                  "threshold": 80
+                }
+              ]
+            }
+          ],
+          "hosts": [
+            {
+              "active_alert_count": 2,
+              "checks": {
+                "failed": 0,
+                "ok": 1,
+                "total": 1,
+                "unknown": 0
+              },
+              "collected_at": "2026-11-26T02:35:17+00:00",
+              "collection_uptime": {
+                "expected": 288,
+                "samples": 5
+              },
+              "container_count": 0,
+              "cpu_cores": 32,
+              "cpu_percent": 41.5,
+              "disk_health": {
+                "critical": 0,
+                "healthy": 0,
+                "status": "unknown",
+                "warning": 0
+              },
+              "disk_percent": 58,
+              "gpu_memory": {
+                "total_mb": 81920,
+                "used_mb": 20480
+              },
+              "gpu_memory_percent": 25,
+              "group": "GPU 集群",
+              "host": "10.0.0.11",
+              "load_1": 1.25,
+              "location": "机房 A",
+              "logged_in_sessions": 1,
+              "logged_in_user_count": 1,
+              "memory_percent": 31.25,
+              "name": "host-a",
+              "online": false,
+              "owner": "alice",
+              "silenced": false,
+              "silenced_until": null,
+              "spark": {
+                "cpu": [
+                  41.5,
+                  41.5,
+                  41.5,
+                  41.5,
+                  41.5
+                ],
+                "memory": [
+                  31.2,
+                  31.2,
+                  31.2,
+                  31.2,
+                  31.2
+                ]
+              },
+              "tags": [
+                "lab",
+                "gpu"
+              ],
+              "temperature_c": 63,
+              "uptime": "12 days, 3:04:05"
+            },
+            {
+              "active_alert_count": 0,
+              "checks": {
+                "failed": 0,
+                "ok": 0,
+                "total": 0,
+                "unknown": 0
+              },
+              "collected_at": "2026-11-26T03:30:17+00:00",
+              "collection_uptime": {
+                "expected": 288,
+                "samples": 0
+              },
+              "container_count": 0,
+              "cpu_cores": 0,
+              "cpu_percent": null,
+              "disk_health": {
+                "critical": 0,
+                "healthy": 0,
+                "status": "unknown",
+                "warning": 0
+              },
+              "disk_percent": null,
+              "gpu_memory": null,
+              "gpu_memory_percent": null,
+              "group": "CPU 集群",
+              "host": "10.0.0.12",
+              "load_1": null,
+              "location": "机房 B",
+              "logged_in_sessions": 0,
+              "logged_in_user_count": 0,
+              "memory_percent": null,
+              "name": "host-b",
+              "online": false,
+              "owner": "bob",
+              "silenced": false,
+              "silenced_until": null,
+              "spark": {
+                "cpu": [],
+                "memory": []
+              },
+              "tags": [
+                "lab"
+              ],
+              "temperature_c": null,
+              "uptime": ""
+            }
+          ],
+          "meta": {
+            "groups": [
+              "GPU 集群",
+              "CPU 集群"
+            ],
+            "has_groups": true,
+            "has_tags": true,
+            "silenced_count": 0,
+            "tags": [
+              "gpu",
+              "lab"
+            ]
+          },
+          "summary": {
+            "active_alerts": 2,
+            "offline": 2,
+            "online": 0
+          }
+        },
+        "name": "get_overview",
+        "set_cookie": true,
+        "status": 200,
+        "text": null
+      },
+      {
+        "content_type": "application/json",
+        "json": {
+          "days": 30,
+          "hosts": [
+            {
+              "host": "10.0.0.11",
+              "host_name": "host-a",
+              "metrics": [
+                {
+                  "current": 31.25,
+                  "days_to_threshold": null,
+                  "key": "memory",
+                  "label": "内存",
+                  "slope_per_day": 0,
+                  "status": "stable",
+                  "threshold": 80
+                },
+                {
+                  "current": 58,
+                  "days_to_threshold": null,
+                  "key": "disk",
+                  "label": "磁盘",
+                  "slope_per_day": 0,
+                  "status": "stable",
+                  "threshold": 85
+                },
+                {
+                  "current": 25,
+                  "days_to_threshold": null,
+                  "key": "gpu_memory",
+                  "label": "GPU 显存",
+                  "slope_per_day": 0,
+                  "status": "stable",
+                  "threshold": 80
+                }
+              ]
+            },
+            {
+              "host": "10.0.0.12",
+              "host_name": "host-b",
+              "metrics": [
+                {
+                  "current": null,
+                  "days_to_threshold": null,
+                  "key": "memory",
+                  "label": "内存",
+                  "slope_per_day": null,
+                  "status": "insufficient_data",
+                  "threshold": 80
+                },
+                {
+                  "current": null,
+                  "days_to_threshold": null,
+                  "key": "disk",
+                  "label": "磁盘",
+                  "slope_per_day": null,
+                  "status": "insufficient_data",
+                  "threshold": 85
+                },
+                {
+                  "current": null,
+                  "days_to_threshold": null,
+                  "key": "gpu_memory",
+                  "label": "GPU 显存",
+                  "slope_per_day": null,
+                  "status": "insufficient_data",
+                  "threshold": 80
+                }
+              ]
+            }
+          ],
+          "thresholds": {
+            "disk": 85,
+            "gpu_memory": 80,
+            "memory": 80
+          }
+        },
+        "name": "get_overview_capacity",
+        "set_cookie": true,
+        "status": 200,
+        "text": null
+      },
+      {
+        "content_type": "application/json",
+        "json": {
+          "points": [
+            {
+              "cpu": 41.5,
+              "disk": 58,
+              "gpu_memory": 25,
+              "gpu_util": 37,
+              "load_1": 1.25,
+              "memory": 31.25,
+              "t": "2026-11-25T07:35:17+00:00"
+            },
+            {
+              "cpu": 41.5,
+              "disk": 58,
+              "gpu_memory": 25,
+              "gpu_util": 37,
+              "load_1": 1.25,
+              "memory": 31.25,
+              "t": "2026-11-25T15:35:17+00:00"
+            },
+            {
+              "cpu": 41.5,
+              "disk": 58,
+              "gpu_memory": 25,
+              "gpu_util": 37,
+              "load_1": 1.25,
+              "memory": 31.25,
+              "t": "2026-11-25T21:35:17+00:00"
+            },
+            {
+              "cpu": 41.5,
+              "disk": 58,
+              "gpu_memory": 25,
+              "gpu_util": 37,
+              "load_1": 1.25,
+              "memory": 31.25,
+              "t": "2026-11-26T01:35:17+00:00"
+            },
+            {
+              "cpu": 41.5,
+              "disk": 58,
+              "gpu_memory": 25,
+              "gpu_util": 37,
+              "load_1": 1.25,
+              "memory": 31.25,
+              "t": "2026-11-26T02:35:17+00:00"
+            }
+          ],
+          "range": "24h"
+        },
+        "name": "get_overview_history",
+        "set_cookie": true,
+        "status": 200,
+        "text": null
+      },
+      {
+        "content_type": "application/json",
+        "json": {
+          "alerts": {
+            "aggregate_by_host": true,
+            "consecutive_periods": 3,
+            "cooldown_minutes": 30,
+            "desktop_notification": true,
+            "email": false,
+            "enabled": true,
+            "notify_on_recovery": true,
+            "offline_failures": 2,
+            "repeat_while_active": false,
+            "thresholds": {
+              "cpu_percent": 85,
+              "disk_percent": 85,
+              "disk_temperature_c": 60,
+              "gpu_memory_percent": 80,
+              "memory_percent": 80
+            },
+            "webhook": {
+              "enabled": false,
+              "type": "wecom",
+              "url_configured": false
+            }
+          },
+          "dashboard": {
+            "host": "0.0.0.0",
+            "port": 8080,
+            "session_lifetime_hours": 12,
+            "username": "admin"
+          },
+          "desktop_mode": false,
+          "disk_health": {
+            "enabled": true,
+            "rules": {
+              "alert_on_error_increase": true,
+              "alert_on_media_errors": true,
+              "alert_on_other_errors": true,
+              "alert_on_predictive_failure": true,
+              "alert_on_smart_flag": true,
+              "alert_on_state_not_optimal": true
+            },
+            "storcli_candidates": [
+              "storcli",
+              "storcli64",
+              "/opt/MegaRAID/storcli/storcli64",
+              "/opt/lsi/storcli/storcli64",
+              "/usr/local/bin/storcli",
+              "/usr/sbin/storcli"
+            ],
+            "use_sudo": true
+          },
+          "hosts": [
+            {
+              "alert_rules": null,
+              "allow_user_write": false,
+              "auth_type": "key",
+              "checks": [
+                {
+                  "enabled": true,
+                  "expected": null,
+                  "name": "gateway",
+                  "target": "10.0.0.1",
+                  "timeout_seconds": 5,
+                  "type": "ping"
+                }
+              ],
+              "disk_health": null,
+              "disk_mounts": [
+                "/",
+                "/data"
+              ],
+              "group": "GPU 集群",
+              "host": "10.0.0.11",
+              "key_configured": true,
+              "key_path": "\\home\\monitor\\.ssh\\id_rsa",
+              "location": "机房 A",
+              "name": "host-a",
+              "notes": "primary gpu node",
+              "owner": "alice",
+              "passphrase_configured": false,
+              "password_configured": false,
+              "port": 22,
+              "sudo_configured": false,
+              "tags": [
+                "lab",
+                "gpu"
+              ],
+              "user_monitoring": null,
+              "username": "monitor"
+            },
+            {
+              "alert_rules": null,
+              "allow_user_write": false,
+              "auth_type": "key",
+              "checks": [],
+              "disk_health": null,
+              "disk_mounts": [
+                "/"
+              ],
+              "group": "CPU 集群",
+              "host": "10.0.0.12",
+              "key_configured": true,
+              "key_path": "\\home\\monitor\\.ssh\\id_rsa",
+              "location": "机房 B",
+              "name": "host-b",
+              "notes": "",
+              "owner": "bob",
+              "passphrase_configured": false,
+              "password_configured": false,
+              "port": 22,
+              "sudo_configured": false,
+              "tags": [
+                "lab"
+              ],
+              "user_monitoring": null,
+              "username": "monitor"
+            }
+          ],
+          "monitoring": {
+            "alert_history_retention_days": 30,
+            "auto_port_fallback": true,
+            "concurrency": 4,
+            "disk_health_max_batches": 100,
+            "disk_health_retention_days": 7,
+            "disk_poll_interval_seconds": 86400,
+            "host_daily_summary_retention_days": 90,
+            "host_metrics_max_points": 100,
+            "member_account": "",
+            "mode": "admin",
+            "open_browser_on_start": true,
+            "poll_interval_seconds": 300,
+            "retention_days": 60,
+            "ssh_audit_retention_days": 30,
+            "timezone": "UTC",
+            "tray_enabled": true
+          },
+          "report": {
+            "daily_enabled": true,
+            "daily_time": "09:00",
+            "weekly": {
+              "busy_threshold": 70,
+              "enabled": true,
+              "idle_threshold": 20,
+              "subject_prefix": "[Server Weekly Report]",
+              "time": "16:00",
+              "weekday": 4
+            }
+          },
+          "setup_required": false,
+          "smtp": {
+            "from_addr": "",
+            "host": "",
+            "password_configured": false,
+            "port": 587,
+            "to_addrs": [],
+            "use_ssl": false,
+            "username": ""
+          },
+          "ssh": {
+            "command_timeout": 20,
+            "connect_timeout": 10,
+            "host_key_policy": "tofu"
+          },
+          "user_monitoring": {
+            "command_timeout": 120,
+            "enabled": true,
+            "scan_interval_seconds": 1800,
+            "usage_interval_seconds": 259200,
+            "usage_timeout_seconds": 1800,
+            "write_enabled": false
+          },
+          "version": "0.1.239",
+          "writable": true
+        },
+        "name": "get_settings",
+        "set_cookie": true,
+        "status": 200,
+        "text": null
+      },
+      {
+        "content_type": "application/json",
+        "json": {
+          "alerts": [
+            {
+              "ack_at": null,
+              "category": "cpu",
+              "created_at": "2026-11-26T02:35:17+00:00",
+              "fingerprint": "fp-cpu-1",
+              "host_name": "host-a",
+              "id": 1,
+              "message": "CPU 使用率连续 2 个周期超过 80%",
+              "notified_channels": null,
+              "severity": "warning",
+              "status": "active",
+              "title": "CPU 使用率偏高"
+            },
+            {
+              "ack_at": null,
+              "category": "gpu",
+              "created_at": "2026-11-26T01:35:17+00:00",
+              "fingerprint": "fp-gpu-1",
+              "host_name": "host-a",
+              "id": 2,
+              "message": "GPU0 显存使用率超过 90%",
+              "notified_channels": null,
+              "severity": "critical",
+              "status": "active",
+              "title": "GPU 显存紧张"
+            }
+          ],
+          "counts": {
+            "acknowledged": 1,
+            "active": 2,
+            "resolved": 1,
+            "total": 4
+          }
+        },
+        "name": "get_alerts",
+        "set_cookie": true,
+        "status": 200,
+        "text": null
+      },
+      {
+        "content_type": "application/json",
+        "json": {
+          "accounts": [
+            {
+              "collected_at": "2026-11-26 03:05",
+              "data_exists": true,
+              "data_group": "alice",
+              "data_mode": "755",
+              "data_owner": "alice",
+              "data_size_bytes": 107374182400,
+              "data_supported": true,
+              "first_seen_at": null,
+              "gecos": "Alice Zhang",
+              "gid": 1001,
+              "gpu_memory_mb": null,
+              "gpu_process_count": 0,
+              "groups": [
+                "alice",
+                "docker",
+                "sudo"
+              ],
+              "home": "/home/alice",
+              "home_exists": true,
+              "home_group": "alice",
+              "home_mode": "700",
+              "home_owner": "alice",
+              "home_size_bytes": 5368709120,
+              "host_name": "host-a",
+              "in_docker": true,
+              "in_sudo": true,
+              "issues": [],
+              "last_seen_at": null,
+              "primary_group": "alice",
+              "shell": "/bin/bash",
+              "state": "present",
+              "uid": 1001,
+              "usage_collected_at": "2026-11-26 03:05",
+              "usage_delta_bytes": null,
+              "usage_delta_days": null,
+              "usage_delta_since": null,
+              "usage_hint": "",
+              "usage_readable": true,
+              "usage_stale": false,
+              "username": "alice"
+            },
+            {
+              "collected_at": "2026-11-26 03:05",
+              "data_exists": false,
+              "data_group": null,
+              "data_mode": null,
+              "data_owner": null,
+              "data_size_bytes": null,
+              "data_supported": true,
+              "first_seen_at": null,
+              "gecos": "Bob Li",
+              "gid": 1002,
+              "gpu_memory_mb": null,
+              "gpu_process_count": 0,
+              "groups": [
+                "bob"
+              ],
+              "home": "/home/bob",
+              "home_exists": true,
+              "home_group": "bob",
+              "home_mode": "700",
+              "home_owner": "bob",
+              "home_size_bytes": 2147483648,
+              "host_name": "host-a",
+              "in_docker": false,
+              "in_sudo": false,
+              "issues": [
+                "docker",
+                "data"
+              ],
+              "last_seen_at": null,
+              "primary_group": "bob",
+              "shell": "/bin/bash",
+              "state": "present",
+              "uid": 1002,
+              "usage_collected_at": "2026-11-26 03:05",
+              "usage_delta_bytes": null,
+              "usage_delta_days": null,
+              "usage_delta_since": null,
+              "usage_hint": "",
+              "usage_readable": true,
+              "usage_stale": false,
+              "username": "bob"
+            }
+          ],
+          "filters": {
+            "host": "",
+            "q": "",
+            "status": "all"
+          },
+          "hosts": [
+            {
+              "accounts": 2,
+              "address": "10.0.0.11",
+              "allow_user_write": false,
+              "bytes": 114890375168,
+              "data_bytes": 107374182400,
+              "delta_bytes": 0,
+              "delta_days": 7,
+              "directory_issues": 1,
+              "docker_issues": 1,
+              "gpu_memory_mb": 0,
+              "gpu_processes": 0,
+              "home_bytes": 7516192768,
+              "last_error": null,
+              "last_scan_at": "2026-11-26T03:05:17+00:00",
+              "last_usage_at": "2026-11-25T21:35:17+00:00",
+              "missing": 0,
+              "monitored": true,
+              "name": "host-a",
+              "present": 2,
+              "status": "ok",
+              "sudo_configured": false,
+              "usage_readable": true
+            },
+            {
+              "accounts": 0,
+              "address": "10.0.0.12",
+              "allow_user_write": false,
+              "bytes": 0,
+              "data_bytes": 0,
+              "delta_bytes": 0,
+              "delta_days": 7,
+              "directory_issues": 0,
+              "docker_issues": 0,
+              "gpu_memory_mb": 0,
+              "gpu_processes": 0,
+              "home_bytes": 0,
+              "last_error": null,
+              "last_scan_at": "2026-11-26T03:05:17+00:00",
+              "last_usage_at": "2026-11-25T21:35:17+00:00",
+              "missing": 0,
+              "monitored": true,
+              "name": "host-b",
+              "present": 0,
+              "status": "ok",
+              "sudo_configured": false,
+              "usage_readable": true
+            }
+          ],
+          "summary": {
+            "data_bytes": 107374182400,
+            "directory_issues": 1,
+            "docker_issues": 1,
+            "home_bytes": 7516192768,
+            "missing": 0,
+            "present": 2,
+            "total": 2
+          },
+          "usage_hint": "1 台主机没有 sudo 密码，目录占用无法统计（host-a）。在设置 → 主机里填写 sudo 密码后会立刻开始统计。",
+          "usage_scan": {
+            "running": false
+          },
+          "usage_totals": {
+            "host-a": [],
+            "host-b": []
+          },
+          "write_enabled": false
+        },
+        "name": "get_users",
+        "set_cookie": true,
+        "status": 200,
+        "text": null
+      },
+      {
+        "content_type": "application/json",
+        "json": {
+          "alerts_active": 2,
+          "db_path": "C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\httpdiff-WqmYdr\\python.db",
+          "db_size_bytes": 212992,
+          "diagnostics": {
+            "checks": [
+              {
+                "key": "database",
+                "label": "数据库",
+                "message": "完整性检查通过",
+                "status": "ok"
+              },
+              {
+                "key": "timezone",
+                "label": "时区",
+                "message": "时区 UTC 已生效",
+                "status": "ok"
+              },
+              {
+                "key": "hosts",
+                "label": "主机采集",
+                "message": "2 台主机均未成功采集",
+                "status": "error"
+              },
+              {
+                "key": "disk",
+                "label": "磁盘阵列",
+                "message": "尚未采集磁盘健康",
+                "status": "ok"
+              },
+              {
+                "key": "tasks",
+                "label": "调度任务",
+                "message": "2 个调度任务正常",
+                "status": "ok"
+              },
+              {
+                "key": "alerts",
+                "label": "严重告警",
+                "message": "1 条严重告警待处理",
+                "status": "warning"
+              }
+            ],
+            "status": "error"
+          },
+          "disk_batches": 0,
+          "history_rows": 10,
+          "host_snapshots": 2,
+          "hosts_configured": 2,
+          "runtime": {
+            "pid": 66348,
+            "port": 8129,
+            "url": "http://127.0.0.1:8129"
+          },
+          "tasks": [
+            {
+              "last_result": "ok",
+              "last_run_at": "2026-11-26T00:35:17+00:00",
+              "task_name": "disk"
+            },
+            {
+              "last_result": "ok",
+              "last_run_at": "2026-11-26T03:25:17+00:00",
+              "task_name": "poll"
+            }
+          ],
+          "version": "0.1.239"
+        },
+        "name": "get_system_health",
+        "set_cookie": true,
+        "status": 200,
+        "text": null
+      },
+      {
+        "content_type": "application/json",
+        "json": {
+          "db_path": "C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\httpdiff-WqmYdr\\python.db",
+          "log_retention_hours": 24,
+          "usage": {
+            "database": 212992,
+            "electron": 0,
+            "logs": 0,
+            "total": 2540711915,
+            "updates": 0
+          }
+        },
+        "name": "get_system_storage",
+        "set_cookie": true,
+        "status": 200,
+        "text": null
+      },
+      {
+        "content_type": "application/json",
+        "json": {
+          "alert_days": [
+            {
+              "critical": 0,
+              "height": 0,
+              "info": 0,
+              "key": "2026-11-20",
+              "label": "11-20",
+              "total": 0,
+              "warning": 0
+            },
+            {
+              "critical": 0,
+              "height": 0,
+              "info": 0,
+              "key": "2026-11-21",
+              "label": "11-21",
+              "total": 0,
+              "warning": 0
+            },
+            {
+              "critical": 0,
+              "height": 0,
+              "info": 0,
+              "key": "2026-11-22",
+              "label": "11-22",
+              "total": 0,
+              "warning": 0
+            },
+            {
+              "critical": 0,
+              "height": 0,
+              "info": 0,
+              "key": "2026-11-23",
+              "label": "11-23",
+              "total": 0,
+              "warning": 0
+            },
+            {
+              "critical": 0,
+              "height": 50,
+              "info": 0,
+              "key": "2026-11-24",
+              "label": "11-24",
+              "total": 1,
+              "warning": 1
+            },
+            {
+              "critical": 0,
+              "height": 0,
+              "info": 0,
+              "key": "2026-11-25",
+              "label": "11-25",
+              "total": 0,
+              "warning": 0
+            },
+            {
+              "critical": 1,
+              "height": 100,
+              "info": 0,
+              "key": "2026-11-26",
+              "label": "11-26",
+              "total": 2,
+              "warning": 1
+            }
+          ],
+          "alerts": [
+            {
+              "ack_at": null,
+              "category": "cpu",
+              "created_at": "2026-11-26T02:35:17+00:00",
+              "fingerprint": "fp-cpu-1",
+              "host_name": "host-a",
+              "id": 1,
+              "message": "CPU 使用率连续 2 个周期超过 80%",
+              "notified_channels": null,
+              "severity": "warning",
+              "status": "active",
+              "title": "CPU 使用率偏高"
+            },
+            {
+              "ack_at": null,
+              "category": "gpu",
+              "created_at": "2026-11-26T01:35:17+00:00",
+              "fingerprint": "fp-gpu-1",
+              "host_name": "host-a",
+              "id": 2,
+              "message": "GPU0 显存使用率超过 90%",
+              "notified_channels": null,
+              "severity": "critical",
+              "status": "active",
+              "title": "GPU 显存紧张"
+            },
+            {
+              "ack_at": "2026-11-24T21:45:17+00:00",
+              "category": "disk",
+              "created_at": "2026-11-24T21:35:17+00:00",
+              "fingerprint": "fp-disk-1",
+              "host_name": "host-a",
+              "id": 4,
+              "message": "挂载点 / 使用率 88%",
+              "notified_channels": null,
+              "severity": "warning",
+              "status": "resolved",
+              "title": "磁盘空间不足"
+            }
+          ],
+          "check_history": {},
+          "checks": [
+            {
+              "check_name": "gateway",
+              "check_type": "ping",
+              "checked_at": "2026-11-26T03:31:17+00:00",
+              "host_name": "host-a",
+              "latency_ms": 0.42,
+              "message": "1 packets transmitted, 1 received",
+              "status": "ok",
+              "target": "10.0.0.1"
+            }
+          ],
+          "collected_at": "2026-11-26T02:35:17+00:00",
+          "collection_uptime": {
+            "expected": 288,
+            "samples": 5
+          },
+          "diagnostics": [
+            {
+              "detail": "最近 24 小时应采 288 次，只成功 5 次（2%）。",
+              "hint": "确认主机在线与 SSH 凭据，必要时手动执行一次采集看报错。",
+              "key": "uptime",
+              "level": "crit",
+              "title": "采集大量失败"
+            },
+            {
+              "detail": "最近一次采集在 60 分钟前，超过轮询周期的 3 倍。",
+              "hint": "确认后台调度是否在运行，或检查该主机的 SSH 连接是否超时。",
+              "key": "collect",
+              "level": "warn",
+              "title": "采集数据已过期"
+            },
+            {
+              "detail": "1 / 2 个账号存在问题（目录缺失、所有者异常或未加入 docker 组）。",
+              "hint": "在服务器用户页查看明细，必要时由管理员人工修复。",
+              "key": "accounts",
+              "level": "warn",
+              "title": "服务器账号异常"
+            },
+            {
+              "detail": "当前 41.5%",
+              "hint": "",
+              "key": "cpu",
+              "level": "ok",
+              "title": "CPU 使用率"
+            },
+            {
+              "detail": "1 分钟负载 1.25，32 核，平均每核 0.04",
+              "hint": "",
+              "key": "load",
+              "level": "ok",
+              "title": "系统负载"
+            },
+            {
+              "detail": "31.2%（20480 / 65536 MB）",
+              "hint": "",
+              "key": "memory",
+              "level": "ok",
+              "title": "内存占用"
+            },
+            {
+              "detail": "GPU 0 显存已用 25.0%",
+              "hint": "",
+              "key": "gpu_memory",
+              "level": "ok",
+              "title": "GPU 显存"
+            },
+            {
+              "detail": "最高 63.0 °C",
+              "hint": "",
+              "key": "temperature",
+              "level": "ok",
+              "title": "温度"
+            },
+            {
+              "detail": "1 项检查全部正常。",
+              "hint": "",
+              "key": "checks",
+              "level": "ok",
+              "title": "服务检查"
+            }
+          ],
+          "diagnostics_summary": {
+            "attention": 3,
+            "crit": 1,
+            "ok": 6,
+            "warn": 2
+          },
+          "disk": null,
+          "errors": [],
+          "group": "GPU 集群",
+          "host": "10.0.0.11",
+          "location": "机房 A",
+          "metrics": {
+            "collected_at": "2026-11-26T02:35:17+00:00",
+            "containers": [],
+            "cpu_core_count": 32,
+            "cpu_usage_percent": 41.5,
+            "disk_usage": [
+              {
+                "available": "1.0T",
+                "filesystem": "/dev/sda1",
+                "mountpoint": "/",
+                "percent": "58%",
+                "size": "1.8T",
+                "used": "720G"
+              },
+              {
+                "available": "2.5T",
+                "filesystem": "/dev/sdb1",
+                "mountpoint": "/data",
+                "percent": "31%",
+                "size": "3.6T",
+                "used": "1.1T"
+              }
+            ],
+            "gpu_processes": [],
+            "gpu_summary": [
+              {
+                "index": 0,
+                "memory_total_mb": 81920,
+                "memory_used_mb": 20480,
+                "name": "NVIDIA A100-SXM4-80GB",
+                "temperature_c": 63,
+                "utilization_percent": 37
+              }
+            ],
+            "hostname": "host-a",
+            "kernel_version": "5.15.0-105-generic",
+            "load_average": {
+              "load_1": 1.25,
+              "load_15": 0.98,
+              "load_5": 1.1
+            },
+            "logged_in_users": [
+              {
+                "login_at": "2026-01-15 08:11",
+                "remote_host": "10.0.0.5",
+                "terminal": "pts/0",
+                "username": "alice"
+              }
+            ],
+            "memory": {
+              "available_mb": 45056,
+              "buff_cache_mb": 2048,
+              "free_mb": 43008,
+              "shared_mb": 512,
+              "swap_free_mb": 15360,
+              "swap_total_mb": 16384,
+              "swap_used_mb": 1024,
+              "total_mb": 65536,
+              "used_mb": 20480
+            },
+            "net_rx_bytes": 123456789,
+            "net_tx_bytes": 98765432,
+            "os_pretty_name": "Ubuntu 22.04.4 LTS",
+            "process_counts_by_user": [],
+            "thermal_zones": [],
+            "top_cpu_processes": [],
+            "top_memory_processes": [],
+            "total_processes": 312,
+            "uptime": "12 days, 3:04:05"
+          },
+          "name": "host-a",
+          "network": {
+            "rx_bytes_per_second": 0,
+            "tx_bytes_per_second": 0
+          },
+          "owner": "alice",
+          "success": true,
+          "tags": [
+            "lab",
+            "gpu"
+          ],
+          "uptime_strip": {
+            "bucket_minutes": 15,
+            "buckets": [
+              {
+                "index": 0,
+                "ok": 0,
+                "start": "2026-11-25T03:35:28.472723+00:00",
+                "total": 0
+              },
+              {
+                "index": 1,
+                "ok": 0,
+                "start": "2026-11-25T03:50:28.472723+00:00",
+                "total": 0
+              },
+              {
+                "index": 2,
+                "ok": 0,
+                "start": "2026-11-25T04:05:28.472723+00:00",
+                "total": 0
+              },
+              {
+                "index": 3,
+                "ok": 0,
+                "start": "2026-11-25T04:20:28.472723+00:00",
+                "total": 0
+              },
+              {
+                "index": 4,
+                "ok": 0,
+                "start": "2026-11-25T04:35:28.472723+00:00",
+                "total": 0
+              },
+              {
+                "index": 5,
+                "ok": 0,
+                "start": "2026-11-25T04:50:28.472723+00:00",
+                "total": 0
+              },
+              {
+                "index": 6,
+                "ok": 0,
+                "start": "2026-11-25T05:05:28.472723+00:00",
+                "total": 0
+              },
+              {
+                "index": 7,
+                "ok": 0,
+                "start": "2026-11-25T05:20:28.472723+00:00",
+                "total": 0
+              },
+              {
+                "index": 8,
+                "ok": 0,
+                "start": "2026-11-25T05:35:28.472723+00:00",
+                "total": 0
+              },
+              {
+                "index": 9,
+                "ok": 0,
+                "start": "2026-11-25T05:50:28.472723+00:00",
+                "total": 0
+              },
+              {
+                "index": 10,
+                "ok": 0,
+                "start": "2026-11-25T06:05:28.472723+00:00",
+                "total": 0
+              },
+              {
+                "index": 11,
+                "ok": 0,
+                "start": "2026-11-25T06:20:28.472723+00:00",
+                "total": 0
+              },
+              {
+                "index": 12,
+                "ok": 0,
+                "start": "2026-11-25T06:35:28.472723+00:00",
+                "total": 0
+              },
+              {
+                "index": 13,
+                "ok": 0,
+                "start": "2026-11-25T06:50:28.472723+00:00",
+                "total": 0
+              },
+              {
+                "index": 14,
+                "ok": 0,
+                "start": "2026-11-25T07:05:28.472723+00:00",
+                "total": 0
+              },
+              {
+                "index": 15,
+                "ok": 1,
+                "start": "2026-11-25T07:20:28.472723+00:00",
+                "total": 1
+              },
+              {
+                "index": 16,
+                "ok": 0,
+                "start": "2026-11-25T07:35:28.472723+00:00",
+                "total": 0
+              },
+              {
+                "index": 17,
+                "ok": 0,
+                "start": "2026-11-25T07:50:28.472723+00:00",
+                "total": 0
+              },
+              {
+                "index": 18,
+                "ok": 0,
+                "start": "2026-11-25T08:05:28.472723+00:00",
+                "total": 0
+              },
+              {
+                "index": 19,
+                "ok": 0,
+                "start": "2026-11-25T08:20:28.472723+00:00",
+                "total": 0
+              },
+              {
+                "index": 20,
+                "ok": 0,
+                "start": "2026-11-25T08:35:28.472723+00:00",
+                "total": 0
+              },
+              {
+                "index": 21,
+                "ok": 0,
+                "start": "2026-11-25T08:50:28.472723+00:00",
+                "total": 0
+              },
+              {
+                "index": 22,
+                "ok": 0,
+                "start": "2026-11-25T09:05:28.472723+00:00",
+                "total": 0
+              },
+              {
+                "index": 23,
+                "ok": 0,
+                "start": "2026-11-25T09:20:28.472723+00:00",
+                "total": 0
+              },
+              {
+                "index": 24,
+                "ok": 0,
+                "start": "2026-11-25T09:35:28.472723+00:00",
+                "total": 0
+              },
+              {
+                "index": 25,
+                "ok": 0,
+                "start": "2026-11-25T09:50:28.472723+00:00",
+                "total": 0
+              },
+              {
+                "index": 26,
+                "ok": 0,
+                "start": "2026-11-25T10:05:28.472723+00:00",
+                "total": 0
+              },
+              {
+                "index": 27,
+                "ok": 0,
+                "start": "2026-11-25T10:20:28.472723+00:00",
+                "total": 0
+              },
+              {
+                "index": 28,
+                "ok": 0,
+                "start": "2026-11-25T10:35:28.472723+00:00",
+                "total": 0
+              },
+              {
+                "index": 29,
+                "ok": 0,
+                "start": "2026-11-25T10:50:28.472723+00:00",
+                "total": 0
+              },
+              {
+                "index": 30,
+                "ok": 0,
+                "start": "2026-11-25T11:05:28.472723+00:00",
+                "total": 0
+              },
+              {
+                "index": 31,
+                "ok": 0,
+                "start": "2026-11-25T11:20:28.472723+00:00",
+                "total": 0
+              },
+              {
+                "index": 32,
+                "ok": 0,
+                "start": "2026-11-25T11:35:28.472723+00:00",
+                "total": 0
+              },
+              {
+                "index": 33,
+                "ok": 0,
+                "start": "2026-11-25T11:50:28.472723+00:00",
+                "total": 0
+              },
+              {
+                "index": 34,
+                "ok": 0,
+                "start": "2026-11-25T12:05:28.472723+00:00",
+                "total": 0
+              },
+              {
+                "index": 35,
+                "ok": 0,
+                "start": "2026-11-25T12:20:28.472723+00:00",
+                "total": 0
+              },
+              {
+                "index": 36,
+                "ok": 0,
+                "start": "2026-11-25T12:35:28.472723+00:00",
+                "total": 0
+              },
+              {
+                "index": 37,
+                "ok": 0,
+                "start": "2026-11-25T12:50:28.472723+00:00",
+                "total": 0
+              },
+              {
+                "index": 38,
+                "ok": 0,
+                "start": "2026-11-25T13:05:28.472723+00:00",
+                "total": 0
+              },
+              {
+                "index": 39,
+                "ok": 0,
+                "start": "2026-11-25T13:20:28.472723+00:00",
+                "total": 0
+              },
+              {
+                "index": 40,
+                "ok": 0,
+                "start": "2026-11-25T13:35:28.472723+00:00",
+                "total": 0
+              },
+              {
+                "index": 41,
+                "ok": 0,
+                "start": "2026-11-25T13:50:28.472723+00:00",
+                "total": 0
+              },
+              {
+                "index": 42,
+                "ok": 0,
+                "start": "2026-11-25T14:05:28.472723+00:00",
+                "total": 0
+              },
+              {
+                "index": 43,
+                "ok": 0,
+                "start": "2026-11-25T14:20:28.472723+00:00",
+                "total": 0
+              },
+              {
+                "index": 44,
+                "ok": 0,
+                "start": "2026-11-25T14:35:28.472723+00:00",
+                "total": 0
+              },
+              {
+                "index": 45,
+                "ok": 0,
+                "start": "2026-11-25T14:50:28.472723+00:00",
+                "total": 0
+              },
+              {
+                "index": 46,
+                "ok": 0,
+                "start": "2026-11-25T15:05:28.472723+00:00",
+                "total": 0
+              },
+              {
+                "index": 47,
+                "ok": 1,
+                "start": "2026-11-25T15:20:28.472723+00:00",
+                "total": 1
+              },
+              {
+                "index": 48,
+                "ok": 0,
+                "start": "2026-11-25T15:35:28.472723+00:00",
+                "total": 0
+              },
+              {
+                "index": 49,
+                "ok": 0,
+                "start": "2026-11-25T15:50:28.472723+00:00",
+                "total": 0
+              },
+              {
+                "index": 50,
+                "ok": 0,
+                "start": "2026-11-25T16:05:28.472723+00:00",
+                "total": 0
+              },
+              {
+                "index": 51,
+                "ok": 0,
+                "start": "2026-11-25T16:20:28.472723+00:00",
+                "total": 0
+              },
+              {
+                "index": 52,
+                "ok": 0,
+                "start": "2026-11-25T16:35:28.472723+00:00",
+                "total": 0
+              },
+              {
+                "index": 53,
+                "ok": 0,
+                "start": "2026-11-25T16:50:28.472723+00:00",
+                "total": 0
+              },
+              {
+                "index": 54,
+                "ok": 0,
+                "start": "2026-11-25T17:05:28.472723+00:00",
+                "total": 0
+              },
+              {
+                "index": 55,
+                "ok": 0,
+                "start": "2026-11-25T17:20:28.472723+00:00",
+                "total": 0
+              },
+              {
+                "index": 56,
+                "ok": 0,
+                "start": "2026-11-25T17:35:28.472723+00:00",
+                "total": 0
+              },
+              {
+                "index": 57,
+                "ok": 0,
+                "start": "2026-11-25T17:50:28.472723+00:00",
+                "total": 0
+              },
+              {
+                "index": 58,
+                "ok": 0,
+                "start": "2026-11-25T18:05:28.472723+00:00",
+                "total": 0
+              },
+              {
+                "index": 59,
+                "ok": 0,
+                "start": "2026-11-25T18:20:28.472723+00:00",
+                "total": 0
+              },
+              {
+                "index": 60,
+                "ok": 0,
+                "start": "2026-11-25T18:35:28.472723+00:00",
+                "total": 0
+              },
+              {
+                "index": 61,
+                "ok": 0,
+                "start": "2026-11-25T18:50:28.472723+00:00",
+                "total": 0
+              },
+              {
+                "index": 62,
+                "ok": 0,
+                "start": "2026-11-25T19:05:28.472723+00:00",
+                "total": 0
+              },
+              {
+                "index": 63,
+                "ok": 0,
+                "start": "2026-11-25T19:20:28.472723+00:00",
+                "total": 0
+              },
+              {
+                "index": 64,
+                "ok": 0,
+                "start": "2026-11-25T19:35:28.472723+00:00",
+                "total": 0
+              },
+              {
+                "index": 65,
+                "ok": 0,
+                "start": "2026-11-25T19:50:28.472723+00:00",
+                "total": 0
+              },
+              {
+                "index": 66,
+                "ok": 0,
+                "start": "2026-11-25T20:05:28.472723+00:00",
+                "total": 0
+              },
+              {
+                "index": 67,
+                "ok": 0,
+                "start": "2026-11-25T20:20:28.472723+00:00",
+                "total": 0
+              },
+              {
+                "index": 68,
+                "ok": 0,
+                "start": "2026-11-25T20:35:28.472723+00:00",
+                "total": 0
+              },
+              {
+                "index": 69,
+                "ok": 0,
+                "start": "2026-11-25T20:50:28.472723+00:00",
+                "total": 0
+              },
+              {
+                "index": 70,
+                "ok": 0,
+                "start": "2026-11-25T21:05:28.472723+00:00",
+                "total": 0
+              },
+              {
+                "index": 71,
+                "ok": 1,
+                "start": "2026-11-25T21:20:28.472723+00:00",
+                "total": 1
+              },
+              {
+                "index": 72,
+                "ok": 0,
+                "start": "2026-11-25T21:35:28.472723+00:00",
+                "total": 0
+              },
+              {
+                "index": 73,
+                "ok": 0,
+                "start": "2026-11-25T21:50:28.472723+00:00",
+                "total": 0
+              },
+              {
+                "index": 74,
+                "ok": 0,
+                "start": "2026-11-25T22:05:28.472723+00:00",
+                "total": 0
+              },
+              {
+                "index": 75,
+                "ok": 0,
+                "start": "2026-11-25T22:20:28.472723+00:00",
+                "total": 0
+              },
+              {
+                "index": 76,
+                "ok": 0,
+                "start": "2026-11-25T22:35:28.472723+00:00",
+                "total": 0
+              },
+              {
+                "index": 77,
+                "ok": 0,
+                "start": "2026-11-25T22:50:28.472723+00:00",
+                "total": 0
+              },
+              {
+                "index": 78,
+                "ok": 0,
+                "start": "2026-11-25T23:05:28.472723+00:00",
+                "total": 0
+              },
+              {
+                "index": 79,
+                "ok": 0,
+                "start": "2026-11-25T23:20:28.472723+00:00",
+                "total": 0
+              },
+              {
+                "index": 80,
+                "ok": 0,
+                "start": "2026-11-25T23:35:28.472723+00:00",
+                "total": 0
+              },
+              {
+                "index": 81,
+                "ok": 0,
+                "start": "2026-11-25T23:50:28.472723+00:00",
+                "total": 0
+              },
+              {
+                "index": 82,
+                "ok": 0,
+                "start": "2026-11-26T00:05:28.472723+00:00",
+                "total": 0
+              },
+              {
+                "index": 83,
+                "ok": 0,
+                "start": "2026-11-26T00:20:28.472723+00:00",
+                "total": 0
+              },
+              {
+                "index": 84,
+                "ok": 0,
+                "start": "2026-11-26T00:35:28.472723+00:00",
+                "total": 0
+              },
+              {
+                "index": 85,
+                "ok": 0,
+                "start": "2026-11-26T00:50:28.472723+00:00",
+                "total": 0
+              },
+              {
+                "index": 86,
+                "ok": 0,
+                "start": "2026-11-26T01:05:28.472723+00:00",
+                "total": 0
+              },
+              {
+                "index": 87,
+                "ok": 1,
+                "start": "2026-11-26T01:20:28.472723+00:00",
+                "total": 1
+              },
+              {
+                "index": 88,
+                "ok": 0,
+                "start": "2026-11-26T01:35:28.472723+00:00",
+                "total": 0
+              },
+              {
+                "index": 89,
+                "ok": 0,
+                "start": "2026-11-26T01:50:28.472723+00:00",
+                "total": 0
+              },
+              {
+                "index": 90,
+                "ok": 0,
+                "start": "2026-11-26T02:05:28.472723+00:00",
+                "total": 0
+              },
+              {
+                "index": 91,
+                "ok": 1,
+                "start": "2026-11-26T02:20:28.472723+00:00",
+                "total": 1
+              },
+              {
+                "index": 92,
+                "ok": 0,
+                "start": "2026-11-26T02:35:28.472723+00:00",
+                "total": 0
+              },
+              {
+                "index": 93,
+                "ok": 0,
+                "start": "2026-11-26T02:50:28.472723+00:00",
+                "total": 0
+              },
+              {
+                "index": 94,
+                "ok": 0,
+                "start": "2026-11-26T03:05:28.472723+00:00",
+                "total": 0
+              },
+              {
+                "index": 95,
+                "ok": 0,
+                "start": "2026-11-26T03:20:28.472723+00:00",
+                "total": 0
+              }
+            ],
+            "hours": 24,
+            "ok": 5,
+            "samples": 5
+          },
+          "users": [
+            {
+              "collected_at": "2026-11-26 03:05",
+              "data_exists": true,
+              "data_group": "alice",
+              "data_mode": "755",
+              "data_owner": "alice",
+              "data_size_bytes": 107374182400,
+              "data_supported": true,
+              "first_seen_at": null,
+              "gecos": "Alice Zhang",
+              "gid": 1001,
+              "gpu_memory_mb": null,
+              "gpu_process_count": 0,
+              "groups": [
+                "alice",
+                "docker",
+                "sudo"
+              ],
+              "home": "/home/alice",
+              "home_exists": true,
+              "home_group": "alice",
+              "home_mode": "700",
+              "home_owner": "alice",
+              "home_size_bytes": 5368709120,
+              "host_name": "host-a",
+              "in_docker": true,
+              "in_sudo": true,
+              "issues": [],
+              "last_seen_at": null,
+              "primary_group": "alice",
+              "shell": "/bin/bash",
+              "state": "present",
+              "uid": 1001,
+              "usage_collected_at": "2026-11-26 03:05",
+              "usage_delta_bytes": null,
+              "usage_delta_days": null,
+              "usage_delta_since": null,
+              "usage_hint": "",
+              "usage_readable": true,
+              "usage_stale": false,
+              "username": "alice"
+            },
+            {
+              "collected_at": "2026-11-26 03:05",
+              "data_exists": false,
+              "data_group": null,
+              "data_mode": null,
+              "data_owner": null,
+              "data_size_bytes": null,
+              "data_supported": true,
+              "first_seen_at": null,
+              "gecos": "Bob Li",
+              "gid": 1002,
+              "gpu_memory_mb": null,
+              "gpu_process_count": 0,
+              "groups": [
+                "bob"
+              ],
+              "home": "/home/bob",
+              "home_exists": true,
+              "home_group": "bob",
+              "home_mode": "700",
+              "home_owner": "bob",
+              "home_size_bytes": 2147483648,
+              "host_name": "host-a",
+              "in_docker": false,
+              "in_sudo": false,
+              "issues": [
+                "docker",
+                "data"
+              ],
+              "last_seen_at": null,
+              "primary_group": "bob",
+              "shell": "/bin/bash",
+              "state": "present",
+              "uid": 1002,
+              "usage_collected_at": "2026-11-26 03:05",
+              "usage_delta_bytes": null,
+              "usage_delta_days": null,
+              "usage_delta_since": null,
+              "usage_hint": "",
+              "usage_readable": true,
+              "usage_stale": false,
+              "username": "bob"
+            }
+          ]
+        },
+        "name": "get_host_detail",
+        "set_cookie": true,
+        "status": 200,
+        "text": null
+      },
+      {
+        "content_type": "application/json",
+        "json": {
+          "points": [
+            {
+              "cpu": 41.5,
+              "disk": 58,
+              "gpu_memory": 25,
+              "gpu_util": 37,
+              "load_1": 1.25,
+              "memory": 31.25,
+              "net_rx": null,
+              "net_tx": null,
+              "t": "2026-11-25T07:35:17+00:00",
+              "temperature": 63
+            },
+            {
+              "cpu": 41.5,
+              "disk": 58,
+              "gpu_memory": 25,
+              "gpu_util": 37,
+              "load_1": 1.25,
+              "memory": 31.25,
+              "net_rx": 0,
+              "net_tx": 0,
+              "t": "2026-11-25T15:35:17+00:00",
+              "temperature": 63
+            },
+            {
+              "cpu": 41.5,
+              "disk": 58,
+              "gpu_memory": 25,
+              "gpu_util": 37,
+              "load_1": 1.25,
+              "memory": 31.25,
+              "net_rx": 0,
+              "net_tx": 0,
+              "t": "2026-11-25T21:35:17+00:00",
+              "temperature": 63
+            },
+            {
+              "cpu": 41.5,
+              "disk": 58,
+              "gpu_memory": 25,
+              "gpu_util": 37,
+              "load_1": 1.25,
+              "memory": 31.25,
+              "net_rx": 0,
+              "net_tx": 0,
+              "t": "2026-11-26T01:35:17+00:00",
+              "temperature": 63
+            },
+            {
+              "cpu": 41.5,
+              "disk": 58,
+              "gpu_memory": 25,
+              "gpu_util": 37,
+              "load_1": 1.25,
+              "memory": 31.25,
+              "net_rx": 0,
+              "net_tx": 0,
+              "t": "2026-11-26T02:35:17+00:00",
+              "temperature": 63
+            }
+          ],
+          "range": "24h"
+        },
+        "name": "get_host_history",
+        "set_cookie": true,
+        "status": 200,
+        "text": null
+      },
+      {
+        "content_type": "text/html",
+        "json": null,
+        "name": "get_disk_health_page",
+        "set_cookie": true,
+        "status": 200,
+        "text": null
+      }
+    ]
+  }
+}

@@ -1,0 +1,429 @@
+{
+  "_commit": "1ca108c",
+  "_source": "parsers.json",
+  "entries": {
+    "cpu-mem-disk-load.json": {
+      "collected_at": "<ts>",
+      "containers": [],
+      "cpu_core_count": 32,
+      "cpu_usage_percent": 7.3,
+      "disk_usage": [
+        {
+          "available": "120G",
+          "filesystem": "/dev/sda1",
+          "mountpoint": "/",
+          "percent": "40%",
+          "size": "200G",
+          "used": "80G"
+        },
+        {
+          "available": "1.9T",
+          "filesystem": "/dev/sdb1",
+          "mountpoint": "/data",
+          "percent": "52%",
+          "size": "4.0T",
+          "used": "2.1T"
+        }
+      ],
+      "gpu_processes": [],
+      "gpu_summary": [],
+      "hostname": "cpu-01",
+      "kernel_version": "5.15.0-113-generic",
+      "load_average": {
+        "load_1": 0.42,
+        "load_15": 0.61,
+        "load_5": 0.55
+      },
+      "logged_in_users": [
+        {
+          "login_at": "2026-03-25 09:00",
+          "remote_host": "10.0.0.2",
+          "terminal": "pts/0",
+          "username": "root"
+        },
+        {
+          "login_at": "2026-03-25 08:10",
+          "remote_host": "10.0.0.3",
+          "terminal": "pts/1",
+          "username": "alice"
+        }
+      ],
+      "memory": {
+        "available_mb": 74210,
+        "buff_cache_mb": 64766,
+        "free_mb": 12000,
+        "shared_mb": 1024,
+        "swap_free_mb": 3584,
+        "swap_total_mb": 4096,
+        "swap_used_mb": 512,
+        "total_mb": 128000,
+        "used_mb": 51234
+      },
+      "net_rx_bytes": 123456789,
+      "net_tx_bytes": 987654321,
+      "os_pretty_name": "Ubuntu 22.04.4 LTS",
+      "process_counts_by_user": [
+        {
+          "container_id": null,
+          "container_name": null,
+          "count": 210,
+          "username": "root"
+        },
+        {
+          "container_id": null,
+          "container_name": null,
+          "count": 64,
+          "username": "alice"
+        },
+        {
+          "container_id": null,
+          "container_name": null,
+          "count": 30,
+          "username": "www-data"
+        }
+      ],
+      "thermal_zones": [
+        {
+          "celsius": 45,
+          "label": "x86_pkg_temp"
+        },
+        {
+          "celsius": 38,
+          "label": "acpitz"
+        }
+      ],
+      "top_cpu_processes": [
+        {
+          "command": "/usr/bin/python3 train.py",
+          "container_id": null,
+          "container_name": null,
+          "cpu_percent": 55.2,
+          "elapsed": "12:00:01",
+          "mem_percent": 4.1,
+          "pid": 1234,
+          "username": "root"
+        },
+        {
+          "command": "nginx: worker process",
+          "container_id": null,
+          "container_name": null,
+          "cpu_percent": 12.5,
+          "elapsed": "1-02:03:04",
+          "mem_percent": 1.2,
+          "pid": 2345,
+          "username": "www-data"
+        }
+      ],
+      "top_memory_processes": [
+        {
+          "command": "/usr/bin/python3 train.py",
+          "container_id": null,
+          "container_name": null,
+          "cpu_percent": 55.2,
+          "elapsed": "12:00:01",
+          "mem_percent": 18.4,
+          "pid": 1234,
+          "username": "root"
+        },
+        {
+          "command": "/usr/bin/node server.js",
+          "container_id": null,
+          "container_name": null,
+          "cpu_percent": 3.1,
+          "elapsed": "3-04:05:06",
+          "mem_percent": 9.9,
+          "pid": 3456,
+          "username": "alice"
+        }
+      ],
+      "total_processes": 342,
+      "uptime": "21 days"
+    },
+    "gpu-host.json": {
+      "collected_at": "<ts>",
+      "containers": [],
+      "cpu_core_count": 16,
+      "cpu_usage_percent": 9,
+      "disk_usage": [
+        {
+          "available": "800G",
+          "filesystem": "/dev/nvme0n1p2",
+          "mountpoint": "/",
+          "percent": "53%",
+          "size": "1.8T",
+          "used": "900G"
+        },
+        {
+          "available": "2.1T",
+          "filesystem": "/dev/nvme1n1",
+          "mountpoint": "/data",
+          "percent": "37%",
+          "size": "3.5T",
+          "used": "1.2T"
+        }
+      ],
+      "gpu_processes": [
+        {
+          "command": "python train.py",
+          "index": 0,
+          "memory_used_mb": 16000,
+          "pid": 12345,
+          "username": "zhangz"
+        },
+        {
+          "command": "python eval.py",
+          "index": 1,
+          "memory_used_mb": 5000,
+          "pid": 23456,
+          "username": "lisi"
+        },
+        {
+          "command": "/opt/cuda/sample",
+          "index": 1,
+          "memory_used_mb": 4000,
+          "pid": 34567,
+          "username": "root"
+        }
+      ],
+      "gpu_summary": [
+        {
+          "index": 0,
+          "memory_total_mb": 24564,
+          "memory_used_mb": 18200,
+          "name": "NVIDIA RTX 4090",
+          "temperature_c": 67,
+          "utilization_percent": 91
+        },
+        {
+          "index": 1,
+          "memory_total_mb": 24564,
+          "memory_used_mb": 6000,
+          "name": "NVIDIA RTX 4090",
+          "temperature_c": 58,
+          "utilization_percent": 45
+        }
+      ],
+      "hostname": "gpu-01",
+      "kernel_version": "5.15.0-113-generic",
+      "load_average": {
+        "load_1": 2.15,
+        "load_15": 1.76,
+        "load_5": 1.98
+      },
+      "logged_in_users": [],
+      "memory": {
+        "available_mb": 22000,
+        "buff_cache_mb": 20000,
+        "free_mb": 3000,
+        "shared_mb": 120,
+        "swap_free_mb": 7680,
+        "swap_total_mb": 8192,
+        "swap_used_mb": 512,
+        "total_mb": 64000,
+        "used_mb": 41000
+      },
+      "net_rx_bytes": null,
+      "net_tx_bytes": null,
+      "os_pretty_name": "Ubuntu 22.04.4 LTS",
+      "process_counts_by_user": [
+        {
+          "container_id": null,
+          "container_name": null,
+          "count": 1,
+          "username": "lisi"
+        },
+        {
+          "container_id": null,
+          "container_name": null,
+          "count": 1,
+          "username": "root"
+        },
+        {
+          "container_id": null,
+          "container_name": null,
+          "count": 1,
+          "username": "zhangz"
+        }
+      ],
+      "thermal_zones": [],
+      "top_cpu_processes": [],
+      "top_memory_processes": [],
+      "total_processes": 188,
+      "uptime": "12 days"
+    },
+    "mixed-container-host.json": {
+      "collected_at": "<ts>",
+      "containers": [
+        {
+          "image": "pytorch/pytorch:2.3.0",
+          "name": "zhangz-train",
+          "state": "running",
+          "status": "Up 2 days"
+        },
+        {
+          "image": "nginx:1.25-alpine",
+          "name": "web-backend",
+          "state": "running",
+          "status": "Up 5 hours"
+        }
+      ],
+      "cpu_core_count": 8,
+      "cpu_usage_percent": 23.5,
+      "disk_usage": [
+        {
+          "available": "65G",
+          "filesystem": "overlay",
+          "mountpoint": "/",
+          "percent": "35%",
+          "size": "100G",
+          "used": "35G"
+        },
+        {
+          "available": "300G",
+          "filesystem": "/dev/sda1",
+          "mountpoint": "/data",
+          "percent": "40%",
+          "size": "500G",
+          "used": "200G"
+        }
+      ],
+      "gpu_processes": [],
+      "gpu_summary": [],
+      "hostname": "web-01",
+      "kernel_version": "6.1.0-18-amd64",
+      "load_average": {
+        "load_1": 1.1,
+        "load_15": 0.75,
+        "load_5": 0.9
+      },
+      "logged_in_users": [
+        {
+          "login_at": "2026-03-26 10:00",
+          "remote_host": "172.16.5.9",
+          "terminal": "pts/2",
+          "username": "ops"
+        }
+      ],
+      "memory": {
+        "available_mb": 13744,
+        "buff_cache_mb": 9400,
+        "free_mb": 4000,
+        "shared_mb": 256,
+        "swap_free_mb": 1792,
+        "swap_total_mb": 2048,
+        "swap_used_mb": 256,
+        "total_mb": 32000,
+        "used_mb": 18000
+      },
+      "net_rx_bytes": 555555,
+      "net_tx_bytes": 666666,
+      "os_pretty_name": "Debian GNU/Linux 12 (bookworm)",
+      "process_counts_by_user": [
+        {
+          "container_id": "a7b9c2d4e6f8a7b9c2d4e6f8a7b9c2d4e6f8a7b9c2d4e6f8a7b9c2d4e6f8",
+          "container_name": "web-backend",
+          "count": 1,
+          "username": "app"
+        },
+        {
+          "container_id": "3fa4c1b92e103fa4c1b92e103fa4c1b92e103fa4c1b92e103fa4c1b92e10",
+          "container_name": "zhangz-train",
+          "count": 1,
+          "username": "root"
+        },
+        {
+          "container_id": null,
+          "container_name": null,
+          "count": 1,
+          "username": "postgres"
+        },
+        {
+          "container_id": null,
+          "container_name": null,
+          "count": 1,
+          "username": "redis"
+        }
+      ],
+      "thermal_zones": [
+        {
+          "celsius": 62,
+          "label": "coretemp"
+        },
+        {
+          "celsius": 52,
+          "label": "nvme"
+        },
+        {
+          "celsius": 41,
+          "label": "acpitz"
+        }
+      ],
+      "top_cpu_processes": [
+        {
+          "command": "python /app/train_server.py",
+          "container_id": "3fa4c1b92e103fa4c1b92e103fa4c1b92e103fa4c1b92e103fa4c1b92e10",
+          "container_name": "zhangz-train",
+          "cpu_percent": 245,
+          "elapsed": "2-03:10:05",
+          "mem_percent": 22.5,
+          "pid": 12345,
+          "username": "root"
+        },
+        {
+          "command": "/usr/local/bin/gunicorn app:app",
+          "container_id": "a7b9c2d4e6f8a7b9c2d4e6f8a7b9c2d4e6f8a7b9c2d4e6f8a7b9c2d4e6f8",
+          "container_name": "web-backend",
+          "cpu_percent": 15.2,
+          "elapsed": "05:12:30",
+          "mem_percent": 3.1,
+          "pid": 23456,
+          "username": "app"
+        },
+        {
+          "command": "postgres: writer process",
+          "container_id": null,
+          "container_name": null,
+          "cpu_percent": 2.5,
+          "elapsed": "10:00:00",
+          "mem_percent": 8,
+          "pid": 34567,
+          "username": "postgres"
+        }
+      ],
+      "top_memory_processes": [
+        {
+          "command": "python /app/train_server.py",
+          "container_id": "3fa4c1b92e103fa4c1b92e103fa4c1b92e103fa4c1b92e103fa4c1b92e10",
+          "container_name": "zhangz-train",
+          "cpu_percent": 245,
+          "elapsed": "2-03:10:05",
+          "mem_percent": 22.5,
+          "pid": 12345,
+          "username": "root"
+        },
+        {
+          "command": "postgres: writer process",
+          "container_id": null,
+          "container_name": null,
+          "cpu_percent": 2.5,
+          "elapsed": "10:00:00",
+          "mem_percent": 18.7,
+          "pid": 34567,
+          "username": "postgres"
+        },
+        {
+          "command": "/usr/local/bin/gunicorn app:app",
+          "container_id": "a7b9c2d4e6f8a7b9c2d4e6f8a7b9c2d4e6f8a7b9c2d4e6f8a7b9c2d4e6f8",
+          "container_name": "web-backend",
+          "cpu_percent": 15.2,
+          "elapsed": "05:12:30",
+          "mem_percent": 9.4,
+          "pid": 23456,
+          "username": "app"
+        }
+      ],
+      "total_processes": 211,
+      "uptime": "3 days"
+    }
+  }
+}

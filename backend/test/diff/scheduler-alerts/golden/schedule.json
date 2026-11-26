@@ -1,0 +1,1176 @@
+{
+  "_commit": "1ca108c",
+  "_source": "schedule.json",
+  "entries": {
+    "schedule": {
+      "part": "scheduler-alerts",
+      "pythonVersion": "frozen",
+      "scenarios": [
+        {
+          "id": "S01-cooldown-jitter-suppress",
+          "steps": [
+            {
+              "action": "process",
+              "at": "2026-01-01T00:00:00Z",
+              "dispatched": [
+                {
+                  "channels": [
+                    "desktop"
+                  ],
+                  "events": [
+                    {
+                      "category": "system",
+                      "fingerprint": "system:web-1:cpu",
+                      "host_name": "web-1",
+                      "message": "CPU 使用率 95%，超过阈值 90%。",
+                      "reasons": [],
+                      "severity": "warning",
+                      "title": "CPU 使用率过高"
+                    }
+                  ]
+                }
+              ],
+              "notified": [
+                {
+                  "category": "system",
+                  "fingerprint": "system:web-1:cpu",
+                  "host_name": "web-1",
+                  "message": "CPU 使用率 95%，超过阈值 90%。",
+                  "reasons": [],
+                  "severity": "warning",
+                  "title": "CPU 使用率过高"
+                }
+              ]
+            },
+            {
+              "action": "process",
+              "at": "2026-01-01T00:05:00Z",
+              "dispatched": [],
+              "notified": []
+            },
+            {
+              "action": "process",
+              "at": "2026-01-01T01:30:00Z",
+              "dispatched": [],
+              "notified": []
+            }
+          ]
+        },
+        {
+          "id": "S02-repeat-active-renotify",
+          "steps": [
+            {
+              "action": "process",
+              "at": "2026-01-01T00:00:00Z",
+              "dispatched": [
+                {
+                  "channels": [
+                    "desktop"
+                  ],
+                  "events": [
+                    {
+                      "category": "system",
+                      "fingerprint": "system:web-1:cpu",
+                      "host_name": "web-1",
+                      "message": "CPU 使用率 95%，超过阈值 90%。",
+                      "reasons": [],
+                      "severity": "warning",
+                      "title": "CPU 使用率过高"
+                    }
+                  ]
+                }
+              ],
+              "notified": [
+                {
+                  "category": "system",
+                  "fingerprint": "system:web-1:cpu",
+                  "host_name": "web-1",
+                  "message": "CPU 使用率 95%，超过阈值 90%。",
+                  "reasons": [],
+                  "severity": "warning",
+                  "title": "CPU 使用率过高"
+                }
+              ]
+            },
+            {
+              "action": "process",
+              "at": "2026-01-01T00:30:00Z",
+              "dispatched": [],
+              "notified": []
+            },
+            {
+              "action": "process",
+              "at": "2026-01-01T01:05:00Z",
+              "dispatched": [
+                {
+                  "channels": [
+                    "desktop"
+                  ],
+                  "events": [
+                    {
+                      "category": "system",
+                      "fingerprint": "system:web-1:cpu",
+                      "host_name": "web-1",
+                      "message": "CPU 使用率 95%，超过阈值 90%。",
+                      "reasons": [],
+                      "severity": "warning",
+                      "title": "CPU 使用率过高"
+                    }
+                  ]
+                }
+              ],
+              "notified": [
+                {
+                  "category": "system",
+                  "fingerprint": "system:web-1:cpu",
+                  "host_name": "web-1",
+                  "message": "CPU 使用率 95%，超过阈值 90%。",
+                  "reasons": [],
+                  "severity": "warning",
+                  "title": "CPU 使用率过高"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "S03-severity-escalation",
+          "steps": [
+            {
+              "action": "process",
+              "at": "2026-01-01T00:00:00Z",
+              "dispatched": [
+                {
+                  "channels": [
+                    "desktop"
+                  ],
+                  "events": [
+                    {
+                      "category": "system",
+                      "fingerprint": "system:web-1:cpu",
+                      "host_name": "web-1",
+                      "message": "CPU 使用率 95%，超过阈值 90%。",
+                      "reasons": [],
+                      "severity": "warning",
+                      "title": "CPU 使用率过高"
+                    }
+                  ]
+                }
+              ],
+              "notified": [
+                {
+                  "category": "system",
+                  "fingerprint": "system:web-1:cpu",
+                  "host_name": "web-1",
+                  "message": "CPU 使用率 95%，超过阈值 90%。",
+                  "reasons": [],
+                  "severity": "warning",
+                  "title": "CPU 使用率过高"
+                }
+              ]
+            },
+            {
+              "action": "process",
+              "at": "2026-01-01T01:10:00Z",
+              "dispatched": [
+                {
+                  "channels": [
+                    "desktop"
+                  ],
+                  "events": [
+                    {
+                      "category": "system",
+                      "fingerprint": "system:web-1:cpu",
+                      "host_name": "web-1",
+                      "message": "CPU 使用率 99%，超过阈值 90%。",
+                      "reasons": [],
+                      "severity": "critical",
+                      "title": "CPU 使用率严重过高"
+                    }
+                  ]
+                }
+              ],
+              "notified": [
+                {
+                  "category": "system",
+                  "fingerprint": "system:web-1:cpu",
+                  "host_name": "web-1",
+                  "message": "CPU 使用率 99%，超过阈值 90%。",
+                  "reasons": [],
+                  "severity": "critical",
+                  "title": "CPU 使用率严重过高"
+                }
+              ]
+            },
+            {
+              "action": "process",
+              "at": "2026-01-01T02:30:00Z",
+              "dispatched": [],
+              "notified": []
+            }
+          ]
+        },
+        {
+          "id": "S04-ack-suppress",
+          "steps": [
+            {
+              "action": "process",
+              "at": "2026-01-01T00:00:00Z",
+              "dispatched": [
+                {
+                  "channels": [
+                    "desktop"
+                  ],
+                  "events": [
+                    {
+                      "category": "system",
+                      "fingerprint": "system:web-1:cpu",
+                      "host_name": "web-1",
+                      "message": "CPU 使用率 95%，超过阈值 90%。",
+                      "reasons": [],
+                      "severity": "warning",
+                      "title": "CPU 使用率过高"
+                    }
+                  ]
+                }
+              ],
+              "notified": [
+                {
+                  "category": "system",
+                  "fingerprint": "system:web-1:cpu",
+                  "host_name": "web-1",
+                  "message": "CPU 使用率 95%，超过阈值 90%。",
+                  "reasons": [],
+                  "severity": "warning",
+                  "title": "CPU 使用率过高"
+                }
+              ]
+            },
+            {
+              "action": "ack",
+              "at": "2026-01-01T00:10:00Z",
+              "dispatched": [],
+              "notified": []
+            },
+            {
+              "action": "process",
+              "at": "2026-01-01T00:20:00Z",
+              "dispatched": [],
+              "notified": []
+            },
+            {
+              "action": "process",
+              "at": "2026-01-01T03:00:00Z",
+              "dispatched": [],
+              "notified": []
+            }
+          ]
+        },
+        {
+          "id": "S05-error-increase-bypass-ack-and-cooldown",
+          "steps": [
+            {
+              "action": "process",
+              "at": "2026-01-01T00:00:00Z",
+              "dispatched": [
+                {
+                  "channels": [
+                    "desktop"
+                  ],
+                  "events": [
+                    {
+                      "category": "system",
+                      "fingerprint": "system:web-1:cpu",
+                      "host_name": "web-1",
+                      "message": "CPU 使用率 95%，超过阈值 90%。",
+                      "reasons": [],
+                      "severity": "warning",
+                      "title": "CPU 使用率过高"
+                    }
+                  ]
+                }
+              ],
+              "notified": [
+                {
+                  "category": "system",
+                  "fingerprint": "system:web-1:cpu",
+                  "host_name": "web-1",
+                  "message": "CPU 使用率 95%，超过阈值 90%。",
+                  "reasons": [],
+                  "severity": "warning",
+                  "title": "CPU 使用率过高"
+                }
+              ]
+            },
+            {
+              "action": "ack",
+              "at": "2026-01-01T00:10:00Z",
+              "dispatched": [],
+              "notified": []
+            },
+            {
+              "action": "process",
+              "at": "2026-01-01T00:20:00Z",
+              "dispatched": [
+                {
+                  "channels": [
+                    "desktop"
+                  ],
+                  "events": [
+                    {
+                      "category": "system",
+                      "fingerprint": "system:web-1:cpu",
+                      "host_name": "web-1",
+                      "message": "CPU 使用率 95%，超过阈值 90%。",
+                      "reasons": [
+                        "error_increase"
+                      ],
+                      "severity": "warning",
+                      "title": "CPU 使用率过高"
+                    }
+                  ]
+                }
+              ],
+              "notified": [
+                {
+                  "category": "system",
+                  "fingerprint": "system:web-1:cpu",
+                  "host_name": "web-1",
+                  "message": "CPU 使用率 95%，超过阈值 90%。",
+                  "reasons": [
+                    "error_increase"
+                  ],
+                  "severity": "warning",
+                  "title": "CPU 使用率过高"
+                }
+              ]
+            },
+            {
+              "action": "process",
+              "at": "2026-01-01T00:30:00Z",
+              "dispatched": [
+                {
+                  "channels": [
+                    "desktop"
+                  ],
+                  "events": [
+                    {
+                      "category": "system",
+                      "fingerprint": "system:web-1:cpu",
+                      "host_name": "web-1",
+                      "message": "CPU 使用率 95%，超过阈值 90%。",
+                      "reasons": [
+                        "error_increase"
+                      ],
+                      "severity": "warning",
+                      "title": "CPU 使用率过高"
+                    }
+                  ]
+                }
+              ],
+              "notified": [
+                {
+                  "category": "system",
+                  "fingerprint": "system:web-1:cpu",
+                  "host_name": "web-1",
+                  "message": "CPU 使用率 95%，超过阈值 90%。",
+                  "reasons": [
+                    "error_increase"
+                  ],
+                  "severity": "warning",
+                  "title": "CPU 使用率过高"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "S06-retry-unnotified",
+          "steps": [
+            {
+              "action": "process",
+              "at": "2026-01-01T00:00:00Z",
+              "dispatched": [
+                {
+                  "channels": [],
+                  "events": [
+                    {
+                      "category": "system",
+                      "fingerprint": "system:web-1:cpu",
+                      "host_name": "web-1",
+                      "message": "CPU 使用率 95%，超过阈值 90%。",
+                      "reasons": [],
+                      "severity": "warning",
+                      "title": "CPU 使用率过高"
+                    }
+                  ]
+                }
+              ],
+              "notified": []
+            },
+            {
+              "action": "process",
+              "at": "2026-01-01T00:05:00Z",
+              "dispatched": [
+                {
+                  "channels": [
+                    "desktop"
+                  ],
+                  "events": [
+                    {
+                      "category": "system",
+                      "fingerprint": "system:web-1:cpu",
+                      "host_name": "web-1",
+                      "message": "CPU 使用率 95%，超过阈值 90%。",
+                      "reasons": [],
+                      "severity": "warning",
+                      "title": "CPU 使用率过高"
+                    }
+                  ]
+                }
+              ],
+              "notified": [
+                {
+                  "category": "system",
+                  "fingerprint": "system:web-1:cpu",
+                  "host_name": "web-1",
+                  "message": "CPU 使用率 95%，超过阈值 90%。",
+                  "reasons": [],
+                  "severity": "warning",
+                  "title": "CPU 使用率过高"
+                }
+              ]
+            },
+            {
+              "action": "process",
+              "at": "2026-01-01T00:35:00Z",
+              "dispatched": [],
+              "notified": []
+            }
+          ]
+        },
+        {
+          "id": "S07-silence-host-window",
+          "steps": [
+            {
+              "action": "process",
+              "at": "2026-01-01T01:00:00Z",
+              "dispatched": [],
+              "notified": []
+            },
+            {
+              "action": "process",
+              "at": "2026-01-01T13:00:00Z",
+              "dispatched": [
+                {
+                  "channels": [
+                    "desktop"
+                  ],
+                  "events": [
+                    {
+                      "category": "system",
+                      "fingerprint": "system:web-1:cpu",
+                      "host_name": "web-1",
+                      "message": "CPU 使用率 95%，超过阈值 90%。",
+                      "reasons": [],
+                      "severity": "warning",
+                      "title": "CPU 使用率过高"
+                    }
+                  ]
+                }
+              ],
+              "notified": [
+                {
+                  "category": "system",
+                  "fingerprint": "system:web-1:cpu",
+                  "host_name": "web-1",
+                  "message": "CPU 使用率 95%，超过阈值 90%。",
+                  "reasons": [],
+                  "severity": "warning",
+                  "title": "CPU 使用率过高"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "S08-silence-all",
+          "steps": [
+            {
+              "action": "process",
+              "at": "2026-01-01T01:00:00Z",
+              "dispatched": [],
+              "notified": []
+            },
+            {
+              "action": "process",
+              "at": "2026-01-01T13:00:00Z",
+              "dispatched": [
+                {
+                  "channels": [
+                    "desktop"
+                  ],
+                  "events": [
+                    {
+                      "category": "system",
+                      "fingerprint": "system:web-1:cpu",
+                      "host_name": "web-1",
+                      "message": "CPU 使用率 95%，超过阈值 90%。",
+                      "reasons": [],
+                      "severity": "warning",
+                      "title": "CPU 使用率过高"
+                    }
+                  ]
+                },
+                {
+                  "channels": [
+                    "desktop"
+                  ],
+                  "events": [
+                    {
+                      "category": "system",
+                      "fingerprint": "system:web-2:mem",
+                      "host_name": "web-2",
+                      "message": "内存使用率 95%，超过阈值 90%。",
+                      "reasons": [],
+                      "severity": "warning",
+                      "title": "内存使用率过高"
+                    }
+                  ]
+                }
+              ],
+              "notified": [
+                {
+                  "category": "system",
+                  "fingerprint": "system:web-1:cpu",
+                  "host_name": "web-1",
+                  "message": "CPU 使用率 95%，超过阈值 90%。",
+                  "reasons": [],
+                  "severity": "warning",
+                  "title": "CPU 使用率过高"
+                },
+                {
+                  "category": "system",
+                  "fingerprint": "system:web-2:mem",
+                  "host_name": "web-2",
+                  "message": "内存使用率 95%，超过阈值 90%。",
+                  "reasons": [],
+                  "severity": "warning",
+                  "title": "内存使用率过高"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "S09-silence-group",
+          "steps": [
+            {
+              "action": "process",
+              "at": "2026-01-01T01:00:00Z",
+              "dispatched": [
+                {
+                  "channels": [
+                    "desktop"
+                  ],
+                  "events": [
+                    {
+                      "category": "system",
+                      "fingerprint": "system:web-2:mem",
+                      "host_name": "web-2",
+                      "message": "内存使用率 95%，超过阈值 90%。",
+                      "reasons": [],
+                      "severity": "warning",
+                      "title": "内存使用率过高"
+                    }
+                  ]
+                }
+              ],
+              "notified": [
+                {
+                  "category": "system",
+                  "fingerprint": "system:web-2:mem",
+                  "host_name": "web-2",
+                  "message": "内存使用率 95%，超过阈值 90%。",
+                  "reasons": [],
+                  "severity": "warning",
+                  "title": "内存使用率过高"
+                }
+              ]
+            },
+            {
+              "action": "process",
+              "at": "2026-01-01T13:00:00Z",
+              "dispatched": [
+                {
+                  "channels": [
+                    "desktop"
+                  ],
+                  "events": [
+                    {
+                      "category": "system",
+                      "fingerprint": "system:web-1:cpu",
+                      "host_name": "web-1",
+                      "message": "CPU 使用率 95%，超过阈值 90%。",
+                      "reasons": [],
+                      "severity": "warning",
+                      "title": "CPU 使用率过高"
+                    }
+                  ]
+                }
+              ],
+              "notified": [
+                {
+                  "category": "system",
+                  "fingerprint": "system:web-1:cpu",
+                  "host_name": "web-1",
+                  "message": "CPU 使用率 95%，超过阈值 90%。",
+                  "reasons": [],
+                  "severity": "warning",
+                  "title": "CPU 使用率过高"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "S10-recovery-resolve",
+          "steps": [
+            {
+              "action": "process",
+              "at": "2026-01-01T00:00:00Z",
+              "dispatched": [
+                {
+                  "channels": [
+                    "desktop"
+                  ],
+                  "events": [
+                    {
+                      "category": "system",
+                      "fingerprint": "system:web-1:cpu",
+                      "host_name": "web-1",
+                      "message": "CPU 使用率 95%，超过阈值 90%。",
+                      "reasons": [],
+                      "severity": "warning",
+                      "title": "CPU 使用率过高"
+                    }
+                  ]
+                }
+              ],
+              "notified": [
+                {
+                  "category": "system",
+                  "fingerprint": "system:web-1:cpu",
+                  "host_name": "web-1",
+                  "message": "CPU 使用率 95%，超过阈值 90%。",
+                  "reasons": [],
+                  "severity": "warning",
+                  "title": "CPU 使用率过高"
+                }
+              ]
+            },
+            {
+              "action": "resolve",
+              "at": "2026-01-01T00:10:00Z",
+              "dispatched": [
+                {
+                  "channels": [
+                    "desktop"
+                  ],
+                  "events": [
+                    {
+                      "category": "system",
+                      "fingerprint": "recovery:web-1:system",
+                      "host_name": "web-1",
+                      "message": "主机 web-1 的 system 告警已恢复。",
+                      "reasons": [],
+                      "severity": "info",
+                      "title": "主机 web-1 system 告警恢复"
+                    }
+                  ]
+                }
+              ],
+              "notified": [
+                {
+                  "category": "system",
+                  "fingerprint": "recovery:web-1:system",
+                  "host_name": "web-1",
+                  "message": "主机 web-1 的 system 告警已恢复。",
+                  "reasons": [],
+                  "severity": "info",
+                  "title": "主机 web-1 system 告警恢复"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "S11-recovery-resolve-missing",
+          "steps": [
+            {
+              "action": "process",
+              "at": "2026-01-01T00:00:00Z",
+              "dispatched": [
+                {
+                  "channels": [
+                    "desktop"
+                  ],
+                  "events": [
+                    {
+                      "category": "system",
+                      "fingerprint": "system:web-1:cpu",
+                      "host_name": "web-1",
+                      "message": "CPU 使用率 95%，超过阈值 90%。",
+                      "reasons": [],
+                      "severity": "warning",
+                      "title": "CPU 使用率过高"
+                    }
+                  ]
+                },
+                {
+                  "channels": [
+                    "desktop"
+                  ],
+                  "events": [
+                    {
+                      "category": "disk",
+                      "fingerprint": "disk:web-1:var",
+                      "host_name": "web-1",
+                      "message": "磁盘 /var 使用率 95%，超过阈值 90%。",
+                      "reasons": [],
+                      "severity": "warning",
+                      "title": "磁盘使用率过高"
+                    }
+                  ]
+                },
+                {
+                  "channels": [
+                    "desktop"
+                  ],
+                  "events": [
+                    {
+                      "category": "user-added",
+                      "fingerprint": "user-added:web-1",
+                      "host_name": "web-1",
+                      "message": "检测到新增用户 alice。",
+                      "reasons": [],
+                      "severity": "info",
+                      "title": "用户变更"
+                    }
+                  ]
+                }
+              ],
+              "notified": [
+                {
+                  "category": "system",
+                  "fingerprint": "system:web-1:cpu",
+                  "host_name": "web-1",
+                  "message": "CPU 使用率 95%，超过阈值 90%。",
+                  "reasons": [],
+                  "severity": "warning",
+                  "title": "CPU 使用率过高"
+                },
+                {
+                  "category": "disk",
+                  "fingerprint": "disk:web-1:var",
+                  "host_name": "web-1",
+                  "message": "磁盘 /var 使用率 95%，超过阈值 90%。",
+                  "reasons": [],
+                  "severity": "warning",
+                  "title": "磁盘使用率过高"
+                },
+                {
+                  "category": "user-added",
+                  "fingerprint": "user-added:web-1",
+                  "host_name": "web-1",
+                  "message": "检测到新增用户 alice。",
+                  "reasons": [],
+                  "severity": "info",
+                  "title": "用户变更"
+                }
+              ]
+            },
+            {
+              "action": "resolve_missing",
+              "at": "2026-01-01T00:10:00Z",
+              "dispatched": [
+                {
+                  "channels": [
+                    "desktop"
+                  ],
+                  "events": [
+                    {
+                      "category": "disk",
+                      "fingerprint": "recovery:web-1:disk",
+                      "host_name": "web-1",
+                      "message": "主机 web-1 的 disk 告警已恢复。",
+                      "reasons": [],
+                      "severity": "info",
+                      "title": "主机 web-1 disk 告警恢复"
+                    }
+                  ]
+                }
+              ],
+              "notified": [
+                {
+                  "category": "disk",
+                  "fingerprint": "recovery:web-1:disk",
+                  "host_name": "web-1",
+                  "message": "主机 web-1 的 disk 告警已恢复。",
+                  "reasons": [],
+                  "severity": "info",
+                  "title": "主机 web-1 disk 告警恢复"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "S12-aggregate-batch",
+          "steps": [
+            {
+              "action": "process",
+              "at": "2026-01-01T00:00:00Z",
+              "dispatched": [
+                {
+                  "channels": [
+                    "desktop",
+                    "email"
+                  ],
+                  "events": [
+                    {
+                      "category": "system",
+                      "fingerprint": "system:web-1:cpu",
+                      "host_name": "web-1",
+                      "message": "CPU 使用率 95%，超过阈值 90%。",
+                      "reasons": [],
+                      "severity": "warning",
+                      "title": "CPU 使用率过高"
+                    },
+                    {
+                      "category": "system",
+                      "fingerprint": "system:web-1:mem",
+                      "host_name": "web-1",
+                      "message": "内存使用率 99%，超过阈值 90%。",
+                      "reasons": [],
+                      "severity": "critical",
+                      "title": "内存使用率严重过高"
+                    }
+                  ]
+                }
+              ],
+              "notified": [
+                {
+                  "category": "system",
+                  "fingerprint": "system:web-1:cpu",
+                  "host_name": "web-1",
+                  "message": "CPU 使用率 95%，超过阈值 90%。",
+                  "reasons": [],
+                  "severity": "warning",
+                  "title": "CPU 使用率过高"
+                },
+                {
+                  "category": "system",
+                  "fingerprint": "system:web-1:mem",
+                  "host_name": "web-1",
+                  "message": "内存使用率 99%，超过阈值 90%。",
+                  "reasons": [],
+                  "severity": "critical",
+                  "title": "内存使用率严重过高"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "timePoints": [
+        {
+          "dailyFire": "2026-03-09T09:00:00",
+          "id": "tp01-shanghai-daily-before-target",
+          "nowLocal": "2026-03-09T08:59:00",
+          "nowUtc": "2026-03-09T00:59:00Z",
+          "periodTarget": "2026-03-09T09:00:00",
+          "reportDue": false,
+          "shouldRun": true,
+          "tz": "Asia/Shanghai",
+          "weeklyFire": "2026-03-09T09:00:00"
+        },
+        {
+          "dailyFire": "2026-03-10T09:00:00",
+          "id": "tp02-shanghai-daily-on-target-boundary",
+          "nowLocal": "2026-03-09T09:00:00",
+          "nowUtc": "2026-03-09T01:00:00Z",
+          "periodTarget": "2026-03-09T09:00:00",
+          "reportDue": true,
+          "shouldRun": true,
+          "tz": "Asia/Shanghai",
+          "weeklyFire": "2026-03-16T09:00:00"
+        },
+        {
+          "dailyFire": "2026-03-10T09:00:00",
+          "id": "tp03-shanghai-daily-just-after-target",
+          "nowLocal": "2026-03-09T09:01:00",
+          "nowUtc": "2026-03-09T01:01:00Z",
+          "periodTarget": "2026-03-09T09:00:00",
+          "reportDue": true,
+          "shouldRun": true,
+          "tz": "Asia/Shanghai",
+          "weeklyFire": "2026-03-16T09:00:00"
+        },
+        {
+          "dailyFire": "2026-03-10T09:00:00",
+          "id": "tp04-shanghai-daily-cross-day-2359",
+          "nowLocal": "2026-03-09T23:59:00",
+          "nowUtc": "2026-03-09T15:59:00Z",
+          "periodTarget": "2026-03-09T09:00:00",
+          "reportDue": true,
+          "shouldRun": true,
+          "tz": "Asia/Shanghai",
+          "weeklyFire": "2026-03-16T09:00:00"
+        },
+        {
+          "dailyFire": "2026-03-10T09:00:00",
+          "id": "tp05-shanghai-daily-midnight",
+          "nowLocal": "2026-03-10T00:00:00",
+          "nowUtc": "2026-03-09T16:00:00Z",
+          "periodTarget": "2026-03-10T09:00:00",
+          "reportDue": false,
+          "shouldRun": true,
+          "tz": "Asia/Shanghai",
+          "weeklyFire": "2026-03-16T09:00:00"
+        },
+        {
+          "dailyFire": "2026-03-09T09:00:00",
+          "id": "tp06-shanghai-interval-exactly-elapsed",
+          "nowLocal": "2026-03-09T08:59:00",
+          "nowUtc": "2026-03-09T00:59:00Z",
+          "periodTarget": "2026-03-09T09:00:00",
+          "reportDue": false,
+          "shouldRun": true,
+          "tz": "Asia/Shanghai",
+          "weeklyFire": "2026-03-09T09:00:00"
+        },
+        {
+          "dailyFire": "2026-03-09T09:00:00",
+          "id": "tp07-shanghai-interval-not-yet-elapsed",
+          "nowLocal": "2026-03-09T08:58:00",
+          "nowUtc": "2026-03-09T00:58:00Z",
+          "periodTarget": "2026-03-09T09:00:00",
+          "reportDue": false,
+          "shouldRun": false,
+          "tz": "Asia/Shanghai",
+          "weeklyFire": "2026-03-09T09:00:00"
+        },
+        {
+          "dailyFire": "2026-03-10T09:00:00",
+          "id": "tp08-shanghai-interval-never-ran",
+          "nowLocal": "2026-03-09T09:30:00",
+          "nowUtc": "2026-03-09T01:30:00Z",
+          "periodTarget": "2026-03-09T09:00:00",
+          "reportDue": true,
+          "shouldRun": true,
+          "tz": "Asia/Shanghai",
+          "weeklyFire": "2026-03-16T09:00:00"
+        },
+        {
+          "dailyFire": "2026-03-09T09:00:00",
+          "id": "tp09-shanghai-interval-last-in-future",
+          "nowLocal": "2026-03-09T08:59:00",
+          "nowUtc": "2026-03-09T00:59:00Z",
+          "periodTarget": "2026-03-09T09:00:00",
+          "reportDue": false,
+          "shouldRun": false,
+          "tz": "Asia/Shanghai",
+          "weeklyFire": "2026-03-09T09:00:00"
+        },
+        {
+          "dailyFire": "2026-03-10T09:00:00",
+          "id": "tp10-shanghai-interval-non-positive",
+          "nowLocal": "2026-03-09T09:30:00",
+          "nowUtc": "2026-03-09T01:30:00Z",
+          "periodTarget": "2026-03-09T09:00:00",
+          "reportDue": true,
+          "shouldRun": true,
+          "tz": "Asia/Shanghai",
+          "weeklyFire": "2026-03-16T09:00:00"
+        },
+        {
+          "dailyFire": "2026-03-10T09:00:00",
+          "id": "tp11-shanghai-daily-report-already-sent",
+          "nowLocal": "2026-03-09T09:01:00",
+          "nowUtc": "2026-03-09T01:01:00Z",
+          "periodTarget": "2026-03-09T09:00:00",
+          "reportDue": false,
+          "shouldRun": true,
+          "tz": "Asia/Shanghai",
+          "weeklyFire": "2026-03-16T09:00:00"
+        },
+        {
+          "dailyFire": "2026-03-10T09:00:00",
+          "id": "tp12-shanghai-daily-report-missed-before-target",
+          "nowLocal": "2026-03-09T09:01:00",
+          "nowUtc": "2026-03-09T01:01:00Z",
+          "periodTarget": "2026-03-09T09:00:00",
+          "reportDue": true,
+          "shouldRun": true,
+          "tz": "Asia/Shanghai",
+          "weeklyFire": "2026-03-16T09:00:00"
+        },
+        {
+          "dailyFire": "2026-03-09T09:00:00",
+          "id": "tp13-shanghai-weekly-monday-before",
+          "nowLocal": "2026-03-09T08:00:00",
+          "nowUtc": "2026-03-09T00:00:00Z",
+          "periodTarget": "2026-03-09T09:00:00",
+          "reportDue": false,
+          "shouldRun": true,
+          "tz": "Asia/Shanghai",
+          "weeklyFire": "2026-03-09T09:00:00"
+        },
+        {
+          "dailyFire": "2026-03-10T09:00:00",
+          "id": "tp14-shanghai-weekly-monday-on-target",
+          "nowLocal": "2026-03-09T09:00:00",
+          "nowUtc": "2026-03-09T01:00:00Z",
+          "periodTarget": "2026-03-09T09:00:00",
+          "reportDue": true,
+          "shouldRun": true,
+          "tz": "Asia/Shanghai",
+          "weeklyFire": "2026-03-16T09:00:00"
+        },
+        {
+          "dailyFire": "2026-03-10T09:00:00",
+          "id": "tp15-shanghai-weekly-monday-after",
+          "nowLocal": "2026-03-09T10:00:00",
+          "nowUtc": "2026-03-09T02:00:00Z",
+          "periodTarget": "2026-03-09T09:00:00",
+          "reportDue": true,
+          "shouldRun": true,
+          "tz": "Asia/Shanghai",
+          "weeklyFire": "2026-03-16T09:00:00"
+        },
+        {
+          "dailyFire": "2026-03-12T09:00:00",
+          "id": "tp16-shanghai-weekly-wednesday-now",
+          "nowLocal": "2026-03-11T10:00:00",
+          "nowUtc": "2026-03-11T02:00:00Z",
+          "periodTarget": "2026-03-09T09:00:00",
+          "reportDue": true,
+          "shouldRun": true,
+          "tz": "Asia/Shanghai",
+          "weeklyFire": "2026-03-16T09:00:00"
+        },
+        {
+          "dailyFire": "2026-03-16T09:00:00",
+          "id": "tp17-shanghai-weekly-sunday-night",
+          "nowLocal": "2026-03-15T23:00:00",
+          "nowUtc": "2026-03-15T15:00:00Z",
+          "periodTarget": "2026-03-09T09:00:00",
+          "reportDue": true,
+          "shouldRun": true,
+          "tz": "Asia/Shanghai",
+          "weeklyFire": "2026-03-16T09:00:00"
+        },
+        {
+          "dailyFire": "2026-03-11T09:00:00",
+          "id": "tp18-shanghai-weekly-report-before-target",
+          "nowLocal": "2026-03-11T07:00:00",
+          "nowUtc": "2026-03-10T23:00:00Z",
+          "periodTarget": "2026-03-11T08:00:00",
+          "reportDue": false,
+          "shouldRun": true,
+          "tz": "Asia/Shanghai",
+          "weeklyFire": "2026-03-11T08:00:00"
+        },
+        {
+          "dailyFire": "2026-03-12T09:00:00",
+          "id": "tp19-shanghai-weekly-report-after-target",
+          "nowLocal": "2026-03-11T09:00:00",
+          "nowUtc": "2026-03-11T01:00:00Z",
+          "periodTarget": "2026-03-11T08:00:00",
+          "reportDue": true,
+          "shouldRun": true,
+          "tz": "Asia/Shanghai",
+          "weeklyFire": "2026-03-18T08:00:00"
+        },
+        {
+          "dailyFire": "2026-06-15T12:00:00",
+          "id": "tp20-utc-daily-before-target",
+          "nowLocal": "2026-06-15T11:30:00",
+          "nowUtc": "2026-06-15T11:30:00Z",
+          "periodTarget": "2026-06-15T12:00:00",
+          "reportDue": false,
+          "shouldRun": true,
+          "tz": "UTC",
+          "weeklyFire": "2026-06-19T18:00:00"
+        },
+        {
+          "dailyFire": "2026-06-16T12:00:00",
+          "id": "tp21-utc-daily-on-target-boundary",
+          "nowLocal": "2026-06-15T12:00:00",
+          "nowUtc": "2026-06-15T12:00:00Z",
+          "periodTarget": "2026-06-15T12:00:00",
+          "reportDue": true,
+          "shouldRun": true,
+          "tz": "UTC",
+          "weeklyFire": "2026-06-19T18:00:00"
+        },
+        {
+          "dailyFire": "2026-06-20T12:00:00",
+          "id": "tp22-utc-weekly-friday-before",
+          "nowLocal": "2026-06-19T17:00:00",
+          "nowUtc": "2026-06-19T17:00:00Z",
+          "periodTarget": "2026-06-19T18:00:00",
+          "reportDue": false,
+          "shouldRun": true,
+          "tz": "UTC",
+          "weeklyFire": "2026-06-19T18:00:00"
+        },
+        {
+          "dailyFire": "2026-06-16T12:00:00",
+          "id": "tp23-utc-interval-elapsed-over-hour",
+          "nowLocal": "2026-06-15T12:30:00",
+          "nowUtc": "2026-06-15T12:30:00Z",
+          "periodTarget": "2026-06-15T12:00:00",
+          "reportDue": true,
+          "shouldRun": true,
+          "tz": "UTC",
+          "weeklyFire": "2026-06-19T18:00:00"
+        },
+        {
+          "dailyFire": "2026-06-16T12:00:00",
+          "id": "tp24-utc-interval-negative",
+          "nowLocal": "2026-06-15T12:30:00",
+          "nowUtc": "2026-06-15T12:30:00Z",
+          "periodTarget": "2026-06-15T12:00:00",
+          "reportDue": true,
+          "shouldRun": true,
+          "tz": "UTC",
+          "weeklyFire": "2026-06-19T18:00:00"
+        },
+        {
+          "dailyFire": "2026-03-16T09:00:00",
+          "id": "tp25-shanghai-weekly-cross-week-sunday-2359",
+          "nowLocal": "2026-03-15T23:59:00",
+          "nowUtc": "2026-03-15T15:59:00Z",
+          "periodTarget": "2026-03-09T09:00:00",
+          "reportDue": true,
+          "shouldRun": true,
+          "tz": "Asia/Shanghai",
+          "weeklyFire": "2026-03-16T09:00:00"
+        },
+        {
+          "dailyFire": "2026-03-10T09:00:00",
+          "id": "tp26-shanghai-daily-report-earlier-run-before-target",
+          "nowLocal": "2026-03-09T23:00:00",
+          "nowUtc": "2026-03-09T15:00:00Z",
+          "periodTarget": "2026-03-09T09:00:00",
+          "reportDue": true,
+          "shouldRun": true,
+          "tz": "Asia/Shanghai",
+          "weeklyFire": "2026-03-16T09:00:00"
+        }
+      ]
+    }
+  }
+}

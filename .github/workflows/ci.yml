@@ -17,52 +17,46 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  backend:
-    name: Python backend (pytest)
+  backend-node:
+    name: Node backend (vitest)
     runs-on: windows-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - name: Set up Node
+        uses: actions/setup-node@v4
         with:
-          python-version: "3.12"
-          cache: pip
-          cache-dependency-path: pyproject.toml
+          node-version: "22"
 
-      - name: Install
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install -e ".[dev]"
+      - name: Enable pnpm
+        run: corepack enable && corepack prepare pnpm@12.14.0 --activate
         shell: pwsh
 
       - name: Version consistency
-        run: python tools/bump_version.py --check
-        shell: pwsh
-
-      - name: Run tests
-        run: python -m pytest -q
-        shell: pwsh
-
-      # --- Non-blocking quality / security scans (never fail the build) ---
-      - name: pip-audit (non-blocking)
-        continue-on-error: true
         run: |
-          python -m pip install pip-audit
-          pip-audit
+          node scripts/bump-version.mjs --check
+          node --test scripts/bump-version.test.mjs
         shell: pwsh
 
-      - name: ruff check (non-blocking)
-        continue-on-error: true
-        run: |
-          python -m pip install ruff
-          $configured = (Test-Path ruff.toml) -or (Select-String -Path pyproject.toml -Pattern 'tool\.ruff' -Quiet)
-          if ($configured) { ruff check . } else { Write-Host 'ruff is not configured; skipping ruff check' }
+      - name: Install (workspace)
+        run: pnpm install --frozen-lockfile
+        shell: pwsh
+
+      - name: Typecheck
+        run: pnpm --filter servermonitor-backend typecheck
+        shell: pwsh
+
+      - name: Test
+        run: pnpm --filter servermonitor-backend test
+        shell: pwsh
+
+      - name: Build bundle
+        run: pnpm --filter servermonitor-backend build
         shell: pwsh
 
   desktop:
-    name: Electron desktop (node:test)
+    name: Electron desktop (node:test + vitest)
     runs-on: windows-latest
     defaults:
       run:
@@ -86,6 +80,18 @@ jobs:
 
       - name: Run tests
         run: pnpm test
+        shell: pwsh
+
+      - name: Typecheck (ts)
+        run: pnpm typecheck
+        shell: pwsh
+
+      - name: Unit tests (vitest)
+        run: pnpm test:unit
+        shell: pwsh
+
+      - name: Build main bundle
+        run: pnpm build:main
         shell: pwsh
 
       - name: pnpm audit (non-blocking)

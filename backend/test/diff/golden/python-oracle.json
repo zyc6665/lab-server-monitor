@@ -1,0 +1,396 @@
+{
+  "_commit": "1ca108c",
+  "_source": "python-oracle.json",
+  "entries": {
+    "alerts_active_top2": {
+      "name": "alerts_active_top2",
+      "ok": true,
+      "value": [
+        {
+          "ack_at": null,
+          "category": "cpu",
+          "created_at": "2026-01-11T00:00:00.000000+00:00",
+          "fingerprint": "cpu:70",
+          "host_name": "host-a",
+          "id": 4,
+          "message": "cpu 70%",
+          "notified_channels": null,
+          "severity": "warning",
+          "status": "active",
+          "title": "CPU warm"
+        },
+        {
+          "ack_at": null,
+          "category": "cpu",
+          "created_at": "2026-01-11T00:00:00.000000+00:00",
+          "fingerprint": "cpu:99",
+          "host_name": "host-b",
+          "id": 2,
+          "message": "cpu 99% for 5m",
+          "notified_channels": null,
+          "severity": "critical",
+          "status": "active",
+          "title": "CPU pegged"
+        }
+      ]
+    },
+    "alerts_all": {
+      "name": "alerts_all",
+      "ok": true,
+      "value": [
+        {
+          "ack_at": "2026-01-12T01:00:00.000000+00:00",
+          "category": "memory",
+          "created_at": "2026-01-12T00:00:00.000000+00:00",
+          "fingerprint": "memory:80",
+          "host_name": "host-a",
+          "id": 3,
+          "message": "memory 80%",
+          "notified_channels": "[\"email\", \"webhook\"]",
+          "severity": "warning",
+          "status": "closed",
+          "title": "Memory rising"
+        },
+        {
+          "ack_at": null,
+          "category": "cpu",
+          "created_at": "2026-01-11T00:00:00.000000+00:00",
+          "fingerprint": "cpu:70",
+          "host_name": "host-a",
+          "id": 4,
+          "message": "cpu 70%",
+          "notified_channels": null,
+          "severity": "warning",
+          "status": "active",
+          "title": "CPU warm"
+        },
+        {
+          "ack_at": null,
+          "category": "cpu",
+          "created_at": "2026-01-11T00:00:00.000000+00:00",
+          "fingerprint": "cpu:99",
+          "host_name": "host-b",
+          "id": 2,
+          "message": "cpu 99% for 5m",
+          "notified_channels": null,
+          "severity": "critical",
+          "status": "active",
+          "title": "CPU pegged"
+        },
+        {
+          "ack_at": null,
+          "category": "disk",
+          "created_at": "2026-01-10T00:00:00.000000+00:00",
+          "fingerprint": "disk:/data",
+          "host_name": "host-a",
+          "id": 1,
+          "message": "/data at 91%",
+          "notified_channels": "[\"email\"]",
+          "severity": "warning",
+          "status": "active",
+          "title": "Disk usage high"
+        }
+      ]
+    },
+    "all_snapshots": {
+      "name": "all_snapshots",
+      "ok": true,
+      "value": [
+        {
+          "collected_at": "2026-01-15T09:10:00.123456+00:00",
+          "errors": [],
+          "host_name": "host-a",
+          "metrics": {
+            "collected_at": "2026-01-15T09:10:00.123456+00:00",
+            "cpu_usage_percent": 42.5,
+            "disk_usage": [
+              {
+                "filesystem": "/dev/sda1",
+                "mountpoint": "/",
+                "percent": "60%"
+              }
+            ],
+            "gpu_summary": [
+              {
+                "memory_total_mb": 4000,
+                "memory_used_mb": 1000,
+                "temperature_c": 55,
+                "utilization_percent": 30
+              }
+            ],
+            "load_average": {
+              "load_1": 1.5,
+              "load_15": 1,
+              "load_5": 1.25
+            },
+            "logged_in_users": [
+              {
+                "username": "alice"
+              }
+            ],
+            "memory": {
+              "total_mb": 8192,
+              "used_mb": 2048
+            },
+            "net_rx_bytes": 1000,
+            "net_tx_bytes": 2000,
+            "thermal_zones": [
+              {
+                "celsius": 45.5
+              }
+            ],
+            "total_processes": 130
+          },
+          "success": true
+        },
+        {
+          "collected_at": "2026-01-15T09:20:00.000000+00:00",
+          "errors": [
+            {
+              "message": "不可用",
+              "source": "gpu"
+            }
+          ],
+          "host_name": "host-b",
+          "metrics": {
+            "collected_at": "2026-01-15T09:20:00.000000+00:00",
+            "cpu_usage_percent": 7,
+            "memory": {
+              "total_mb": 2,
+              "used_mb": 1
+            }
+          },
+          "success": false
+        }
+      ]
+    },
+    "daily_week": {
+      "name": "daily_week",
+      "ok": true,
+      "value": [
+        {
+          "cpu_avg": 15,
+          "day": "2026-01-09",
+          "gpu_util": 30,
+          "host": "10.0.0.1",
+          "host_name": "host-a",
+          "memory_percent": 50
+        },
+        {
+          "cpu_avg": 20,
+          "day": "2026-01-10",
+          "gpu_util": 20,
+          "host": "10.0.0.1",
+          "host_name": "host-a",
+          "memory_percent": 50
+        },
+        {
+          "cpu_avg": 10,
+          "day": "2026-01-11",
+          "gpu_util": 30,
+          "host": "10.0.0.1",
+          "host_name": "host-a",
+          "memory_percent": 50
+        },
+        {
+          "cpu_avg": 10,
+          "day": "2026-01-10",
+          "gpu_util": 20,
+          "host": "10.0.0.2",
+          "host_name": "host-b",
+          "memory_percent": 30
+        }
+      ]
+    },
+    "history_24h": {
+      "name": "history_24h",
+      "ok": true,
+      "value": [
+        {
+          "cpu": 10,
+          "disk": 20,
+          "gpu_memory": 25,
+          "gpu_util": 30,
+          "load_1": 0.5,
+          "memory": 10,
+          "net_rx": null,
+          "net_tx": null,
+          "t": "2026-01-15T09:00:00+00:00",
+          "temperature": 45
+        },
+        {
+          "cpu": 20,
+          "disk": 30,
+          "gpu_memory": 50,
+          "gpu_util": 40,
+          "load_1": 0.5,
+          "memory": 20,
+          "net_rx": 2,
+          "net_tx": 2,
+          "t": "2026-01-15T09:10:00.123456+00:00",
+          "temperature": 46
+        }
+      ]
+    },
+    "history_7d": {
+      "name": "history_7d",
+      "ok": true,
+      "value": [
+        {
+          "cpu": 15,
+          "disk": 20,
+          "gpu_memory": 25,
+          "gpu_util": 30,
+          "load_1": 0.5,
+          "memory": 50,
+          "net_rx": null,
+          "net_tx": null,
+          "t": "2026-01-09",
+          "temperature": null
+        },
+        {
+          "cpu": 20,
+          "disk": 20,
+          "gpu_memory": 25,
+          "gpu_util": 20,
+          "load_1": 0.5,
+          "memory": 50,
+          "net_rx": null,
+          "net_tx": null,
+          "t": "2026-01-10",
+          "temperature": null
+        },
+        {
+          "cpu": 10,
+          "disk": 20,
+          "gpu_memory": 25,
+          "gpu_util": 30,
+          "load_1": 0.5,
+          "memory": 50,
+          "net_rx": null,
+          "net_tx": null,
+          "t": "2026-01-11",
+          "temperature": null
+        },
+        {
+          "cpu": 20,
+          "disk": 20,
+          "gpu_memory": 25,
+          "gpu_util": 20,
+          "load_1": 0.5,
+          "memory": 50,
+          "net_rx": null,
+          "net_tx": null,
+          "t": "2026-01-12",
+          "temperature": null
+        }
+      ]
+    },
+    "host_snapshot": {
+      "name": "host_snapshot",
+      "ok": true,
+      "value": {
+        "collected_at": "2026-01-15T09:10:00.123456+00:00",
+        "errors": [],
+        "host_name": "host-a",
+        "metrics": {
+          "collected_at": "2026-01-15T09:10:00.123456+00:00",
+          "cpu_usage_percent": 42.5,
+          "disk_usage": [
+            {
+              "filesystem": "/dev/sda1",
+              "mountpoint": "/",
+              "percent": "60%"
+            }
+          ],
+          "gpu_summary": [
+            {
+              "memory_total_mb": 4000,
+              "memory_used_mb": 1000,
+              "temperature_c": 55,
+              "utilization_percent": 30
+            }
+          ],
+          "load_average": {
+            "load_1": 1.5,
+            "load_15": 1,
+            "load_5": 1.25
+          },
+          "logged_in_users": [
+            {
+              "username": "alice"
+            }
+          ],
+          "memory": {
+            "total_mb": 8192,
+            "used_mb": 2048
+          },
+          "net_rx_bytes": 1000,
+          "net_tx_bytes": 2000,
+          "thermal_zones": [
+            {
+              "celsius": 45.5
+            }
+          ],
+          "total_processes": 130
+        },
+        "success": true
+      }
+    },
+    "host_snapshot_missing": {
+      "name": "host_snapshot_missing",
+      "ok": true,
+      "value": null
+    },
+    "secret_names": {
+      "name": "secret_names",
+      "ok": true,
+      "value": [
+        "a_token",
+        "m_ssh_passphrase",
+        "z_api_key"
+      ]
+    },
+    "settings": {
+      "name": "settings",
+      "ok": true,
+      "value": {
+        "alerts": {
+          "channels": [
+            "email",
+            "webhook"
+          ],
+          "email": "ops@example.com",
+          "enabled": true,
+          "quiet_hours": {
+            "end": "07:00",
+            "start": "22:00"
+          }
+        },
+        "empty": {},
+        "general": {
+          "locale": "zh-CN",
+          "nested": {
+            "backoff": [
+              1,
+              2,
+              4
+            ],
+            "flags": {
+              "beta": true,
+              "legacy": false
+            },
+            "retries": 3
+          },
+          "note": "实验室服务器轮询",
+          "theme": "dark",
+          "thresholds": {
+            "cpu": 85.5,
+            "disk": 90,
+            "memory": 75.25
+          }
+        }
+      }
+    }
+  }
+}

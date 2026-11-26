@@ -1,0 +1,1 @@
+ 10:00:00 up 12 days,  3:04,  2 users,  load average: 7.50, 6.20, 5.10

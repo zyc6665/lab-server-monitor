@@ -1,0 +1,618 @@
+{
+  "_commit": "1ca108c",
+  "_source": "evaluate.json",
+  "entries": {
+    "evaluate": {
+      "controllers": [
+        {
+          "name": "bbu_failed",
+          "result": {
+            "health": "warning",
+            "reasons": [
+              "bbu_not_optimal"
+            ]
+          }
+        },
+        {
+          "name": "bbu_optimal",
+          "result": {
+            "health": "healthy",
+            "reasons": []
+          }
+        },
+        {
+          "name": "bbu_fault_substring",
+          "result": {
+            "health": "warning",
+            "reasons": [
+              "bbu_not_optimal"
+            ]
+          }
+        },
+        {
+          "name": "bbu_degraded",
+          "result": {
+            "health": "warning",
+            "reasons": [
+              "bbu_not_optimal"
+            ]
+          }
+        },
+        {
+          "name": "bbu_null",
+          "result": {
+            "health": "unknown",
+            "reasons": []
+          }
+        },
+        {
+          "name": "bbu_empty",
+          "result": {
+            "health": "unknown",
+            "reasons": []
+          }
+        }
+      ],
+      "drives": [
+        {
+          "events": [
+            {
+              "category": "disk",
+              "fingerprint": "disk:oracle-host:c0:e252:s0:state_failed",
+              "host_name": "oracle-host",
+              "message": "物理盘 c0/e252/s0 健康状态 critical；原因：state_failed；状态 Failed；型号 ST1000NM；序列号 S1",
+              "reasons": [
+                "state_failed"
+              ],
+              "severity": "critical",
+              "title": "磁盘 oracle-host c0/e252/s0 异常"
+            }
+          ],
+          "name": "state_failed_critical",
+          "result": {
+            "health": "critical",
+            "reasons": [
+              "state_failed"
+            ]
+          }
+        },
+        {
+          "events": [
+            {
+              "category": "disk",
+              "fingerprint": "disk:oracle-host:c0:e252:s1:state_failed",
+              "host_name": "oracle-host",
+              "message": "物理盘 c0/e252/s1 健康状态 critical；原因：state_failed；状态 Offline；型号 ST1000NM；序列号 S2",
+              "reasons": [
+                "state_failed"
+              ],
+              "severity": "critical",
+              "title": "磁盘 oracle-host c0/e252/s1 异常"
+            }
+          ],
+          "name": "state_offline_critical",
+          "result": {
+            "health": "critical",
+            "reasons": [
+              "state_failed"
+            ]
+          }
+        },
+        {
+          "events": [
+            {
+              "category": "disk",
+              "fingerprint": "disk:oracle-host:c0:e252:s2:state_degraded",
+              "host_name": "oracle-host",
+              "message": "物理盘 c0/e252/s2 健康状态 warning；原因：state_degraded；状态 Degraded；型号 ST1000NM；序列号 S3",
+              "reasons": [
+                "state_degraded"
+              ],
+              "severity": "warning",
+              "title": "磁盘 oracle-host c0/e252/s2 异常"
+            }
+          ],
+          "name": "state_degraded_warning",
+          "result": {
+            "health": "warning",
+            "reasons": [
+              "state_degraded"
+            ]
+          }
+        },
+        {
+          "events": [
+            {
+              "category": "disk",
+              "fingerprint": "disk:oracle-host:c0:e252:s3:state_degraded",
+              "host_name": "oracle-host",
+              "message": "物理盘 c0/e252/s3 健康状态 warning；原因：state_degraded；状态 Rebuild；型号 ST1000NM；序列号 S4",
+              "reasons": [
+                "state_degraded"
+              ],
+              "severity": "warning",
+              "title": "磁盘 oracle-host c0/e252/s3 异常"
+            }
+          ],
+          "name": "state_rebuild_warning",
+          "result": {
+            "health": "warning",
+            "reasons": [
+              "state_degraded"
+            ]
+          }
+        },
+        {
+          "events": [],
+          "name": "healthy_optimal",
+          "result": {
+            "health": "healthy",
+            "reasons": []
+          }
+        },
+        {
+          "events": [
+            {
+              "category": "disk",
+              "fingerprint": "disk:oracle-host:c0:e252:s5:predictive_failure",
+              "host_name": "oracle-host",
+              "message": "物理盘 c0/e252/s5 健康状态 warning；原因：predictive_failure；状态 Optimal；型号 ST1000NM；序列号 S6",
+              "reasons": [
+                "predictive_failure"
+              ],
+              "severity": "warning",
+              "title": "磁盘 oracle-host c0/e252/s5 异常"
+            }
+          ],
+          "name": "predictive_failure",
+          "result": {
+            "health": "warning",
+            "reasons": [
+              "predictive_failure"
+            ]
+          }
+        },
+        {
+          "events": [
+            {
+              "category": "disk",
+              "fingerprint": "disk:oracle-host:c0:e252:s6:smart_flag",
+              "host_name": "oracle-host",
+              "message": "物理盘 c0/e252/s6 健康状态 warning；原因：smart_flag；状态 Optimal；型号 ST1000NM；序列号 S7",
+              "reasons": [
+                "smart_flag"
+              ],
+              "severity": "warning",
+              "title": "磁盘 oracle-host c0/e252/s6 异常"
+            }
+          ],
+          "name": "smart_failed",
+          "result": {
+            "health": "warning",
+            "reasons": [
+              "smart_flag"
+            ]
+          }
+        },
+        {
+          "events": [
+            {
+              "category": "disk",
+              "fingerprint": "disk:oracle-host:c0:e252:s7:media_errors",
+              "host_name": "oracle-host",
+              "message": "物理盘 c0/e252/s7 健康状态 warning；原因：media_errors；状态 Optimal；型号 ST1000NM；序列号 S8",
+              "reasons": [
+                "media_errors"
+              ],
+              "severity": "warning",
+              "title": "磁盘 oracle-host c0/e252/s7 异常"
+            }
+          ],
+          "name": "media_errors_positive",
+          "result": {
+            "health": "warning",
+            "reasons": [
+              "media_errors"
+            ]
+          }
+        },
+        {
+          "events": [
+            {
+              "category": "disk",
+              "fingerprint": "disk:oracle-host:c0:e252:s8:other_errors",
+              "host_name": "oracle-host",
+              "message": "物理盘 c0/e252/s8 健康状态 warning；原因：other_errors；状态 Optimal；型号 ST1000NM；序列号 S9",
+              "reasons": [
+                "other_errors"
+              ],
+              "severity": "warning",
+              "title": "磁盘 oracle-host c0/e252/s8 异常"
+            }
+          ],
+          "name": "other_errors_positive",
+          "result": {
+            "health": "warning",
+            "reasons": [
+              "other_errors"
+            ]
+          }
+        },
+        {
+          "events": [
+            {
+              "category": "disk",
+              "fingerprint": "disk:oracle-host:c0:e252:s9:media_errors",
+              "host_name": "oracle-host",
+              "message": "物理盘 c0/e252/s9 健康状态 warning；原因：media_errors, error_increase；状态 Optimal",
+              "reasons": [
+                "media_errors",
+                "error_increase"
+              ],
+              "severity": "warning",
+              "title": "磁盘 oracle-host c0/e252/s9 异常"
+            }
+          ],
+          "name": "error_increase_media_combined",
+          "result": {
+            "health": "warning",
+            "reasons": [
+              "media_errors",
+              "error_increase"
+            ]
+          }
+        },
+        {
+          "events": [
+            {
+              "category": "disk",
+              "fingerprint": "disk:oracle-host:c0:e252:s10:other_errors",
+              "host_name": "oracle-host",
+              "message": "物理盘 c0/e252/s10 健康状态 warning；原因：other_errors, error_increase；状态 Optimal",
+              "reasons": [
+                "other_errors",
+                "error_increase"
+              ],
+              "severity": "warning",
+              "title": "磁盘 oracle-host c0/e252/s10 异常"
+            }
+          ],
+          "name": "error_increase_other_combined",
+          "result": {
+            "health": "warning",
+            "reasons": [
+              "other_errors",
+              "error_increase"
+            ]
+          }
+        },
+        {
+          "events": [
+            {
+              "category": "disk",
+              "fingerprint": "disk:oracle-host:c0:e252:s11:error_increase",
+              "host_name": "oracle-host",
+              "message": "物理盘 c0/e252/s11 健康状态 warning；原因：error_increase；状态 Optimal",
+              "reasons": [
+                "error_increase"
+              ],
+              "severity": "warning",
+              "title": "磁盘 oracle-host c0/e252/s11 异常"
+            }
+          ],
+          "name": "error_increase_only",
+          "result": {
+            "health": "warning",
+            "reasons": [
+              "error_increase"
+            ]
+          }
+        },
+        {
+          "events": [],
+          "name": "counters_unchanged_healthy",
+          "result": {
+            "health": "healthy",
+            "reasons": []
+          }
+        },
+        {
+          "events": [],
+          "name": "previous_unknown_no_increase",
+          "result": {
+            "health": "healthy",
+            "reasons": []
+          }
+        },
+        {
+          "events": [],
+          "name": "temperature_54",
+          "result": {
+            "health": "healthy",
+            "reasons": []
+          }
+        },
+        {
+          "events": [],
+          "name": "temperature_55",
+          "result": {
+            "health": "healthy",
+            "reasons": []
+          }
+        },
+        {
+          "events": [
+            {
+              "category": "disk",
+              "fingerprint": "disk:oracle-host:c0:e252:s16:temperature",
+              "host_name": "oracle-host",
+              "message": "物理盘 c0/e252/s16 健康状态 warning；原因：temperature；状态 Optimal",
+              "reasons": [
+                "temperature"
+              ],
+              "severity": "warning",
+              "title": "磁盘 oracle-host c0/e252/s16 异常"
+            }
+          ],
+          "name": "temperature_56",
+          "result": {
+            "health": "warning",
+            "reasons": [
+              "temperature"
+            ]
+          }
+        },
+        {
+          "events": [],
+          "name": "temperature_56_custom_threshold_60",
+          "result": {
+            "health": "healthy",
+            "reasons": []
+          }
+        },
+        {
+          "events": [],
+          "name": "rules_media_off",
+          "result": {
+            "health": "healthy",
+            "reasons": []
+          }
+        },
+        {
+          "events": [],
+          "name": "state_failed_but_rule_off",
+          "result": {
+            "health": "healthy",
+            "reasons": []
+          }
+        }
+      ],
+      "virtual_drives": [
+        {
+          "events": [],
+          "name": "vd_optimal",
+          "result": {
+            "health": "healthy",
+            "reasons": []
+          }
+        },
+        {
+          "events": [],
+          "name": "vd_optl",
+          "result": {
+            "health": "healthy",
+            "reasons": []
+          }
+        },
+        {
+          "events": [],
+          "name": "vd_online",
+          "result": {
+            "health": "healthy",
+            "reasons": []
+          }
+        },
+        {
+          "events": [],
+          "name": "vd_onln",
+          "result": {
+            "health": "healthy",
+            "reasons": []
+          }
+        },
+        {
+          "events": [
+            {
+              "category": "disk",
+              "fingerprint": "disk:oracle-host:c0:vd4:state_degraded",
+              "host_name": "oracle-host",
+              "message": "虚拟盘 c0/vd4 健康状态 warning；RAID RAID5；状态 Degraded；原因：state_degraded",
+              "reasons": [
+                "state_degraded"
+              ],
+              "severity": "warning",
+              "title": "虚拟磁盘 oracle-host c0/vd4 异常"
+            }
+          ],
+          "name": "vd_degraded",
+          "result": {
+            "health": "warning",
+            "reasons": [
+              "state_degraded"
+            ]
+          }
+        },
+        {
+          "events": [
+            {
+              "category": "disk",
+              "fingerprint": "disk:oracle-host:c0:vd5:state_degraded",
+              "host_name": "oracle-host",
+              "message": "虚拟盘 c0/vd5 健康状态 warning；RAID RAID5；状态 Partially   Degraded；原因：state_degraded",
+              "reasons": [
+                "state_degraded"
+              ],
+              "severity": "warning",
+              "title": "虚拟磁盘 oracle-host c0/vd5 异常"
+            }
+          ],
+          "name": "vd_partially_degraded",
+          "result": {
+            "health": "warning",
+            "reasons": [
+              "state_degraded"
+            ]
+          }
+        },
+        {
+          "events": [
+            {
+              "category": "disk",
+              "fingerprint": "disk:oracle-host:c0:vd6:state_degraded",
+              "host_name": "oracle-host",
+              "message": "虚拟盘 c0/vd6 健康状态 warning；RAID RAID5；状态 Rebuild；原因：state_degraded",
+              "reasons": [
+                "state_degraded"
+              ],
+              "severity": "warning",
+              "title": "虚拟磁盘 oracle-host c0/vd6 异常"
+            }
+          ],
+          "name": "vd_rebuild",
+          "result": {
+            "health": "warning",
+            "reasons": [
+              "state_degraded"
+            ]
+          }
+        },
+        {
+          "events": [
+            {
+              "category": "disk",
+              "fingerprint": "disk:oracle-host:c0:vd7:state_degraded",
+              "host_name": "oracle-host",
+              "message": "虚拟盘 c0/vd7 健康状态 warning；RAID RAID5；状态 Init；原因：state_degraded",
+              "reasons": [
+                "state_degraded"
+              ],
+              "severity": "warning",
+              "title": "虚拟磁盘 oracle-host c0/vd7 异常"
+            }
+          ],
+          "name": "vd_init",
+          "result": {
+            "health": "warning",
+            "reasons": [
+              "state_degraded"
+            ]
+          }
+        },
+        {
+          "events": [
+            {
+              "category": "disk",
+              "fingerprint": "disk:oracle-host:c0:vd8:state_failed",
+              "host_name": "oracle-host",
+              "message": "虚拟盘 c0/vd8 健康状态 critical；RAID RAID5；状态 Failed；原因：state_failed",
+              "reasons": [
+                "state_failed"
+              ],
+              "severity": "critical",
+              "title": "虚拟磁盘 oracle-host c0/vd8 异常"
+            }
+          ],
+          "name": "vd_failed",
+          "result": {
+            "health": "critical",
+            "reasons": [
+              "state_failed"
+            ]
+          }
+        },
+        {
+          "events": [
+            {
+              "category": "disk",
+              "fingerprint": "disk:oracle-host:c0:vd9:state_failed",
+              "host_name": "oracle-host",
+              "message": "虚拟盘 c0/vd9 健康状态 critical；RAID RAID5；状态 Offline；原因：state_failed",
+              "reasons": [
+                "state_failed"
+              ],
+              "severity": "critical",
+              "title": "虚拟磁盘 oracle-host c0/vd9 异常"
+            }
+          ],
+          "name": "vd_offline",
+          "result": {
+            "health": "critical",
+            "reasons": [
+              "state_failed"
+            ]
+          }
+        },
+        {
+          "events": [
+            {
+              "category": "disk",
+              "fingerprint": "disk:oracle-host:c0:vd10:state_failed",
+              "host_name": "oracle-host",
+              "message": "虚拟盘 c0/vd10 健康状态 critical；RAID RAID5；状态 Missing；原因：state_failed",
+              "reasons": [
+                "state_failed"
+              ],
+              "severity": "critical",
+              "title": "虚拟磁盘 oracle-host c0/vd10 异常"
+            }
+          ],
+          "name": "vd_missing",
+          "result": {
+            "health": "critical",
+            "reasons": [
+              "state_failed"
+            ]
+          }
+        },
+        {
+          "events": [],
+          "name": "vd_state_null",
+          "result": {
+            "health": "unknown",
+            "reasons": []
+          }
+        },
+        {
+          "events": [],
+          "name": "vd_state_empty",
+          "result": {
+            "health": "unknown",
+            "reasons": []
+          }
+        },
+        {
+          "events": [
+            {
+              "category": "disk",
+              "fingerprint": "disk:oracle-host:c0:vd13:state_degraded",
+              "host_name": "oracle-host",
+              "message": "虚拟盘 c0/vd13 健康状态 warning；RAID RAID5；状态 Weird；原因：state_degraded",
+              "reasons": [
+                "state_degraded"
+              ],
+              "severity": "warning",
+              "title": "虚拟磁盘 oracle-host c0/vd13 异常"
+            }
+          ],
+          "name": "vd_state_unknown_word",
+          "result": {
+            "health": "warning",
+            "reasons": [
+              "state_degraded"
+            ]
+          }
+        }
+      ]
+    }
+  }
+}

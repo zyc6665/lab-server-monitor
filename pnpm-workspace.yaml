@@ -1,0 +1,18 @@
+packages:
+  - backend
+
+# pnpm >= 10 reads the build-script allow-list from here (not package.json).
+# esbuild ships a postinstall; better-sqlite3 uses prebuilt binaries but is
+# listed too so a source build is permitted on platforms without prebuilds.
+# @primno/dpapi declares `"gypfile": true` but ships prebuilt N-API binaries and
+# an `install` script that is a no-op (`exit 0`), so allowing its build scripts
+# does NOT require MSVC/Visual C++ build tools.
+allowBuilds:
+  esbuild: true
+  better-sqlite3: true
+  '@primno/dpapi': true
+  # ssh2 ships an optional native `cpu-features` accelerator. The pure-JS
+  # fallback is fully functional, so we deliberately skip the native build
+  # (avoids requiring MSVC build tools on Windows).
+  ssh2: false
+  cpu-features: false

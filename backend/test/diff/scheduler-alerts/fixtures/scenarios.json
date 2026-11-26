@@ -1,0 +1,716 @@
+{
+  "description": "Alert-engine scenario fixtures for the P4 Task11 differential test. The Python oracle drives the REAL servermanage.alerts.AlertEngine (in-memory temp SQLite + fake clock + fake notifier) over each scenario's steps; the Node test drives backend/src/alerts/engine.ts with the same fixture and diffs the notified events + dispatch log after every step (must be []). Consecutive-period gating is neutralised with consecutive_periods=1 because Node folds the servermanage/app.py gate into process() while Python keeps it outside AlertEngine (see engine.ts:34-37) — that is a documented structural difference, not a behavioural one, so the shared engine logic is compared 1:1 here.",
+  "coverage": {
+    "jitter": ["S01"],
+    "cooldown": ["S01", "S03"],
+    "ack": ["S04", "S05"],
+    "error_increase": ["S05"],
+    "retry": ["S06"],
+    "silence": ["S07", "S08", "S09"],
+    "recovery": ["S10", "S11"],
+    "aggregate": ["S12"]
+  },
+  "scenarios": [
+    {
+      "id": "S01-cooldown-jitter-suppress",
+      "config": {
+        "enabled": true,
+        "cooldown_minutes": 60,
+        "repeat_while_active": false,
+        "aggregate_by_host": false,
+        "notify_on_recovery": true,
+        "consecutive_periods": 1
+      },
+      "steps": [
+        {
+          "at": "2026-01-01T00:00:00Z",
+          "action": "process",
+          "accept": ["desktop"],
+          "events": [
+            {
+              "host_name": "web-1",
+              "category": "system",
+              "severity": "warning",
+              "title": "CPU 使用率过高",
+              "message": "CPU 使用率 95%，超过阈值 90%。",
+              "fingerprint": "system:web-1:cpu",
+              "reasons": []
+            }
+          ]
+        },
+        {
+          "at": "2026-01-01T00:05:00Z",
+          "action": "process",
+          "accept": ["desktop"],
+          "events": [
+            {
+              "host_name": "web-1",
+              "category": "system",
+              "severity": "warning",
+              "title": "CPU 使用率过高",
+              "message": "CPU 使用率 95%，超过阈值 90%。",
+              "fingerprint": "system:web-1:cpu",
+              "reasons": []
+            }
+          ]
+        },
+        {
+          "at": "2026-01-01T01:30:00Z",
+          "action": "process",
+          "accept": ["desktop"],
+          "events": [
+            {
+              "host_name": "web-1",
+              "category": "system",
+              "severity": "warning",
+              "title": "CPU 使用率过高",
+              "message": "CPU 使用率 95%，超过阈值 90%。",
+              "fingerprint": "system:web-1:cpu",
+              "reasons": []
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "S02-repeat-active-renotify",
+      "config": {
+        "enabled": true,
+        "cooldown_minutes": 60,
+        "repeat_while_active": true,
+        "aggregate_by_host": false,
+        "notify_on_recovery": true,
+        "consecutive_periods": 1
+      },
+      "steps": [
+        {
+          "at": "2026-01-01T00:00:00Z",
+          "action": "process",
+          "accept": ["desktop"],
+          "events": [
+            {
+              "host_name": "web-1",
+              "category": "system",
+              "severity": "warning",
+              "title": "CPU 使用率过高",
+              "message": "CPU 使用率 95%，超过阈值 90%。",
+              "fingerprint": "system:web-1:cpu",
+              "reasons": []
+            }
+          ]
+        },
+        {
+          "at": "2026-01-01T00:30:00Z",
+          "action": "process",
+          "accept": ["desktop"],
+          "events": [
+            {
+              "host_name": "web-1",
+              "category": "system",
+              "severity": "warning",
+              "title": "CPU 使用率过高",
+              "message": "CPU 使用率 95%，超过阈值 90%。",
+              "fingerprint": "system:web-1:cpu",
+              "reasons": []
+            }
+          ]
+        },
+        {
+          "at": "2026-01-01T01:05:00Z",
+          "action": "process",
+          "accept": ["desktop"],
+          "events": [
+            {
+              "host_name": "web-1",
+              "category": "system",
+              "severity": "warning",
+              "title": "CPU 使用率过高",
+              "message": "CPU 使用率 95%，超过阈值 90%。",
+              "fingerprint": "system:web-1:cpu",
+              "reasons": []
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "S03-severity-escalation",
+      "config": {
+        "enabled": true,
+        "cooldown_minutes": 60,
+        "repeat_while_active": false,
+        "aggregate_by_host": false,
+        "notify_on_recovery": true,
+        "consecutive_periods": 1
+      },
+      "steps": [
+        {
+          "at": "2026-01-01T00:00:00Z",
+          "action": "process",
+          "accept": ["desktop"],
+          "events": [
+            {
+              "host_name": "web-1",
+              "category": "system",
+              "severity": "warning",
+              "title": "CPU 使用率过高",
+              "message": "CPU 使用率 95%，超过阈值 90%。",
+              "fingerprint": "system:web-1:cpu",
+              "reasons": []
+            }
+          ]
+        },
+        {
+          "at": "2026-01-01T01:10:00Z",
+          "action": "process",
+          "accept": ["desktop"],
+          "events": [
+            {
+              "host_name": "web-1",
+              "category": "system",
+              "severity": "critical",
+              "title": "CPU 使用率严重过高",
+              "message": "CPU 使用率 99%，超过阈值 90%。",
+              "fingerprint": "system:web-1:cpu",
+              "reasons": []
+            }
+          ]
+        },
+        {
+          "at": "2026-01-01T02:30:00Z",
+          "action": "process",
+          "accept": ["desktop"],
+          "events": [
+            {
+              "host_name": "web-1",
+              "category": "system",
+              "severity": "warning",
+              "title": "CPU 使用率过高",
+              "message": "CPU 使用率 95%，超过阈值 90%。",
+              "fingerprint": "system:web-1:cpu",
+              "reasons": []
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "S04-ack-suppress",
+      "config": {
+        "enabled": true,
+        "cooldown_minutes": 60,
+        "repeat_while_active": false,
+        "aggregate_by_host": false,
+        "notify_on_recovery": true,
+        "consecutive_periods": 1
+      },
+      "steps": [
+        {
+          "at": "2026-01-01T00:00:00Z",
+          "action": "process",
+          "accept": ["desktop"],
+          "events": [
+            {
+              "host_name": "web-1",
+              "category": "system",
+              "severity": "warning",
+              "title": "CPU 使用率过高",
+              "message": "CPU 使用率 95%，超过阈值 90%。",
+              "fingerprint": "system:web-1:cpu",
+              "reasons": []
+            }
+          ]
+        },
+        {
+          "at": "2026-01-01T00:10:00Z",
+          "action": "ack",
+          "host": "web-1",
+          "category": "system"
+        },
+        {
+          "at": "2026-01-01T00:20:00Z",
+          "action": "process",
+          "accept": ["desktop"],
+          "events": [
+            {
+              "host_name": "web-1",
+              "category": "system",
+              "severity": "warning",
+              "title": "CPU 使用率过高",
+              "message": "CPU 使用率 95%，超过阈值 90%。",
+              "fingerprint": "system:web-1:cpu",
+              "reasons": []
+            }
+          ]
+        },
+        {
+          "at": "2026-01-01T03:00:00Z",
+          "action": "process",
+          "accept": ["desktop"],
+          "events": [
+            {
+              "host_name": "web-1",
+              "category": "system",
+              "severity": "warning",
+              "title": "CPU 使用率过高",
+              "message": "CPU 使用率 95%，超过阈值 90%。",
+              "fingerprint": "system:web-1:cpu",
+              "reasons": []
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "S05-error-increase-bypass-ack-and-cooldown",
+      "config": {
+        "enabled": true,
+        "cooldown_minutes": 60,
+        "repeat_while_active": false,
+        "aggregate_by_host": false,
+        "notify_on_recovery": true,
+        "consecutive_periods": 1
+      },
+      "steps": [
+        {
+          "at": "2026-01-01T00:00:00Z",
+          "action": "process",
+          "accept": ["desktop"],
+          "events": [
+            {
+              "host_name": "web-1",
+              "category": "system",
+              "severity": "warning",
+              "title": "CPU 使用率过高",
+              "message": "CPU 使用率 95%，超过阈值 90%。",
+              "fingerprint": "system:web-1:cpu",
+              "reasons": []
+            }
+          ]
+        },
+        {
+          "at": "2026-01-01T00:10:00Z",
+          "action": "ack",
+          "host": "web-1",
+          "category": "system"
+        },
+        {
+          "at": "2026-01-01T00:20:00Z",
+          "action": "process",
+          "accept": ["desktop"],
+          "events": [
+            {
+              "host_name": "web-1",
+              "category": "system",
+              "severity": "warning",
+              "title": "CPU 使用率过高",
+              "message": "CPU 使用率 95%，超过阈值 90%。",
+              "fingerprint": "system:web-1:cpu",
+              "reasons": ["error_increase"]
+            }
+          ]
+        },
+        {
+          "at": "2026-01-01T00:30:00Z",
+          "action": "process",
+          "accept": ["desktop"],
+          "events": [
+            {
+              "host_name": "web-1",
+              "category": "system",
+              "severity": "warning",
+              "title": "CPU 使用率过高",
+              "message": "CPU 使用率 95%，超过阈值 90%。",
+              "fingerprint": "system:web-1:cpu",
+              "reasons": ["error_increase"]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "S06-retry-unnotified",
+      "config": {
+        "enabled": true,
+        "cooldown_minutes": 60,
+        "repeat_while_active": false,
+        "aggregate_by_host": false,
+        "notify_on_recovery": true,
+        "consecutive_periods": 1
+      },
+      "steps": [
+        {
+          "at": "2026-01-01T00:00:00Z",
+          "action": "process",
+          "accept": [],
+          "events": [
+            {
+              "host_name": "web-1",
+              "category": "system",
+              "severity": "warning",
+              "title": "CPU 使用率过高",
+              "message": "CPU 使用率 95%，超过阈值 90%。",
+              "fingerprint": "system:web-1:cpu",
+              "reasons": []
+            }
+          ]
+        },
+        {
+          "at": "2026-01-01T00:05:00Z",
+          "action": "process",
+          "accept": ["desktop"],
+          "events": [
+            {
+              "host_name": "web-1",
+              "category": "system",
+              "severity": "warning",
+              "title": "CPU 使用率过高",
+              "message": "CPU 使用率 95%，超过阈值 90%。",
+              "fingerprint": "system:web-1:cpu",
+              "reasons": []
+            }
+          ]
+        },
+        {
+          "at": "2026-01-01T00:35:00Z",
+          "action": "process",
+          "accept": ["desktop"],
+          "events": [
+            {
+              "host_name": "web-1",
+              "category": "system",
+              "severity": "warning",
+              "title": "CPU 使用率过高",
+              "message": "CPU 使用率 95%，超过阈值 90%。",
+              "fingerprint": "system:web-1:cpu",
+              "reasons": []
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "S07-silence-host-window",
+      "config": {
+        "enabled": true,
+        "cooldown_minutes": 60,
+        "repeat_while_active": false,
+        "aggregate_by_host": false,
+        "notify_on_recovery": true,
+        "consecutive_periods": 1
+      },
+      "silences": [
+        {
+          "scopeType": "host",
+          "scope": "web-1",
+          "reason": "maintenance",
+          "startsAt": "2026-01-01T00:00:00+00:00",
+          "endsAt": "2026-01-01T12:00:00+00:00"
+        }
+      ],
+      "steps": [
+        {
+          "at": "2026-01-01T01:00:00Z",
+          "action": "process",
+          "accept": ["desktop"],
+          "events": [
+            {
+              "host_name": "web-1",
+              "category": "system",
+              "severity": "warning",
+              "title": "CPU 使用率过高",
+              "message": "CPU 使用率 95%，超过阈值 90%。",
+              "fingerprint": "system:web-1:cpu",
+              "reasons": []
+            }
+          ]
+        },
+        {
+          "at": "2026-01-01T13:00:00Z",
+          "action": "process",
+          "accept": ["desktop"],
+          "events": [
+            {
+              "host_name": "web-1",
+              "category": "system",
+              "severity": "warning",
+              "title": "CPU 使用率过高",
+              "message": "CPU 使用率 95%，超过阈值 90%。",
+              "fingerprint": "system:web-1:cpu",
+              "reasons": []
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "S08-silence-all",
+      "config": {
+        "enabled": true,
+        "cooldown_minutes": 60,
+        "repeat_while_active": false,
+        "aggregate_by_host": false,
+        "notify_on_recovery": true,
+        "consecutive_periods": 1
+      },
+      "silences": [
+        {
+          "scopeType": "all",
+          "scope": null,
+          "reason": "global-freeze",
+          "startsAt": "2026-01-01T00:00:00+00:00",
+          "endsAt": "2026-01-01T12:00:00+00:00"
+        }
+      ],
+      "steps": [
+        {
+          "at": "2026-01-01T01:00:00Z",
+          "action": "process",
+          "accept": ["desktop"],
+          "events": [
+            {
+              "host_name": "web-1",
+              "category": "system",
+              "severity": "warning",
+              "title": "CPU 使用率过高",
+              "message": "CPU 使用率 95%，超过阈值 90%。",
+              "fingerprint": "system:web-1:cpu",
+              "reasons": []
+            },
+            {
+              "host_name": "web-2",
+              "category": "system",
+              "severity": "warning",
+              "title": "内存使用率过高",
+              "message": "内存使用率 95%，超过阈值 90%。",
+              "fingerprint": "system:web-2:mem",
+              "reasons": []
+            }
+          ]
+        },
+        {
+          "at": "2026-01-01T13:00:00Z",
+          "action": "process",
+          "accept": ["desktop"],
+          "events": [
+            {
+              "host_name": "web-1",
+              "category": "system",
+              "severity": "warning",
+              "title": "CPU 使用率过高",
+              "message": "CPU 使用率 95%，超过阈值 90%。",
+              "fingerprint": "system:web-1:cpu",
+              "reasons": []
+            },
+            {
+              "host_name": "web-2",
+              "category": "system",
+              "severity": "warning",
+              "title": "内存使用率过高",
+              "message": "内存使用率 95%，超过阈值 90%。",
+              "fingerprint": "system:web-2:mem",
+              "reasons": []
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "S09-silence-group",
+      "config": {
+        "enabled": true,
+        "cooldown_minutes": 60,
+        "repeat_while_active": false,
+        "aggregate_by_host": false,
+        "notify_on_recovery": true,
+        "consecutive_periods": 1
+      },
+      "hostGroups": {
+        "web-1": ["prod"],
+        "web-2": ["staging"]
+      },
+      "silences": [
+        {
+          "scopeType": "group",
+          "scope": "prod",
+          "reason": "prod-maintenance",
+          "startsAt": "2026-01-01T00:00:00+00:00",
+          "endsAt": "2026-01-01T12:00:00+00:00"
+        }
+      ],
+      "steps": [
+        {
+          "at": "2026-01-01T01:00:00Z",
+          "action": "process",
+          "accept": ["desktop"],
+          "events": [
+            {
+              "host_name": "web-1",
+              "category": "system",
+              "severity": "warning",
+              "title": "CPU 使用率过高",
+              "message": "CPU 使用率 95%，超过阈值 90%。",
+              "fingerprint": "system:web-1:cpu",
+              "reasons": []
+            },
+            {
+              "host_name": "web-2",
+              "category": "system",
+              "severity": "warning",
+              "title": "内存使用率过高",
+              "message": "内存使用率 95%，超过阈值 90%。",
+              "fingerprint": "system:web-2:mem",
+              "reasons": []
+            }
+          ]
+        },
+        {
+          "at": "2026-01-01T13:00:00Z",
+          "action": "process",
+          "accept": ["desktop"],
+          "events": [
+            {
+              "host_name": "web-1",
+              "category": "system",
+              "severity": "warning",
+              "title": "CPU 使用率过高",
+              "message": "CPU 使用率 95%，超过阈值 90%。",
+              "fingerprint": "system:web-1:cpu",
+              "reasons": []
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "S10-recovery-resolve",
+      "config": {
+        "enabled": true,
+        "cooldown_minutes": 60,
+        "repeat_while_active": false,
+        "aggregate_by_host": false,
+        "notify_on_recovery": true,
+        "consecutive_periods": 1
+      },
+      "steps": [
+        {
+          "at": "2026-01-01T00:00:00Z",
+          "action": "process",
+          "accept": ["desktop"],
+          "events": [
+            {
+              "host_name": "web-1",
+              "category": "system",
+              "severity": "warning",
+              "title": "CPU 使用率过高",
+              "message": "CPU 使用率 95%，超过阈值 90%。",
+              "fingerprint": "system:web-1:cpu",
+              "reasons": []
+            }
+          ]
+        },
+        {
+          "at": "2026-01-01T00:10:00Z",
+          "action": "resolve",
+          "host": "web-1",
+          "category": "system",
+          "notify": true
+        }
+      ]
+    },
+    {
+      "id": "S11-recovery-resolve-missing",
+      "config": {
+        "enabled": true,
+        "cooldown_minutes": 60,
+        "repeat_while_active": false,
+        "aggregate_by_host": false,
+        "notify_on_recovery": true,
+        "consecutive_periods": 1
+      },
+      "steps": [
+        {
+          "at": "2026-01-01T00:00:00Z",
+          "action": "process",
+          "accept": ["desktop"],
+          "events": [
+            {
+              "host_name": "web-1",
+              "category": "system",
+              "severity": "warning",
+              "title": "CPU 使用率过高",
+              "message": "CPU 使用率 95%，超过阈值 90%。",
+              "fingerprint": "system:web-1:cpu",
+              "reasons": []
+            },
+            {
+              "host_name": "web-1",
+              "category": "disk",
+              "severity": "warning",
+              "title": "磁盘使用率过高",
+              "message": "磁盘 /var 使用率 95%，超过阈值 90%。",
+              "fingerprint": "disk:web-1:var",
+              "reasons": []
+            },
+            {
+              "host_name": "web-1",
+              "category": "user-added",
+              "severity": "info",
+              "title": "用户变更",
+              "message": "检测到新增用户 alice。",
+              "fingerprint": "user-added:web-1",
+              "reasons": []
+            }
+          ]
+        },
+        {
+          "at": "2026-01-01T00:10:00Z",
+          "action": "resolve_missing",
+          "host": "web-1",
+          "active_fingerprints": ["system:web-1:cpu"],
+          "category": null,
+          "skip_prefixes": ["user-added"],
+          "notify": true
+        }
+      ]
+    },
+    {
+      "id": "S12-aggregate-batch",
+      "config": {
+        "enabled": true,
+        "cooldown_minutes": 60,
+        "repeat_while_active": false,
+        "aggregate_by_host": true,
+        "notify_on_recovery": true,
+        "consecutive_periods": 1
+      },
+      "steps": [
+        {
+          "at": "2026-01-01T00:00:00Z",
+          "action": "process",
+          "accept": ["desktop", "email"],
+          "events": [
+            {
+              "host_name": "web-1",
+              "category": "system",
+              "severity": "warning",
+              "title": "CPU 使用率过高",
+              "message": "CPU 使用率 95%，超过阈值 90%。",
+              "fingerprint": "system:web-1:cpu",
+              "reasons": []
+            },
+            {
+              "host_name": "web-1",
+              "category": "system",
+              "severity": "critical",
+              "title": "内存使用率严重过高",
+              "message": "内存使用率 99%，超过阈值 90%。",
+              "fingerprint": "system:web-1:mem",
+              "reasons": []
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

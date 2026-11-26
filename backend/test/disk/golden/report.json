@@ -1,0 +1,309 @@
+{
+  "_commit": "1ca108c",
+  "_source": "report.json",
+  "entries": {
+    "coercion_mixed": {
+      "ok": true,
+      "value": {
+        "collected_at": "2026-04-18T12:00:00.900000+00:00",
+        "controllers": [
+          {
+            "bbu_state": null,
+            "controller": 0,
+            "firmware": null,
+            "health": "Healthy",
+            "model": null,
+            "reasons": [
+              "ok"
+            ]
+          },
+          {
+            "bbu_state": null,
+            "controller": 0,
+            "firmware": null,
+            "health": "unknown",
+            "model": "only-model",
+            "reasons": [
+              "a",
+              "b",
+              "c"
+            ]
+          }
+        ],
+        "host_name": "",
+        "message": null,
+        "physical_drives": [
+          {
+            "controller": 0,
+            "did": 9,
+            "enclosure": 252,
+            "health": "warning",
+            "media_errors": 2,
+            "model": "Samsung SSD",
+            "other_errors": null,
+            "predictive_failures": null,
+            "reasons": [
+              "media_errors"
+            ],
+            "serial": "SER1",
+            "shield_counter": 0,
+            "slot": 7,
+            "smart_alert": true,
+            "state": "Onln",
+            "temperature_c": 41
+          },
+          {
+            "controller": 0,
+            "did": null,
+            "enclosure": null,
+            "health": "unknown",
+            "media_errors": -1,
+            "model": null,
+            "other_errors": null,
+            "predictive_failures": null,
+            "reasons": [],
+            "serial": null,
+            "shield_counter": null,
+            "slot": null,
+            "smart_alert": false,
+            "state": null,
+            "temperature_c": null
+          },
+          {
+            "controller": 1,
+            "did": null,
+            "enclosure": null,
+            "health": "unknown",
+            "media_errors": null,
+            "model": null,
+            "other_errors": null,
+            "predictive_failures": null,
+            "reasons": [],
+            "serial": null,
+            "shield_counter": null,
+            "slot": null,
+            "smart_alert": null,
+            "state": null,
+            "temperature_c": null
+          }
+        ],
+        "status": "ok",
+        "virtual_drives": [
+          {
+            "controller": 1,
+            "health": "unknown",
+            "raid_level": "raid1",
+            "reasons": [],
+            "size": "1.2 TB",
+            "state": "Optl",
+            "vd_id": 3
+          },
+          {
+            "controller": 0,
+            "health": "unknown",
+            "raid_level": null,
+            "reasons": [],
+            "size": null,
+            "state": null,
+            "vd_id": 0
+          }
+        ]
+      }
+    },
+    "degraded": {
+      "ok": true,
+      "value": {
+        "collected_at": "2026-04-18T10:15:30+00:00",
+        "controllers": [
+          {
+            "bbu_state": "Optimal",
+            "controller": 0,
+            "firmware": "4.680.00-8486",
+            "health": "healthy",
+            "model": "MR9362-8i 1GB",
+            "reasons": []
+          },
+          {
+            "bbu_state": "Optimal",
+            "controller": 1,
+            "firmware": "4.680.00-8486",
+            "health": "healthy",
+            "model": "AVAGO MegaRAID SAS 9361-8i",
+            "reasons": []
+          }
+        ],
+        "host_name": "gpu-4090-02",
+        "message": "控制器 1 物理盘查询失败：Command timed out after 20s",
+        "physical_drives": [
+          {
+            "controller": 0,
+            "did": 11,
+            "enclosure": 252,
+            "health": "warning",
+            "media_errors": 4,
+            "model": "Samsung SSD 870 EVO 1TB",
+            "other_errors": 0,
+            "predictive_failures": 0,
+            "reasons": [
+              "media_errors"
+            ],
+            "serial": "S6PVNX0T205789Y",
+            "shield_counter": 0,
+            "slot": 3,
+            "smart_alert": false,
+            "state": "Onln",
+            "temperature_c": 41
+          },
+          {
+            "controller": 0,
+            "did": 12,
+            "enclosure": 252,
+            "health": "warning",
+            "media_errors": 0,
+            "model": "ST1200MM0088",
+            "other_errors": 2,
+            "predictive_failures": 0,
+            "reasons": [
+              "other_errors"
+            ],
+            "serial": "7LGCXXXX",
+            "shield_counter": 0,
+            "slot": 4,
+            "smart_alert": false,
+            "state": "Onln",
+            "temperature_c": 38
+          }
+        ],
+        "status": "degraded",
+        "virtual_drives": [
+          {
+            "controller": 0,
+            "health": "healthy",
+            "raid_level": "RAID1",
+            "reasons": [],
+            "size": "1.090 TB",
+            "state": "Optl",
+            "vd_id": 0
+          }
+        ]
+      }
+    },
+    "healthy": {
+      "ok": true,
+      "value": {
+        "collected_at": "2026-04-18T09:30:00.250000+00:00",
+        "controllers": [
+          {
+            "bbu_state": "Optimal",
+            "controller": 0,
+            "firmware": "4.680.00-8486",
+            "health": "healthy",
+            "model": "MR9362-8i 1GB",
+            "reasons": []
+          }
+        ],
+        "host_name": "gpu-4090-01",
+        "message": null,
+        "physical_drives": [
+          {
+            "controller": 0,
+            "did": 9,
+            "enclosure": 252,
+            "health": "healthy",
+            "media_errors": 0,
+            "model": "Samsung SSD 870 EVO 1TB",
+            "other_errors": 0,
+            "predictive_failures": 0,
+            "reasons": [],
+            "serial": "S6PVNX0T205787W",
+            "shield_counter": 0,
+            "slot": 0,
+            "smart_alert": false,
+            "state": "Onln",
+            "temperature_c": 33
+          },
+          {
+            "controller": 0,
+            "did": 10,
+            "enclosure": 252,
+            "health": "healthy",
+            "media_errors": 0,
+            "model": "Samsung SSD 870 EVO 1TB",
+            "other_errors": 0,
+            "predictive_failures": 0,
+            "reasons": [],
+            "serial": "S6PVNX0T205788X",
+            "shield_counter": 0,
+            "slot": 1,
+            "smart_alert": false,
+            "state": "Onln",
+            "temperature_c": 35
+          }
+        ],
+        "status": "ok",
+        "virtual_drives": [
+          {
+            "controller": 0,
+            "health": "healthy",
+            "raid_level": "RAID1",
+            "reasons": [],
+            "size": "1.090 TB",
+            "state": "Optl",
+            "vd_id": 0
+          }
+        ]
+      }
+    },
+    "no_virtual_drives": {
+      "ok": true,
+      "value": {
+        "collected_at": "2026-04-18T11:00:00.000001+00:00",
+        "controllers": [
+          {
+            "bbu_state": "iBBU",
+            "controller": 0,
+            "firmware": "25.5.6.0001",
+            "health": "healthy",
+            "model": "PERC H730 Mini",
+            "reasons": []
+          }
+        ],
+        "host_name": "gpu-a100-07",
+        "message": null,
+        "physical_drives": [
+          {
+            "controller": 0,
+            "did": 0,
+            "enclosure": 32,
+            "health": "healthy",
+            "media_errors": 0,
+            "model": "HGST HUH721010AL",
+            "other_errors": 0,
+            "predictive_failures": 0,
+            "reasons": [],
+            "serial": "7LGCYYYY",
+            "shield_counter": 4,
+            "slot": 0,
+            "smart_alert": false,
+            "state": "Onln",
+            "temperature_c": 29
+          }
+        ],
+        "status": "ok",
+        "virtual_drives": []
+      }
+    },
+    "permission_denied": {
+      "ok": true,
+      "value": {
+        "collected_at": "2026-04-18T12:45:00+00:00",
+        "controllers": [],
+        "host_name": "gpu-4090-09",
+        "message": "sudo 权限不足，无法以 root 运行 storcli；请在主机编辑中配置 sudo 密码，或配置免密 sudo 后重试。",
+        "physical_drives": [],
+        "status": "permission_denied",
+        "virtual_drives": []
+      }
+    }
+  }
+}

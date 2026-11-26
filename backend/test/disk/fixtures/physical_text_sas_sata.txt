@@ -1,0 +1,24 @@
+Drive /c0/e252/s3 - Detailed Information :
+Drive /c0/e252/s3 State :
+Media Error Count = 0
+Other Error Count = 0
+Predictive Failure Count = 0
+S.M.A.R.T alert flagged by drive = No
+Drive Temperature = 41C (105.80 F)
+Drive /c0/e252/s3 Device attributes :
+SN = S6PVNX0T205787W
+Manufacturer Id = ATA
+Model Number = Samsung SSD 870 EVO 1TB
+Drive Firmware Revision = SVT02B6Q
+Drive /c0/e252/s4 - Detailed Information :
+Drive /c0/e252/s4 State :
+Media Error Count = 0
+Other Error Count = 2
+Predictive Failure Count = 0
+S.M.A.R.T alert flagged by drive = No
+Drive Temperature = 45C (113.00 F)
+Drive /c0/e252/s4 Device attributes :
+SN = ZC21ABCD
+Manufacturer Id = SEAGATE
+Model Number = ST1200MM0088
+Drive Firmware Revision = ST44

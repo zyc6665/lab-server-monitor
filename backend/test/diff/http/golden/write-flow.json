@@ -1,0 +1,728 @@
+{
+  "_commit": "1ca108c",
+  "_source": "write-flow.json",
+  "entries": {
+    "frozenAtMs": 1795664117299,
+    "python": {
+      "dump": {
+        "alert_silences": [
+          {
+            "created_at": "<masked>",
+            "created_by": "admin",
+            "ends_at": "2026-12-24T08:00:00.666666+00:00",
+            "id": "<masked>",
+            "reason": "计划维护：RAID 扩容窗口",
+            "scope": "lab-02",
+            "scope_type": "host",
+            "starts_at": "2026-11-24T08:00:00.666666+00:00"
+          }
+        ],
+        "alerts": [
+          {
+            "ack_at": false,
+            "category": "system",
+            "created_at": "2026-11-23T09:00:00.111111+00:00",
+            "fingerprint": "lab-01:system:cpu_high",
+            "host_name": "lab-01",
+            "id": 1,
+            "message": "lab-01 CPU 使用率连续 3 个周期超过 90%",
+            "notified_channels": null,
+            "severity": "critical",
+            "status": "resolved",
+            "title": "CPU 使用率持续过高"
+          },
+          {
+            "ack_at": true,
+            "category": "disk",
+            "created_at": "2026-11-20T14:00:00.222222+00:00",
+            "fingerprint": "lab-02:disk:capacity",
+            "host_name": "lab-02",
+            "id": 2,
+            "message": "/data 挂载点使用率已达 88%",
+            "notified_channels": "desktop,email",
+            "severity": "warning",
+            "status": "acknowledged",
+            "title": "磁盘容量接近阈值"
+          },
+          {
+            "ack_at": true,
+            "category": "system",
+            "created_at": "2026-11-15T20:00:00.444444+00:00",
+            "fingerprint": "gpu-01:system:load_high",
+            "host_name": "gpu-01",
+            "id": 3,
+            "message": "gpu-01 15 分钟平均负载曾超过 48",
+            "notified_channels": "desktop",
+            "severity": "warning",
+            "status": "resolved",
+            "title": "系统负载偏高"
+          },
+          {
+            "ack_at": true,
+            "category": "disk",
+            "created_at": "2026-11-24T08:00:00.555555+00:00",
+            "fingerprint": "gpu-01:disk:temperature",
+            "host_name": "gpu-01",
+            "id": 4,
+            "message": "磁盘槽位 1 温度 54°C，接近告警阈值",
+            "notified_channels": null,
+            "severity": "warning",
+            "status": "acknowledged",
+            "title": "磁盘温度偏高"
+          }
+        ],
+        "app_secrets": [
+          "dashboard:admin_password",
+          "dashboard:session_secret"
+        ],
+        "app_settings": {
+          "alerts": {
+            "thresholds": {
+              "cpu_percent": 85
+            }
+          },
+          "hosts": {
+            "hosts": [
+              {
+                "alert_rules": null,
+                "allow_user_write": false,
+                "auth_type": "key",
+                "checks": [
+                  {
+                    "enabled": true,
+                    "expected": null,
+                    "name": "ssh-port",
+                    "target": "lab-01.lab.example.edu:22",
+                    "timeout_seconds": 5,
+                    "type": "tcp"
+                  }
+                ],
+                "disk_health": null,
+                "disk_mounts": [
+                  "/"
+                ],
+                "group": "lab",
+                "host": "lab-01.lab.example.edu",
+                "key_path": "\\home\\monitor\\.ssh\\id_rsa",
+                "location": "Lab",
+                "name": "lab-01",
+                "notes": "",
+                "owner": "ops",
+                "port": 22,
+                "tags": [
+                  "lab",
+                  "cpu"
+                ],
+                "user_monitoring": null,
+                "username": "monitor"
+              },
+              {
+                "alert_rules": null,
+                "allow_user_write": false,
+                "auth_type": "key",
+                "checks": [],
+                "disk_health": null,
+                "disk_mounts": [
+                  "/"
+                ],
+                "group": "lab",
+                "host": "lab-02.lab.example.edu",
+                "key_path": "\\home\\monitor\\.ssh\\id_rsa",
+                "location": "Lab",
+                "name": "lab-02",
+                "notes": "",
+                "owner": "ops",
+                "port": 22,
+                "tags": [
+                  "lab"
+                ],
+                "user_monitoring": null,
+                "username": "monitor"
+              },
+              {
+                "alert_rules": null,
+                "allow_user_write": false,
+                "auth_type": "key",
+                "checks": [],
+                "disk_health": null,
+                "disk_mounts": [
+                  "/",
+                  "/data"
+                ],
+                "group": "lab",
+                "host": "gpu-01.lab.example.edu",
+                "key_path": "\\home\\monitor\\.ssh\\id_rsa",
+                "location": "Lab",
+                "name": "gpu-01",
+                "notes": "",
+                "owner": "ops",
+                "port": 22,
+                "tags": [
+                  "lab",
+                  "gpu"
+                ],
+                "user_monitoring": null,
+                "username": "monitor"
+              }
+            ]
+          },
+          "monitoring": {
+            "poll_interval_seconds": 300,
+            "timezone": "Asia/Shanghai"
+          },
+          "security": {
+            "machine_id": "0a75f370c38a22ad0a60b6cd77b3334dc4b817d0081e71ba45b6264cc129af78",
+            "migrated_at": "2026-11-26T03:35:18.036220+00:00",
+            "sudo_migrated_at": "2026-11-26T03:35:17.933664+00:00"
+          }
+        },
+        "host_check_history": [
+          {
+            "check_name": "ssh-port",
+            "checked_at": "<set>",
+            "host_name": "lab-01",
+            "latency_ms": 12.5,
+            "status": "ok"
+          }
+        ],
+        "host_check_snapshot": [
+          {
+            "check_name": "ssh-port",
+            "check_type": "tcp",
+            "checked_at": "<set>",
+            "host_name": "lab-01",
+            "latency_ms": 12.5,
+            "message": "stub",
+            "status": "ok",
+            "target": "lab-01.lab.example.edu:22"
+          }
+        ],
+        "host_latest_snapshot": [
+          {
+            "collected_at": "2026-11-25T12:00:00.123456+00:00",
+            "host_name": "gpu-01",
+            "raw_json": {
+              "checks": [],
+              "errors": [],
+              "host": "gpu-01.lab.example.edu",
+              "host_name": "gpu-01",
+              "metrics": {
+                "collected_at": "2026-11-25T12:00:00.123456+00:00",
+                "containers": [],
+                "cpu_core_count": 64,
+                "cpu_usage_percent": 74.9,
+                "disk_usage": [
+                  {
+                    "available": "174G",
+                    "filesystem": "/dev/sda1",
+                    "mountpoint": "/",
+                    "percent": "65%",
+                    "size": "500G",
+                    "used": "325G"
+                  },
+                  {
+                    "available": "664G",
+                    "filesystem": "/dev/sdb1",
+                    "mountpoint": "/data",
+                    "percent": "83%",
+                    "size": "4000G",
+                    "used": "3335G"
+                  }
+                ],
+                "gpu_processes": [],
+                "gpu_summary": [
+                  {
+                    "index": 0,
+                    "memory_total_mb": 81920,
+                    "memory_used_mb": 32499,
+                    "name": "NVIDIA A100-SXM4-80GB",
+                    "temperature_c": 49,
+                    "utilization_percent": 60
+                  },
+                  {
+                    "index": 1,
+                    "memory_total_mb": 81920,
+                    "memory_used_mb": 28785,
+                    "name": "NVIDIA A100-SXM4-80GB",
+                    "temperature_c": 47,
+                    "utilization_percent": 50
+                  }
+                ],
+                "hostname": "gpu-01.lab.example.edu",
+                "kernel_version": "6.8.0-45-generic",
+                "load_average": {
+                  "load_1": 43.14,
+                  "load_15": 30.2,
+                  "load_5": 36.67
+                },
+                "logged_in_users": [],
+                "memory": {
+                  "available_mb": 114170,
+                  "buff_cache_mb": 20971,
+                  "free_mb": 93199,
+                  "shared_mb": 2621,
+                  "swap_free_mb": 62260,
+                  "swap_total_mb": 65536,
+                  "swap_used_mb": 3276,
+                  "total_mb": 262144,
+                  "used_mb": 168945
+                },
+                "net_rx_bytes": 3335000000,
+                "net_tx_bytes": 1523000000,
+                "os_pretty_name": "Ubuntu 24.04.1 LTS",
+                "process_counts_by_user": [],
+                "thermal_zones": [
+                  {
+                    "celsius": 58.7,
+                    "label": "cpu"
+                  }
+                ],
+                "top_cpu_processes": [],
+                "top_memory_processes": [],
+                "total_processes": 249,
+                "uptime": "209 days, 4:32"
+              },
+              "success": true,
+              "users": []
+            },
+            "success": 1
+          },
+          {
+            "collected_at": "2026-11-25T12:00:00.123456+00:00",
+            "host_name": "lab-01",
+            "raw_json": {
+              "checks": [],
+              "errors": [],
+              "host": "lab-01.lab.example.edu",
+              "host_name": "lab-01",
+              "metrics": {
+                "collected_at": "2026-11-25T12:00:00.123456+00:00",
+                "containers": [],
+                "cpu_core_count": 16,
+                "cpu_usage_percent": 55.6,
+                "disk_usage": [
+                  {
+                    "available": "237G",
+                    "filesystem": "/dev/sda1",
+                    "mountpoint": "/",
+                    "percent": "52%",
+                    "size": "500G",
+                    "used": "262G"
+                  },
+                  {
+                    "available": "1222G",
+                    "filesystem": "/dev/sdb1",
+                    "mountpoint": "/data",
+                    "percent": "69%",
+                    "size": "4000G",
+                    "used": "2777G"
+                  }
+                ],
+                "gpu_processes": [],
+                "gpu_summary": [
+                  {
+                    "index": 0,
+                    "memory_total_mb": 16384,
+                    "memory_used_mb": 4085,
+                    "name": "NVIDIA T4",
+                    "temperature_c": 36,
+                    "utilization_percent": 7
+                  }
+                ],
+                "hostname": "lab-01.lab.example.edu",
+                "kernel_version": "6.8.0-45-generic",
+                "load_average": {
+                  "load_1": 8.01,
+                  "load_15": 5.61,
+                  "load_5": 6.81
+                },
+                "logged_in_users": [],
+                "memory": {
+                  "available_mb": 34634,
+                  "buff_cache_mb": 5242,
+                  "free_mb": 29392,
+                  "shared_mb": 655,
+                  "swap_free_mb": 15565,
+                  "swap_total_mb": 16384,
+                  "swap_used_mb": 819,
+                  "total_mb": 65536,
+                  "used_mb": 36144
+                },
+                "net_rx_bytes": 3335000000,
+                "net_tx_bytes": 1523000000,
+                "os_pretty_name": "Ubuntu 24.04.1 LTS",
+                "process_counts_by_user": [],
+                "thermal_zones": [
+                  {
+                    "celsius": 53.9,
+                    "label": "cpu"
+                  }
+                ],
+                "top_cpu_processes": [],
+                "top_memory_processes": [],
+                "total_processes": 201,
+                "uptime": "209 days, 4:32"
+              },
+              "success": true,
+              "users": []
+            },
+            "success": 1
+          },
+          {
+            "collected_at": "2026-11-25T12:00:00.123456+00:00",
+            "host_name": "lab-02",
+            "raw_json": {
+              "checks": [],
+              "errors": [],
+              "host": "lab-02.lab.example.edu",
+              "host_name": "lab-02",
+              "metrics": {
+                "collected_at": "2026-11-25T12:00:00.123456+00:00",
+                "containers": [],
+                "cpu_core_count": 32,
+                "cpu_usage_percent": 57.5,
+                "disk_usage": [
+                  {
+                    "available": "206G",
+                    "filesystem": "/dev/sda1",
+                    "mountpoint": "/",
+                    "percent": "58%",
+                    "size": "500G",
+                    "used": "293G"
+                  },
+                  {
+                    "available": "928G",
+                    "filesystem": "/dev/sdb1",
+                    "mountpoint": "/data",
+                    "percent": "76%",
+                    "size": "4000G",
+                    "used": "3071G"
+                  }
+                ],
+                "gpu_processes": [],
+                "gpu_summary": [
+                  {
+                    "index": 0,
+                    "memory_total_mb": 16384,
+                    "memory_used_mb": 5199,
+                    "name": "NVIDIA RTX A4000",
+                    "temperature_c": 40,
+                    "utilization_percent": 10
+                  }
+                ],
+                "hostname": "lab-02.lab.example.edu",
+                "kernel_version": "5.15.0-119-generic",
+                "load_average": {
+                  "load_1": 16.57,
+                  "load_15": 11.6,
+                  "load_5": 14.08
+                },
+                "logged_in_users": [],
+                "memory": {
+                  "available_mb": 63441,
+                  "buff_cache_mb": 10485,
+                  "free_mb": 52956,
+                  "shared_mb": 1310,
+                  "swap_free_mb": 31130,
+                  "swap_total_mb": 32768,
+                  "swap_used_mb": 1638,
+                  "total_mb": 131072,
+                  "used_mb": 78116
+                },
+                "net_rx_bytes": 3335000000,
+                "net_tx_bytes": 1523000000,
+                "os_pretty_name": "Ubuntu 22.04.4 LTS",
+                "process_counts_by_user": [],
+                "thermal_zones": [
+                  {
+                    "celsius": 54.4,
+                    "label": "cpu"
+                  }
+                ],
+                "top_cpu_processes": [],
+                "top_memory_processes": [],
+                "total_processes": 217,
+                "uptime": "209 days, 4:32"
+              },
+              "success": true,
+              "users": []
+            },
+            "success": 1
+          }
+        ]
+      },
+      "responses": [
+        {
+          "json": null,
+          "name": "login",
+          "status": 302
+        },
+        {
+          "json": {
+            "ok": true,
+            "restart_required": false
+          },
+          "name": "a_monitoring",
+          "status": 200
+        },
+        {
+          "json": {
+            "ok": true,
+            "restart_required": false
+          },
+          "name": "b_alerts",
+          "status": 200
+        },
+        {
+          "json": {
+            "id": 2,
+            "ok": true
+          },
+          "name": "c_silence_add",
+          "status": 200
+        },
+        {
+          "json": {
+            "alerts": [
+              {
+                "ack_at": null,
+                "category": "disk",
+                "created_at": "2026-11-24T16:00:00.555555+08:00",
+                "fingerprint": "gpu-01:disk:temperature",
+                "host_name": "gpu-01",
+                "id": 4,
+                "message": "磁盘槽位 1 温度 54°C，接近告警阈值",
+                "notified_channels": null,
+                "severity": "warning",
+                "status": "active",
+                "title": "磁盘温度偏高"
+              },
+              {
+                "ack_at": null,
+                "category": "system",
+                "created_at": "2026-11-23T17:00:00.111111+08:00",
+                "fingerprint": "lab-01:system:cpu_high",
+                "host_name": "lab-01",
+                "id": 1,
+                "message": "lab-01 CPU 使用率连续 3 个周期超过 90%",
+                "notified_channels": null,
+                "severity": "critical",
+                "status": "resolved",
+                "title": "CPU 使用率持续过高"
+              },
+              {
+                "ack_at": "2026-11-21T10:00:00.333333+00:00",
+                "category": "disk",
+                "created_at": "2026-11-20T22:00:00.222222+08:00",
+                "fingerprint": "lab-02:disk:capacity",
+                "host_name": "lab-02",
+                "id": 2,
+                "message": "/data 挂载点使用率已达 88%",
+                "notified_channels": "desktop,email",
+                "severity": "warning",
+                "status": "acknowledged",
+                "title": "磁盘容量接近阈值"
+              },
+              {
+                "ack_at": "2026-11-16T08:00:00.555555+00:00",
+                "category": "system",
+                "created_at": "2026-11-16T04:00:00.444444+08:00",
+                "fingerprint": "gpu-01:system:load_high",
+                "host_name": "gpu-01",
+                "id": 3,
+                "message": "gpu-01 15 分钟平均负载曾超过 48",
+                "notified_channels": "desktop",
+                "severity": "warning",
+                "status": "resolved",
+                "title": "系统负载偏高"
+              }
+            ],
+            "counts": {
+              "acknowledged": 1,
+              "active": 1,
+              "resolved": 2,
+              "total": 4
+            }
+          },
+          "name": "c_alerts_after_silence",
+          "status": 200
+        },
+        {
+          "json": {
+            "ok": true
+          },
+          "name": "c_silence_delete",
+          "status": 200
+        },
+        {
+          "json": {
+            "ok": true
+          },
+          "name": "d_ack",
+          "status": 200
+        },
+        {
+          "json": {
+            "ok": true
+          },
+          "name": "e_host_add",
+          "status": 200
+        },
+        {
+          "json": {
+            "hosts": [
+              {
+                "alert_rules": null,
+                "allow_user_write": false,
+                "auth_type": "key",
+                "checks": [
+                  {
+                    "enabled": true,
+                    "expected": null,
+                    "name": "ssh-port",
+                    "target": "lab-01.lab.example.edu:22",
+                    "timeout_seconds": 5,
+                    "type": "tcp"
+                  }
+                ],
+                "disk_health": null,
+                "disk_mounts": [
+                  "/"
+                ],
+                "group": "lab",
+                "host": "lab-01.lab.example.edu",
+                "key_configured": true,
+                "key_path": "\\home\\monitor\\.ssh\\id_rsa",
+                "location": "Lab",
+                "name": "lab-01",
+                "notes": "",
+                "owner": "ops",
+                "passphrase_configured": false,
+                "password_configured": false,
+                "port": 22,
+                "sudo_configured": false,
+                "tags": [
+                  "lab",
+                  "cpu"
+                ],
+                "user_monitoring": null,
+                "username": "monitor"
+              },
+              {
+                "alert_rules": null,
+                "allow_user_write": false,
+                "auth_type": "key",
+                "checks": [],
+                "disk_health": null,
+                "disk_mounts": [
+                  "/"
+                ],
+                "group": "lab",
+                "host": "lab-02.lab.example.edu",
+                "key_configured": true,
+                "key_path": "\\home\\monitor\\.ssh\\id_rsa",
+                "location": "Lab",
+                "name": "lab-02",
+                "notes": "",
+                "owner": "ops",
+                "passphrase_configured": false,
+                "password_configured": false,
+                "port": 22,
+                "sudo_configured": false,
+                "tags": [
+                  "lab"
+                ],
+                "user_monitoring": null,
+                "username": "monitor"
+              },
+              {
+                "alert_rules": null,
+                "allow_user_write": false,
+                "auth_type": "key",
+                "checks": [],
+                "disk_health": null,
+                "disk_mounts": [
+                  "/",
+                  "/data"
+                ],
+                "group": "lab",
+                "host": "gpu-01.lab.example.edu",
+                "key_configured": true,
+                "key_path": "\\home\\monitor\\.ssh\\id_rsa",
+                "location": "Lab",
+                "name": "gpu-01",
+                "notes": "",
+                "owner": "ops",
+                "passphrase_configured": false,
+                "password_configured": false,
+                "port": 22,
+                "sudo_configured": false,
+                "tags": [
+                  "lab",
+                  "gpu"
+                ],
+                "user_monitoring": null,
+                "username": "monitor"
+              },
+              {
+                "alert_rules": null,
+                "allow_user_write": false,
+                "auth_type": "key",
+                "checks": [],
+                "disk_health": null,
+                "disk_mounts": [
+                  "/",
+                  "/data"
+                ],
+                "group": "lab",
+                "host": "lab-03.lab.example.edu",
+                "key_configured": true,
+                "key_path": "/home/monitor/.ssh/id_rsa",
+                "location": "",
+                "name": "lab-03",
+                "notes": "",
+                "owner": "",
+                "passphrase_configured": false,
+                "password_configured": false,
+                "port": 22,
+                "sudo_configured": false,
+                "tags": [
+                  "lab"
+                ],
+                "user_monitoring": null,
+                "username": "monitor"
+              }
+            ]
+          },
+          "name": "e_hosts_after_add",
+          "status": 200
+        },
+        {
+          "json": {
+            "ok": true
+          },
+          "name": "e_host_delete",
+          "status": 200
+        },
+        {
+          "json": {
+            "checked_at": "2026-11-26T03:35:18.887284+00:00",
+            "checks": [
+              {
+                "latency_ms": 12.5,
+                "message": "stub",
+                "name": "ssh-port",
+                "status": "ok",
+                "target": "lab-01.lab.example.edu:22",
+                "type": "tcp"
+              }
+            ],
+            "ok": true
+          },
+          "name": "f_checks_run",
+          "status": 200
+        }
+      ]
+    }
+  }
+}

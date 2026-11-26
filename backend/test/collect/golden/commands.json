@@ -1,0 +1,29 @@
+{
+  "_commit": "1ca108c",
+  "_source": "commands.json",
+  "entries": {
+    "build_command_map": {
+      "cpu_cores": "nproc",
+      "cpu_usage": "sh -c 'read _ u1 n1 s1 i1 io1 ir1 si1 st1 _ < /proc/stat; sleep 1; read _ u2 n2 s2 i2 io2 ir2 si2 st2 _ < /proc/stat; idle=$((i2+io2-i1-io1)); total=$((u2+n2+s2+i2+io2+ir2+si2+st2-u1-n1-s1-i1-io1-ir1-si1-st1)); if [ \"$total\" -le 0 ]; then printf \"0.0\\n\"; else awk -v idle=\"$idle\" -v total=\"$total\" \"BEGIN { printf \\\"%.1f\\\\n\\\", (1 - idle / total) * 100 }\"; fi'",
+      "disk": "df -hP",
+      "docker_containers": "docker ps --no-trunc --format '{{.ID}}\t{{.Names}}'",
+      "docker_status": "docker ps --no-trunc --format '{{.Names}}\t{{.Image}}\t{{.State}}\t{{.Status}}'",
+      "gpu_processes": "nvidia-smi --query-compute-apps=gpu_uuid,pid,used_memory,process_name --format=csv,noheader,nounits",
+      "gpu_summary": "nvidia-smi --query-gpu=index,name,utilization.gpu,temperature.gpu,memory.used,memory.total,uuid --format=csv,noheader,nounits",
+      "hostname": "hostname",
+      "kernel": "uname -r",
+      "memory": "free -m",
+      "net": "awk -F'[: ]+' 'NR>2 && $2 != \"lo\" {rx += $3; tx += $11} END {printf \"%.0f %.0f\\n\", rx, tx}' /proc/net/dev",
+      "os_release": "awk -F= '/^PRETTY_NAME=/{gsub(/\"/,\"\",$2); print $2}' /etc/os-release",
+      "pid_container_map": "sh -c 'for proc in /proc/[0-9]*; do pid=${proc#/proc/}; [ -r \"$proc/cgroup\" ] || continue; line=$(grep -m1 -E \"/docker/[0-9a-f]{12,64}|docker-[0-9a-f]{12,64}\\\\.scope\" \"$proc/cgroup\" 2>/dev/null || true); [ -n \"$line\" ] || continue; printf \"%s\\t%s\\n\" \"$pid\" \"$line\"; done'",
+      "pid_user_map": "ps -eo pid=,user=,args=",
+      "process_counts": "ps -eo user= | sort | uniq -c | sort -nr",
+      "thermal": "for f in /sys/class/thermal/thermal_zone*/temp; do [ -r \"$f\" ] && printf '%s\t%s\n' \"$(cat \"$(dirname \"$f\")/type\" 2>/dev/null)\" \"$(cat \"$f\")\"; done 2>/dev/null",
+      "top_cpu": "ps -eo user=,pid=,%cpu=,%mem=,etime=,args= --sort=-%cpu | head -n 10",
+      "top_memory": "ps -eo user=,pid=,%cpu=,%mem=,etime=,args= --sort=-%mem | head -n 10",
+      "total_processes": "ps -e --no-headers | wc -l",
+      "uptime": "uptime",
+      "who": "who"
+    }
+  }
+}

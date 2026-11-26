@@ -1,32 +1,19 @@
-# Python caches
-__pycache__/
-*.py[cod]
-*.pyo
-
 # Test and coverage artifacts
-.pytest_cache/
-.coverage
-.coverage.*
-htmlcov/
+
+# Node dependencies (root + backend workspace)
+node_modules/
 
 # Build artifacts
 build/
 dist/
-*.egg-info/
 
 # Desktop build outputs
 desktop/node_modules/
 desktop/release-electron/
-desktop/build/portable/
 release/
 .tmp/
 .superpowers/
 samples/
-
-# Virtual environments
-.venv/
-venv/
-env/
 
 # Local runtime files
 logs/
@@ -38,7 +25,6 @@ data/*
 # (an untracked servermonitor-main/ copy once confused the packaging script root detection)
 servermonitor-main/
 backup_*/
-.tmp-upd/
 
 # Local configuration and secrets
 .env
@@ -49,3 +35,5 @@ ssh/
 .DS_Store
 .idea/
 .vscode/
+desktop/vendor/
+desktop/.vendor-stage/

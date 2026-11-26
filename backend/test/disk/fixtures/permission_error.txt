@@ -1,0 +1,2 @@
+Failed to run storcli: sudo: interactive authentication is required
+storcli: error - Permission denied while opening the controller device

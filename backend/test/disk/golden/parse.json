@@ -1,0 +1,429 @@
+{
+  "_commit": "1ca108c",
+  "_source": "parse.json",
+  "entries": {
+    "controllers|controllers_4090_multi.json|": {
+      "ok": true,
+      "value": [
+        {
+          "bbu_state": null,
+          "controller": 0,
+          "firmware": "4.220.80-6461",
+          "health": "unknown",
+          "model": "MR9362-8i 1GB",
+          "reasons": []
+        },
+        {
+          "bbu_state": null,
+          "controller": 1,
+          "firmware": "4.680.00-8577",
+          "health": "unknown",
+          "model": "AVAGO MegaRAID SAS 9361-8i",
+          "reasons": []
+        }
+      ]
+    },
+    "controllers|controllers_top_level_array.json|": {
+      "error": "StorcliParseError",
+      "message": "storcli JSON is not an object",
+      "ok": false
+    },
+    "controllers|controllers_top_level_object.json|": {
+      "ok": true,
+      "value": [
+        {
+          "bbu_state": "Optimal",
+          "controller": 0,
+          "firmware": "25.5.6.0001",
+          "health": "unknown",
+          "model": "PERC H730 Mini",
+          "reasons": []
+        },
+        {
+          "bbu_state": "iBBU",
+          "controller": 1,
+          "firmware": "4.680.00-8561",
+          "health": "unknown",
+          "model": "MegaRAID SAS 9361-8i",
+          "reasons": []
+        }
+      ]
+    },
+    "physical_text|physical_text_abnormal.txt|": {
+      "ok": true,
+      "value": [
+        {
+          "controller": 0,
+          "did": null,
+          "enclosure": 252,
+          "health": "unknown",
+          "media_errors": 2,
+          "model": null,
+          "other_errors": 0,
+          "predictive_failures": 0,
+          "reasons": [],
+          "serial": null,
+          "shield_counter": null,
+          "slot": 12,
+          "smart_alert": true,
+          "state": null,
+          "temperature_c": 38
+        },
+        {
+          "controller": 0,
+          "did": null,
+          "enclosure": 252,
+          "health": "unknown",
+          "media_errors": null,
+          "model": "HGST HUH721010AL",
+          "other_errors": null,
+          "predictive_failures": null,
+          "reasons": [],
+          "serial": "7LGCXXXX",
+          "shield_counter": 4,
+          "slot": 13,
+          "smart_alert": null,
+          "state": null,
+          "temperature_c": null
+        }
+      ]
+    },
+    "physical_text|physical_text_sas_sata.txt|": {
+      "ok": true,
+      "value": [
+        {
+          "controller": 0,
+          "did": null,
+          "enclosure": 252,
+          "health": "unknown",
+          "media_errors": 0,
+          "model": "Samsung SSD 870 EVO 1TB",
+          "other_errors": 0,
+          "predictive_failures": 0,
+          "reasons": [],
+          "serial": "S6PVNX0T205787W",
+          "shield_counter": null,
+          "slot": 3,
+          "smart_alert": false,
+          "state": null,
+          "temperature_c": 41
+        },
+        {
+          "controller": 0,
+          "did": null,
+          "enclosure": 252,
+          "health": "unknown",
+          "media_errors": 0,
+          "model": "ST1200MM0088",
+          "other_errors": 2,
+          "predictive_failures": 0,
+          "reasons": [],
+          "serial": "ZC21ABCD",
+          "shield_counter": null,
+          "slot": 4,
+          "smart_alert": false,
+          "state": null,
+          "temperature_c": 45
+        }
+      ]
+    },
+    "physical|permission_error.txt|": {
+      "error": "StorcliParseError",
+      "message": "unable to parse storcli physical drive output as JSON or text",
+      "ok": false
+    },
+    "physical|physical_4090_c0.json|": {
+      "ok": true,
+      "value": [
+        {
+          "controller": 0,
+          "did": 20,
+          "enclosure": 252,
+          "health": "unknown",
+          "media_errors": 0,
+          "model": "WUH721816ALE6L4",
+          "other_errors": 0,
+          "predictive_failures": 0,
+          "reasons": [],
+          "serial": "2VHD9AKM",
+          "shield_counter": 0,
+          "slot": 0,
+          "smart_alert": false,
+          "state": "Onln",
+          "temperature_c": 27
+        },
+        {
+          "controller": 0,
+          "did": 21,
+          "enclosure": 252,
+          "health": "unknown",
+          "media_errors": 0,
+          "model": "WUH721816ALE6L4",
+          "other_errors": 0,
+          "predictive_failures": 0,
+          "reasons": [],
+          "serial": "4MHWDL5Y",
+          "shield_counter": 0,
+          "slot": 1,
+          "smart_alert": false,
+          "state": "Onln",
+          "temperature_c": 29
+        },
+        {
+          "controller": 0,
+          "did": 22,
+          "enclosure": 252,
+          "health": "unknown",
+          "media_errors": 0,
+          "model": "WUH721816ALE6L4",
+          "other_errors": 0,
+          "predictive_failures": 0,
+          "reasons": [],
+          "serial": "4MHW072Y",
+          "shield_counter": 0,
+          "slot": 2,
+          "smart_alert": false,
+          "state": "Onln",
+          "temperature_c": 28
+        },
+        {
+          "controller": 0,
+          "did": 23,
+          "enclosure": 252,
+          "health": "unknown",
+          "media_errors": 0,
+          "model": "WUH721816ALE6L4",
+          "other_errors": 0,
+          "predictive_failures": 0,
+          "reasons": [],
+          "serial": "2VHDJYGM",
+          "shield_counter": 0,
+          "slot": 3,
+          "smart_alert": false,
+          "state": "Onln",
+          "temperature_c": 29
+        },
+        {
+          "controller": 0,
+          "did": 24,
+          "enclosure": 252,
+          "health": "unknown",
+          "media_errors": 0,
+          "model": "WUH721816ALE6L4",
+          "other_errors": 0,
+          "predictive_failures": 0,
+          "reasons": [],
+          "serial": "2PHKEY1T",
+          "shield_counter": 0,
+          "slot": 4,
+          "smart_alert": false,
+          "state": "Onln",
+          "temperature_c": 27
+        },
+        {
+          "controller": 0,
+          "did": 25,
+          "enclosure": 252,
+          "health": "unknown",
+          "media_errors": 0,
+          "model": "WUH721816ALE6L4",
+          "other_errors": 0,
+          "predictive_failures": 0,
+          "reasons": [],
+          "serial": "3JH606PG",
+          "shield_counter": 0,
+          "slot": 5,
+          "smart_alert": false,
+          "state": "Onln",
+          "temperature_c": 29
+        }
+      ]
+    },
+    "physical|physical_4090_c1.json|": {
+      "ok": true,
+      "value": [
+        {
+          "controller": 1,
+          "did": 0,
+          "enclosure": 252,
+          "health": "unknown",
+          "media_errors": 0,
+          "model": "INTEL SSDSC2KB960GZ",
+          "other_errors": 0,
+          "predictive_failures": 0,
+          "reasons": [],
+          "serial": "PHYI244402P0960CGN",
+          "shield_counter": 0,
+          "slot": 4,
+          "smart_alert": false,
+          "state": "Onln",
+          "temperature_c": 29
+        },
+        {
+          "controller": 1,
+          "did": 1,
+          "enclosure": 252,
+          "health": "unknown",
+          "media_errors": 0,
+          "model": "INTEL SSDSC2KB960GZ",
+          "other_errors": 0,
+          "predictive_failures": 0,
+          "reasons": [],
+          "serial": "PHYI328100PM960CGN",
+          "shield_counter": 0,
+          "slot": 5,
+          "smart_alert": false,
+          "state": "Onln",
+          "temperature_c": 29
+        }
+      ]
+    },
+    "physical|physical_a100_c0.json|": {
+      "ok": true,
+      "value": [
+        {
+          "controller": 0,
+          "did": 9,
+          "enclosure": 252,
+          "health": "unknown",
+          "media_errors": 0,
+          "model": "Samsung SSD 870 EVO 1TB",
+          "other_errors": 0,
+          "predictive_failures": 0,
+          "reasons": [],
+          "serial": "S6PVNX0T205787W",
+          "shield_counter": 0,
+          "slot": 0,
+          "smart_alert": false,
+          "state": "Onln",
+          "temperature_c": 27
+        },
+        {
+          "controller": 0,
+          "did": 11,
+          "enclosure": 252,
+          "health": "unknown",
+          "media_errors": 0,
+          "model": "Samsung SSD 870 EVO 1TB",
+          "other_errors": 0,
+          "predictive_failures": 0,
+          "reasons": [],
+          "serial": "S6PVNX0T200870D",
+          "shield_counter": 0,
+          "slot": 1,
+          "smart_alert": false,
+          "state": "Onln",
+          "temperature_c": 26
+        },
+        {
+          "controller": 0,
+          "did": 6,
+          "enclosure": 252,
+          "health": "unknown",
+          "media_errors": 0,
+          "model": "HGST HUS728T8TALE6L4",
+          "other_errors": 0,
+          "predictive_failures": 0,
+          "reasons": [],
+          "serial": "VYG2DT9M",
+          "shield_counter": 0,
+          "slot": 2,
+          "smart_alert": false,
+          "state": "Onln",
+          "temperature_c": 31
+        },
+        {
+          "controller": 0,
+          "did": 7,
+          "enclosure": 252,
+          "health": "unknown",
+          "media_errors": 0,
+          "model": "HGST HUS728T8TALE6L4",
+          "other_errors": 0,
+          "predictive_failures": 0,
+          "reasons": [],
+          "serial": "VYG32K3M",
+          "shield_counter": 0,
+          "slot": 3,
+          "smart_alert": false,
+          "state": "Onln",
+          "temperature_c": 31
+        },
+        {
+          "controller": 0,
+          "did": 10,
+          "enclosure": 252,
+          "health": "unknown",
+          "media_errors": 0,
+          "model": "HGST HUS728T8TALE6L4",
+          "other_errors": 0,
+          "predictive_failures": 0,
+          "reasons": [],
+          "serial": "VYG0B66R",
+          "shield_counter": 0,
+          "slot": 4,
+          "smart_alert": false,
+          "state": "Onln",
+          "temperature_c": 32
+        },
+        {
+          "controller": 0,
+          "did": 8,
+          "enclosure": 252,
+          "health": "unknown",
+          "media_errors": 0,
+          "model": "HGST HUS728T8TALE6L4",
+          "other_errors": 0,
+          "predictive_failures": 0,
+          "reasons": [],
+          "serial": "VYG321HM",
+          "shield_counter": 0,
+          "slot": 5,
+          "smart_alert": false,
+          "state": "Onln",
+          "temperature_c": 30
+        }
+      ]
+    },
+    "temperature|virtual_none.json|[\" 27C (80.60 F)\",\"N/A\",null,31,\"-5C\",\"unknown\",\"\",\"0C\"]": {
+      "ok": true,
+      "value": [
+        27,
+        null,
+        null,
+        31,
+        -5,
+        null,
+        null,
+        0
+      ]
+    },
+    "virtual|virtual_a100_c0.json|0": {
+      "ok": true,
+      "value": [
+        {
+          "controller": 0,
+          "health": "unknown",
+          "raid_level": "RAID1",
+          "reasons": [],
+          "size": "931.000 GB",
+          "state": "Optl",
+          "vd_id": 0
+        },
+        {
+          "controller": 0,
+          "health": "unknown",
+          "raid_level": "RAID5",
+          "reasons": [],
+          "size": "21.830 TB",
+          "state": "Optl",
+          "vd_id": 1
+        }
+      ]
+    },
+    "virtual|virtual_none.json|0": {
+      "ok": true,
+      "value": []
+    }
+  }
+}

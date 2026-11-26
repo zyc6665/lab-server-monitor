@@ -1,0 +1,17 @@
+{
+  "host": { "name": "gpu-01", "host": "10.0.0.1" },
+  "stages": {
+    "hostname": "gpu-01\n",
+    "os_release": "Ubuntu 22.04.4 LTS\n",
+    "kernel": "5.15.0-113-generic\n",
+    "uptime": " 09:00:00 up 12 days,  2 users,  load average: 2.15, 1.98, 1.76\n",
+    "cpu_cores": "16\n",
+    "cpu_usage": "9.0\n",
+    "memory": "              total        used        free      shared  buff/cache   available\nMem:           64000       41000        3000         120       20000       22000\nSwap:           8192         512        7680\n",
+    "disk": "Filesystem      Size  Used Avail Use% Mounted on\n/dev/nvme0n1p2  1.8T  900G  800G  53% /\n/dev/nvme1n1    3.5T  1.2T  2.1T  37% /data\n",
+    "gpu_summary": "0, NVIDIA RTX 4090, 91, 67, 18200, 24564, GPU-1a2b3c4d-0000-0000-0000-000000000000\n1, NVIDIA RTX 4090, 45, 58, 6000, 24564, GPU-9f8e7d6c-1111-1111-1111-111111111111\n",
+    "gpu_processes": "GPU-1a2b3c4d-0000-0000-0000-000000000000, 12345, 16000, python train.py\nGPU-9f8e7d6c-1111-1111-1111-111111111111, 23456, 5000, python eval.py\n1, 34567, 4000, /opt/cuda/sample\n",
+    "pid_user_map": "12345 zhangz python train.py\n23456 lisi python eval.py\n34567 root /opt/cuda/sample\n",
+    "total_processes": "188\n"
+  }
+}
