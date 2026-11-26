@@ -208,12 +208,17 @@ export function saveSection(
   try {
     // Persist only the submitted fields (servermanage/settings/sections.py:71-110
     // save_section): validation uses the merged value, storage does not merge
-    // defaults/stored values — except user_monitoring, merged over raw stored.
+    // defaults/stored values — except user_monitoring (merged over raw stored)
+    // and report (merged over raw stored so a partial save such as
+    // `{executive: {enabled: X}}` keeps the saved subject_prefix/to_addrs).
     // Keep validated/coerced values, but only for keys the payload submitted.
     let toStore: Record<string, unknown> = projectSubmitted(value, payload);
     if (section === 'user_monitoring') {
       const stored = loadAppSettings(db)[section];
       if (isPlainObject(stored)) toStore = { ...stored, ...payload };
+    } else if (section === 'report') {
+      const stored = loadAppSettings(db)[section];
+      if (isPlainObject(stored)) toStore = mergeSections(stored, toStore);
     }
     persisted = sanitizeSection(section, toStore, { secrets, writable });
   } catch (err) {
@@ -310,6 +315,7 @@ export function publicSettings(db: SqliteDatabase): PublicSettings {
   const webhook = objectOrEmpty(alerts.webhook);
   const thresholds = objectOrEmpty(alerts.thresholds);
   const weekly = objectOrEmpty(report.weekly);
+  const executive = objectOrEmpty(report.executive);
   const rules = objectOrEmpty(diskHealth.rules);
 
   const smtpConfigured = typeof smtp.host === 'string' && smtp.host.trim() !== '';
@@ -400,6 +406,11 @@ export function publicSettings(db: SqliteDatabase): PublicSettings {
         idle_threshold: weekly.idle_threshold,
         time: weekly.time,
         weekday: weekly.weekday,
+      },
+      executive: {
+        enabled: executive.enabled,
+        subject_prefix: executive.subject_prefix,
+        to_addrs: Array.isArray(executive.to_addrs) ? [...executive.to_addrs] : [],
       },
     },
     disk_health: {

@@ -17,6 +17,8 @@ extraResources:
     to: backend/node_modules
     filter:
       - "**/*"
+  - from: build/icon.ico
+    to: icon.ico
 win:
   target: nsis
   icon: build/icon.ico
@@ -30,6 +32,8 @@ nsis:
   allowToChangeInstallationDirectory: true
   deleteAppDataOnUninstall: false
   include: build/installer.nsh
+  installerIcon: build/icon.ico
+  uninstallerIcon: build/icon.ico
   createDesktopShortcut: true
   createStartMenuShortcut: true
   shortcutName: 服务器轮询监测工具

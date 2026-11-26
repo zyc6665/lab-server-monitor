@@ -435,6 +435,16 @@ export const SETTINGS_SCHEMA: Record<string, SectionSpec> = {
           weekday: monField('integer', 4),
         },
       }),
+      executive: monField('object', null, {
+        fields: {
+          enabled: monField('boolean', false, {
+            strictBool: true,
+            boolMessage: '管理层摘要版日报开关必须是 true 或 false',
+          }),
+          subject_prefix: monField('string', '[Leader Summary]'),
+          to_addrs: monField('string_list', []),
+        },
+      }),
     },
   },
   disk_health: {

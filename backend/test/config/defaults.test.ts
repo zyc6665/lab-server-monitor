@@ -99,7 +99,7 @@ describe('DEFAULT_SETTINGS', () => {
     });
   });
 
-  it('report mirrors ReportConfig plus weekly defaults', () => {
+  it('report mirrors ReportConfig plus weekly and executive defaults', () => {
     expect(DEFAULT_SETTINGS.report).toEqual({
       subject_prefix: '[Server Daily Report]',
       include_failed_hosts: true,
@@ -112,6 +112,11 @@ describe('DEFAULT_SETTINGS', () => {
         idle_threshold: 20,
         time: '16:00',
         weekday: 4,
+      },
+      executive: {
+        enabled: false,
+        subject_prefix: '[Leader Summary]',
+        to_addrs: [],
       },
     });
   });

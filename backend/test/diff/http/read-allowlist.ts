@@ -8,8 +8,9 @@
  *
  * Nothing here loosens a business field to hide a mismatch — every entry is
  * either a genuinely volatile value (a wall-clock "now" stamped at request
- * time), an OS/environment fingerprint (listen port, pid), or one of the two
- * structural differences already documented in P5.
+ * time), an OS/environment fingerprint (listen port, pid), one of the
+ * structural differences already documented in P5, or a documented additive
+ * Node-only schema key that the frozen Python oracle predates.
  *
  * Normalisation rules implemented by the test itself (per plan §9.1):
  *   - ISO-8601 timestamps are parsed back to an absolute UTC instant at µs
@@ -50,6 +51,15 @@ export const ALLOWED_DIFFS: Record<string, string[]> = {
     // diagnostics/diagnostics_summary/network/uptime_strip/users, which the Node
     // page composes separately on the client. Summary granularity, not data.
     'summary-granularity: Node returns the reduced host summary; Python returns the full page-context detail',
+  ],
+  '/api/settings': [
+    // Additive-only schema extension. The Node settings schema gained the
+    // `report.executive` sub-section (管理层摘要版日报: enabled / subject_prefix /
+    // to_addrs) after the Python oracle was frozen, so the Node payload carries
+    // one extra object under `report` that the golden response cannot contain.
+    // No existing field changed shape or value; the extension is covered by
+    // test/config/report-executive.test.ts and test/web/settings.test.ts.
+    'additive key: Node-only `report.executive` settings block (executive daily report) absent from the frozen Python oracle',
   ],
 };
 

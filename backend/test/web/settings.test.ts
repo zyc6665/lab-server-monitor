@@ -113,6 +113,20 @@ describe('settings page', () => {
     expect(res.text).toContain('设置');
   });
 
+  it('renders the executive report controls with the saved values', async () => {
+    const h = setup();
+    saveSection(h.fresh.db, 'report', {
+      executive: { enabled: true, subject_prefix: '[Lead]', to_addrs: ['lead@x.com'] },
+    });
+    const res = await request(h.app).get('/settings').set('Cookie', h.cookie);
+    expect(res.status).toBe(200);
+    expect(res.text).toContain('data-field="executive.enabled" checked');
+    expect(res.text).toContain('管理层版主题前缀');
+    expect(res.text).toContain('data-field="executive.to_addrs"');
+    expect(res.text).toContain('value="[Lead]"');
+    expect(res.text).toContain('value="lead@x.com"');
+  });
+
   it('renders the user settings page in user mode', async () => {
     const h = setup({ userMode: true });
     const res = await request(h.app).get('/settings').set('Cookie', h.cookie);

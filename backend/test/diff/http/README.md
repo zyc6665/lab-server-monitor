@@ -58,7 +58,7 @@ cross-implementation ciphertext interop.
 | `GET /api/overview` | in | exact |
 | `GET /api/overview/capacity?days=30` | in | exact |
 | `GET /api/overview/history?range=24h` | in | exact |
-| `GET /api/settings` | in | exact |
+| `GET /api/settings` | in | known difference (see below) |
 | `GET /api/alerts` | in | exact |
 | `GET /api/users` | in | known difference (see below) |
 | `GET /api/system/health` | in | exact (runtime/tasks/diagnostics masked) |
@@ -67,7 +67,7 @@ cross-implementation ciphertext interop.
 | `GET /api/host/host-a/history?range=24h` | in | exact |
 | `GET /disk-health` | in | exact (200, html; body not compared — different template engines) |
 
-Result: **13 exact matches, 2 documented known differences.**
+Result: **12 exact matches, 3 documented known differences.**
 
 ## Normalisation rules
 
@@ -91,6 +91,10 @@ Result: **13 exact matches, 2 documented known differences.**
   while Flask uses a differently-named flag field, and Node adds a live
   `usage_scan` progress object that the Flask payload does not carry. Both are
   intentional Node-side enrichments of the same underlying data.
+* **`GET /api/settings`** — additive Node-only schema extension: the Node
+  payload carries `report.executive` (`enabled` / `subject_prefix` / `to_addrs`,
+  the 管理层摘要版日报 controls), a sub-section added after the golden Flask
+  response was frozen. No existing field changed shape or value.
 * **`GET /api/host/<name>`** — Node returns the reduced summary payload
   (`name/host/collected_at/success/group/owner/location/tags/metrics/errors/disk/alerts/checks`);
   Flask returns the full page-context detail, additionally carrying

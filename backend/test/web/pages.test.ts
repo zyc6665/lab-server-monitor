@@ -171,11 +171,14 @@ describe('pages routes — GET /api/compute', () => {
     const res = await request(app).get('/api/compute').set('Cookie', cookie);
     expect(res.status).toBe(200);
 
+    // Values come from the real `collect/compute.ts` builder that
+    // `defaultBuildComputeSummary` now delegates to (one-decimal GiB, like the
+    // Python oracle): 8000 MiB / 1024 = 7.8, 1500 MiB / 1024 = 1.5, 19.2%.
     expect(res.body.totals).toMatchObject({
       cards: 2,
-      vram_gb: 7.81,
-      used_gb: 1.46,
-      vram_pct: 18.8,
+      vram_gb: 7.8,
+      used_gb: 1.5,
+      vram_pct: 19.2,
     });
     expect(typeof res.body.totals.pf16).toBe('number');
     expect(Array.isArray(res.body.models)).toBe(true);

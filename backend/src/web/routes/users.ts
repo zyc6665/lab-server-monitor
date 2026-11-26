@@ -711,6 +711,71 @@ function buildUsersPayload(args: {
   };
 }
 
+/**
+ * `_build_my_summary`: the signed-in member's accounts grouped by host.
+ *
+ * Only hosts that carry the member's account (present or in the baseline) are
+ * returned, so a member never sees unrelated servers. Mirrors the Python oracle
+ * at `servermanage/web/routes/_core.py:1669`.
+ */
+export function buildMyAccountsPayload(args: { db: SqliteDatabase; config: AppConfig }): Obj {
+  const settings = readUserSettings(args.db);
+  const payload = buildUsersPayload({
+    servers: args.config.servers,
+    db: args.db,
+    settings,
+    tz: settings.timezone,
+  });
+  const monitoring = asObj(loadEffectiveSettings(args.db).monitoring);
+  const rawMember = monitoring['member_account'];
+  const member = typeof rawMember === 'string' ? rawMember.trim() : '';
+
+  const accountsByHost: Record<string, Obj> = {};
+  for (const raw of asArray(payload['accounts'])) {
+    const account = asObj(raw);
+    if (member && String(account['username'] ?? '') === member) {
+      accountsByHost[String(account['host_name'] ?? '')] = account;
+    }
+  }
+
+  const hosts: Obj[] = [];
+  for (const raw of asArray(payload['hosts'])) {
+    const block = asObj(raw);
+    const account = accountsByHost[String(block['name'] ?? '')];
+    if (!account) continue;
+    hosts.push({
+      name: block['name'],
+      address: block['address'],
+      status: block['status'],
+      last_scan_at: block['last_scan_at'],
+      last_error: block['last_error'],
+      account,
+    });
+  }
+
+  const state = (host: Obj): string => String(asObj(host['account'])['state'] ?? '');
+  return {
+    mode: monitoring['mode'] === 'user' ? 'user' : 'admin',
+    member,
+    hosts,
+    summary: {
+      hosts: hosts.length,
+      present: hosts.filter((host) => state(host) === 'present').length,
+      missing: hosts.filter((host) => state(host) === 'missing').length,
+      issues: hosts.filter((host) => asArray(asObj(host['account'])['issues']).length > 0).length,
+      host_errors: hosts.filter((host) => host['status'] === 'error').length,
+      home_bytes: hosts.reduce(
+        (total, host) => total + (Number(asObj(host['account'])['home_size_bytes']) || 0),
+        0,
+      ),
+      data_bytes: hosts.reduce(
+        (total, host) => total + (Number(asObj(host['account'])['data_size_bytes']) || 0),
+        0,
+      ),
+    },
+  };
+}
+
 /** `fingerprint_for('user-present', host, username)`. */
 function userPresentFingerprint(hostName: string, username: string): string {
   return ['user-present', hostName, username].join(':').toLowerCase();

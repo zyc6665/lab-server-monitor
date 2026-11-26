@@ -106,7 +106,21 @@ const MATRIX: EndpointSpec[] = [
   { name: 'get_overview', method: 'GET', path: '/api/overview', auth: true, capture: 'json' },
   { name: 'get_overview_capacity', method: 'GET', path: '/api/overview/capacity?days=30', auth: true, capture: 'json' },
   { name: 'get_overview_history', method: 'GET', path: '/api/overview/history?range=24h', auth: true, capture: 'json' },
-  { name: 'get_settings', method: 'GET', path: '/api/settings', auth: true, capture: 'json', mask: ['key_path'] },
+  {
+    name: 'get_settings',
+    method: 'GET',
+    path: '/api/settings',
+    auth: true,
+    capture: 'json',
+    mask: ['key_path'],
+    // Additive-only schema extension: the Node settings schema gained the
+    // `report.executive` sub-section (管理层摘要版日报) after the golden oracle was
+    // frozen, so the Node payload carries one extra object under `report` that
+    // the golden response cannot contain. No existing field changed shape or
+    // value; the extension itself is covered by test/config/report-executive.test.ts.
+    knownDifference:
+      'Node-only additive `report.executive` settings block (executive daily report) absent from the frozen Python oracle',
+  },
   { name: 'get_alerts', method: 'GET', path: '/api/alerts', auth: true, capture: 'json' },
   {
     name: 'get_users',

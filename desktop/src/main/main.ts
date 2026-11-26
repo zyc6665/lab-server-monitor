@@ -55,6 +55,7 @@ import {
   applyLoginItem,
 } from './lifecycle';
 import { createUpdater, type AutoUpdaterLike, type UpdaterControl } from './updater';
+import { loadAppIcon } from './icon';
 
 type BackendProcess = ReturnType<typeof utilityProcess.fork>;
 
@@ -224,6 +225,8 @@ function createWindow(): BrowserWindow {
     // user sees two stacked title bars and an extra default menu.
     frame: false,
     autoHideMenuBar: true,
+    // Window/taskbar icon: packaged `resources/icon.ico`, dev `desktop/build/icon.ico`.
+    icon: loadAppIcon() ?? undefined,
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
@@ -259,7 +262,8 @@ function createTray(): void {
 }
 
 function buildTray(): Tray {
-  const tray = new Tray(nativeImage.createEmpty());
+  const appIcon = loadAppIcon();
+  const tray = new Tray(appIcon ?? nativeImage.createEmpty());
   const menu = Menu.buildFromTemplate([
     { label: '显示主窗口', click: () => showWindow() },
     {

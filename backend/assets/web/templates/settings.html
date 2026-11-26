@@ -507,6 +507,9 @@
       <label class="field"><span>周报主题前缀</span><input data-field="weekly.subject_prefix" value="{{ settings.report.weekly.subject_prefix }}"></label>
       <label class="field"><span>繁忙阈值 %</span><input type="number" step="0.1" data-field="weekly.busy_threshold" value="{{ settings.report.weekly.busy_threshold }}"></label>
       <label class="field"><span>空闲阈值 %</span><input type="number" step="0.1" data-field="weekly.idle_threshold" value="{{ settings.report.weekly.idle_threshold }}"></label>
+      <label class="check-row span-2"><input type="checkbox" data-field="executive.enabled" {% if settings.report.executive.enabled %}checked{% endif %}> 额外发送「管理层摘要版」日报</label>
+      <label class="field"><span>管理层版主题前缀</span><input data-field="executive.subject_prefix" value="{{ settings.report.executive.subject_prefix }}"></label>
+      <label class="field span-2"><span>管理层版收件人（逗号或分号分隔，留空沿用 SMTP 收件人）</span><input data-field="executive.to_addrs" value="{{ settings.report.executive.to_addrs|join(', ') }}"></label>
     </div>
     <p class="hint">邮件服务器与收件人请在上方“邮件服务器（SMTP）”中配置；未配置 SMTP 时无法启用日报/周报，邮件告警也不会发送。</p>
     <button class="primary-button" data-save="report" {% if not settings.writable %}disabled{% endif %}>保存报告</button>
