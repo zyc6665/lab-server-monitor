@@ -6,7 +6,7 @@ import {
   servermonitorPrompt,
   showToast,
 } from './lib/ui.js';
-import { drawOverviewTrend } from './pages/trend-chart.js';
+import { drawOverviewTrend, overviewSvgEl } from './pages/trend-chart.js';
 import {
   attentionChip,
   booleanBadge,
@@ -17,6 +17,7 @@ import {
   metricBlock,
   percentCell,
   percentText,
+  setText,
   sparkline,
   temperatureChip,
   textCell,

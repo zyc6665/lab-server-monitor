@@ -1,5 +1,12 @@
 # 更新日志
 
+## v0.2.9 概览趋势与首页统计修复
+
+- **修复概览页「趋势数据加载失败 / 告警趋势加载失败」红色提示**：`backend/assets/web/static/pages/trend-chart.js` 在从 `app.js` 拆分（M2）时遗漏了 SVG 命名空间常量 `OVERVIEW_SVG_NS` 与 `overviewNumbers` 导入，`app.js` 也漏导入 `overviewSvgEl`，导致绘制趋势图时抛 `ReferenceError`，被 `.catch` 当作网络失败弹提示。已补齐定义与导入。
+- **修复首页统计数字不更新**：`app.js` 拆分后漏导入 `setText`，概览/告警等处的统计文本更新会抛 `ReferenceError`。已补齐导入。
+- 新增回归测试 `backend/test/web/static-modules.test.ts`：静态扫描前端 ES 模块，若调用其它模块导出的函数却未 import，或 `createElementNS` 使用未声明的命名空间标识符，测试即失败，防止同类拆分遗漏再次发生。
+- 版本号三处同步至 0.2.9。
+
 ## v0.2.8 UI 与稳定性修复
 
 - **修复双层标题栏**：桌面窗口改为无边框（`frame: false`），只保留页面内自绘标题栏；移除 Electron 默认应用菜单（File/Edit/View/Window）。补齐窗口控制 IPC（最小化/最大化/关闭），标题栏按钮与双击最大化现在真正可用。

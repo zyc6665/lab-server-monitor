@@ -1,8 +1,9 @@
 /* Overview trend chart rendering (M2: extracted from app.js).
  * Pure SVG building: the caller passes the target <svg> and the series. */
-import { overviewPathIndexed, overviewTrendText } from './overview-trends.js';
+import { overviewNumbers, overviewPathIndexed, overviewTrendText } from './overview-trends.js';
 import { formatPercent } from '../lib/format.js';
 
+var OVERVIEW_SVG_NS = 'http://www.w3.org/2000/svg';
 var OVERVIEW_COLORS = { cpu: '#2563eb', memory: '#7c3aed', disk: '#059669', gpu_util: '#d97706', load_1: '#0ea5e9' };
 
 export function overviewSvgEl(name, attrs) {
