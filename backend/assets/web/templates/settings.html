@@ -532,6 +532,11 @@
       <label class="field"><span>单条命令超时（秒）</span><input type="number" min="10" max="600" data-field="command_timeout" value="{{ settings.user_monitoring.command_timeout }}"></label>
       <label class="check-row span-2"><input type="checkbox" data-field="write_enabled" {% if settings.user_monitoring.write_enabled %}checked{% endif %}>
         允许账号写操作（新建账号 / 重置密码 / 加入 docker 组 / 创建 data 目录）</label>
+      <label class="field span-2"><span>账号命名规范（只读）</span><input type="text" readonly data-field="account_policy.naming_regex" value="{{ settings.user_monitoring.account_policy.naming_regex }}"></label>
+      <label class="field"><span>默认账号模板</span><input type="text" data-field="account_policy.default_template" value="{{ settings.user_monitoring.account_policy.default_template }}" placeholder="standard"></label>
+      <label class="field"><span>账号有效期天数（0 = 永不过期）</span><input type="number" min="0" max="3650" data-field="account_policy.expiry_days" value="{{ settings.user_monitoring.account_policy.expiry_days }}"></label>
+      <label class="field span-2"><span>账号模板（JSON 数组，每项 {name, description, groups[], sudo[]}）</span>
+        <textarea rows="8" data-field="account_policy.templates" data-json="1">{{ settings.user_monitoring.account_policy.templates | tojson }}</textarea></label>
     </div>
     <p class="hint">账号清单按扫描间隔刷新，只读取 /etc/passwd 与 /etc/group；目录占用按统计间隔执行，<code>du</code> 以 idle I/O 与最低 CPU 优先级运行，失败时保留上次数值。默认每 6 小时统计一次占用即可。</p>
     <p class="hint hint-warn">写操作默认关闭。打开后仍需在每台主机上单独允许，并且执行前必须预览计划、手动输入主机名与账号名确认；密码只经 SSH 标准输入传递，不写入日志或数据库，每次操作都会记入审计。</p>

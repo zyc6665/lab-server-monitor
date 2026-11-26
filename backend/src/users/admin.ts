@@ -268,6 +268,22 @@ function statCommand(name: string): string {
 }
 
 /** Parameters for {@link buildPlan}; field names follow the Python keyword args. */
+/** One account template from `user_monitoring.account_policy.templates`. */
+export interface AccountPolicyTemplate {
+  name: string;
+  description?: string;
+  groups?: string[];
+  sudo?: string[];
+}
+
+/** The `user_monitoring.account_policy` settings block (all fields optional). */
+export interface AccountPolicy {
+  naming_regex?: string;
+  templates?: AccountPolicyTemplate[];
+  default_template?: string;
+  expiry_days?: number;
+}
+
 export interface BuildPlanParams {
   /** One of {@link OPERATIONS}. */
   operation: string;
@@ -286,6 +302,8 @@ export interface BuildPlanParams {
   with_data?: boolean;
   /** Clock override for deterministic plans/tests. */
   now?: Date;
+  /** Account naming/template policy from settings (optional). */
+  policy?: AccountPolicy | null;
 }
 
 /**
@@ -306,6 +324,29 @@ export function buildPlan(params: BuildPlanParams): AdminPlan {
     throw new AdminPlanError('缺少主机名');
   }
 
+  const policy = params.policy ?? null;
+  let policyViolation: string | null = null;
+  if (policy !== null && typeof policy.naming_regex === 'string' && policy.naming_regex.trim() !== '') {
+    let ok = true;
+    try {
+      ok = new RegExp(policy.naming_regex).test(name);
+    } catch {
+      ok = true; // an invalid regex must not brick account creation
+    }
+    if (!ok) {
+      policyViolation = `账号名不符合命名规范：需匹配 ${policy.naming_regex}（小写字母开头，3-16 位，仅小写字母/数字/下划线/连字符）`;
+    }
+  }
+
+  const templates = Array.isArray(policy?.templates) ? policy!.templates! : [];
+  const templateName = (policy?.default_template ?? '').trim();
+  const template = templateName !== ''
+    ? templates.find((item) => item.name === templateName) ?? null
+    : templates.length > 0
+      ? templates[0]
+      : null;
+  const expiryDays = typeof policy?.expiry_days === 'number' ? Math.max(0, Math.floor(policy.expiry_days)) : 0;
+
   const accountExists = params.account_exists ?? false;
   const dockerGroup = params.docker_group ?? true;
   const dataSupported = params.data_supported ?? true;
@@ -317,6 +358,9 @@ export function buildPlan(params: BuildPlanParams): AdminPlan {
   const steps: PlanStep[] = [];
   const warnings: string[] = [];
   const blocked: string[] = [];
+  if (policyViolation !== null) {
+    blocked.push(policyViolation);
+  }
 
   if (!sudoPassword) {
     blocked.push(
@@ -338,6 +382,10 @@ export function buildPlan(params: BuildPlanParams): AdminPlan {
           stdin_label: STDIN_LABEL,
         }),
       );
+      steps.push(...templateSteps(name, template));
+      if (expiryDays > 0) {
+        steps.push(expiryStep(name, expiryDays, moment));
+      }
       if (withDocker) {
         if (dockerGroup) {
           steps.push(step('docker', '加入 docker 组', `gpasswd -a ${name} docker`));
@@ -369,6 +417,9 @@ export function buildPlan(params: BuildPlanParams): AdminPlan {
         stdin_label: STDIN_LABEL,
       }),
     );
+    if (expiryDays > 0) {
+      steps.push(expiryStep(name, expiryDays, moment));
+    }
     steps.push(step('verify-id', '验证账号', `id -- ${name}`, { elevated: false }));
   } else if (operation === 'docker') {
     if (!accountExists) {
@@ -435,6 +486,35 @@ export const _rollbackHint = rollbackHint;
  * host, account, nonce, `created_at` and per-step `{id, command, elevated,
  * stdin_sha256}` (stdin hashed, never embedded).
  */
+/** Steps that apply an account template's groups and sudo whitelist. */
+function templateSteps(name: string, template: AccountPolicyTemplate | null): PlanStep[] {
+  if (template === null) {
+    return [];
+  }
+  const steps: PlanStep[] = [];
+  for (const group of template.groups ?? []) {
+    const trimmed = String(group).trim();
+    if (trimmed !== '') {
+      steps.push(step('group', `加入附加组 ${trimmed}`, `gpasswd -a ${name} ${trimmed}`));
+    }
+  }
+  const sudo = (template.sudo ?? []).map((cmd) => String(cmd).trim()).filter((cmd) => cmd !== '');
+  if (sudo.length > 0) {
+    const rule = `${name} ALL=(ALL) NOPASSWD: ${sudo.join(', ')}`;
+    steps.push(
+      step('sudo', '写入 sudo 白名单', `sh -c 'printf "%s\\n" "${rule}" > /etc/sudoers.d/${name} && chmod 440 /etc/sudoers.d/${name}'`),
+    );
+  }
+  return steps;
+}
+
+/** `chage -E <date>` step for an optional account expiry (UTC date). */
+function expiryStep(name: string, days: number, moment: Date): PlanStep {
+  const expiry = new Date(moment.getTime() + days * 24 * 60 * 60 * 1000);
+  const date = expiry.toISOString().slice(0, 10);
+  return step('expiry', `设置有效期至 ${date}`, `chage -E ${date} ${name}`);
+}
+
 export function hashPlan(
   operation: string,
   host: string,

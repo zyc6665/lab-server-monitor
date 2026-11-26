@@ -26,6 +26,7 @@ export const ENDPOINTS = {
   settings_page: '/settings',
   terminal_page: '/terminal',
   tasks_page: '/tasks',
+  reports_page: '/reports',
 
   // --- auth ----------------------------------------------------------------
   setup: '/setup',
@@ -93,6 +94,9 @@ export const ENDPOINTS = {
   api_system_config_export: '/api/system/config-export',
   api_system_tasks: '/api/system/tasks',
   api_run_system_task: '/api/system/tasks/{name}/run',
+  api_reports_preview: '/api/reports/preview',
+  api_reports_history: '/api/reports/history',
+  api_reports_send: '/api/reports/send',
   api_logs: '/api/logs',
   api_logs_download: '/api/logs/download',
   api_runtime: '/api/runtime',

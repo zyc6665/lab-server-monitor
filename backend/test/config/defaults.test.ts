@@ -153,6 +153,16 @@ describe('DEFAULT_SETTINGS', () => {
       usage_timeout_seconds: 1800,
       command_timeout: 120,
       write_enabled: false,
+      account_policy: {
+        naming_regex: '^[a-z][a-z0-9_-]{2,15}$',
+        templates: [
+          { name: 'standard', description: '标准账号（默认附加组）', groups: [], sudo: [] },
+          { name: 'developer', description: '开发账号（附加组 + sudo 白名单）', groups: ['developers'], sudo: ['systemctl restart jupyter'] },
+          { name: 'readonly', description: '只读账号（仅家目录）', groups: [], sudo: [] },
+        ],
+        default_template: 'standard',
+        expiry_days: 0,
+      },
     });
   });
 

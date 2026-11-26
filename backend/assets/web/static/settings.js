@@ -144,6 +144,13 @@
       } else if (path === "storcli_candidates") {
         var lines = input.value.split(/\r?\n/).map(function (line) { return line.trim(); });
         setNested(payload, path, lines.filter(Boolean));
+      } else if (path === "account_policy.templates") {
+        var trimmed = (input.value || "").trim();
+        var parsed = [];
+        if (trimmed !== "") {
+          try { parsed = JSON.parse(trimmed); } catch (e) { parsed = []; }
+        }
+        setNested(payload, path, Array.isArray(parsed) ? parsed : []);
       } else if (input.type === "number") {
         var number = Number(input.value);
         setNested(payload, path, isNaN(number) ? input.value : number);
@@ -169,6 +176,7 @@
       if (value === undefined || value === null) return;
       if (input.type === "checkbox") input.checked = !!value;
       else if (path === "storcli_candidates") input.value = (value || []).join("\n");
+      else if (path === "account_policy.templates") input.value = JSON.stringify(value || [], null, 2);
       else input.value = value;
     });
   }

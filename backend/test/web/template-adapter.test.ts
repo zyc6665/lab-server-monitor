@@ -97,8 +97,8 @@ describe('template compile: all reused templates', () => {
     .filter((file: string) => file.endsWith('.html'))
     .sort();
 
-  it('finds all 16 templates', () => {
-    expect(names).toHaveLength(16);
+  it('finds all 17 templates', () => {
+    expect(names).toHaveLength(17);
   });
 
   it.each(names)('%s compiles without a syntax error', (name: string) => {

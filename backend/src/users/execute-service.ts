@@ -148,6 +148,10 @@ export function hostToBuildPlanParams(
     with_docker: coerceBoolean(options['withDocker'] ?? options['with_docker'], true),
     with_data: coerceBoolean(options['withData'] ?? options['with_data'], true),
     now,
+    policy:
+      options['accountPolicy'] !== undefined
+        ? (options['accountPolicy'] as BuildPlanParams['policy'])
+        : (options['policy'] as BuildPlanParams['policy']),
   };
 }
 

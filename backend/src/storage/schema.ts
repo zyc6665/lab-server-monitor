@@ -209,6 +209,19 @@ export const CREATE_STATEMENTS: string[] = [
     ON alert_delivery_failures(alert_id);`,
   `CREATE INDEX IF NOT EXISTS idx_alert_delivery_failures_at
     ON alert_delivery_failures(at);`,
+  // Node-only (module optimization): report send history.
+  `CREATE TABLE IF NOT EXISTS report_runs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    kind TEXT NOT NULL,
+    variant TEXT NOT NULL,
+    status TEXT NOT NULL,
+    error TEXT,
+    recipients TEXT,
+    sent_at TEXT,
+    created_at TEXT NOT NULL
+);`,
+  `CREATE INDEX IF NOT EXISTS idx_report_runs_created
+    ON report_runs(created_at);`,
   `CREATE TABLE IF NOT EXISTS app_settings (
     section TEXT PRIMARY KEY,
     payload TEXT NOT NULL,

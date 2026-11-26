@@ -11,7 +11,7 @@
  */
 import { ConfigError } from './errors';
 
-export type FieldType = 'boolean' | 'integer' | 'number' | 'string' | 'string_list' | 'object';
+export type FieldType = 'boolean' | 'integer' | 'number' | 'string' | 'string_list' | 'object' | 'object_list';
 
 /** One field inside a section payload. */
 export interface FieldSpec {
@@ -37,6 +37,10 @@ export interface FieldSpec {
   messageStyle?: 'spaced' | 'compact';
   /** Child fields when {@link type} is `object`. */
   fields?: Record<string, FieldSpec>;
+  /** Per-item child fields when {@link type} is `object_list`. */
+  items?: Record<string, FieldSpec>;
+  /** Maximum item count for `object_list` (extra items are dropped). */
+  maxItems?: number;
 }
 
 /** Metadata + field specs for one settings section. */
@@ -74,7 +78,10 @@ function cloneValue(value: unknown): unknown {
 function buildDefault(fields: Record<string, FieldSpec>): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   for (const [key, spec] of Object.entries(fields)) {
-    out[key] = spec.type === 'object' ? buildDefault(spec.fields ?? {}) : cloneValue(spec.default);
+    out[key] =
+      spec.type === 'object'
+        ? buildDefault(spec.fields ?? {})
+        : cloneValue(spec.default);
   }
   return out;
 }
@@ -217,6 +224,29 @@ function coerceField(key: string, spec: FieldSpec, raw: unknown, errors: string[
       }
       errors.push(`${label} 必须是字符串列表`);
       return { ok: false };
+    }
+
+    case 'object_list': {
+      if (!Array.isArray(raw)) {
+        errors.push(`${label} 必须是列表`);
+        return { ok: false };
+      }
+      const itemFields = spec.items ?? {};
+      const max = spec.maxItems ?? raw.length;
+      const list: Record<string, unknown>[] = [];
+      for (const entry of raw.slice(0, max)) {
+        if (!isMapping(entry)) {
+          errors.push(`${label} 的每一项必须是对象`);
+          return { ok: false };
+        }
+        const item: Record<string, unknown> = {};
+        validateFields(itemFields, entry, item, errors);
+        list.push(item);
+      }
+      if (errors.length > 0) {
+        return { ok: false };
+      }
+      return { ok: true, value: list };
     }
 
     case 'object':
@@ -549,9 +579,50 @@ export const SETTINGS_SCHEMA: Record<string, SectionSpec> = {
         strictBool: true,
         boolMessage: '允许账号写操作必须是 true 或 false',
       }),
+      account_policy: monField('object', null, {
+        fields: {
+          naming_regex: monField('string', '^[a-z][a-z0-9_-]{2,15}$', {
+            label: '账号命名规范',
+          }),
+          templates: monField('object_list', [
+            { name: 'standard', description: '标准账号（默认附加组）', groups: [], sudo: [] },
+            { name: 'developer', description: '开发账号（附加组 + sudo 白名单）', groups: ['developers'], sudo: ['systemctl restart jupyter'] },
+            { name: 'readonly', description: '只读账号（仅家目录）', groups: [], sudo: [] },
+          ], {
+            label: '账号模板',
+            maxItems: 20,
+            items: {
+              name: monField('string', '', { label: '模板名', required: true }),
+              description: monField('string', '', { label: '说明' }),
+              groups: monField('string_list', [], { label: '附加组' }),
+              sudo: monField('string_list', [], { label: 'sudo 命令' }),
+            },
+          }),
+          default_template: monField('string', 'standard', { label: '默认模板' }),
+          expiry_days: monField('integer', 0, {
+            label: '有效期天数',
+            min: 0,
+            max: 3650,
+            strictInt: true,
+            messageStyle: 'compact',
+          }),
+        },
+      }),
     },
   },
 };
+
+// Default account templates (used when `templates` is omitted/empty).
+export const DEFAULT_ACCOUNT_TEMPLATES: Array<{
+  name: string;
+  description: string;
+  groups: string[];
+  sudo: string[];
+}> = [
+  { name: 'standard', description: '标准账号（默认附加组）', groups: [], sudo: [] },
+  { name: 'developer', description: '开发账号（附加组 + sudo 白名单）', groups: ['developers'], sudo: ['systemctl restart jupyter'] },
+  { name: 'readonly', description: '只读账号（仅家目录）', groups: [], sudo: [] },
+];
 
 /** Section names in UI order (hosts is intentionally excluded; Task4 owns it). */
 export const SECTION_NAMES: string[] = [

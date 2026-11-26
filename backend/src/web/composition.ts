@@ -60,6 +60,7 @@ import { registerPagesRoutes, type PagesRouteDeps } from './routes/pages';
 import { registerDiskHealthRoutes, type DiskHealthRouteDeps } from './routes/disk-health';
 import { registerSshTerminalRoutes, type SshTerminalRouteDeps } from './routes/ssh-terminal';
 import { registerTasksRoutes, type TasksRouteDeps } from './routes/tasks';
+import { registerReportsRoutes, type ReportsRouteDeps } from './routes/reports';
 
 type SqliteDatabase = import('better-sqlite3').Database;
 
@@ -82,6 +83,7 @@ export interface CompositionDeps {
   diskHealth?: Partial<DiskHealthRouteDeps>;
   sshTerminal?: Partial<SshTerminalRouteDeps>;
   tasks?: Partial<TasksRouteDeps>;
+  reports?: Partial<ReportsRouteDeps>;
 }
 
 /** Options accepted by {@link createServerApp}. */
@@ -546,6 +548,7 @@ export function createServerApp(opts: CreateServerAppOptions): Express {
         appVersion,
         scheduler: overrides.tasks?.scheduler ?? null,
       });
+      registerReportsRoutes(app, { ...overrides.reports, db, config, appVersion });
     },
   });
 }

@@ -56,9 +56,9 @@ function tableInfo(db: SqliteDb, table: string): ColumnInfo[] {
 /**
  * The exact set of user tables created by the DDL (sqlite_sequence excluded).
  *
- * The 20 base tables mirror `base.py`; `alert_delivery_failures` and
- * `task_runs` are Node-only P1 additions (not part of the frozen Python
- * oracle), so read-diff comparisons stay on the oracle subset.
+ * The 20 base tables mirror `base.py`; `alert_delivery_failures`,
+ * `task_runs` and `report_runs` are Node-only additions (not part of the
+ * frozen Python oracle), so read-diff comparisons stay on the oracle subset.
  */
 const EXPECTED_TABLES = [
   'alert_delivery_failures',
@@ -79,6 +79,7 @@ const EXPECTED_TABLES = [
   'host_user_scan_state',
   'host_user_snapshot',
   'host_user_usage_history',
+  'report_runs',
   'ssh_audit_sessions',
   'task_runs',
   'task_state',
@@ -103,6 +104,7 @@ const EXPECTED_INDEXES = [
   'idx_host_metrics_history_host',
   'idx_host_metrics_history_host_collected',
   'idx_host_user_snapshot_host',
+  'idx_report_runs_created',
   'idx_ssh_audit_started_at',
   'idx_task_runs_started',
   'idx_task_runs_task_started',
@@ -110,21 +112,21 @@ const EXPECTED_INDEXES = [
 ];
 
 describe('schema DDL constants', () => {
-  it('contains 22 CREATE TABLE and 20 CREATE INDEX statements (42 total)', () => {
+  it('contains 23 CREATE TABLE and 21 CREATE INDEX statements (44 total)', () => {
     const tables = CREATE_STATEMENTS.filter((sql) =>
       /^CREATE TABLE IF NOT EXISTS/i.test(sql.trim()),
     );
     const indexes = CREATE_STATEMENTS.filter((sql) =>
       /^CREATE INDEX IF NOT EXISTS/i.test(sql.trim()),
     );
-    expect(CREATE_STATEMENTS).toHaveLength(42);
-    expect(tables).toHaveLength(22);
-    expect(indexes).toHaveLength(20);
+    expect(CREATE_STATEMENTS).toHaveLength(44);
+    expect(tables).toHaveLength(23);
+    expect(indexes).toHaveLength(21);
   });
 });
 
 describe('initSchema on a fresh database', () => {
-  it('creates exactly the 22 expected tables', () => {
+  it('creates exactly the 23 expected tables', () => {
     const db = freshDb();
     initSchema(db);
     const rows = db

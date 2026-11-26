@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}报表 - 服务器监控{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div class="page-head-main">
+    <h1 class="page-title">报表</h1>
+    <p class="page-subtitle muted">预览并按需发送日报/周报，查看最近的发送记录。</p>
+  </div>
+</div>
+
+<section class="card" id="report-preview-card">
+  <div class="section-head">
+    <h2>报表预览</h2>
+    <label class="field-inline">
+      <span>类型</span>
+      <select id="report-variant">
+        <option value="technical">日报（技术版）</option>
+        <option value="executive">日报（管理层版）</option>
+        <option value="weekly">周报</option>
+      </select>
+    </label>
+    <button type="button" class="btn-secondary" id="report-preview-btn">预览</button>
+    <button type="button" class="btn-primary" id="report-send-btn">立即发送</button>
+    <span class="muted small" id="report-status"></span>
+  </div>
+  <div class="report-preview" id="report-preview-body">
+    <p class="muted">点击「预览」生成报表内容。</p>
+  </div>
+</section>
+
+<section class="card" id="report-history-card">
+  <div class="section-head">
+    <h2>最近发送</h2>
+    <span class="muted small" id="report-history-updated">正在加载…</span>
+    <button type="button" class="btn-secondary" id="report-history-refresh">刷新</button>
+  </div>
+  <div class="table-wrap">
+    <table class="data-table" id="report-history-table">
+      <thead>
+        <tr>
+          <th>时间</th>
+          <th>类型</th>
+          <th>版本</th>
+          <th>状态</th>
+          <th>收件人</th>
+          <th>错误</th>
+        </tr>
+      </thead>
+      <tbody id="report-history-rows">
+        <tr><td colspan="6" class="empty">正在加载…</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<script type="module" src="{{ asset_url('pages/reports.js') }}"></script>
+{% endblock %}
