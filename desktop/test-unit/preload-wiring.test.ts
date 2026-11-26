@@ -12,6 +12,11 @@ describe('renderer preload wiring', () => {
     expect(main).toMatch(/contextIsolation:\s*true/);
   });
 
+  it('backend child is spawned in desktop mode', () => {
+    const main = read('src/main/main.ts');
+    expect(main).toMatch(/SERVERMONITOR_DESKTOP:\s*'1'/);
+  });
+
   it('build script bundles src/main/preload.ts to dist/preload.cjs', () => {
     const build = read('scripts/build-main.mjs');
     expect(build).toContain("entryPoints: ['src/main/preload.ts']");

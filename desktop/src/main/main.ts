@@ -173,6 +173,9 @@ function spawnBackend(importLegacy: boolean): void {
   backendProc = utilityProcess.fork(entry, args, {
     stdio: 'pipe',
     serviceName: 'servermonitor-backend',
+    // Tells the backend it is hosted by the desktop shell so pages render
+    // desktop-only UI (e.g. the 软件更新 / 检查更新 section).
+    env: { ...process.env, SERVERMONITOR_DESKTOP: '1' },
   });
   backendProc.on('exit', (code) => {
     backendProc = null;
