@@ -74,3 +74,11 @@
 ## 9. CI
 
 未 push。push 后需要用 rc 版本（如 `0.2.0-rc.1`）触发 `release-windows.yml` 的 workflow_dispatch，验证 ci 绿灯，以及 Release 中三件产物（Setup.exe / latest.yml / blockmap）齐全——**未做**。
+
+## 附：中文路径静默安装问题复核（2026-11-26）
+
+- 结论：与中文路径无关。同一安装包在 `D:\工具\sm_cn_test\`（中文、仓库外）可正常 `/S` 安装。
+- 根因：仓库目录继承了开发沙箱 ACL（`Mandatory Label\Low Mandatory Level:(I)(OI)(CI)(NW)` 等），从该处启动的安装程序以 Low 完整性运行，无法写 `D:\Tools` 与 HKCU，静默模式下仍返回 exit 0。
+- 处理：无需改代码。在沙箱内构建的安装包须复制到工作区外再执行；可用 `icacls <exe>` 检查是否带 `Low Mandatory Level`。
+- 另见：注册表残留旧安装记录但目录已手动删除时，electron-builder 模板的 `uninstallOldVersion` 会弹 "Failed to uninstall old application files"（`/S` 下也会阻塞）；正常安装/升级/卸载流程不触发。
+- §8 人工待验中的“中文路径安装”项据此关闭。
