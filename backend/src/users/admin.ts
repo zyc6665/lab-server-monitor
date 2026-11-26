@@ -673,3 +673,85 @@ export function executePlan(
   }
   return { ok: true, status: 'succeeded', steps: results, error: '' };
 }
+
+/** Async twin of {@link PlanRunner}, used by the real (SSH-backed) executor. */
+export interface AsyncPlanRunner {
+  run(command: string, timeout: number): Promise<CommandResult>;
+  run_sudo(
+    command: string,
+    timeout: number,
+    opts?: { stdin_data?: string | null },
+  ): Promise<CommandResult>;
+}
+
+/**
+ * Async twin of {@link executePlan} for a real SSH connection.
+ *
+ * Validation (cache presence, expiry, tamper hash), per-step status semantics,
+ * failure short-circuit and 4000/400-character clipping are identical to
+ * {@link executePlan}; the only difference is that each command is awaited.
+ * The synchronous `executePlan` stays the oracle-parity path used by unit tests.
+ */
+export async function executePlanAsync(
+  plan: AdminPlan,
+  runner: AsyncPlanRunner,
+  cache?: PlanCache | null,
+  opts: ExecutePlanOptions = {},
+): Promise<ExecutePlanResult> {
+  if (cache) {
+    const cached = cache.get(plan.plan_hash, { now: opts.now });
+    if (!cached) {
+      throw new AdminPlanError('计划已过期或无效，请重新预览');
+    }
+  }
+  const expectedHash = hashPlan(
+    plan.operation,
+    plan.host,
+    plan.account,
+    plan.steps,
+    plan.nonce,
+    new Date(plan.created_at),
+  );
+  if (expectedHash !== plan.plan_hash) {
+    throw new AdminPlanError('计划校验失败：内容已被篡改');
+  }
+
+  const timeout = opts.timeout ?? COMMAND_TIMEOUT_SECONDS;
+  const results: ExecutedStep[] = [];
+  for (const item of plan.steps) {
+    const stdinData = item.stdin;
+    try {
+      const result = item.elevated
+        ? await runner.run_sudo(item.command, timeout, { stdin_data: stdinData })
+        : await runner.run(item.command, timeout);
+      const entry: ExecutedStep = {
+        id: item.id,
+        title: item.title,
+        status: result.exit_status === 0 ? 'ok' : 'failed',
+        exit_status: result.exit_status,
+        stdout: clip(result.stdout),
+        stderr: clip(result.stderr),
+      };
+      results.push(entry);
+      if (result.exit_status !== 0) {
+        return {
+          ok: false,
+          status: 'failed',
+          steps: results,
+          error: `步骤“${item.title}”失败（退出码 ${result.exit_status}）`,
+        };
+      }
+    } catch (exc) {
+      results.push({
+        id: item.id,
+        title: item.title,
+        status: 'error',
+        exit_status: null,
+        stdout: '',
+        stderr: safeError(exc),
+      });
+      return { ok: false, status: 'error', steps: results, error: safeError(exc) };
+    }
+  }
+  return { ok: true, status: 'succeeded', steps: results, error: '' };
+}

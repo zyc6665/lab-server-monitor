@@ -26,11 +26,15 @@ import { loadEffectiveSettings } from '../../config/service';
 import { createTemplating, type Templating } from '../templating';
 import { ENDPOINTS } from './registry';
 import {
+  fetchAllHostNetworkRates,
+  fetchHostNetworkRates,
   getAllHostCheckResults,
   getAllHostSnapshots,
   type HostCheckResultRow,
   type HostSnapshot,
+  type NetworkRate,
 } from '../../storage/hosts';
+import { getAllHostCheckHistory, getHostCheckHistory } from '../../storage/metrics-write';
 import { getAllDiskHealth, type DiskHealthSnapshot } from '../../storage/disk';
 import {
   countActiveAlertsByHost,
@@ -41,13 +45,31 @@ import {
   type SilenceRow,
 } from '../../storage/alerts';
 import {
+  countRecentSamples,
   countRecentSamplesByHost,
+  fetchAllHostUptimeStrips,
   fetchHostHistory,
   fetchHostSparklines,
+  fetchHostUptimeStrip,
   fetchOverviewHistory,
   type OverviewPoint,
   type SparklineSeries,
+  type UptimeStrip,
 } from '../../storage/metrics-read';
+import {
+  getAllHostUserSnapshots,
+  getAllUserBaselines,
+  getAllUserUsageDeltas,
+} from '../../storage/users';
+import {
+  buildHostDiagnostics,
+  hostAlertDays,
+  summarizeDiagnostics,
+  type AlertDay,
+  type DiagnosticRow,
+  type DiagnosticsSummary,
+} from '../host-diagnostics';
+import { buildUserRows, gpuUsageFromMetrics, USAGE_DELTA_DAYS } from './users';
 
 type SqliteDatabase = import('better-sqlite3').Database;
 type Obj = Record<string, unknown>;
@@ -985,6 +1007,11 @@ export function buildOverview(db: SqliteDatabase, config: AppConfig): OverviewDa
 // Fleet inspection report (port of `_build_fleet_report` / `_build_host_report`)
 // ---------------------------------------------------------------------------
 
+interface CollectionUptime {
+  samples: number;
+  expected: number;
+}
+
 interface HostDetail {
   name: string;
   host: string | undefined;
@@ -999,6 +1026,14 @@ interface HostDetail {
   disk: Obj | null;
   alerts: Obj[];
   checks: HostCheckResultRow[];
+  check_history: Record<string, string[]>;
+  network: NetworkRate;
+  users: Obj[];
+  collection_uptime: CollectionUptime;
+  uptime_strip: UptimeStrip;
+  diagnostics: DiagnosticRow[];
+  diagnostics_summary: DiagnosticsSummary;
+  alert_days: AlertDay[];
 }
 
 /** `_report_number`: `None`/`""` → null; otherwise float of the trimmed value. */
@@ -1246,24 +1281,50 @@ function fmtWithDefault(row: Obj, key: string): string {
   return '—';
 }
 
+/** Fleet-wide reads that let {@link buildHostDetail} skip per-host queries. */
+export interface HostDetailPrecomputed {
+  checkHistory?: Record<string, string[]>;
+  network?: NetworkRate;
+  users?: Obj[];
+  sampleCount?: number;
+  uptimeStrip?: UptimeStrip;
+}
+
+/**
+ * `_build_host_detail` — build the `/api/host/<name>` payload. A host that is
+ * configured but not yet collected still returns a payload with empty metrics;
+ * callers are responsible for rejecting names that are neither configured nor
+ * polled.
+ */
 export function buildHostDetail(
   name: string,
   config: AppConfig,
+  db: SqliteDatabase,
   snapshot: HostSnapshot | undefined,
   disk: DiskHealthSnapshot | undefined,
   alerts: Obj[],
   checks: HostCheckResultRow[],
   timezone: string,
+  pollIntervalSeconds: number,
+  precomputed: HostDetailPrecomputed = {},
+  now: Date = new Date(),
 ): HostDetail {
   const server = config.servers.find((entry) => entry.name === name);
-  const localizedDisk = disk
-    ? {
-        status: disk.status,
-        message: disk.message,
+  const localizedDisk: Obj | null = disk
+    ? ({
+        ...disk,
         collected_at: toLocalIso(disk.collected_at, timezone),
-      }
+      } as unknown as Obj)
     : null;
-  return {
+  const checkHistory = precomputed.checkHistory ?? getHostCheckHistory(db, name);
+  const network = precomputed.network ?? fetchHostNetworkRates(db, name);
+  const users = precomputed.users ?? buildUserRows(name, db, timezone, server);
+  const pollSeconds = Math.max(60, Math.trunc(pollIntervalSeconds));
+  const samples = precomputed.sampleCount ?? countRecentSamples(db, name, { hours: 24 });
+  const uptimeStrip =
+    precomputed.uptimeStrip ?? fetchHostUptimeStrip(db, name, { hours: 24, bucketMinutes: 15 });
+
+  const detail: HostDetail = {
     name,
     host: server ? server.host : undefined,
     collected_at: snapshot ? toLocalIso(snapshot.collected_at, timezone) : null,
@@ -1277,7 +1338,25 @@ export function buildHostDetail(
     disk: localizedDisk,
     alerts,
     checks,
+    check_history: checkHistory,
+    network,
+    users,
+    collection_uptime: {
+      samples,
+      expected: Math.max(1, Math.trunc((24 * 3600) / pollSeconds)),
+    },
+    uptime_strip: uptimeStrip,
+    diagnostics: [],
+    diagnostics_summary: { crit: 0, warn: 0, ok: 0, attention: 0 },
+    alert_days: [],
   };
+  detail.diagnostics = buildHostDiagnostics(detail as unknown as Obj, {
+    now,
+    pollIntervalSeconds,
+  });
+  detail.diagnostics_summary = summarizeDiagnostics(detail.diagnostics);
+  detail.alert_days = hostAlertDays(alerts, timezone, { now });
+  return detail;
 }
 
 function buildFleetReport(
@@ -1297,6 +1376,15 @@ function buildFleetReport(
   }
   const alertsGrouped = listRecentAlertsGrouped(db, { perHost: 20 });
   const checksGrouped = getAllHostCheckResults(db);
+  // v0.1.233 parity: fetch every per-host input in one batch instead of
+  // ~10 queries per host inside `buildHostDetail`.
+  const checkHistoryGrouped = getAllHostCheckHistory(db);
+  const networkGrouped = fetchAllHostNetworkRates(db);
+  const sampleCounts = countRecentSamplesByHost(db, { hours: 24 });
+  const uptimeStrips = fetchAllHostUptimeStrips(db, { hours: 24, bucketMinutes: 15 });
+  const userSnapshots = getAllHostUserSnapshots(db);
+  const userBaselines = getAllUserBaselines(db);
+  const userDeltas = getAllUserUsageDeltas(db, { days: USAGE_DELTA_DAYS });
 
   const details: HostDetail[] = [];
   for (const server of config.servers) {
@@ -1304,15 +1392,31 @@ function buildFleetReport(
       ...alert,
       created_at: toLocalIso(alert.created_at, timezone),
     }));
+    const snapshot = snapshots.get(server.name);
+    const users = buildUserRows(server.name, db, timezone, server, {
+      snapshots: userSnapshots[server.name] ?? [],
+      baselines: userBaselines[server.name] ?? [],
+      deltas: userDeltas[server.name] ?? {},
+      gpuUsage: gpuUsageFromMetrics(asObj(snapshot?.metrics)),
+    });
     details.push(
       buildHostDetail(
         server.name,
         config,
-        snapshots.get(server.name),
+        db,
+        snapshot,
         disks.get(server.name),
         localizedAlerts,
         checksGrouped[server.name] ?? [],
         timezone,
+        settings.pollIntervalSeconds,
+        {
+          checkHistory: checkHistoryGrouped[server.name] ?? {},
+          network: networkGrouped[server.name],
+          users,
+          sampleCount: sampleCounts[server.name] ?? 0,
+          uptimeStrip: uptimeStrips[server.name],
+        },
       ),
     );
   }
@@ -1562,11 +1666,13 @@ export function createOverviewBuilders(db: SqliteDatabase, config: AppConfig): O
       return buildHostDetail(
         name,
         config,
+        db,
         snapshot,
         disk,
         localizedAlerts,
         checks,
         timezone,
+        settings.pollIntervalSeconds,
       ) as unknown as Obj;
     },
     buildHostReport: (detail: Obj, generatedAt: Date): string => {

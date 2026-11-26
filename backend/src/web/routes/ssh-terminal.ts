@@ -11,20 +11,29 @@
  *   DELETE /api/ssh/sessions/:id                close the session  → 204
  *   GET    /api/ssh/sessions/:id/stream         SSE byte stream (`data: <base64>`)
  *
- * The PTY/session manager itself is not part of this skeleton: it is injected
- * through {@link SshTerminalRouteDeps.sshSessions}. Without an injected manager
- * (the current default) `POST /api/ssh/sessions` answers 502
+ * The PTY/session manager is injected through
+ * {@link SshTerminalRouteDeps.sshSessions}; the composition root supplies the
+ * real {@link SshTerminalManager}. When no manager is injected (unit tests that
+ * only exercise the gate) `POST /api/ssh/sessions` answers 502
  * `{error:'ssh_failed',message:'SSH 终端功能尚未迁移'}` and every per-session
- * endpoint answers 404 `session_not_found`, so the routes exist in the URL map
- * without pretending a working terminal.
+ * endpoint answers 404 `session_not_found`.
  *
  * The middleware chain (setup / CSRF / auth / user-mode) is installed by
  * `createWebApp`; this module only registers handlers.
  */
 import type { Express, Request, Response } from 'express';
 
-import type { AppConfig, HostConfig } from '../../config/config';
+import type { AppConfig } from '../../config/config';
+import {
+  SessionNotFoundError,
+  TerminalLimitError,
+  type SshSessionManager,
+} from '../../ssh/session-manager';
+import type { SessionManager } from '../session';
 import { ENDPOINTS } from './registry';
+
+export { SessionNotFoundError, TerminalLimitError } from '../../ssh/session-manager';
+export type { SshSessionManager } from '../../ssh/session-manager';
 
 type SqliteDatabase = import('better-sqlite3').Database;
 type Obj = Record<string, unknown>;
@@ -33,43 +42,12 @@ type Obj = Record<string, unknown>;
 const DEFAULT_COLS = 80;
 const DEFAULT_ROWS = 24;
 
-/** Raised by a manager when the concurrent-session limit is reached (→ 429). */
-export class TerminalLimitError extends Error {
-  constructor(message = 'terminal limit reached') {
-    super(message);
-    this.name = 'TerminalLimitError';
-  }
-}
-
-/** Raised by a manager when a session id is unknown (→ 404). */
-export class SessionNotFoundError extends Error {
-  constructor(message = 'session not found') {
-    super(message);
-    this.name = 'SessionNotFoundError';
-  }
-}
-
 /**
  * The injectable SSH session manager contract.
  *
- * Mirrors the Python `app.extensions['ssh_terminal']` manager surface used by
- * the oracle: `create` / `get_session` / `send_input` / `resize` / `close` /
- * `stream`.
+ * The concrete interface lives in `../../ssh/session-manager`; it is re-exported
+ * above for backwards compatibility with the route skeleton.
  */
-export interface SshSessionManager {
-  /** Allocate a session for `host` and return its id. */
-  create(host: HostConfig, cols: number, rows: number): string;
-  /** Whether a session id currently exists. */
-  getSession(sessionId: string): boolean;
-  /** Write raw client input to the session's PTY. */
-  sendInput(sessionId: string, data: string): void;
-  /** Resize the session's PTY. */
-  resize(sessionId: string, cols: number, rows: number): void;
-  /** Close the session; returns whether a session was closed. */
-  close(sessionId: string): boolean;
-  /** Async stream of output chunks (`''`/empty → SSE keepalive comment). */
-  stream(sessionId: string): AsyncIterable<Uint8Array | string>;
-}
 
 /** Injected dependencies. Only `config` is required for the routes to mount. */
 export interface SshTerminalRouteDeps {
@@ -168,6 +146,27 @@ function sessionExists(manager: SshSessionManager | undefined, sessionId: string
   }
 }
 
+/** The logged-in username from the signed session cookie, or "" (mirrors users.ts). */
+function sessionUsername(req: Request): string {
+  const locals = req.app?.locals as { session?: SessionManager } | undefined;
+  const manager = locals?.session;
+  if (!manager || typeof manager.getSession !== 'function') {
+    return '';
+  }
+  const username = manager.getSession(req)?.username;
+  return typeof username === 'string' ? username : '';
+}
+
+/** The client address, normalised like the oracle's `request.remote_addr`. */
+function remoteAddress(req: Request): string {
+  const raw = req.ip || req.socket?.remoteAddress || '';
+  if (!raw) {
+    return '127.0.0.1';
+  }
+  const normalized = raw.startsWith('::ffff:') ? raw.slice(7) : raw;
+  return normalized === '::1' ? '127.0.0.1' : normalized;
+}
+
 /** Registers the SSH terminal endpoints on `app`. */
 export function registerSshTerminalRoutes(app: Express, deps: SshTerminalRouteDeps): void {
   const { config } = deps;
@@ -185,7 +184,7 @@ export function registerSshTerminalRoutes(app: Express, deps: SshTerminalRouteDe
   };
 
   // --- POST /api/ssh/sessions ---------------------------------------------
-  app.post(ENDPOINTS.create_ssh_session, (req, res) => {
+  app.post(ENDPOINTS.create_ssh_session, async (req, res) => {
     if (!passGate(req, res)) {
       return;
     }
@@ -211,8 +210,12 @@ export function registerSshTerminalRoutes(app: Express, deps: SshTerminalRouteDe
     }
 
     try {
-      const sessionId = manager.create(host, cols, rows);
-      // TODO(audit): record the session-creation audit entry as the oracle does.
+      // `await` keeps both the real (async) manager and the legacy sync fakes
+      // structurally compatible.
+      const sessionId = await manager.create(host, cols, rows, {
+        username: sessionUsername(req) || 'admin',
+        remoteAddr: remoteAddress(req),
+      });
       res.status(201).json({ session_id: sessionId });
     } catch (error) {
       if (error instanceof TerminalLimitError) {
@@ -340,7 +343,6 @@ export function registerSshTerminalRoutes(app: Express, deps: SshTerminalRouteDe
       } finally {
         try {
           manager?.close(sessionId);
-          // TODO(audit): finalize the session audit entry as the oracle does.
         } catch {
           // ignore close failures on an already-terminated stream
         }

@@ -577,21 +577,6 @@ import {
     loadAlertHistory('24h');
   }
 
-  var ATTENTION_LIMITS = { cpu: 90, memory: 90, disk: 90, gpu: 90, temperature: 70 };
-
-  // 关注项按"影响面"排序：检查失败/坏盘这类硬故障在前，占用类指标居中，
-  // 活动告警只是结果，放在最后。数字越大越靠前。
-  var ATTENTION_WEIGHTS = {
-    checks: 90,
-    diskHealth: 80,
-    temperature: 70,
-    disk: 65,
-    memory: 60,
-    cpu: 55,
-    gpu: 50,
-    alerts: 40,
-  };
-
   function attentionPopover() {
     var pop = document.getElementById('attention-pop');
     if (pop) { return pop; }

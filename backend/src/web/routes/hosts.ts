@@ -66,6 +66,7 @@ import {
 } from '../../storage/alerts';
 import { getAllDiskHealth, getDiskHealth, type DiskHealthSnapshot } from '../../storage/disk';
 import {
+  fetchHostNetworkRates,
   getAllHostCheckResults,
   getAllHostSnapshots,
   getHostCheckResults,
@@ -86,6 +87,9 @@ import {
 } from '../../storage/metrics-read';
 import { nowIsoUtc } from '../../storage/time';
 import { toLocalIso as sharedToLocalIso } from '../local-iso';
+import { buildHostDiagnostics, hostAlertDays, summarizeDiagnostics } from '../host-diagnostics';
+import { buildHostReport as buildHostReportShared } from './overview';
+import { buildUserRows } from './users';
 
 type SqliteDatabase = import('better-sqlite3').Database;
 type Obj = Record<string, unknown>;
@@ -498,7 +502,7 @@ export function registerHostsRoutes(app: Express, deps: HostsRouteDeps): void {
     const samples = countRecentSamples(db, name, { hours: 24 });
     const expected = Math.max(1, Math.trunc((24 * 3600) / Math.max(60, settings.pollIntervalSeconds)));
 
-    return {
+    const detail: Obj = {
       name,
       host: server.host,
       collected_at: snapshot ? toLocalIso(snapshot.collected_at, settings.timezone) : null,
@@ -511,49 +515,37 @@ export function registerHostsRoutes(app: Express, deps: HostsRouteDeps): void {
       errors: snapshot ? snapshot.errors : [],
       disk: disk
         ? {
-            status: disk.status,
-            message: disk.message,
+            ...disk,
             collected_at: toLocalIso(disk.collected_at, settings.timezone),
-            controllers: disk.controllers,
-            virtual_drives: disk.virtual_drives,
-            physical_drives: disk.physical_drives,
           }
-        : {},
+        : null,
       alerts,
       checks,
       check_history: checkHistory,
-      // TODO: port `_network_rate_pair` (rx/tx rate needs consecutive history rows).
-      network: {},
-      // TODO: port `_build_user_rows` once the user-collection module is migrated.
-      users: [],
+      network: fetchHostNetworkRates(db, name),
+      users: buildUserRows(name, db, settings.timezone, server),
       collection_uptime: { samples, expected },
       uptime_strip: uptimeStrip,
-      // TODO: port the diagnostics module (`diagnostics` / `diagnostics_summary`).
       diagnostics: [],
-      diagnostics_summary: {},
-      // TODO: port `_host_alert_days` (per-day alert counts for the report strip).
+      diagnostics_summary: { crit: 0, warn: 0, ok: 0, attention: 0 },
       alert_days: [],
     };
+    const diagnostics = buildHostDiagnostics(detail, {
+      pollIntervalSeconds: settings.pollIntervalSeconds,
+    });
+    detail['diagnostics'] = diagnostics;
+    detail['diagnostics_summary'] = summarizeDiagnostics(diagnostics);
+    detail['alert_days'] = hostAlertDays(alerts as unknown as Obj[], settings.timezone);
+    return detail;
   };
 
-  const buildHostReportLocal = (detail: Obj, generatedAt: Date): string => {
-    // TODO: full parity with `_build_host_report` (disk/session/alert sections).
-    const settings = readHostsSettings(db);
-    const metrics = asObj(detail['metrics']);
-    const cpu = asFloat(metrics.cpu_usage_percent);
-    const mem = memoryPercent(metrics);
-    const lines = [
-      `主机巡检报告：${String(detail['name'] ?? '')}`,
-      `地址：${String(detail['host'] ?? '')}`,
-      `生成时间：${toLocalIso(generatedAt, settings.timezone) ?? ''}`,
-      `采集时间：${String(detail['collected_at'] ?? '—')}`,
-      `采集状态：${detail['success'] === true ? '成功' : detail['success'] === false ? '失败' : '等待采集'}`,
-      `分组：${String(detail['group'] ?? '未分组')}`,
-      `CPU：${cpu === null ? '—' : `${cpu.toFixed(1)}%`}`,
-      `内存：${mem === null ? '—' : `${mem.toFixed(1)}%`}`,
-    ];
-    return `${lines.join('\n')}\n`;
-  };
+  const buildHostReportLocal = (detail: Obj, generatedAt: Date): string =>
+    buildHostReportShared(
+      detail as unknown as Parameters<typeof buildHostReportShared>[0],
+      generatedAt,
+      readHostsSettings(db).timezone,
+      true,
+    );
 
   const buildOverview = (): Obj => (deps.buildOverview ? deps.buildOverview() : buildOverviewLocal());
   const buildHostDetail = (name: string): Obj | null =>

@@ -27,6 +27,7 @@ import { loadEffectiveSettings } from '../config/service';
 import { hostToSshConnectConfig } from '../collect/collectors';
 import { collectContainerStats } from '../collect/container-stats';
 import { buildComputeSummary } from '../collect/compute';
+import { createUsersAdminApi, createUsersExecuteRunner } from '../users/execute-service';
 import {
   probeHost,
   type ProbeCandidate,
@@ -39,17 +40,11 @@ import { coerceHostCheckConfig, runHostChecks, type CheckRunner } from '../runti
 import { collectHostsNow } from '../runtime/wiring';
 import { getCollectionStatusRegistry } from '../runtime/collection-status';
 import { getAllHostSnapshots } from '../storage/hosts';
+import { recordSshSessionEnd, recordSshSessionStart } from '../storage/runtime';
 import { getAllUserScanStates } from '../storage/users';
-import {
-  AdminPlanError,
-  buildPlan as adminBuildPlan,
-  publicPlan as adminPublicPlan,
-  validateAccountName as adminValidateAccountName,
-  type AdminPlan,
-  type BuildPlanParams,
-} from '../users/admin';
 import { runUserScan, type ScanSummary } from '../users/collection';
 import { createWebApp } from './app';
+import { SshTerminalManager } from '../ssh/session-manager';
 import { registerAuthRoutes, type AuthRouteDeps } from './routes/auth';
 import {
   createOverviewBuilders,
@@ -59,7 +54,7 @@ import {
 import { registerHostsRoutes, type HostsRouteDeps } from './routes/hosts';
 import { registerSettingsRoutes, type SettingsRouteDeps } from './routes/settings';
 import { registerAlertsRoutes, type AlertsRouteDeps } from './routes/alerts';
-import { registerUsersRoutes, type UsersRouteDeps, type UsersAdminApi, type UsersMonitorService } from './routes/users';
+import { registerUsersRoutes, type UsersRouteDeps, type UsersMonitorService } from './routes/users';
 import { registerSystemRoutes, type SystemRouteDeps } from './routes/system';
 import { registerPagesRoutes, type PagesRouteDeps } from './routes/pages';
 import { registerDiskHealthRoutes, type DiskHealthRouteDeps } from './routes/disk-health';
@@ -404,40 +399,25 @@ function createUsersMonitorService(db: SqliteDatabase, config: AppConfig): Users
   };
 }
 
+
 /**
- * Builds the `admin` planner API for the users routes (P5 Task 11b).
- *
- * The route calls `buildPlan(operation, options)` with camelCase option keys;
- * this adapter maps them onto the `users/admin.ts` snake_case {@link
- * BuildPlanParams}. `AdminPlanError`/`validateAccountName`/`publicPlan` are the
- * real planner helpers, so plan preview works end-to-end. Actually executing a
- * plan is intentionally left unwired (see the module docs): `executePlan` is
- * synchronous while `SshClient` is async and no production `PlanRunner` exists.
+ * `sshTerminal.sshSessions` — the real ssh2-backed terminal session manager,
+ * with its audit rows bound to the runtime storage helpers. A fresh manager is
+ * created per composition (each app owns its own session table + idle sweep).
  */
-function createUsersAdmin(): UsersAdminApi {
-  return {
-    AdminPlanError,
-    validateAccountName: (value: unknown) => adminValidateAccountName(value),
-    buildPlan: (operation: string, options: Record<string, unknown>) => {
-      const params: BuildPlanParams = {
-        operation,
-        host_name: typeof options['hostName'] === 'string' ? (options['hostName'] as string) : '',
-        account: typeof options['account'] === 'string' ? (options['account'] as string) : '',
-        password:
-          typeof options['password'] === 'string'
-            ? (options['password'] as string)
-            : null,
-        account_exists: Boolean(options['accountExists']),
-        data_supported: options['dataSupported'] !== false,
-        sudo_configured: Boolean(options['sudoOk']),
-        with_docker: options['withDocker'] !== false,
-        with_data: options['withData'] !== false,
-      };
-      return adminBuildPlan(params) as unknown as Record<string, unknown>;
+function createSshTerminalDeps(db: SqliteDatabase): Partial<SshTerminalRouteDeps> {
+  const { connectTimeoutSec, hostKeyPolicy } = readSshSettings(db);
+  const manager = new SshTerminalManager({
+    connectTimeoutSec,
+    hostKeyPolicy,
+    audit: {
+      recordStart: (input) => recordSshSessionStart(db, input),
+      recordEnd: (auditId, status, error) => {
+        recordSshSessionEnd(db, auditId, { status, error });
+      },
     },
-    publicPlan: (plan: Record<string, unknown>) =>
-      adminPublicPlan(plan as unknown as AdminPlan) as unknown as Record<string, unknown>,
-  };
+  });
+  return { sshSessions: manager };
 }
 
 /**
@@ -474,11 +454,15 @@ export function buildDefaultDeps(db: SqliteDatabase, config: AppConfig): Composi
     },
     users: {
       monitorService: createUsersMonitorService(db, config),
-      admin: createUsersAdmin(),
+      admin: createUsersAdminApi({ servers: () => config.servers }),
+      runExecuteJob: createUsersExecuteRunner({
+        config: { servers: () => config.servers },
+      }),
     },
     pages: {
       buildComputeSummary: createComputeSummaryBuilder(),
     },
+    sshTerminal: createSshTerminalDeps(db),
   };
 }
 
@@ -546,7 +530,13 @@ export function createServerApp(opts: CreateServerAppOptions): Express {
         appVersion,
       });
       registerDiskHealthRoutes(app, { ...overrides.diskHealth, db, config, appVersion });
-      registerSshTerminalRoutes(app, { ...overrides.sshTerminal, db, config, appVersion });
+      registerSshTerminalRoutes(app, {
+        ...defaults.sshTerminal,
+        ...overrides.sshTerminal,
+        db,
+        config,
+        appVersion,
+      });
     },
   });
 }

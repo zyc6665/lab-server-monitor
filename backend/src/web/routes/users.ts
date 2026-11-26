@@ -296,7 +296,7 @@ function sessionUsername(req: Request): string {
 // ---------------------------------------------------------------------------
 
 const USER_DIRECTORY_ISSUES = new Set(['home', 'data', 'owner']);
-const USAGE_DELTA_DAYS = 7;
+export const USAGE_DELTA_DAYS = 7;
 
 /** `_user_row_issues`: UI issue keys for a *present* snapshot row. */
 function userRowIssues(row: Obj): string[] {
@@ -413,13 +413,13 @@ function userHostStatus(state: UserScanState | undefined): string {
   return 'unknown';
 }
 
-interface GpuBucket {
+export interface GpuBucket {
   mb: number;
   procs: number;
 }
 
 /** `_gpu_usage_from_metrics`: sum GPU memory per account from one metrics snapshot. */
-function gpuUsageFromMetrics(metrics: Obj): Record<string, GpuBucket> {
+export function gpuUsageFromMetrics(metrics: Obj): Record<string, GpuBucket> {
   const usage: Record<string, GpuBucket> = {};
   for (const raw of asArray(metrics['gpu_processes'])) {
     const proc = asObj(raw);
@@ -439,7 +439,7 @@ function gpuUsageByUser(db: SqliteDatabase, hostName: string): Record<string, Gp
   return gpuUsageFromMetrics(asObj(snapshot?.metrics));
 }
 
-interface PrecomputedUserRows {
+export interface PrecomputedUserRows {
   snapshots?: UserRow[];
   baselines?: UserRow[];
   deltas?: Record<string, UserUsageDelta>;
@@ -447,7 +447,7 @@ interface PrecomputedUserRows {
 }
 
 /** `_build_user_rows`: merged present/missing rows for one host. */
-function buildUserRows(
+export function buildUserRows(
   hostName: string,
   db: SqliteDatabase,
   tz: string | null,

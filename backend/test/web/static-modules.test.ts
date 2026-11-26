@@ -69,6 +69,37 @@ describe('static ES modules integrity', () => {
     expect(problems).toEqual([]);
   });
 
+  it('every UPPERCASE constant from another module is declared or imported', () => {
+    const problems: string[] = [];
+    for (const [file, src] of sources) {
+      if (!isModule(src)) { continue; }
+      const available = new Set([...importedNames(src), ...declaredNames(src)]);
+      for (const [name, owner] of exportedFrom) {
+        if (owner === file || !/^[A-Z][A-Z0-9_]+$/.test(name)) { continue; }
+        const used = new RegExp('(^|[^\\w$.])' + name + '\\b').test(src);
+        if (used && !available.has(name)) {
+          problems.push(`${path.relative(staticRoot, file)} uses constant ${name} from ${path.relative(staticRoot, owner)} without importing it`);
+        }
+      }
+    }
+    // Also catch constants declared in classic app.js but used by a module.
+    for (const [file, src] of sources) {
+      if (!isModule(src)) { continue; }
+      const available = new Set([...importedNames(src), ...declaredNames(src)]);
+      const appSrc = sources.get(path.join(staticRoot, 'app.js')) ?? '';
+      const re = /(?:^|\n)\s*(?:var|let|const)\s+([A-Z][A-Z0-9_]+)\s*=/g;
+      let m: RegExpExecArray | null;
+      while ((m = re.exec(appSrc))) {
+        const name = m[1];
+        if (available.has(name)) { continue; }
+        if (new RegExp('(^|[^\\w$.])' + name + '\\b').test(src)) {
+          problems.push(`${path.relative(staticRoot, file)} uses app.js constant ${name} without a local definition`);
+        }
+      }
+    }
+    expect(problems).toEqual([]);
+  });
+
   it('every createElementNS() namespace argument is a declared identifier or literal', () => {
     const problems: string[] = [];
     for (const [file, src] of sources) {

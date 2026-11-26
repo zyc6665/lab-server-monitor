@@ -73,6 +73,11 @@ export interface ShellChannel {
   onData(callback: (data: string) => void): void;
   resize(cols: number, rows: number): void;
   close(): void;
+  /**
+   * Register a one-shot callback fired when the channel closes or errors
+   * (remote EOF / teardown). Optional so lightweight fakes stay valid.
+   */
+  onClose?(callback: (error?: Error) => void): void;
 }
 
 // ---------------------------------------------------------------------------
@@ -451,9 +456,22 @@ export class SshClient {
     return this.execInternal(command, timeoutMs);
   }
 
-  async runSudo(command: string, password: string, timeoutMs: number): Promise<CommandResult> {
+  async runSudo(
+    command: string,
+    password: string,
+    timeoutMs: number,
+    stdinData?: string | null,
+  ): Promise<CommandResult> {
     await this.connect();
-    const result = await this.execInternal(`sudo -S -p '' ${command}`, timeoutMs, password + '\n');
+    // sudo consumes the first line as its password; anything after it is
+    // fed to the wrapped command's stdin (e.g. `chpasswd`). Mirrors the Python
+    // `run_sudo(command, timeout, stdin_data)` oracle, which writes both to the
+    // same channel.
+    let stdin = password + '\n';
+    if (stdinData !== null && stdinData !== undefined) {
+      stdin += stdinData + '\n';
+    }
+    const result = await this.execInternal(`sudo -S -p '' ${command}`, timeoutMs, stdin);
 
     if (result.exitStatus !== 0) {
       const haystack = `${result.stderr}\n${result.stdout}`.toLowerCase();
@@ -569,6 +587,20 @@ export class SshClient {
       }
     });
 
+    const closeListeners: Array<(error?: Error) => void> = [];
+    let closeNotified = false;
+    const notifyClose = (error?: Error): void => {
+      if (closeNotified) {
+        return;
+      }
+      closeNotified = true;
+      for (const listener of closeListeners) {
+        listener(error);
+      }
+    };
+    channel.on('close', () => notifyClose());
+    channel.on('error', (error: Error) => notifyClose(error));
+
     return {
       write: (data: string): void => {
         channel.write(data);
@@ -585,6 +617,13 @@ export class SshClient {
         } catch {
           // ignore
         }
+      },
+      onClose: (callback: (error?: Error) => void): void => {
+        if (closeNotified) {
+          callback();
+          return;
+        }
+        closeListeners.push(callback);
       },
     };
   }

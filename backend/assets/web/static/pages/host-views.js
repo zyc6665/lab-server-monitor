@@ -2,6 +2,22 @@
  * Each builder takes the host payload and returns a detached DOM node. */
 import { formatBytesShared, formatPercent, formatRelative, formatStamp } from '../lib/format.js';
 
+// Shared thresholds/weights for the "关注项" chips. These used to live in
+// app.js; after the M2 module split they must be defined here too (used by
+// hostAttentionReasons/attentionChip), otherwise every table row build throws.
+const ATTENTION_LIMITS = { cpu: 90, memory: 90, disk: 90, gpu: 90, temperature: 70 };
+const ATTENTION_WEIGHTS = {
+  checks: 90,
+  diskHealth: 80,
+  temperature: 70,
+  disk: 65,
+  memory: 60,
+  cpu: 55,
+  gpu: 50,
+  alerts: 40,
+};
+
+
 export function setText(id, text) {
   var el = document.getElementById(id);
   if (el) { el.textContent = String(text); }
