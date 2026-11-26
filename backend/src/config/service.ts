@@ -20,6 +20,7 @@
 import { ConfigError } from './errors';
 import { defaultSection, isKnownSection, validateSection, SETTINGS_SCHEMA, SECTION_NAMES } from './schema';
 import { deleteAppSettings, loadAppSettings, saveAppSettings } from '../storage/settings';
+import { recordConfigHistory } from '../storage/config-history';
 import { getSecret } from '../storage/secrets';
 import { dpapiAvailable } from '../storage/dpapi';
 import { APP_VERSION } from '../version';
@@ -154,6 +155,8 @@ export interface SaveSectionOptions {
   writable?: boolean;
   /** Secret sink for stripped credentials (defaults to a DB-backed writer). */
   secrets?: SecretWriter;
+  /** Who performed the change (recorded in the settings change history). */
+  changedBy?: string;
 }
 
 /**
@@ -241,6 +244,17 @@ export function saveSection(
   }
 
   saveAppSettings(db, section, persisted);
+  // P2-3: record WHICH keys changed (names only — never values).
+  try {
+    const before = isPlainObject(current) ? current : {};
+    const after = isPlainObject(persisted) ? persisted : {};
+    const changed = Array.from(new Set([...Object.keys(before), ...Object.keys(after)])).filter(
+      (key) => JSON.stringify(before[key]) !== JSON.stringify(after[key]),
+    );
+    recordConfigHistory(db, { section, changedKeys: changed, changedBy: options.changedBy ?? 'admin' });
+  } catch {
+    /* history is best-effort; never fail a save because logging failed */
+  }
   return { restartRequired: SETTINGS_SCHEMA[section].restartRequired };
 }
 

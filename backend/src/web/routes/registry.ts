@@ -78,6 +78,7 @@ export const ENDPOINTS = {
   // --- settings ------------------------------------------------------------
   api_get_settings: '/api/settings',
   api_put_settings_section: '/api/settings/{section}',
+  api_settings_history: '/api/settings/history',
   api_test_ssh: '/api/settings/test-ssh',
   api_test_email: '/api/settings/test-email',
   api_test_desktop: '/api/settings/test-desktop',

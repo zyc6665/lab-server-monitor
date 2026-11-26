@@ -1464,6 +1464,56 @@
     });
   }
 
+
+  function initSettingsSearch() {
+    var input = document.getElementById("settings-search");
+    if (!input) return;
+    var cards = qsa("[data-section]");
+    input.addEventListener("input", function () {
+      var q = String(input.value || "").trim().toLowerCase();
+      cards.forEach(function (card) {
+        var match = !q || String(card.textContent || "").toLowerCase().indexOf(q) !== -1;
+        card.style.display = match ? "" : "none";
+      });
+    });
+  }
+
+  function renderHistoryList(items) {
+    var list = document.getElementById("settings-history-list");
+    if (!list) return;
+    while (list.firstChild) list.removeChild(list.firstChild);
+    if (!items || !items.length) {
+      var empty = document.createElement("li");
+      empty.className = "muted small";
+      empty.textContent = "暂无记录";
+      list.appendChild(empty);
+      return;
+    }
+    items.forEach(function (row) {
+      var li = document.createElement("li");
+      var when = document.createElement("span");
+      when.className = "history-when muted small";
+      when.textContent = String(row.changed_at || "").replace("T", " ").slice(0, 19);
+      var text = document.createElement("span");
+      var keys = Array.isArray(row.changed_keys) ? row.changed_keys : [];
+      text.textContent = " [" + String(row.section || "") + "] " + keys.join("、");
+      li.appendChild(when);
+      li.appendChild(text);
+      list.appendChild(li);
+    });
+  }
+
+  function loadSettingsHistory() {
+    api("GET", "/api/settings/history?limit=20").then(function (payload) {
+      renderHistoryList((payload && payload.history) || []);
+    }).catch(function () {
+      renderHistoryList([]);
+    });
+  }
+
+  initSettingsSearch();
+  loadSettingsHistory();
+
   // Fill any values that were not rendered server-side (e.g. list edits).
   fillSection("monitoring", initial.monitoring);
   fillSection("ssh", initial.ssh);

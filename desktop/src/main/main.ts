@@ -20,7 +20,9 @@ import {
   shell,
   clipboard,
   ipcMain,
+  dialog,
 } from 'electron';
+import { get as httpGet } from 'node:http';
 import {
   existsSync,
   mkdirSync,
@@ -56,6 +58,8 @@ import {
 } from './lifecycle';
 import { createUpdater, type AutoUpdaterLike, type UpdaterControl } from './updater';
 import { loadAppIcon } from './icon';
+import { latestCrashLog, pruneCrashLogs, writeCrashLog, type CrashEntry } from './crash-log';
+import { runStartupChecks } from './startup-check';
 
 type BackendProcess = ReturnType<typeof utilityProcess.fork>;
 
@@ -142,6 +146,81 @@ function initDataDir(): void {
   runtimePath = join(dataDir, 'runtime.json');
   mkdirSync(dataDir, { recursive: true });
   mkdirSync(logsDir(dataDir), { recursive: true });
+}
+
+/**
+ * Logs directory for crash reports.
+ *
+ * Normally `paths.logsDir(dataDir)`. Before {@link initDataDir} has run (e.g. a
+ * crash in an early `whenReady` handler) `dataDir` is still empty, so fall back
+ * to Electron's per-user logs directory. Never throws: this runs inside crash
+ * handlers.
+ */
+function crashLogsDir(): string {
+  if (dataDir) {
+    return logsDir(dataDir);
+  }
+  try {
+    return app.getPath('logs');
+  } catch {
+    return logsDir(process.cwd());
+  }
+}
+
+function describeError(error: unknown): { message: string; stack?: string } {
+  if (error instanceof Error) {
+    return { message: error.message || error.name, stack: error.stack };
+  }
+  if (error && typeof error === 'object' && 'message' in error) {
+    const message = String((error as { message: unknown }).message);
+    const stack = (error as { stack?: unknown }).stack;
+    return { message, stack: typeof stack === 'string' ? stack : undefined };
+  }
+  return { message: String(error) };
+}
+
+/**
+ * Persist a crash entry and prune old logs. Never throws — we may already be
+ * unwinding from a fatal error, and the app must keep running / quitting
+ * cleanly even when the disk is full or the logs directory is unwritable.
+ */
+function recordCrash(entry: Omit<CrashEntry, 'at'>): void {
+  const dir = crashLogsDir();
+  let written: string | null = null;
+  try {
+    written = writeCrashLog(dir, { ...entry, at: new Date() });
+  } catch {
+    written = null;
+  }
+  try {
+    pruneCrashLogs(dir, 20);
+  } catch {
+    /* pruning is best-effort */
+  }
+  if (written) {
+    // eslint-disable-next-line no-console
+    console.error(`[crash] ${entry.kind}: ${entry.message}（日志：${written}）`);
+  } else {
+    // eslint-disable-next-line no-console
+    console.error(`[crash] ${entry.kind}: ${entry.message}（无法写入崩溃日志：${dir}）`);
+  }
+}
+
+/**
+ * Register process-level crash handlers as early as possible (before `ready`)
+ * so exceptions thrown during startup are still recorded. The app stays
+ * resident in the tray instead of vanishing: a renderer/backend problem should
+ * not take the whole dashboard down.
+ */
+function installCrashHandlers(): void {
+  process.on('uncaughtException', (error) => {
+    const { message, stack } = describeError(error);
+    recordCrash({ kind: 'uncaughtException', message, stack });
+  });
+  process.on('unhandledRejection', (reason) => {
+    const { message, stack } = describeError(reason);
+    recordCrash({ kind: 'unhandledRejection', message, stack });
+  });
 }
 
 /** True when this first run should import a legacy database. */
@@ -277,7 +356,36 @@ function buildTray(): Tray {
     {
       label: '打开日志目录',
       click: () => {
-        void shell.openPath(logsDir(dataDir));
+        const dir = crashLogsDir();
+        // The directory normally exists (created by initDataDir); re-create it
+        // here so the menu still works after a user deletes it by hand.
+        try {
+          mkdirSync(dir, { recursive: true });
+        } catch {
+          /* shell.openPath reports the failure to the user below */
+        }
+        void shell.openPath(dir);
+      },
+    },
+    {
+      label: '打开最近崩溃日志',
+      click: () => {
+        const dir = crashLogsDir();
+        try {
+          mkdirSync(dir, { recursive: true });
+        } catch {
+          /* fall through: openPath will surface the problem */
+        }
+        const latest = latestCrashLog(dir);
+        if (latest) {
+          // Select the newest crash log in Explorer so it is obvious which file
+          // to attach to a bug report.
+          shell.showItemInFolder(latest);
+          return;
+        }
+        // No crash recorded yet: opening the directory is more useful than a
+        // silent no-op.
+        void shell.openPath(dir);
       },
     },
     { type: 'separator' },
@@ -314,6 +422,7 @@ function initUpdater(): void {
       autoUpdater,
       currentVersion: app.getVersion(),
       ipcMain,
+      logDir: logsDir(dataDir),
       log: (message) => {
         // eslint-disable-next-line no-console
         console.log(`[update] ${message}`);
@@ -407,6 +516,40 @@ function registerWindowControls(): void {
   });
 }
 
+/**
+ * Backend liveness probe used by the startup self-check.
+ *
+ * Any HTTP response (even 401/428 from the auth/setup middleware) proves the
+ * backend is serving; only a connection error/timeout counts as unhealthy.
+ */
+function probeBackend(url: string): Promise<boolean> {
+  const healthUrl = `${url.replace(/\/+$/, '')}/api/system/health`;
+  return new Promise<boolean>((resolve) => {
+    let settled = false;
+    const finish = (healthy: boolean): void => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      resolve(healthy);
+    };
+    try {
+      const request = httpGet(healthUrl, (response) => {
+        response.resume();
+        response.on('end', () => finish(true));
+        response.on('error', () => finish(false));
+      });
+      request.on('error', () => finish(false));
+      request.setTimeout(2000, () => {
+        request.destroy();
+        finish(false);
+      });
+    } catch {
+      finish(false);
+    }
+  });
+}
+
 async function main(): Promise<void> {
   // No native application menu — the in-page title bar is the only chrome.
   Menu.setApplicationMenu(null);
@@ -419,7 +562,28 @@ async function main(): Promise<void> {
   initUpdater();
 
   const rt = await launchBackend(importLegacy);
-  await win.loadURL(rt.url);
+  // M11 startup self-check: run once after the backend answered its runtime
+  // handshake, in parallel with the first page load. `port` is intentionally
+  // omitted — the backend is launched with `--port 0` (OS-assigned), so there
+  // is no pre-known port to probe and probing our own port would false-alarm.
+  const logDir = logsDir(dataDir);
+  const [selfCheck] = await Promise.all([
+    runStartupChecks({
+      dataDir,
+      health: () => probeBackend(rt.url),
+      logDir,
+      retries: 3,
+      delayMs: 500,
+    }),
+    win.loadURL(rt.url),
+  ]);
+  if (!selfCheck.ok) {
+    recordCrash({ kind: 'startup-check', message: selfCheck.failures.join('；') });
+    dialog.showErrorBox(
+      '启动自检失败',
+      `${selfCheck.failures.join('\n')}\n日志目录：${logDir}`,
+    );
+  }
 }
 
 // Single-instance lock: a second launch focuses the existing window instead of
@@ -428,8 +592,19 @@ async function main(): Promise<void> {
 if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
+  installCrashHandlers();
+
   app.on('second-instance', () => {
     showWindow();
+  });
+
+  // Renderer crash: keep the main process alive (the window can be reloaded or
+  // recreated) but leave a crash log with the Chromium reason for diagnosis.
+  app.on('render-process-gone', (_event, _webContents, details) => {
+    recordCrash({
+      kind: 'render-process-gone',
+      message: `reason=${details.reason} exitCode=${details.exitCode}`,
+    });
   });
 
   app.on('window-all-closed', () => {

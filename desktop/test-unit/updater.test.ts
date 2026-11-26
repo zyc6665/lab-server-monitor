@@ -78,7 +78,7 @@ class FakeIpcMain implements IpcMainLike {
   }
 }
 
-function setup(currentVersion = '0.1.239') {
+function setup(currentVersion = '0.1.239', logDir?: string) {
   const autoUpdater = new FakeAutoUpdater();
   const ipcMain = new FakeIpcMain();
   const events: UpdaterEvent[] = [];
@@ -86,6 +86,7 @@ function setup(currentVersion = '0.1.239') {
     autoUpdater,
     currentVersion,
     ipcMain,
+    logDir,
     notify: (event) => events.push(event),
   });
   return { autoUpdater, ipcMain, events, control };
@@ -251,5 +252,53 @@ describe('dispose', () => {
     expect(ipcMain.handlers.size).toBe(0);
     expect(autoUpdater.listenerCount('update-available')).toBe(0);
     expect(autoUpdater.listenerCount('download-progress')).toBe(0);
+  });
+});
+
+describe('failure diagnostics (M11)', () => {
+  const LOG_DIR = 'D:\\ServerMonitorData\\logs';
+
+  it('appends the logs directory to check failures without changing the IPC shape', async () => {
+    const { autoUpdater, ipcMain, events } = setup('0.1.239', LOG_DIR);
+    autoUpdater.checkError = new Error('network down');
+
+    const result = (await ipcMain.invoke('update:check')) as UpdaterEvent & {
+      ok: boolean;
+      result: { status: string; error?: string };
+    };
+
+    expect(result.status).toBe('error');
+    expect(result.error).toContain('network down');
+    expect(result.error).toContain(`日志：${LOG_DIR}`);
+    // Notify sink carries the same diagnostic.
+    expect(events.at(-1)?.error).toContain(`日志：${LOG_DIR}`);
+    // Payload keys are unchanged (only the error text got richer).
+    expect(Object.keys(result).sort()).toEqual(['error', 'ok', 'result', 'status']);
+    expect(Object.keys(result.result).sort()).toEqual(['current_version', 'error', 'status']);
+  });
+
+  it('appends the logs directory to download failures', async () => {
+    const { autoUpdater, ipcMain, events } = setup('0.1.239', LOG_DIR);
+    autoUpdater.downloadError = new Error('disk full');
+
+    const result = (await ipcMain.invoke('update:download')) as UpdaterEvent;
+
+    expect(result.status).toBe('error');
+    expect(result.error).toContain('disk full');
+    expect(result.error).toContain(`日志：${LOG_DIR}`);
+    expect(events.at(-1)?.error).toBe(result.error);
+  });
+
+  it('appends the logs directory to forwarded autoUpdater error events', () => {
+    const { autoUpdater, events } = setup('0.1.239', LOG_DIR);
+    autoUpdater.emit('error', new Error('boom'));
+    expect(events.at(-1)?.error).toBe(`boom\n日志：${LOG_DIR}`);
+  });
+
+  it('keeps the plain message when no log dir is injected', async () => {
+    const { autoUpdater, ipcMain } = setup();
+    autoUpdater.checkError = new Error('network down');
+    const result = (await ipcMain.invoke('update:check')) as UpdaterEvent;
+    expect(result.error).toBe('network down');
   });
 });

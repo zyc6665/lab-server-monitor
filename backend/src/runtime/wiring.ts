@@ -30,6 +30,8 @@
  * registered when at least one host opts into user monitoring, matching
  * `ServerMonitor._build_tasks`.
  */
+import { mkdirSync, readdirSync, rmSync, statSync } from 'node:fs';
+import { join } from 'node:path';
 import type { AppConfig, HostConfig } from '../config/config';
 import { loadEffectiveSettings, type Settings } from '../config/service';
 import {
@@ -51,7 +53,9 @@ import {
   runHostChecks as defaultAvailabilityRunHostChecks,
   type CheckRunner,
 } from './availability';
-import { cleanupLogs as defaultCleanupLogs, type CleanupResult } from './maintenance';
+import { cleanupLogs as defaultCleanupLogs, directorySize as defaultDirectorySize, type CleanupResult } from './maintenance';
+import { backupDatabase as defaultBackupDatabase } from '../storage/runtime';
+import { pruneStorageSamples, recordStorageSample } from '../storage/storage-samples';
 import { Scheduler, type CalendarSpec, type ScheduledTask } from './scheduler';
 import {
   persistHostReports,
@@ -167,6 +171,10 @@ export interface SchedulerWiringDeps {
   renderReport?: RenderReportFn;
   /** Replacement for `alerts/mailer.ts` `sendReport` (report tasks). */
   sendReport?: SendReportFn;
+  /** Replacement for `maintenance.directorySize` (tests stub the filesystem). */
+  directorySize?: (target: string) => number;
+  /** Replacement for `storage/runtime.ts` `backupDatabase`. */
+  backupDatabase?: (db: SqliteDatabase, target: string) => Promise<void>;
   /** Injectable clock (defaults to `() => new Date()`); used by `prune` + reports. */
   now?: () => Date;
   /** Replacement for the P5 `disk/collect.ts` `collectDiskHealth`. */
@@ -888,6 +896,67 @@ function buildWeeklyReportTask(
   };
 }
 
+function fileSize(path: string): number {
+  try {
+    return statSync(path).size;
+  } catch {
+    return 0;
+  }
+}
+
+/** Daily storage-size sample (P2-4 growth trend). */
+function buildStorageSampleTask(db: SqliteDatabase, config: AppConfig, deps: SchedulerWiringDeps): ScheduledTask {
+  return {
+    name: 'storage-sample',
+    intervalSeconds: 86400,
+    run: () => {
+      const now = deps.now ? deps.now() : new Date();
+      const size = deps.directorySize ?? defaultDirectorySize;
+      const dataDir = config.dataDir ?? '';
+      const dataDirBytes = dataDir ? size(dataDir) : 0;
+      recordStorageSample(db, { dbBytes: fileSize(config.dbPath ?? db.name), dataDirBytes, now });
+      pruneStorageSamples(db, now);
+      return `storage sample day=${now.toISOString().slice(0, 10)} db=${fileSize(config.dbPath ?? db.name)} data=${dataDirBytes}`;
+    },
+  };
+}
+
+/** Scheduled database backup (P2-4): writes backups/auto-<date>.db and keeps N copies. */
+function buildBackupTask(
+  db: SqliteDatabase,
+  config: AppConfig,
+  deps: SchedulerWiringDeps,
+  schedule: 'daily' | 'weekly',
+  keep: number,
+): ScheduledTask {
+  return {
+    name: 'backup',
+    intervalSeconds: schedule === 'weekly' ? 604800 : 86400,
+    run: async () => {
+      const now = deps.now ? deps.now() : new Date();
+      const dir = join(config.dataDir ?? '.', 'backups');
+      mkdirSync(dir, { recursive: true });
+      const target = join(dir, `auto-${now.toISOString().slice(0, 10)}.db`);
+      const backup = deps.backupDatabase ?? defaultBackupDatabase;
+      await backup(db, target);
+      let deleted = 0;
+      try {
+        const files = readdirSync(dir)
+          .filter((name) => /^auto-\d{4}-\d{2}-\d{2}\.db$/.test(name))
+          .sort()
+          .reverse();
+        for (const name of files.slice(Math.max(1, keep))) {
+          rmSync(join(dir, name), { force: true });
+          deleted += 1;
+        }
+      } catch {
+        /* best-effort cleanup */
+      }
+      return `backup written ${target} pruned=${deleted}`;
+    },
+  };
+}
+
 function buildPruneTask(
   db: SqliteDatabase,
   config: AppConfig,
@@ -958,6 +1027,13 @@ export function buildScheduledTasks(options: BuildScheduledTasksOptions): Schedu
   }
 
   tasks.push(buildPruneTask(db, config, settings, deps));
+  tasks.push(buildStorageSampleTask(db, config, deps));
+
+  const backupSchedule = readString(settings['monitoring'] as Settings[string], 'backup_schedule', 'off');
+  if (backupSchedule === 'daily' || backupSchedule === 'weekly') {
+    const keep = readNumber(settings['monitoring'] as Settings[string], 'backup_keep') ?? 7;
+    tasks.push(buildBackupTask(db, config, deps, backupSchedule, Math.max(1, Math.min(60, keep))));
+  }
   return tasks;
 }
 

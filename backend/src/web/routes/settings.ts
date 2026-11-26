@@ -43,6 +43,7 @@ import {
   type PublicSettings,
 } from '../../config/service';
 import { SECRET_SMTP_PASSWORD } from '../../config/secrets';
+import { listConfigHistory } from '../../storage/config-history';
 import { listHosts } from '../../config/hosts';
 import { listSilences } from '../../config/silences';
 import { dpapiAvailable, unprotect } from '../../storage/dpapi';
@@ -150,6 +151,16 @@ function asBool(value: unknown): boolean {
 }
 
 /** Reads the active view mode from the middleware-resolved locals. */
+function sessionUsername(req: Request): string | null {
+  const locals = (req.app && (req.app.locals as Record<string, unknown>)) || {};
+  const session = locals['session'] as { getSession?: (r: Request) => { username?: string | null } | null } | undefined;
+  try {
+    return session?.getSession?.(req)?.username ?? null;
+  } catch {
+    return null;
+  }
+}
+
 function viewMode(req: Request): string {
   const settings = req.app.locals.webSettings as { mode?: string } | undefined;
   return settings?.mode === 'user' ? 'user' : 'admin';
@@ -271,7 +282,8 @@ export function registerSettingsRoutes(app: Express, deps: SettingsRouteDeps): v
       }
     }
     try {
-      const { restartRequired } = saveSection(db, section, payload);
+      const changedBy = sessionUsername(req) ?? 'admin';
+      const { restartRequired } = saveSection(db, section, payload, { changedBy });
       res.json({ ok: true, restart_required: section === 'dashboard' && restartRequired });
     } catch (err) {
       if (err instanceof SettingsServiceError) {
@@ -283,6 +295,12 @@ export function registerSettingsRoutes(app: Express, deps: SettingsRouteDeps): v
       }
       throw err;
     }
+  });
+
+  app.get(ENDPOINTS.api_settings_history, (req: Request, res: Response) => {
+    const raw = Number.parseInt(String(req.query['limit'] ?? '20'), 10);
+    const limit = Number.isFinite(raw) ? Math.max(1, Math.min(50, raw)) : 20;
+    res.json({ history: listConfigHistory(db, { limit }) });
   });
 
   // =========================================================================

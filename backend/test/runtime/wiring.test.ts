@@ -207,6 +207,7 @@ describe('buildScheduledTasks — task set and cadences', () => {
       'weekly-report',
       'user-scan',
       'prune',
+      'storage-sample',
     ]);
 
     expect(taskNamed(tasks, 'collect').intervalSeconds).toBe(600);
@@ -226,7 +227,7 @@ describe('buildScheduledTasks — task set and cadences', () => {
     const { db } = freshDb();
     saveAppSettings(db, 'report', { daily_enabled: false, weekly: { enabled: false } });
     const tasks = buildScheduledTasks({ db, config: makeConfig(), deps: inertDeps() });
-    expect(tasks.map((task) => task.name)).toEqual(['collect', 'disk-poll', 'prune']);
+    expect(tasks.map((task) => task.name)).toEqual(['collect', 'disk-poll', 'prune', 'storage-sample']);
   });
 
   it('honours a custom poll interval, timezone-driven calendar times remain configurable', () => {
@@ -384,6 +385,7 @@ describe('runPending catch-up semantics', () => {
       'weekly-report',
       'user-scan',
       'prune',
+      'storage-sample',
     ]);
     // Nothing is due again at the same instant.
     await expect(scheduler.runPending()).resolves.toEqual([]);

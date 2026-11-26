@@ -48,6 +48,7 @@ import { loadEffectiveSettings } from '../../config/service';
 import { getAllDiskHealth } from '../../storage/disk';
 import { countActiveCriticalAlerts } from '../../storage/alerts';
 import { getAllHostSnapshots } from '../../storage/hosts';
+import { listStorageSamples } from '../../storage/storage-samples';
 import { listTaskStates } from '../../storage/tasks';
 import {
   backupDatabase,
@@ -643,6 +644,7 @@ export function registerSystemRoutes(app: Express, deps: SystemRouteDeps): void 
       usage: usage(),
       db_path: db.name,
       log_retention_hours: 24,
+      db_size_history: listStorageSamples(db, 90),
     });
   });
 

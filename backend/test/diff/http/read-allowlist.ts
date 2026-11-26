@@ -64,6 +64,11 @@ export const ALLOWED_DIFFS: Record<string, string[]> = {
     // test/config/schema.test.ts and test/web/settings.test.ts.
     'additive keys: Node-only `report.executive` settings block (executive daily report) + P1-1 `monitoring.stage_retries` absent from the frozen Python oracle',
   ],
+  '/api/system/storage': [
+    // P2-4 additive key: Node returns `db_size_history` (daily db/data-dir size
+    // samples for the growth trend) that the frozen Python oracle predates.
+    'additive Node-only `db_size_history` array',
+  ],
 };
 
 /**

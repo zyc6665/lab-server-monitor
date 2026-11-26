@@ -148,6 +148,8 @@ const MATRIX: EndpointSpec[] = [
     auth: true,
     capture: 'json',
     mask: ['usage', 'db_path', 'size_bytes', 'file_size'],
+    knownDifference:
+      'Node adds `db_size_history` (daily db/data-dir size samples) that the frozen Python oracle predates.',
   },
   {
     name: 'get_host_detail',

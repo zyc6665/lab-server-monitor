@@ -218,7 +218,7 @@ describe('GET /api/system/storage', () => {
     const h = setup({ deps: { storageUsage: () => usage } });
     const res = await request(h.app).get('/api/system/storage').set('Cookie', h.cookie);
     expect(res.status).toBe(200);
-    expect(res.body).toEqual({ usage, db_path: h.fresh.dbPath, log_retention_hours: 24 });
+    expect(res.body).toMatchObject({ usage, db_path: h.fresh.dbPath, log_retention_hours: 24, db_size_history: [] });
   });
 
   it('derives sizes from config dirs instead of walking the data dir parent', async () => {

@@ -66,6 +66,7 @@ const EXPECTED_TABLES = [
   'alerts',
   'app_secrets',
   'app_settings',
+  'config_history',
   'disk_controller_snapshot',
   'disk_health_snapshot',
   'disk_pd_snapshot',
@@ -81,6 +82,7 @@ const EXPECTED_TABLES = [
   'host_user_usage_history',
   'report_runs',
   'ssh_audit_sessions',
+  'storage_samples',
   'task_runs',
   'task_state',
   'user_operations',
@@ -94,6 +96,7 @@ const EXPECTED_INDEXES = [
   'idx_alerts_created_at',
   'idx_alerts_fingerprint',
   'idx_alerts_host_status_category',
+  'idx_config_history_at',
   'idx_disk_controller_snapshot_host_time',
   'idx_disk_pd_snapshot_host_time',
   'idx_disk_vd_snapshot_host_time',
@@ -112,21 +115,21 @@ const EXPECTED_INDEXES = [
 ];
 
 describe('schema DDL constants', () => {
-  it('contains 23 CREATE TABLE and 21 CREATE INDEX statements (44 total)', () => {
+  it('contains 25 CREATE TABLE and 22 CREATE INDEX statements (47 total)', () => {
     const tables = CREATE_STATEMENTS.filter((sql) =>
       /^CREATE TABLE IF NOT EXISTS/i.test(sql.trim()),
     );
     const indexes = CREATE_STATEMENTS.filter((sql) =>
       /^CREATE INDEX IF NOT EXISTS/i.test(sql.trim()),
     );
-    expect(CREATE_STATEMENTS).toHaveLength(44);
-    expect(tables).toHaveLength(23);
-    expect(indexes).toHaveLength(21);
+    expect(CREATE_STATEMENTS).toHaveLength(47);
+    expect(tables).toHaveLength(25);
+    expect(indexes).toHaveLength(22);
   });
 });
 
 describe('initSchema on a fresh database', () => {
-  it('creates exactly the 23 expected tables', () => {
+  it('creates exactly the 25 expected tables', () => {
     const db = freshDb();
     initSchema(db);
     const rows = db

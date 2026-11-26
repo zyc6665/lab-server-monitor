@@ -63,6 +63,11 @@ export interface CreateUpdaterOptions {
   log?: (message: string) => void;
   /** Sink for lifecycle events (main.ts forwards these to the window). */
   notify?: (event: UpdaterEvent) => void;
+  /**
+   * Logs directory reported alongside check/download failures (`日志：<dir>`).
+   * Desktop-only diagnostic; the IPC payload shape is unchanged.
+   */
+  logDir?: string;
   now?: () => number;
 }
 
@@ -90,10 +95,26 @@ function versionOf(info: unknown): string {
   return '';
 }
 
+/**
+ * Build an `error` event, appending the logs directory when one was injected.
+ *
+ * The failure message is the only place the diagnostic goes: the IPC payload
+ * keeps exactly the Task3 shape (`status` / `version?` / `error?`), so the
+ * renderer sees the same contract and simply gets a more useful `error` string.
+ */
+function makeErrorEvent(error: unknown, logDir: string): UpdaterEvent {
+  const message = toMessage(error);
+  return {
+    status: 'error',
+    error: logDir ? `${message}\n日志：${logDir}` : message,
+  };
+}
+
 export function createUpdater(options: CreateUpdaterOptions): UpdaterControl {
   const { autoUpdater, currentVersion, ipcMain } = options;
   const log = options.log ?? (() => {});
   const notify = options.notify ?? (() => {});
+  const logDir = typeof options.logDir === 'string' ? options.logDir.trim() : '';
 
   // Renderer drives download/install explicitly; never auto-download or offer a
   // prerelease channel.
@@ -127,7 +148,7 @@ export function createUpdater(options: CreateUpdaterOptions): UpdaterControl {
       emit(event);
       return event;
     } catch (error) {
-      const event: UpdaterEvent = { status: 'error', error: toMessage(error) };
+      const event = makeErrorEvent(error, logDir);
       emit(event);
       return event;
     }
@@ -141,7 +162,7 @@ export function createUpdater(options: CreateUpdaterOptions): UpdaterControl {
       emit(event);
       return event;
     } catch (error) {
-      const event: UpdaterEvent = { status: 'error', error: toMessage(error) };
+      const event = makeErrorEvent(error, logDir);
       emit(event);
       return event;
     }
@@ -175,7 +196,7 @@ export function createUpdater(options: CreateUpdaterOptions): UpdaterControl {
     emit({ status: 'up-to-date', version: versionOf(info) || currentVersion });
   });
   bind('error', (error: unknown) => {
-    emit({ status: 'error', error: toMessage(error) });
+    emit(makeErrorEvent(error, logDir));
   });
   bind('download-progress', (progress: unknown) => {
     const p = (progress ?? {}) as Record<string, unknown>;

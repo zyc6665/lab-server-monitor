@@ -8,6 +8,9 @@
 <div id="settings-root" data-csrf="{{ csrf_token() }}">
   <div class="page-head">
     <h1 class="page-title">设置</h1>
+    <div class="settings-search-row">
+      <input type="search" id="settings-search" class="settings-search" placeholder="搜索设置项（如：超时、保留、备份）" aria-label="搜索设置项">
+    </div>
     <p class="save-log muted small" id="settings-save-log" hidden><span id="settings-save-log-text"></span><button type="button" class="btn-link save-log-clear" id="settings-save-log-clear" title="清除这些本地保存记录">清除</button></p>
     {% if not settings.writable %}
     <span class="readonly-banner">只读：当前平台不支持在线保存敏感配置（请在 Windows 本机运行）。</span>
@@ -67,6 +70,16 @@
       </label>
       <label class="field"><span>采集阶段重试次数</span>
         <input type="number" min="0" max="3" data-field="stage_retries" value="{{ settings.monitoring.stage_retries }}">
+      </label>
+      <label class="field"><span>自动备份计划</span>
+        <select data-field="backup_schedule">
+          <option value="off" {% if settings.monitoring.backup_schedule == 'off' %}selected{% endif %}>关闭</option>
+          <option value="daily" {% if settings.monitoring.backup_schedule == 'daily' %}selected{% endif %}>每日</option>
+          <option value="weekly" {% if settings.monitoring.backup_schedule == 'weekly' %}selected{% endif %}>每周</option>
+        </select>
+      </label>
+      <label class="field"><span>自动备份保留份数</span>
+        <input type="number" min="1" max="60" data-field="backup_keep" value="{{ settings.monitoring.backup_keep }}">
       </label>
       <label class="field"><span>每台状态曲线保留点数</span>
         <input type="number" min="10" max="10000" data-field="host_metrics_max_points" value="{{ settings.monitoring.host_metrics_max_points }}">
@@ -667,6 +680,11 @@
       </div>
     </div>
   </div>
+  <section class="card settings-history-card" id="settings-history" aria-label="最近配置变更">
+    <div class="section-head"><h2>最近变更</h2></div>
+    <p class="muted small">仅记录被修改的配置项名称，不记录具体值。</p>
+    <ul class="settings-history-list" id="settings-history-list"><li class="muted small">加载中…</li></ul>
+  </section>
 </div>
 
 <script>

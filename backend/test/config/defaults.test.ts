@@ -36,6 +36,8 @@ describe('DEFAULT_SETTINGS', () => {
       open_browser_on_start: true,
       mode: 'admin',
       member_account: '',
+      backup_schedule: 'off',
+      backup_keep: 7,
       stage_retries: 1,
     });
   });

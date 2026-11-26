@@ -380,6 +380,17 @@ function monitoringFields(): Record<string, FieldSpec> {
   fields.open_browser_on_start = monField('boolean', true);
   fields.mode = monField('string', 'admin');
   fields.member_account = monField('string', '');
+  // P2-4 数据治理: 自动备份计划与保留份数。
+  fields.backup_schedule = monField('string', 'off', {
+    label: '自动备份计划',
+    options: ['off', 'daily', 'weekly'],
+  });
+  fields.backup_keep = monField('integer', 7, {
+    label: '自动备份保留份数',
+    min: 1,
+    max: 60,
+    strictInt: true,
+  });
   // P1-1 采集耗时: 单个采集阶段失败后的重试次数 (0-3, 默认 1)。
   fields.stage_retries = monField('integer', 1, {
     label: '采集阶段重试次数',

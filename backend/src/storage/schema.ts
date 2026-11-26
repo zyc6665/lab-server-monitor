@@ -222,6 +222,23 @@ export const CREATE_STATEMENTS: string[] = [
 );`,
   `CREATE INDEX IF NOT EXISTS idx_report_runs_created
     ON report_runs(created_at);`,
+  // Node-only (module optimization P2 / M8): settings change history (keys only).
+  `CREATE TABLE IF NOT EXISTS config_history (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    section TEXT NOT NULL,
+    changed_keys TEXT NOT NULL,
+    changed_by TEXT,
+    changed_at TEXT NOT NULL
+);`,
+  `CREATE INDEX IF NOT EXISTS idx_config_history_at
+    ON config_history(changed_at);`,
+  // Node-only (module optimization P2 / M2): daily storage size samples.
+  `CREATE TABLE IF NOT EXISTS storage_samples (
+    day TEXT PRIMARY KEY,
+    db_bytes INTEGER NOT NULL,
+    data_dir_bytes INTEGER NOT NULL,
+    created_at TEXT NOT NULL
+);`,
   `CREATE TABLE IF NOT EXISTS app_settings (
     section TEXT PRIMARY KEY,
     payload TEXT NOT NULL,
