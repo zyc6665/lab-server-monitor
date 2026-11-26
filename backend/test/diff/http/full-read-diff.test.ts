@@ -21,13 +21,13 @@
  * (the two P5-documented cases). Any other divergence is a failure and is
  * reported verbatim — never silently absorbed.
  */
-import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { golden } from '../../golden/golden';
 
 // The admin credential is stored through DPAPI on both stacks. Replace the
 // native binding with an identity codec so the Node side can round-trip its own
@@ -58,11 +58,8 @@ import {
 
 const ADMIN_USERNAME = 'admin';
 const ADMIN_PASSWORD = 'Diff-Test-Passw0rd!';
-const RESULT_PREFIX = '@@HTTP_DIFF_RESULT@@';
-const PYTHON = process.env.PYTHON ?? 'python';
 const REPO_ROOT = findRepoRoot(process.cwd());
 const SEED_DB = path.join(REPO_ROOT, 'backend', 'test', 'fixtures', 'seed', 'servermonitor-seed.db');
-const DUMP_SCRIPT = path.join(REPO_ROOT, 'backend', 'test', 'diff', 'http', 'dump_python.py');
 const APP_VERSION = '0.1.239';
 
 // ---------------------------------------------------------------------------
@@ -161,47 +158,7 @@ interface HttpRecord {
   title?: string | null;
 }
 
-function pythonPathEnv(): string {
-  const existing = process.env.PYTHONPATH;
-  return existing ? `${REPO_ROOT}${path.delimiter}${existing}` : REPO_ROOT;
-}
-
-const PYTHON_READY = (() => {
-  try {
-    const probe = spawnSync(
-      PYTHON,
-      ['-c', 'import servermanage, servermanage.security as s; print(bool(s.dpapi_available()))'],
-      {
-        cwd: REPO_ROOT,
-        env: { ...process.env, PYTHONPATH: pythonPathEnv(), PYTHONWARNINGS: 'ignore' },
-        encoding: 'utf8',
-      },
-    );
-    return probe.status === 0 && (probe.stdout ?? '').trim().endsWith('True');
-  } catch {
-    return false;
-  }
-})();
-
-function runDumpPython(dbPath: string, configPath: string, planPath: string): HttpRecord[] {
-  const result = spawnSync(PYTHON, [DUMP_SCRIPT, '--db', dbPath, '--config', configPath, '--plan', planPath], {
-    cwd: REPO_ROOT,
-    env: { ...process.env, PYTHONPATH: pythonPathEnv(), PYTHONWARNINGS: 'ignore' },
-    encoding: 'utf8',
-    maxBuffer: 64 * 1024 * 1024,
-  });
-  if (result.status !== 0) {
-    throw new Error(`dump_python.py failed (${result.status}):\n${result.stdout}\n${result.stderr}`);
-  }
-  const line = (result.stdout ?? '')
-    .split(/\r?\n/)
-    .find((entry) => entry.startsWith(RESULT_PREFIX));
-  if (!line) {
-    throw new Error(`dump_python.py produced no ${RESULT_PREFIX} line:\n${result.stdout}\n${result.stderr}`);
-  }
-  const payload = JSON.parse(line.slice(RESULT_PREFIX.length)) as { responses: HttpRecord[] };
-  return payload.responses;
-}
+const GOLDEN_FILE = path.join(REPO_ROOT, 'backend', 'test', 'diff', 'http', 'golden', 'full-read.json');
 
 // ---------------------------------------------------------------------------
 // Normalisation
@@ -376,11 +333,12 @@ function buildSeedServers(): Array<Record<string, unknown>> {
 }
 
 beforeAll(async () => {
-  if (!PYTHON_READY) {
-    return;
-  }
   expect(fs.existsSync(SEED_DB), `seed database missing at ${SEED_DB}`).toBe(true);
 
+  // Pin the Node clock to the instant the Python oracle ran so relative ages
+  // ("N 分钟前", 24h windows) match the frozen golden forever.
+  const frozenAtMs = golden<number>(GOLDEN_FILE, 'frozenAtMs');
+  vi.useFakeTimers({ toFake: ['Date'], now: frozenAtMs });
   workDir = fs.mkdtempSync(path.join(os.tmpdir(), 'fullread-'));
   const nodeDbPath = path.join(workDir, 'node.db');
   const pyDbPath = path.join(workDir, 'python.db');
@@ -427,7 +385,9 @@ beforeAll(async () => {
   };
   const planPath = path.join(workDir, 'plan.json');
   fs.writeFileSync(planPath, JSON.stringify(plan), 'utf8');
-  pythonResponses = new Map(runDumpPython(pyDbPath, configPath, planPath).map((record) => [record.name, record]));
+  pythonResponses = new Map(
+    golden<HttpRecord[]>(GOLDEN_FILE, 'responses').map((record) => [record.name, record]),
+  );
 
   // Node drive: log the shared agent in once, then replay the matrix.
   const agent = request.agent(app);
@@ -451,6 +411,7 @@ beforeAll(async () => {
 }, 120_000);
 
 afterAll(() => {
+  vi.useRealTimers();
   if (nodeDb) {
     nodeDb.close();
   }
@@ -463,7 +424,7 @@ afterAll(() => {
 // Tests
 // ---------------------------------------------------------------------------
 
-describe.skipIf(!PYTHON_READY)('full read-only endpoint differential (Node vs Python)', () => {
+describe('full read-only endpoint differential (Node vs Python)', () => {
   it('covers every read-only endpoint in the matrix', () => {
     // A guard so the coverage list cannot silently shrink.
     expect(MATRIX.length).toBeGreaterThanOrEqual(34);

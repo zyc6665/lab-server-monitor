@@ -1,0 +1,172 @@
+{% extends "base.html" %}
+{% block title %}磁盘健康 - 服务器监控{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div class="page-head-main">
+    <h1 class="page-title">磁盘健康</h1>
+    <p class="page-subtitle muted">按 storcli 最近一次采集结果汇总，告警盘与严重盘会单独标出。</p>
+  </div>
+</div>
+
+<section class="stat-grid" aria-label="磁盘汇总">
+  <article class="card stat-card stat-card-total">
+    <div class="stat-body"><div class="stat-label">物理盘总数</div><div class="stat-value">{{ totals.drives }}</div></div>
+  </article>
+  <article class="card stat-card stat-card-online">
+    <div class="stat-body"><div class="stat-label">健康盘</div><div class="stat-value">{{ totals.healthy }}</div></div>
+  </article>
+  <article class="card stat-card stat-card-alert">
+    <div class="stat-body"><div class="stat-label">告警盘</div><div class="stat-value">{{ totals.warning }}</div></div>
+  </article>
+  <article class="card stat-card stat-card-offline">
+    <div class="stat-body"><div class="stat-label">严重盘</div><div class="stat-value">{{ totals.critical }}</div></div>
+  </article>
+</section>
+
+<section class="card" id="disk-groups">
+  <div class="section-head">
+    <h2>按主机查看物理盘</h2>
+    <span class="muted">共 {{ hosts|length }} 台 · {{ drives|length }} 块盘{% if totals.warning or totals.critical %} · <span class="disk-attention">{{ totals.warning }} 告警 / {{ totals.critical }} 严重</span>{% endif %} · 每台按温度排序，热盘在前</span>
+    {% if temperature_stats and temperature_stats.samples %}
+    <span class="disk-temp-summary" title="仅统计上报了温度的盘位">
+      温度 最高 {{ temperature_stats.max }} °C · 平均 {{ temperature_stats.average }} °C{% if temperature_stats.hot %} · <span class="disk-temp-summary-hot">{{ temperature_stats.hot }} 块 ≥55 °C</span>{% endif %}
+    </span>
+    {% endif %}
+    {% if drives %}<details class="col-menu disk-col-menu" id="disk-columns">
+        <summary class="btn-secondary">列</summary>
+        <div class="col-menu-body">
+          <label><input type="checkbox" data-disk-col="media" checked> 介质错误</label>
+          <label><input type="checkbox" data-disk-col="errors" checked> 其他错误</label>
+          <label><input type="checkbox" data-disk-col="predictive" checked> Predictive</label>
+          <label><input type="checkbox" data-disk-col="smart" checked> SMART</label>
+          <label><input type="checkbox" data-disk-col="shield" checked> Shield</label>
+        </div>
+      </details>
+      <button type="button" class="btn-secondary disk-export" id="disk-export" title="导出当前筛选结果，不受分组折叠影响">导出 CSV</button>{% endif %}
+  </div>
+  {% if not has_groups %}
+  <p class="group-hint">还没有配置分组：在<a href="/settings#hosts">设置 → 主机与 SSH</a>里填上分组，磁盘页会按组折叠并显示合计。</p>
+  {% endif %}
+  {% if hosts %}
+  <div class="disk-filter">
+    <label class="disk-filter-toggle">
+      <input type="checkbox" id="disk-only-issues">
+      <span>只看异常主机</span>
+    </label>
+    <label class="disk-filter-toggle">
+      <input type="checkbox" id="disk-only-bad">
+      <span>只看异常盘</span>
+    </label>
+    <label class="filter-field disk-heat">温度
+      <select id="disk-heat" aria-label="只看达到温度的磁盘主机">
+        <option value="0">全部</option>
+        <option value="60">≥60 °C</option>
+        <option value="70">≥70 °C</option>
+        <option value="80">≥80 °C</option>
+      </select>
+    </label>
+    <input type="search" id="disk-search" class="disk-search" placeholder="搜索主机、分组、盘型号或序列号" aria-label="搜索磁盘">
+    <span class="muted small" id="disk-filter-empty" hidden>当前没有告警、严重或采集失败的主机。</span>
+    <p class="disk-legend muted small" id="disk-legend">
+      <span class="disk-legend-bar" aria-hidden="true"></span>温度条：25 °C 起画、65 °C 满格
+      <span class="disk-legend-chip disk-legend-hot">55 °C 起偏热</span>
+      <span class="disk-legend-chip disk-legend-critical">65 °C 起过热</span>
+    </p>
+    <span class="muted small" id="disk-search-empty" hidden>没有匹配的磁盘记录。</span>
+    <span class="muted small" id="disk-search-count" hidden></span>
+    <span class="muted small" id="disk-heat-empty" hidden>没有达到该温度的主机。</span>
+    <button type="button" class="btn-secondary disk-groups-toggle" id="disk-groups-toggle" hidden>全部折叠</button>
+  </div>
+  <nav class="disk-jump" aria-label="按主机跳转">
+    {% for host in hosts %}
+    <a class="disk-jump-link" href="#disk-{{ host.anchor }}" data-disk-issues="{{ 1 if host.needs_attention else 0 }}" data-disk-search="{{ host.name|lower }}" data-disk-heat="{{ host.temperature_max or 0 }}">
+      <span class="disk-jump-name">{{ host.name }}</span>
+      <span class="disk-jump-count">{{ host.pd_count }}</span>
+      {% if host.critical %}<span class="disk-jump-flag disk-jump-critical">{{ host.critical }}</span>{% elif host.warning %}<span class="disk-jump-flag disk-jump-warning">{{ host.warning }}</span>{% endif %}
+    </a>
+    {% endfor %}
+  </nav>
+  {% for host in hosts %}
+  {% if host.group_header %}
+  <div class="disk-group-head" data-disk-group="{{ host.group_header }}">
+    <button type="button" class="disk-group-collapse" data-disk-group-collapse aria-expanded="true" aria-label="展开或收起分组 {{ host.group_header }}" title="展开 / 收起这个分组"><span class="disk-group-caret">▾</span></button>
+    <span class="disk-group-name">{{ host.group_header }}</span>
+    <span class="disk-group-count" data-group-count data-group-size="{{ host.group_size }}">{{ host.group_size }} 台主机</span>
+    {% set stats = group_stats.get(host.group_header) if group_stats else none %}
+    {% if stats %}
+    {% if stats.max_temp is not none %}<span class="disk-group-temp{{ ' is-hot' if stats.max_temp >= 55 else (' is-critical' if stats.max_temp >= 65 else '') }}" title="这个分组里最高的单盘温度">最高 {{ '%.0f'|format(stats.max_temp) }} °C</span>{% endif %}
+    <span class="disk-group-health"><b>{{ stats.healthy }}</b> 健康{% if stats.warning %} · <b class="is-warn">{{ stats.warning }}</b> 告警{% endif %}{% if stats.critical %} · <b class="is-crit">{{ stats.critical }}</b> 严重{% endif %}</span>
+    {% endif %}
+  </div>
+  {% endif %}
+  <article class="disk-host" id="disk-{{ host.anchor }}" data-disk-group-member="{{ host.group }}" data-disk-issues="{{ 1 if host.needs_attention else 0 }}" data-disk-search="{{ host.search_text }}" data-disk-heat="{{ host.temperature_max or 0 }}">
+    <header class="disk-host-head">
+      <div class="disk-host-id">
+        <button type="button" class="disk-collapse" data-disk-collapse aria-expanded="true" aria-label="展开或收起 {{ host.name }} 的盘位明细" title="展开 / 收起盘位明细"><span class="disk-caret">▾</span></button>
+        <a href="{{ url_for('host_page', name=host.name) }}">{{ host.name }}</a>
+        <span class="muted mono">{{ host.host or '—' }}</span>
+        <span class="disk-host-group">{{ host.group }}</span>
+      </div>
+      <div class="disk-host-meta">
+        <span class="health health-{{ host.status }}">{{ host.status }}</span>
+        <span class="disk-host-counts"><b>{{ host.healthy }}</b> 健康 · <b>{{ host.warning }}</b> 告警 · <b>{{ host.critical }}</b> 严重</span>
+        <span class="muted">控制器 {{ host.controller_count }} · VD {{ host.vd_count }}</span>
+        {% if host.temperature_max is not none %}<span class="muted disk-temp-max{% if host.temperature_max >= 65 %} is-critical{% elif host.temperature_max >= 55 %} is-hot{% endif %}">最高 {{ host.temperature_max }} °C</span>{% endif %}
+        <span class="muted mono"{% if host.collected_at %} title="{{ host.collected_at }}"{% endif %}>{{ host.collected_at|stamp }}</span>
+        <a class="btn-link" href="{{ url_for('host_page', name=host.name) }}#disk-array">主机详情</a>
+      </div>
+    </header>
+    {% if host.drives %}
+    <div class="table-wrap">
+      <table class="data-table disk-table">
+        <thead><tr><th>控制器</th><th>Enclosure</th><th class="sortable" data-disk-sort="slot">Slot</th><th>型号</th><th>序列号</th><th>状态</th><th class="sortable col-media" data-disk-sort="media">介质错误</th><th class="col-errors">其他错误</th><th class="col-predictive">Predictive</th><th class="col-smart">SMART</th><th class="col-shield">Shield</th><th class="sortable" data-disk-sort="temp">温度</th><th class="sortable" data-disk-sort="health">健康</th></tr></thead>
+        <tbody>
+          {% for d in host.drives %}
+          <tr data-disk-row data-slot="{{ d.slot if d.slot is not none else '' }}"
+              data-media="{{ d.media_errors if d.media_errors is not none else '' }}"
+              data-temp="{{ d.temperature_c if d.temperature_c is not none else '' }}"
+              data-health="{{ d.health }}">
+            <td>{{ d.controller }}</td>
+            <td>{{ d.enclosure }}</td>
+            <td>{{ d.slot }}</td>
+            <td>{{ d.model or '—' }}</td>
+            <td class="mono">{{ d.serial or '—' }}</td>
+            <td>{{ d.state or '—' }}</td>
+            <td class="col-media">{{ d.media_errors if d.media_errors is not none else '—' }}</td>
+            <td class="col-errors">{{ d.other_errors if d.other_errors is not none else '—' }}</td>
+            <td class="col-predictive">{{ d.predictive_failures if d.predictive_failures is not none else '—' }}</td>
+            <td class="col-smart">{% if d.smart_alert is not none %}{{ '是' if d.smart_alert else '否' }}{% else %}—{% endif %}</td>
+            <td class="col-shield">{{ d.shield_counter if d.shield_counter is not none else '—' }}</td>
+            {% set temp = d.temperature_c %}
+            <td class="mono disk-temp{% if temp is not none and temp >= 65 %} is-critical{% elif temp is not none and temp >= 55 %} is-hot{% endif %}"{% if temp is not none %} title="盘温阈值：55 °C 起偏热，65 °C 起需关注"{% endif %}>{% if temp is not none %}{{ temp }} °C{% set pct = [[(temp - 25) * 100 // 40, 0]|max, 100]|min %}<span class="temp-bar" aria-hidden="true"><span class="temp-bar-fill" style="width: {{ pct }}%"></span></span>{% else %}—{% endif %}</td>
+            <td><span class="health health-{{ d.health }}">{{ d.health }}</span></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <p class="empty disk-host-empty">{{ host.message or '这台主机还没有物理盘数据。' }}</p>
+    {% endif %}
+  </article>
+  {% endfor %}
+  {% else %}
+  <p class="empty">还没有磁盘健康数据。请先在设置中配置磁盘健康采集，等待首次磁盘轮询完成。</p>
+  {% endif %}
+  <dialog class="disk-drive-dialog" id="disk-drive-dialog">
+    <form method="dialog" class="disk-drive-head">
+      <strong id="disk-drive-title">磁盘详情</strong>
+      <button type="button" class="btn-link" id="disk-drive-copy" title="把这块盘的字段复制成文本">复制</button>
+      <button class="btn-link" value="close" aria-label="关闭">关闭</button>
+    </form>
+    <dl class="disk-drive-body" id="disk-drive-body"></dl>
+    <p class="muted small">数据来自最近一次 storcli 采集，仅供查看。</p>
+  </dialog>
+
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ asset_url('disk-health.js') }}"></script>
+{% endblock %}

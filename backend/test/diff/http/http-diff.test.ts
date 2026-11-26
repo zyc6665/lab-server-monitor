@@ -15,13 +15,13 @@
  * module is stubbed to identity (same approach as the existing web integration
  * test) so the credential round-trips without touching the Windows key store.
  */
-import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { golden } from '../../golden/golden';
 
 // DPAPI identity stub: byte-copy protect/unprotect, always "writable".
 vi.mock('../../../src/storage/dpapi', () => ({
@@ -39,34 +39,8 @@ import { applyMask, diffValues, findRepoRoot, normalizeValue, type Diff } from '
 
 const ADMIN_USERNAME = 'admin';
 const ADMIN_PASSWORD = 'Diff-Test-Passw0rd!';
-const RESULT_PREFIX = '@@HTTP_DIFF_RESULT@@';
 
-const PYTHON = process.env.PYTHON ?? 'python';
 const REPO_ROOT = findRepoRoot(process.cwd());
-
-/** True when the Python oracle can import `servermanage` and DPAPI is usable. */
-const PYTHON_READY = (() => {
-  try {
-    const probe = spawnSync(
-      PYTHON,
-      ['-c', 'import servermanage, servermanage.security as s; print(bool(s.dpapi_available()))'],
-      {
-        cwd: REPO_ROOT,
-        env: {
-          ...process.env,
-          PYTHONPATH: process.env.PYTHONPATH
-            ? `${REPO_ROOT}${path.delimiter}${process.env.PYTHONPATH}`
-            : REPO_ROOT,
-          PYTHONWARNINGS: 'ignore',
-        },
-        encoding: 'utf8',
-      },
-    );
-    return probe.status === 0 && probe.stdout.trim() === 'True';
-  } catch {
-    return false;
-  }
-})();
 
 /** Fields whose *values* are legitimately volatile and therefore masked. */
 const VOLATILE = [
@@ -193,40 +167,21 @@ interface EndpointResult {
   diffs: Diff[];
 }
 
-function mergePythonPath(): string {
-  const existing = process.env.PYTHONPATH;
-  return existing ? `${REPO_ROOT}${path.delimiter}${existing}` : REPO_ROOT;
-}
+const GOLDEN_DIR = path.join(REPO_ROOT, 'backend', 'test', 'diff', 'http', 'golden');
+const GOLDEN_FILE = path.join(GOLDEN_DIR, 'read.json');
+const GOLDEN_DB = path.join(GOLDEN_DIR, 'read-fixture.db');
+const GOLDEN_SERVERS = path.join(GOLDEN_DIR, 'read-servers.json');
 
-function runBuildFixture(outDir: string): { dbPath: string; configPath: string } {
-  const script = path.join(REPO_ROOT, 'backend', 'test', 'diff', 'http', 'build_fixture.py');
-  const result = spawnSync(PYTHON, [script, '--out', outDir], {
-    cwd: REPO_ROOT,
-    env: { ...process.env, PYTHONPATH: mergePythonPath(), PYTHONWARNINGS: 'ignore' },
-    encoding: 'utf8',
-  });
-  if (result.status !== 0) {
-    throw new Error(`build_fixture.py failed (status ${result.status}):\n${result.stderr || result.stdout}`);
-  }
-  const payload = JSON.parse(result.stdout.trim().split(/\r?\n/).pop() as string);
-  return { dbPath: payload.db_path as string, configPath: payload.config_path as string };
-}
-
-function runDumpPython(pyDbPath: string, configPath: string, planPath: string): HttpRecord[] {
-  const script = path.join(REPO_ROOT, 'backend', 'test', 'diff', 'http', 'dump_python.py');
-  const result = spawnSync(PYTHON, [script, '--db', pyDbPath, '--config', configPath, '--plan', planPath], {
-    cwd: REPO_ROOT,
-    env: { ...process.env, PYTHONPATH: mergePythonPath(), PYTHONWARNINGS: 'ignore' },
-    encoding: 'utf8',
-  });
-  const line = (result.stdout || '')
-    .split(/\r?\n/)
-    .find((entry) => entry.startsWith(RESULT_PREFIX));
-  if (!line) {
-    throw new Error(`dump_python.py produced no result (status ${result.status}):\n${result.stderr || result.stdout}`);
-  }
-  const payload = JSON.parse(line.slice(RESULT_PREFIX.length));
-  return payload.responses as HttpRecord[];
+/**
+ * Restore the fixture frozen from the (removed) Python `build_fixture.py`. Its
+ * timestamps are offsets from the generation instant, so the Node clock is
+ * pinned to that instant (`generatedAtMs`) during replay.
+ */
+function prepareFixture(outDir: string): { dbPath: string; generatedAtMs: number } {
+  const dbPath = path.join(outDir, 'fixture.db');
+  fs.copyFileSync(GOLDEN_DB, dbPath);
+  fs.copyFileSync(GOLDEN_SERVERS, path.join(outDir, 'servers.json'));
+  return { dbPath, generatedAtMs: golden<number>(GOLDEN_FILE, 'generatedAtMs') };
 }
 
 function normaliseForCompare(record: HttpRecord, spec: EndpointSpec): unknown {
@@ -234,7 +189,7 @@ function normaliseForCompare(record: HttpRecord, spec: EndpointSpec): unknown {
   return normalizeValue(masked);
 }
 
-describe.skipIf(!PYTHON_READY)('P5 Task12 cross-stack HTTP golden diff', () => {
+describe('P5 Task12 cross-stack HTTP golden diff', () => {
   let workDir: string;
   let nodeDb: import('better-sqlite3').Database;
   let app: ReturnType<typeof createServerApp>;
@@ -244,7 +199,8 @@ describe.skipIf(!PYTHON_READY)('P5 Task12 cross-stack HTTP golden diff', () => {
 
   beforeAll(async () => {
     workDir = fs.mkdtempSync(path.join(os.tmpdir(), 'httpdiff-'));
-    const { dbPath, configPath } = runBuildFixture(workDir);
+    const { dbPath, generatedAtMs } = prepareFixture(workDir);
+    vi.useFakeTimers({ toFake: ['Date'], now: generatedAtMs + 2000 });
 
     // Two independent copies so each stack writes its own secrets.
     const nodeDbPath = path.join(workDir, 'node.db');
@@ -281,7 +237,9 @@ describe.skipIf(!PYTHON_READY)('P5 Task12 cross-stack HTTP golden diff', () => {
     };
     const planPath = path.join(workDir, 'plan.json');
     fs.writeFileSync(planPath, JSON.stringify(plan), 'utf8');
-    pythonResponses = new Map(runDumpPython(pyDbPath, configPath, planPath).map((r) => [r.name, r]));
+    pythonResponses = new Map(
+      golden<HttpRecord[]>(GOLDEN_FILE, 'responses').map((r) => [r.name, r]),
+    );
 
     // Drive Node sequentially: anon requests on a bare client, the login request
     // and every authenticated request on one shared agent (mirrors the oracle).
@@ -309,6 +267,7 @@ describe.skipIf(!PYTHON_READY)('P5 Task12 cross-stack HTTP golden diff', () => {
   }, 120_000);
 
   afterAll(() => {
+    vi.useRealTimers();
     try {
       nodeDb?.close();
     } catch {

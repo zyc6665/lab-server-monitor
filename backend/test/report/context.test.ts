@@ -21,11 +21,11 @@
  * equivalent camelCase `DailyReport` / `WeeklyReport` objects directly (no DB
  * assembly, no template rendering — Tasks 11 / 10).
  */
-import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 
 import { describe, expect, it } from 'vitest';
+import { golden } from '../golden/golden';
 
 import {
   emptyHostMetrics,
@@ -65,36 +65,6 @@ import { diffValues, findRepoRoot, normalizeValue, type Diff } from '../diff/har
 const repoRoot = findRepoRoot();
 const TEST_DIR = path.join(repoRoot, 'backend', 'test', 'report');
 const FIXTURE_PATH = path.join(TEST_DIR, 'fixtures', 'report-context-scenarios.json');
-const ORACLE_SCRIPT = path.join(TEST_DIR, 'run_report_context_oracle.py');
-
-function defaultPython(): string {
-  return process.env.PYTHON ?? 'python';
-}
-
-function mergePythonPath(): string {
-  const existing = process.env.PYTHONPATH;
-  const sep = process.platform === 'win32' ? ';' : ':';
-  return existing ? `${repoRoot}${sep}${existing}` : repoRoot;
-}
-
-function detectOracle(): { ok: boolean; detail: string } {
-  const result = spawnSync(
-    defaultPython(),
-    ['-c', 'import servermanage.report, servermanage.models'],
-    {
-      cwd: repoRoot,
-      encoding: 'utf-8',
-      env: { ...process.env, PYTHONPATH: mergePythonPath(), PYTHONWARNINGS: 'ignore' },
-    },
-  );
-  if (result.error) {
-    return { ok: false, detail: String(result.error) };
-  }
-  if (result.status !== 0) {
-    return { ok: false, detail: `exit ${result.status}: ${(result.stderr ?? '').trim()}` };
-  }
-  return { ok: true, detail: 'ok' };
-}
 
 interface OracleEntry {
   name: string;
@@ -111,42 +81,12 @@ interface OracleOutput {
   charts: OracleChart[];
 }
 
+const GOLDEN_FILE = path.join(repoRoot, 'backend', 'test', 'report', 'golden', 'context.json');
 function runOracle(): OracleOutput {
-  const result = spawnSync(defaultPython(), [ORACLE_SCRIPT, FIXTURE_PATH], {
-    cwd: repoRoot,
-    encoding: 'utf-8',
-    env: {
-      ...process.env,
-      PYTHONPATH: mergePythonPath(),
-      PYTHONIOENCODING: 'utf-8',
-      PYTHONWARNINGS: 'ignore',
-    },
-    maxBuffer: 64 * 1024 * 1024,
-  });
-  if (result.error) {
-    throw result.error;
-  }
-  if (result.status !== 0) {
-    throw new Error(
-      `python report-context oracle exited with status ${result.status}\nstderr:\n${result.stderr ?? ''}`,
-    );
-  }
-  const lastLine = (result.stdout ?? '')
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0)
-    .pop();
-  if (!lastLine) {
-    throw new Error('python report-context oracle produced no JSON output');
-  }
-  return JSON.parse(lastLine) as OracleOutput;
+  return golden<OracleOutput>(GOLDEN_FILE, 'context');
 }
 
-const oracleProbe = detectOracle();
-const itPython = oracleProbe.ok ? it : it.skip;
-if (!oracleProbe.ok) {
-  console.warn(`Python report-context oracle unavailable; skipping diff groups: ${oracleProbe.detail}`);
-}
+const itPython = it;
 
 const fixture = JSON.parse(readFileSync(FIXTURE_PATH, 'utf-8')) as {
   daily: Array<Record<string, any>>;
@@ -154,7 +94,7 @@ const fixture = JSON.parse(readFileSync(FIXTURE_PATH, 'utf-8')) as {
   charts: Array<Record<string, any>>;
 };
 
-const oracle = oracleProbe.ok ? runOracle() : null;
+const oracle = runOracle();
 const dailyByName = new Map<string, unknown>((oracle?.daily ?? []).map((entry) => [entry.name, entry.context]));
 const executiveByName = new Map<string, unknown>(
   (oracle?.executive ?? []).map((entry) => [entry.name, entry.context]),

@@ -8,12 +8,10 @@
  * `UserScanRunner` to exercise the orchestration (sudo probe, per-account
  * budgeting, known-usage skipping) without touching a real host.
  */
-import { execFileSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
 import path from 'node:path';
 
 import { describe, expect, it } from 'vitest';
+import { golden } from '../golden/golden';
 
 import type { HostConfig } from '../../src/config/config';
 import type { CommandResult } from '../../src/collect/types';
@@ -35,74 +33,6 @@ import {
 
 const repoRoot = findRepoRoot();
 
-/** First interpreter that can `import sys`, or null if none is available. */
-function findPython(): string | null {
-  const candidates = [process.env.PYTHON, 'python', 'python3'].filter(
-    (value): value is string => typeof value === 'string' && value.length > 0,
-  );
-  for (const candidate of candidates) {
-    try {
-      execFileSync(candidate, ['-c', 'import sys'], { stdio: 'ignore' });
-      return candidate;
-    } catch {
-      // try the next candidate
-    }
-  }
-  return null;
-}
-
-const python = findPython();
-
-/**
- * Python driver: reads the case list, dispatches to the matching
- * `servermanage.user_scan` function (chosen by `servermanage.user_scan`), and
- * writes `{id: {ok, value} | {ok: false, error}}` back. Exceptions are turned
- * into their `str()` message so verbatim error text can be compared.
- */
-const PY_ORACLE = `import json, sys
-from servermanage import user_scan as u
-
-def call(op, case):
-    if op == 'validate_username':
-        return {'ok': True, 'value': u.validate_username(case.get('text'))}
-    if op == 'parse_passwd':
-        return {'ok': True, 'value': u.parse_passwd(case['text'])}
-    if op == 'parse_group':
-        groups, gid_map = u.parse_group(case['text'])
-        return {'ok': True, 'value': {'groups': groups, 'gidMap': {str(k): v for k, v in gid_map.items()}}}
-    if op == 'parse_usage':
-        return {'ok': True, 'value': u.parse_usage(case['text'])}
-    if op == 'build_scan_command':
-        return {'ok': True, 'value': u.build_scan_command()}
-    if op == 'build_usage_command':
-        try:
-            return {'ok': True, 'value': u.build_usage_command(case['paths'])}
-        except Exception as exc:
-            return {'ok': False, 'error': str(exc)}
-    if op == 'safe_usage_path':
-        try:
-            return {'ok': True, 'value': u._safe_usage_path(case['path'])}
-        except Exception as exc:
-            return {'ok': False, 'error': str(exc)}
-    if op == 'optional_field':
-        return {'ok': True, 'value': u._optional_field(case['fields'], case['index'])}
-    if op == 'scan_metadata':
-        return {'ok': True, 'value': u._scan_metadata(case['fields'])}
-    if op == 'parse_scan_output':
-        try:
-            users, members, gids, homes, data_dirs, supported = u._parse_scan_output(case['text'])
-            return {'ok': True, 'value': {'users': users, 'groupMembers': members, 'gidNames': {str(k): v for k, v in gids.items()}, 'homes': homes, 'dataDirs': data_dirs, 'dataSupported': supported}}
-        except Exception as exc:
-            return {'ok': False, 'error': str(exc)}
-    raise AssertionError('unknown op ' + op)
-
-payload = json.load(open(sys.argv[1], encoding='utf-8'))
-result = {}
-for case in payload:
-    result[case['id']] = call(case['op'], case)
-json.dump(result, open(sys.argv[2], 'w', encoding='utf-8'), ensure_ascii=False, sort_keys=True)
-`;
-
 interface OracleCase {
   id: string;
   op: string;
@@ -115,27 +45,9 @@ interface OracleCase {
 
 type OracleResult = { ok: true; value: unknown } | { ok: false; error: string };
 
+const GOLDEN_FILE = path.join(repoRoot, 'backend', 'test', 'users', 'golden', 'scan.json');
 function runOracle(cases: OracleCase[]): Record<string, OracleResult> {
-  if (!python) {
-    throw new Error('python oracle unavailable');
-  }
-  const dir = mkdtempSync(path.join(tmpdir(), 'scan-oracle-'));
-  try {
-    const script = path.join(dir, 'oracle.py');
-    const inPath = path.join(dir, 'in.json');
-    const outPath = path.join(dir, 'out.json');
-    writeFileSync(script, PY_ORACLE, { encoding: 'utf-8' });
-    writeFileSync(inPath, JSON.stringify(cases), { encoding: 'utf-8' });
-    execFileSync(python, [script, inPath, outPath], {
-      cwd: repoRoot,
-      encoding: 'utf-8',
-      env: { ...process.env, PYTHONPATH: repoRoot, PYTHONIOENCODING: 'utf-8' },
-      maxBuffer: 8 * 1024 * 1024,
-    });
-    return JSON.parse(readFileSync(outPath, 'utf-8')) as Record<string, OracleResult>;
-  } finally {
-    rmSync(dir, { recursive: true, force: true });
-  }
+  return golden<Record<string, OracleResult>>(GOLDEN_FILE, JSON.stringify(cases));
 }
 
 /** Compare a JS value against an oracle value; returns the (normally empty) diff list. */
@@ -303,7 +215,7 @@ describe('validateUsername', () => {
     'a\n',
   ];
 
-  const oracleIt = python ? it : it.skip;
+  const oracleIt = it;
 
   oracleIt('matches Python validate_username for valid and invalid names', () => {
     const result = runOracle(
@@ -346,7 +258,7 @@ describe('validateUsername', () => {
 // ---------------------------------------------------------------------------
 
 describe('parsePasswd', () => {
-  const oracleIt = python ? it : it.skip;
+  const oracleIt = it;
 
   oracleIt('matches Python parse_passwd (system accounts, nologin, malformed, non-ASCII)', () => {
     const result = runOracle([
@@ -400,7 +312,7 @@ describe('parsePasswd', () => {
 // ---------------------------------------------------------------------------
 
 describe('parseGroup', () => {
-  const oracleIt = python ? it : it.skip;
+  const oracleIt = it;
 
   oracleIt('matches Python parse_group (members, gid conflict, duplicate names)', () => {
     const result = runOracle([{ id: 'g', op: 'parse_group', text: GROUP_TEXT }]);
@@ -436,7 +348,7 @@ describe('parseGroup', () => {
 // ---------------------------------------------------------------------------
 
 describe('parseUsage', () => {
-  const oracleIt = python ? it : it.skip;
+  const oracleIt = it;
 
   oracleIt('matches Python parse_usage (units, negatives, non-numeric, permission denied)', () => {
     const result = runOracle([{ id: 'u', op: 'parse_usage', text: USAGE_TEXT }]);
@@ -466,7 +378,7 @@ describe('parseUsage', () => {
 // ---------------------------------------------------------------------------
 
 describe('buildScanCommand', () => {
-  const oracleIt = python ? it : it.skip;
+  const oracleIt = it;
 
   oracleIt('is byte-for-byte identical to Python build_scan_command()', () => {
     const result = runOracle([{ id: 's', op: 'build_scan_command' }]);
@@ -481,7 +393,7 @@ describe('buildScanCommand', () => {
 });
 
 describe('buildUsageCommand', () => {
-  const oracleIt = python ? it : it.skip;
+  const oracleIt = it;
 
   oracleIt('matches Python build_usage_command() including quoting and rejects unsafe paths', () => {
     const result = runOracle([
@@ -527,7 +439,7 @@ describe('_safeUsagePath', () => {
     123,
   ];
 
-  const oracleIt = python ? it : it.skip;
+  const oracleIt = it;
 
   oracleIt('matches Python _safe_usage_path for allowed and rejected inputs', () => {
     const result = runOracle(
@@ -555,7 +467,7 @@ describe('_safeUsagePath', () => {
 // ---------------------------------------------------------------------------
 
 describe('_optionalField / _scanMetadata', () => {
-  const oracleIt = python ? it : it.skip;
+  const oracleIt = it;
 
   oracleIt('matches Python for out-of-range, "-" and blank fields', () => {
     const result = runOracle([
@@ -592,7 +504,7 @@ describe('_optionalField / _scanMetadata', () => {
 // ---------------------------------------------------------------------------
 
 describe('_parseScanOutput', () => {
-  const oracleIt = python ? it : it.skip;
+  const oracleIt = it;
 
   const texts: Record<string, string> = {
     valid: SCAN_OUTPUT_VALID,

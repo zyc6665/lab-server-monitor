@@ -1,10 +1,8 @@
-import { execFileSync } from 'node:child_process';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
+import { golden } from '../golden/golden';
 
 import { STAGES, buildCommandMap } from '../../src/collect/commands';
 
@@ -40,23 +38,7 @@ const EXPECTED: Record<string, string> = {
   gpu_processes: "nvidia-smi --query-compute-apps=gpu_uuid,pid,used_memory,process_name --format=csv,noheader,nounits",
 };
 
-/** First interpreter that can `import sys`, or null if none is available. */
-function findPython(): string | null {
-  const candidates = [process.env.PYTHON, 'python', 'python3'].filter(
-    (value): value is string => typeof value === 'string' && value.length > 0,
-  );
-  for (const candidate of candidates) {
-    try {
-      execFileSync(candidate, ['-c', 'import sys'], { stdio: 'ignore' });
-      return candidate;
-    } catch {
-      // try the next candidate
-    }
-  }
-  return null;
-}
-
-const python = findPython();
+const GOLDEN_FILE = path.join(repoRoot, 'backend', 'test', 'collect', 'golden', 'commands.json');
 
 describe('collect/commands', () => {
   it('exposes exactly the 21 recognised stages', () => {
@@ -71,35 +53,10 @@ describe('collect/commands', () => {
     expect(buildCommandMap()).toEqual(EXPECTED);
   });
 
-  const oracle = python ? it : it.skip;
-  oracle('is byte-for-byte identical to Python build_command_map()', () => {
-    const dir = mkdtempSync(path.join(tmpdir(), 'commands-oracle-'));
-    const script = path.join(dir, 'dump_commands.py');
-    writeFileSync(
-      script,
-      [
-        'import json',
-        'from servermanage.commands import build_command_map',
-        'print(json.dumps(build_command_map(), ensure_ascii=False))',
-        '',
-      ].join('\n'),
-      { encoding: 'utf-8' },
-    );
-    try {
-      const pythonPath = process.env.PYTHONPATH
-        ? `${repoRoot}${path.delimiter}${process.env.PYTHONPATH}`
-        : repoRoot;
-      const stdout = execFileSync(python, [script], {
-        cwd: repoRoot,
-        encoding: 'utf-8',
-        env: { ...process.env, PYTHONPATH: pythonPath, PYTHONIOENCODING: 'utf-8' },
-        maxBuffer: 8 * 1024 * 1024,
-      });
-      const fromPython = JSON.parse(stdout.trim()) as Record<string, string>;
-      expect(fromPython).toEqual(EXPECTED);
-      expect(buildCommandMap()).toEqual(fromPython);
-    } finally {
-      rmSync(dir, { recursive: true, force: true });
-    }
+  const oracle = it;
+  oracle('is byte-for-byte identical to the frozen Python build_command_map() golden', () => {
+    const fromPython = golden<Record<string, string>>(GOLDEN_FILE, 'build_command_map');
+    expect(fromPython).toEqual(EXPECTED);
+    expect(buildCommandMap()).toEqual(fromPython);
   });
 });

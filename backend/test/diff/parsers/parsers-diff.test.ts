@@ -28,11 +28,11 @@
  * skipped; a Node-only sanity suite still runs so a broken fixture or Node port
  * failure cannot hide behind the skip.
  */
-import { spawnSync } from 'node:child_process';
 import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 
 import { describe, expect, it } from 'vitest';
+import { golden } from '../../golden/golden';
 
 import type { Stage } from '../../../src/collect/commands';
 import { parseHostMetrics } from '../../../src/collect/parsers';
@@ -54,37 +54,7 @@ interface FixtureFile {
 const repoRoot = findRepoRoot();
 const FIXTURE_DIR = path.join(repoRoot, 'backend', 'test', 'diff', 'parsers', 'fixtures');
 
-function defaultPython(): string {
-  return process.env.PYTHON ?? 'python';
-}
-
-function mergePythonPath(): string {
-  const existing = process.env.PYTHONPATH;
-  const sep = process.platform === 'win32' ? ';' : ':';
-  return existing ? `${repoRoot}${sep}${existing}` : repoRoot;
-}
-
-/** Probe once whether the Python parser oracle can run in this environment. */
-function detectParsersPython(): { ok: boolean; detail: string } {
-  const result = spawnSync(defaultPython(), ['-c', 'import servermanage.parsers'], {
-    cwd: repoRoot,
-    encoding: 'utf-8',
-    env: { ...process.env, PYTHONPATH: mergePythonPath(), PYTHONWARNINGS: 'ignore' },
-  });
-  if (result.error) {
-    return { ok: false, detail: String(result.error) };
-  }
-  if (result.status !== 0) {
-    return { ok: false, detail: `exit ${result.status}: ${(result.stderr ?? '').trim()}` };
-  }
-  return { ok: true, detail: 'ok' };
-}
-
-const pythonProbe = detectParsersPython();
-const itPython = pythonProbe.ok ? it : it.skip;
-if (!pythonProbe.ok) {
-  console.warn(`Python parser oracle unavailable; skipping diff groups: ${pythonProbe.detail}`);
-}
+const itPython = it;
 
 /** `snake_case` -> `camelCase` (digits kept: `load_15` -> `load15`). */
 function camelize(key: string): string {
@@ -146,36 +116,9 @@ function asStageMap(fixture: FixtureFile): Partial<Record<Stage, string>> {
 }
 
 /** Run the Python oracle for one fixture and return its parsed JSON output. */
+const GOLDEN_FILE = path.join(repoRoot, 'backend', 'test', 'diff', 'parsers', 'golden', 'parsers.json');
 function runOracle(fixturePath: string): unknown {
-  const script = path.join(repoRoot, 'backend', 'test', 'diff', 'parsers', 'run_parsers_oracle.py');
-  const result = spawnSync(defaultPython(), [script, fixturePath], {
-    cwd: repoRoot,
-    encoding: 'utf-8',
-    env: {
-      ...process.env,
-      PYTHONPATH: mergePythonPath(),
-      PYTHONIOENCODING: 'utf-8',
-      PYTHONWARNINGS: 'ignore',
-    },
-    maxBuffer: 64 * 1024 * 1024,
-  });
-  if (result.error) {
-    throw result.error;
-  }
-  if (result.status !== 0) {
-    throw new Error(
-      `python parser oracle exited with status ${result.status}\nstderr:\n${result.stderr ?? ''}`,
-    );
-  }
-  const lastLine = (result.stdout ?? '')
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0)
-    .pop();
-  if (!lastLine) {
-    throw new Error('python parser oracle produced no JSON output');
-  }
-  return JSON.parse(lastLine);
+  return golden<unknown>(GOLDEN_FILE, path.basename(fixturePath));
 }
 
 const fixtureNames = readdirSync(FIXTURE_DIR)

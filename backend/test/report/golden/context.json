@@ -1,0 +1,1603 @@
+{
+  "_commit": "1ca108c",
+  "_source": "context.json",
+  "entries": {
+    "context": {
+      "charts": [
+        {
+          "name": "three-points",
+          "svg": "<svg width=\"360\" height=\"120\" xmlns=\"http://www.w3.org/2000/svg\" style=\"font-family: ui-sans-serif, system-ui, sans-serif;\">\n    <text x=\"36\" y=\"16\" font-size=\"11\" font-weight=\"bold\" fill=\"#374151\">CPU 使用率 (%)</text>\n    <line x1=\"36\" y1=\"92.0\" x2=\"348\" y2=\"92.0\" stroke=\"#e5e7eb\" stroke-width=\"1\" />\n<line x1=\"36\" y1=\"58.0\" x2=\"348\" y2=\"58.0\" stroke=\"#e5e7eb\" stroke-width=\"1\" />\n<line x1=\"36\" y1=\"24.0\" x2=\"348\" y2=\"24.0\" stroke=\"#e5e7eb\" stroke-width=\"1\" />\n    \n    <line x1=\"36\" y1=\"24\" x2=\"36\" y2=\"92\" stroke=\"#9ca3af\" stroke-width=\"1\" />\n    <line x1=\"36\" y1=\"92\" x2=\"348\" y2=\"92\" stroke=\"#9ca3af\" stroke-width=\"1\" />\n    \n    <text x=\"30\" y=\"96.0\" text-anchor=\"end\" font-size=\"9\" fill=\"#666\">0</text>\n<text x=\"30\" y=\"62.0\" text-anchor=\"end\" font-size=\"9\" fill=\"#666\">50</text>\n<text x=\"30\" y=\"28.0\" text-anchor=\"end\" font-size=\"9\" fill=\"#666\">100</text>\n    <text x=\"36.0\" y=\"112\" text-anchor=\"middle\" font-size=\"9\" fill=\"#666\">04-29</text>\n<text x=\"348.0\" y=\"112\" text-anchor=\"middle\" font-size=\"9\" fill=\"#666\">05-01</text>\n    <polyline fill=\"none\" stroke=\"#3b82f6\" stroke-width=\"2\" points=\"36.0,69.33333333333333 348.0,47.12\" />\n    <circle cx=\"36.0\" cy=\"69.33333333333333\" r=\"2.5\" fill=\"#2563eb\" />\n<circle cx=\"348.0\" cy=\"47.12\" r=\"2.5\" fill=\"#2563eb\" />\n</svg>\n"
+        },
+        {
+          "name": "single-point",
+          "svg": "<svg width=\"360\" height=\"120\" xmlns=\"http://www.w3.org/2000/svg\"><text x=\"10\" y=\"20\" font-size=\"12\" fill=\"#888\">内存使用率 (%): 数据不足</text></svg>"
+        },
+        {
+          "name": "zero-points",
+          "svg": "<svg width=\"360\" height=\"120\" xmlns=\"http://www.w3.org/2000/svg\"><text x=\"10\" y=\"20\" font-size=\"12\" fill=\"#888\">Chart: 数据不足</text></svg>"
+        },
+        {
+          "name": "above-hundred",
+          "svg": "<svg width=\"360\" height=\"120\" xmlns=\"http://www.w3.org/2000/svg\" style=\"font-family: ui-sans-serif, system-ui, sans-serif;\">\n    <text x=\"36\" y=\"16\" font-size=\"11\" font-weight=\"bold\" fill=\"#374151\">Load</text>\n    <line x1=\"36\" y1=\"92.0\" x2=\"348\" y2=\"92.0\" stroke=\"#e5e7eb\" stroke-width=\"1\" />\n<line x1=\"36\" y1=\"58.0\" x2=\"348\" y2=\"58.0\" stroke=\"#e5e7eb\" stroke-width=\"1\" />\n<line x1=\"36\" y1=\"24.0\" x2=\"348\" y2=\"24.0\" stroke=\"#e5e7eb\" stroke-width=\"1\" />\n    \n    <line x1=\"36\" y1=\"24\" x2=\"36\" y2=\"92\" stroke=\"#9ca3af\" stroke-width=\"1\" />\n    <line x1=\"36\" y1=\"92\" x2=\"348\" y2=\"92\" stroke=\"#9ca3af\" stroke-width=\"1\" />\n    \n    <text x=\"30\" y=\"96.0\" text-anchor=\"end\" font-size=\"9\" fill=\"#666\">0</text>\n<text x=\"30\" y=\"62.0\" text-anchor=\"end\" font-size=\"9\" fill=\"#666\">75</text>\n<text x=\"30\" y=\"28.0\" text-anchor=\"end\" font-size=\"9\" fill=\"#666\">150</text>\n    <text x=\"36.0\" y=\"112\" text-anchor=\"middle\" font-size=\"9\" fill=\"#666\"></text>\n<text x=\"192.0\" y=\"112\" text-anchor=\"middle\" font-size=\"9\" fill=\"#666\"></text>\n<text x=\"348.0\" y=\"112\" text-anchor=\"middle\" font-size=\"9\" fill=\"#666\"></text>\n    <polyline fill=\"none\" stroke=\"#3b82f6\" stroke-width=\"2\" points=\"36.0,37.373333333333335 192.0,24.0 348.0,46.89333333333333\" />\n    <circle cx=\"36.0\" cy=\"37.373333333333335\" r=\"2.5\" fill=\"#2563eb\" />\n<circle cx=\"192.0\" cy=\"24.0\" r=\"2.5\" fill=\"#2563eb\" />\n<circle cx=\"348.0\" cy=\"46.89333333333333\" r=\"2.5\" fill=\"#2563eb\" />\n</svg>\n"
+        },
+        {
+          "name": "custom-size",
+          "svg": "<svg width=\"200\" height=\"80\" xmlns=\"http://www.w3.org/2000/svg\" style=\"font-family: ui-sans-serif, system-ui, sans-serif;\">\n    <text x=\"36\" y=\"16\" font-size=\"11\" font-weight=\"bold\" fill=\"#374151\">Custom</text>\n    <line x1=\"36\" y1=\"52.0\" x2=\"188\" y2=\"52.0\" stroke=\"#e5e7eb\" stroke-width=\"1\" />\n<line x1=\"36\" y1=\"38.0\" x2=\"188\" y2=\"38.0\" stroke=\"#e5e7eb\" stroke-width=\"1\" />\n<line x1=\"36\" y1=\"24.0\" x2=\"188\" y2=\"24.0\" stroke=\"#e5e7eb\" stroke-width=\"1\" />\n    \n    <line x1=\"36\" y1=\"24\" x2=\"36\" y2=\"52\" stroke=\"#9ca3af\" stroke-width=\"1\" />\n    <line x1=\"36\" y1=\"52\" x2=\"188\" y2=\"52\" stroke=\"#9ca3af\" stroke-width=\"1\" />\n    \n    <text x=\"30\" y=\"56.0\" text-anchor=\"end\" font-size=\"9\" fill=\"#666\">0</text>\n<text x=\"30\" y=\"42.0\" text-anchor=\"end\" font-size=\"9\" fill=\"#666\">2</text>\n<text x=\"30\" y=\"28.0\" text-anchor=\"end\" font-size=\"9\" fill=\"#666\">5</text>\n    <text x=\"36.0\" y=\"72\" text-anchor=\"middle\" font-size=\"9\" fill=\"#666\">D1</text>\n<text x=\"112.0\" y=\"72\" text-anchor=\"middle\" font-size=\"9\" fill=\"#666\">D2</text>\n<text x=\"188.0\" y=\"72\" text-anchor=\"middle\" font-size=\"9\" fill=\"#666\">D3</text>\n    <polyline fill=\"none\" stroke=\"#3b82f6\" stroke-width=\"2\" points=\"36.0,40.8 112.0,29.599999999999998 188.0,35.2\" />\n    <circle cx=\"36.0\" cy=\"40.8\" r=\"2.5\" fill=\"#2563eb\" />\n<circle cx=\"112.0\" cy=\"29.599999999999998\" r=\"2.5\" fill=\"#2563eb\" />\n<circle cx=\"188.0\" cy=\"35.2\" r=\"2.5\" fill=\"#2563eb\" />\n</svg>\n"
+        },
+        {
+          "name": "short-labels-null",
+          "svg": "<svg width=\"360\" height=\"120\" xmlns=\"http://www.w3.org/2000/svg\" style=\"font-family: ui-sans-serif, system-ui, sans-serif;\">\n    <text x=\"36\" y=\"16\" font-size=\"11\" font-weight=\"bold\" fill=\"#374151\">Sparse</text>\n    <line x1=\"36\" y1=\"92.0\" x2=\"348\" y2=\"92.0\" stroke=\"#e5e7eb\" stroke-width=\"1\" />\n<line x1=\"36\" y1=\"58.0\" x2=\"348\" y2=\"58.0\" stroke=\"#e5e7eb\" stroke-width=\"1\" />\n<line x1=\"36\" y1=\"24.0\" x2=\"348\" y2=\"24.0\" stroke=\"#e5e7eb\" stroke-width=\"1\" />\n    \n    <line x1=\"36\" y1=\"24\" x2=\"36\" y2=\"92\" stroke=\"#9ca3af\" stroke-width=\"1\" />\n    <line x1=\"36\" y1=\"92\" x2=\"348\" y2=\"92\" stroke=\"#9ca3af\" stroke-width=\"1\" />\n    \n    <text x=\"30\" y=\"96.0\" text-anchor=\"end\" font-size=\"9\" fill=\"#666\">0</text>\n<text x=\"30\" y=\"62.0\" text-anchor=\"end\" font-size=\"9\" fill=\"#666\">50</text>\n<text x=\"30\" y=\"28.0\" text-anchor=\"end\" font-size=\"9\" fill=\"#666\">100</text>\n    <text x=\"36.0\" y=\"112\" text-anchor=\"middle\" font-size=\"9\" fill=\"#666\">A</text>\n<text x=\"192.0\" y=\"112\" text-anchor=\"middle\" font-size=\"9\" fill=\"#666\">C</text>\n<text x=\"348.0\" y=\"112\" text-anchor=\"middle\" font-size=\"9\" fill=\"#666\">D</text>\n    <polyline fill=\"none\" stroke=\"#3b82f6\" stroke-width=\"2\" points=\"36.0,88.6 192.0,86.9 348.0,90.3\" />\n    <circle cx=\"36.0\" cy=\"88.6\" r=\"2.5\" fill=\"#2563eb\" />\n<circle cx=\"192.0\" cy=\"86.9\" r=\"2.5\" fill=\"#2563eb\" />\n<circle cx=\"348.0\" cy=\"90.3\" r=\"2.5\" fill=\"#2563eb\" />\n</svg>\n"
+        },
+        {
+          "name": "scientific-width",
+          "svg": "<svg width=\"10000000000000000\" height=\"120\" xmlns=\"http://www.w3.org/2000/svg\" style=\"font-family: ui-sans-serif, system-ui, sans-serif;\">\n    <text x=\"36\" y=\"16\" font-size=\"11\" font-weight=\"bold\" fill=\"#374151\">Wide</text>\n    <line x1=\"36\" y1=\"92.0\" x2=\"9999999999999988\" y2=\"92.0\" stroke=\"#e5e7eb\" stroke-width=\"1\" />\n<line x1=\"36\" y1=\"58.0\" x2=\"9999999999999988\" y2=\"58.0\" stroke=\"#e5e7eb\" stroke-width=\"1\" />\n<line x1=\"36\" y1=\"24.0\" x2=\"9999999999999988\" y2=\"24.0\" stroke=\"#e5e7eb\" stroke-width=\"1\" />\n    \n    <line x1=\"36\" y1=\"24\" x2=\"36\" y2=\"92\" stroke=\"#9ca3af\" stroke-width=\"1\" />\n    <line x1=\"36\" y1=\"92\" x2=\"9999999999999988\" y2=\"92\" stroke=\"#9ca3af\" stroke-width=\"1\" />\n    \n    <text x=\"30\" y=\"96.0\" text-anchor=\"end\" font-size=\"9\" fill=\"#666\">0</text>\n<text x=\"30\" y=\"62.0\" text-anchor=\"end\" font-size=\"9\" fill=\"#666\">50</text>\n<text x=\"30\" y=\"28.0\" text-anchor=\"end\" font-size=\"9\" fill=\"#666\">100</text>\n    <text x=\"36.0\" y=\"112\" text-anchor=\"middle\" font-size=\"9\" fill=\"#666\">04-29</text>\n<text x=\"9999999999999988.0\" y=\"112\" text-anchor=\"middle\" font-size=\"9\" fill=\"#666\">04-30</text>\n    <polyline fill=\"none\" stroke=\"#3b82f6\" stroke-width=\"2\" points=\"36.0,85.2 9999999999999988.0,78.4\" />\n    <circle cx=\"36.0\" cy=\"85.2\" r=\"2.5\" fill=\"#2563eb\" />\n<circle cx=\"9999999999999988.0\" cy=\"78.4\" r=\"2.5\" fill=\"#2563eb\" />\n</svg>\n"
+        }
+      ],
+      "daily": [
+        {
+          "context": {
+            "failed_hosts": [],
+            "generated_at": "2024-05-01 09:30:15 UTC",
+            "hosts": [
+              {
+                "check_ok": 1,
+                "check_total": 2,
+                "checks": [
+                  {
+                    "latency_ms": 1.2,
+                    "message": "",
+                    "name": "ping",
+                    "status": "ok",
+                    "target": "10.0.0.1",
+                    "type": "icmp"
+                  },
+                  {
+                    "latency_ms": 5000,
+                    "message": "timeout",
+                    "name": "http",
+                    "status": "fail",
+                    "target": "https://alpha/health",
+                    "type": "http"
+                  }
+                ],
+                "errors": [],
+                "failed_checks": [
+                  {
+                    "latency_ms": 5000,
+                    "message": "timeout",
+                    "name": "http",
+                    "status": "fail",
+                    "target": "https://alpha/health",
+                    "type": "http"
+                  }
+                ],
+                "has_partial_errors": false,
+                "host": "10.0.0.11",
+                "host_name": "alpha",
+                "memory_total_gib": "64.0 GiB",
+                "memory_used_gib": "20.8 GiB",
+                "metrics": {
+                  "collected_at": "2024-05-01T09:29:58+00:00",
+                  "containers": [
+                    {
+                      "image": "nginx:1.25",
+                      "name": "web",
+                      "state": "running",
+                      "status": "Up 2 hours"
+                    }
+                  ],
+                  "cpu_core_count": 16,
+                  "cpu_usage_percent": 42.35,
+                  "disk_usage": [
+                    {
+                      "available": "250G",
+                      "filesystem": "/dev/sda1",
+                      "mountpoint": "/",
+                      "percent": "50%",
+                      "size": "500G",
+                      "used": "250G"
+                    },
+                    {
+                      "available": "31G",
+                      "filesystem": "tmpfs",
+                      "mountpoint": "/run",
+                      "percent": "4%",
+                      "size": "32G",
+                      "used": "1.2G"
+                    },
+                    {
+                      "available": "0.5T",
+                      "filesystem": "/dev/sdb1",
+                      "mountpoint": "/data",
+                      "percent": "75%",
+                      "size": "2T",
+                      "used": "1.5T"
+                    }
+                  ],
+                  "gpu_processes": [
+                    {
+                      "command": "python train.py",
+                      "index": 0,
+                      "memory_used_mb": 20480,
+                      "pid": 101,
+                      "username": "alice"
+                    }
+                  ],
+                  "gpu_summary": [
+                    {
+                      "index": 0,
+                      "memory_total_mb": 40960,
+                      "memory_used_mb": 20480,
+                      "name": "NVIDIA A100",
+                      "temperature_c": 58,
+                      "utilization_percent": 63
+                    },
+                    {
+                      "index": 1,
+                      "memory_total_mb": 40960,
+                      "memory_used_mb": 30720,
+                      "name": "NVIDIA A100",
+                      "temperature_c": 61,
+                      "utilization_percent": 71.5
+                    }
+                  ],
+                  "hostname": "alpha",
+                  "kernel_version": "6.8.0-41-generic",
+                  "load_average": {
+                    "load_1": 0.52,
+                    "load_15": 0.55,
+                    "load_5": 0.61
+                  },
+                  "logged_in_users": [
+                    {
+                      "login_at": "2024-05-01T08:10:00+00:00",
+                      "remote_host": "10.0.0.5",
+                      "terminal": "pts/0",
+                      "username": "alice"
+                    },
+                    {
+                      "login_at": "2024-05-01T07:00:00+00:00",
+                      "remote_host": null,
+                      "terminal": "pts/1",
+                      "username": "bob"
+                    }
+                  ],
+                  "memory": {
+                    "available_mb": 42000,
+                    "buff_cache_mb": 8192,
+                    "free_mb": 44191,
+                    "shared_mb": 512,
+                    "swap_free_mb": 8180,
+                    "swap_total_mb": 8192,
+                    "swap_used_mb": 12,
+                    "total_mb": 65536,
+                    "used_mb": 21345
+                  },
+                  "net_rx_bytes": 123456789,
+                  "net_tx_bytes": 98765432,
+                  "os_pretty_name": "Ubuntu 24.04.1 LTS",
+                  "process_counts_by_user": [
+                    {
+                      "container_id": null,
+                      "container_name": null,
+                      "count": 120,
+                      "username": "alice"
+                    },
+                    {
+                      "container_id": "abcdef1234567890ff",
+                      "container_name": null,
+                      "count": 80,
+                      "username": "root"
+                    },
+                    {
+                      "container_id": null,
+                      "container_name": "web",
+                      "count": 40,
+                      "username": "svc"
+                    },
+                    {
+                      "container_id": null,
+                      "container_name": null,
+                      "count": 3,
+                      "username": "nobody"
+                    }
+                  ],
+                  "thermal_zones": [
+                    {
+                      "celsius": 45.5,
+                      "label": "CPU"
+                    },
+                    {
+                      "celsius": 0,
+                      "label": "Board"
+                    }
+                  ],
+                  "top_cpu_processes": [
+                    {
+                      "command": "python train.py",
+                      "container_id": null,
+                      "container_name": "ml",
+                      "cpu_percent": 220.5,
+                      "display_user": "ml | alice",
+                      "elapsed": "01:20:00",
+                      "mem_percent": 3.2,
+                      "pid": 101,
+                      "username": "alice"
+                    },
+                    {
+                      "command": "sshd",
+                      "container_id": null,
+                      "container_name": null,
+                      "cpu_percent": 12,
+                      "display_user": "root",
+                      "elapsed": "10:00",
+                      "mem_percent": 0.5,
+                      "pid": 7,
+                      "username": "root"
+                    }
+                  ],
+                  "top_memory_processes": [
+                    {
+                      "command": "java -jar app.jar",
+                      "container_id": null,
+                      "container_name": null,
+                      "cpu_percent": 5,
+                      "display_user": "bob",
+                      "elapsed": "02:00:00",
+                      "mem_percent": 22.4,
+                      "pid": 202,
+                      "username": "bob"
+                    }
+                  ],
+                  "total_processes": 321,
+                  "uptime": "12 days, 3:04"
+                },
+                "overview": "CPU 42.4% | MEM 20.8 GiB/64.0 GiB | DISK /data 75% | GPU 2 active | 检查 1/2",
+                "process_counts_text": "alice=120 | abcdef123456 | root=80 | web | svc=40 | nobody=3",
+                "success": true,
+                "users_online": "alice, bob"
+              },
+              {
+                "check_ok": 0,
+                "check_total": 0,
+                "checks": [],
+                "errors": [],
+                "failed_checks": [],
+                "has_partial_errors": false,
+                "host": "10.0.0.12",
+                "host_name": "beta",
+                "memory_total_gib": "N/A",
+                "memory_used_gib": "N/A",
+                "metrics": {
+                  "collected_at": null,
+                  "containers": [],
+                  "cpu_core_count": null,
+                  "cpu_usage_percent": null,
+                  "disk_usage": [],
+                  "gpu_processes": [],
+                  "gpu_summary": [],
+                  "hostname": "beta",
+                  "kernel_version": null,
+                  "load_average": null,
+                  "logged_in_users": [],
+                  "memory": null,
+                  "net_rx_bytes": null,
+                  "net_tx_bytes": null,
+                  "os_pretty_name": null,
+                  "process_counts_by_user": [],
+                  "thermal_zones": [],
+                  "top_cpu_processes": [],
+                  "top_memory_processes": [],
+                  "total_processes": null,
+                  "uptime": null
+                },
+                "overview": "CPU N/A | MEM N/A | DISK N/A | N/A",
+                "process_counts_text": "None",
+                "success": true,
+                "users_online": "None"
+              }
+            ],
+            "subject": "[Server Daily Report] 2024-05-01",
+            "summary": {
+              "failed_count": 0,
+              "success_count": 2,
+              "total_hosts": 2
+            }
+          },
+          "name": "baseline-two-hosts"
+        },
+        {
+          "context": {
+            "failed_hosts": [],
+            "generated_at": "2024-05-02 00:00:00 UTC",
+            "hosts": [],
+            "subject": "[Server Daily Report] 2024-05-02",
+            "summary": {
+              "failed_count": 0,
+              "success_count": 0,
+              "total_hosts": 0
+            }
+          },
+          "name": "empty-report"
+        },
+        {
+          "context": {
+            "failed_hosts": [
+              {
+                "host": "10.0.0.21",
+                "host_name": "down-a",
+                "reason": "connection refused; bad credentials"
+              },
+              {
+                "host": "10.0.0.22",
+                "host_name": "down-b",
+                "reason": "Unknown failure"
+              }
+            ],
+            "generated_at": "2024-05-03 18:05:09 UTC",
+            "hosts": [
+              {
+                "check_ok": 0,
+                "check_total": 0,
+                "checks": [],
+                "errors": [
+                  {
+                    "message": "connection refused",
+                    "stage": "ssh"
+                  },
+                  {
+                    "message": "bad credentials",
+                    "stage": "auth"
+                  }
+                ],
+                "failed_checks": [],
+                "has_partial_errors": true,
+                "host": "10.0.0.21",
+                "host_name": "down-a",
+                "memory_total_gib": "N/A",
+                "memory_used_gib": "N/A",
+                "metrics": {
+                  "collected_at": null,
+                  "containers": [],
+                  "cpu_core_count": null,
+                  "cpu_usage_percent": null,
+                  "disk_usage": [],
+                  "gpu_processes": [],
+                  "gpu_summary": [],
+                  "hostname": null,
+                  "kernel_version": null,
+                  "load_average": null,
+                  "logged_in_users": [],
+                  "memory": null,
+                  "net_rx_bytes": null,
+                  "net_tx_bytes": null,
+                  "os_pretty_name": null,
+                  "process_counts_by_user": [],
+                  "thermal_zones": [],
+                  "top_cpu_processes": [],
+                  "top_memory_processes": [],
+                  "total_processes": null,
+                  "uptime": null
+                },
+                "overview": "CPU N/A | MEM N/A | DISK N/A | N/A",
+                "process_counts_text": "None",
+                "success": false,
+                "users_online": "None"
+              },
+              {
+                "check_ok": 0,
+                "check_total": 0,
+                "checks": [],
+                "errors": [],
+                "failed_checks": [],
+                "has_partial_errors": false,
+                "host": "10.0.0.22",
+                "host_name": "down-b",
+                "memory_total_gib": "N/A",
+                "memory_used_gib": "N/A",
+                "metrics": {
+                  "collected_at": null,
+                  "containers": [],
+                  "cpu_core_count": null,
+                  "cpu_usage_percent": null,
+                  "disk_usage": [],
+                  "gpu_processes": [],
+                  "gpu_summary": [],
+                  "hostname": null,
+                  "kernel_version": null,
+                  "load_average": null,
+                  "logged_in_users": [],
+                  "memory": null,
+                  "net_rx_bytes": null,
+                  "net_tx_bytes": null,
+                  "os_pretty_name": null,
+                  "process_counts_by_user": [],
+                  "thermal_zones": [],
+                  "top_cpu_processes": [],
+                  "top_memory_processes": [],
+                  "total_processes": null,
+                  "uptime": null
+                },
+                "overview": "CPU N/A | MEM N/A | DISK N/A | N/A",
+                "process_counts_text": "None",
+                "success": false,
+                "users_online": "None"
+              },
+              {
+                "check_ok": 0,
+                "check_total": 0,
+                "checks": [],
+                "errors": [],
+                "failed_checks": [],
+                "has_partial_errors": false,
+                "host": "10.0.0.23",
+                "host_name": "ok-c",
+                "memory_total_gib": "8.0 GiB",
+                "memory_used_gib": "2.0 GiB",
+                "metrics": {
+                  "collected_at": null,
+                  "containers": [],
+                  "cpu_core_count": null,
+                  "cpu_usage_percent": 10,
+                  "disk_usage": [],
+                  "gpu_processes": [],
+                  "gpu_summary": [],
+                  "hostname": "ok-c",
+                  "kernel_version": null,
+                  "load_average": null,
+                  "logged_in_users": [],
+                  "memory": {
+                    "available_mb": 6000,
+                    "buff_cache_mb": 512,
+                    "free_mb": 6144,
+                    "shared_mb": 0,
+                    "swap_free_mb": 0,
+                    "swap_total_mb": 0,
+                    "swap_used_mb": 0,
+                    "total_mb": 8192,
+                    "used_mb": 2048
+                  },
+                  "net_rx_bytes": null,
+                  "net_tx_bytes": null,
+                  "os_pretty_name": null,
+                  "process_counts_by_user": [],
+                  "thermal_zones": [],
+                  "top_cpu_processes": [],
+                  "top_memory_processes": [],
+                  "total_processes": null,
+                  "uptime": null
+                },
+                "overview": "CPU 10.0% | MEM 2.0 GiB/8.0 GiB | DISK N/A | N/A",
+                "process_counts_text": "None",
+                "success": true,
+                "users_online": "None"
+              }
+            ],
+            "subject": "[Emergency Daily] 2024-05-03",
+            "summary": {
+              "failed_count": 2,
+              "success_count": 1,
+              "total_hosts": 3
+            }
+          },
+          "name": "failed-hosts"
+        },
+        {
+          "context": {
+            "failed_hosts": [],
+            "generated_at": "2024-05-04 06:00:00 UTC",
+            "hosts": [
+              {
+                "check_ok": 0,
+                "check_total": 1,
+                "checks": [
+                  {
+                    "latency_ms": null,
+                    "message": "one disk hot",
+                    "name": "disks",
+                    "status": "warn",
+                    "target": "smartctl",
+                    "type": "command"
+                  }
+                ],
+                "errors": [],
+                "failed_checks": [
+                  {
+                    "latency_ms": null,
+                    "message": "one disk hot",
+                    "name": "disks",
+                    "status": "warn",
+                    "target": "smartctl",
+                    "type": "command"
+                  }
+                ],
+                "has_partial_errors": false,
+                "host": "10.0.0.31",
+                "host_name": "storage",
+                "memory_total_gib": "1.0 GiB",
+                "memory_used_gib": "0.1 GiB",
+                "metrics": {
+                  "collected_at": null,
+                  "containers": [],
+                  "cpu_core_count": null,
+                  "cpu_usage_percent": 5.5,
+                  "disk_usage": [
+                    {
+                      "available": "1.5T",
+                      "filesystem": "/dev/md0",
+                      "mountpoint": "/data",
+                      "percent": "85%",
+                      "size": "10T",
+                      "used": "8.5T"
+                    },
+                    {
+                      "available": "1.5T",
+                      "filesystem": "/dev/md0",
+                      "mountpoint": "/data2",
+                      "percent": "85%",
+                      "size": "10T",
+                      "used": "8.5T"
+                    },
+                    {
+                      "available": "10G",
+                      "filesystem": "overlay",
+                      "mountpoint": "/var/lib/docker",
+                      "percent": "90%",
+                      "size": "100G",
+                      "used": "90G"
+                    },
+                    {
+                      "available": "800G",
+                      "filesystem": "/dev/nvme0n1p2",
+                      "mountpoint": "/",
+                      "percent": "47%",
+                      "size": "1.5T",
+                      "used": "700G"
+                    },
+                    {
+                      "available": "0",
+                      "filesystem": "proc",
+                      "mountpoint": "/proc",
+                      "percent": "0%",
+                      "size": "0",
+                      "used": "0"
+                    },
+                    {
+                      "available": "0.5T",
+                      "filesystem": "  ",
+                      "mountpoint": "/blank",
+                      "percent": "50%",
+                      "size": "1T",
+                      "used": "0.5T"
+                    },
+                    {
+                      "available": "1G",
+                      "filesystem": "/dev/bad",
+                      "mountpoint": "/bad",
+                      "percent": "50%",
+                      "size": "not-a-size",
+                      "used": "1G"
+                    }
+                  ],
+                  "gpu_processes": [],
+                  "gpu_summary": [],
+                  "hostname": "storage",
+                  "kernel_version": null,
+                  "load_average": null,
+                  "logged_in_users": [],
+                  "memory": {
+                    "available_mb": 900,
+                    "buff_cache_mb": 64,
+                    "free_mb": 924,
+                    "shared_mb": 1,
+                    "swap_free_mb": 2038,
+                    "swap_total_mb": 2048,
+                    "swap_used_mb": 10,
+                    "total_mb": 1024,
+                    "used_mb": 100
+                  },
+                  "net_rx_bytes": null,
+                  "net_tx_bytes": null,
+                  "os_pretty_name": null,
+                  "process_counts_by_user": [],
+                  "thermal_zones": [],
+                  "top_cpu_processes": [],
+                  "top_memory_processes": [],
+                  "total_processes": null,
+                  "uptime": null
+                },
+                "overview": "CPU 5.5% | MEM 0.1 GiB/1.0 GiB | DISK /var/lib/docker 90% | N/A | 检查 0/1",
+                "process_counts_text": "None",
+                "success": true,
+                "users_online": "None"
+              }
+            ],
+            "subject": "[Server Daily Report] 2024-05-04",
+            "summary": {
+              "failed_count": 0,
+              "success_count": 1,
+              "total_hosts": 1
+            }
+          },
+          "name": "no-gpu-multidisk"
+        },
+        {
+          "context": {
+            "failed_hosts": [
+              {
+                "host": "10.0.0.43",
+                "host_name": "dead-3",
+                "reason": "timed out"
+              }
+            ],
+            "generated_at": "2024-05-05 12:00:00 UTC",
+            "hosts": [
+              {
+                "check_ok": 0,
+                "check_total": 0,
+                "checks": [],
+                "errors": [
+                  {
+                    "message": "nvml query failed",
+                    "stage": "gpu"
+                  }
+                ],
+                "failed_checks": [],
+                "has_partial_errors": true,
+                "host": "10.0.0.41",
+                "host_name": "hot-1",
+                "memory_total_gib": "1.0 GiB",
+                "memory_used_gib": "0.9 GiB",
+                "metrics": {
+                  "collected_at": null,
+                  "containers": [],
+                  "cpu_core_count": null,
+                  "cpu_usage_percent": 92.4,
+                  "disk_usage": [
+                    {
+                      "available": "10G",
+                      "filesystem": "/dev/sda1",
+                      "mountpoint": "/",
+                      "percent": "90%",
+                      "size": "100G",
+                      "used": "90G"
+                    }
+                  ],
+                  "gpu_processes": [],
+                  "gpu_summary": [
+                    {
+                      "index": 0,
+                      "memory_total_mb": 24576,
+                      "memory_used_mb": 24000,
+                      "name": "RTX 4090",
+                      "temperature_c": 80,
+                      "utilization_percent": 97
+                    }
+                  ],
+                  "hostname": "hot-1",
+                  "kernel_version": null,
+                  "load_average": null,
+                  "logged_in_users": [],
+                  "memory": {
+                    "available_mb": 50,
+                    "buff_cache_mb": 0,
+                    "free_mb": 50,
+                    "shared_mb": 0,
+                    "swap_free_mb": 0,
+                    "swap_total_mb": 0,
+                    "swap_used_mb": 0,
+                    "total_mb": 1000,
+                    "used_mb": 950
+                  },
+                  "net_rx_bytes": null,
+                  "net_tx_bytes": null,
+                  "os_pretty_name": null,
+                  "process_counts_by_user": [],
+                  "thermal_zones": [],
+                  "top_cpu_processes": [],
+                  "top_memory_processes": [],
+                  "total_processes": null,
+                  "uptime": null
+                },
+                "overview": "CPU 92.4% | MEM 0.9 GiB/1.0 GiB | DISK / 90% | GPU 1 active",
+                "process_counts_text": "None",
+                "success": true,
+                "users_online": "None"
+              },
+              {
+                "check_ok": 0,
+                "check_total": 0,
+                "checks": [],
+                "errors": [],
+                "failed_checks": [],
+                "has_partial_errors": false,
+                "host": "10.0.0.42",
+                "host_name": "warm-2",
+                "memory_total_gib": "N/A",
+                "memory_used_gib": "N/A",
+                "metrics": {
+                  "collected_at": null,
+                  "containers": [],
+                  "cpu_core_count": null,
+                  "cpu_usage_percent": 88,
+                  "disk_usage": [],
+                  "gpu_processes": [],
+                  "gpu_summary": [],
+                  "hostname": "warm-2",
+                  "kernel_version": null,
+                  "load_average": null,
+                  "logged_in_users": [],
+                  "memory": null,
+                  "net_rx_bytes": null,
+                  "net_tx_bytes": null,
+                  "os_pretty_name": null,
+                  "process_counts_by_user": [],
+                  "thermal_zones": [],
+                  "top_cpu_processes": [],
+                  "top_memory_processes": [],
+                  "total_processes": null,
+                  "uptime": null
+                },
+                "overview": "CPU 88.0% | MEM N/A | DISK N/A | N/A",
+                "process_counts_text": "None",
+                "success": true,
+                "users_online": "None"
+              },
+              {
+                "check_ok": 0,
+                "check_total": 0,
+                "checks": [],
+                "errors": [
+                  {
+                    "message": "timed out",
+                    "stage": "connect"
+                  }
+                ],
+                "failed_checks": [],
+                "has_partial_errors": true,
+                "host": "10.0.0.43",
+                "host_name": "dead-3",
+                "memory_total_gib": "N/A",
+                "memory_used_gib": "N/A",
+                "metrics": {
+                  "collected_at": null,
+                  "containers": [],
+                  "cpu_core_count": null,
+                  "cpu_usage_percent": null,
+                  "disk_usage": [],
+                  "gpu_processes": [],
+                  "gpu_summary": [],
+                  "hostname": null,
+                  "kernel_version": null,
+                  "load_average": null,
+                  "logged_in_users": [],
+                  "memory": null,
+                  "net_rx_bytes": null,
+                  "net_tx_bytes": null,
+                  "os_pretty_name": null,
+                  "process_counts_by_user": [],
+                  "thermal_zones": [],
+                  "top_cpu_processes": [],
+                  "top_memory_processes": [],
+                  "total_processes": null,
+                  "uptime": null
+                },
+                "overview": "CPU N/A | MEM N/A | DISK N/A | N/A",
+                "process_counts_text": "None",
+                "success": false,
+                "users_online": "None"
+              }
+            ],
+            "subject": "[Server Daily Report] 2024-05-05",
+            "summary": {
+              "failed_count": 1,
+              "success_count": 2,
+              "total_hosts": 3
+            }
+          },
+          "name": "risk-heavy"
+        },
+        {
+          "context": {
+            "failed_hosts": [],
+            "generated_at": "2024-05-06 23:59:59 UTC",
+            "hosts": [
+              {
+                "check_ok": 0,
+                "check_total": 0,
+                "checks": [],
+                "errors": [],
+                "failed_checks": [],
+                "has_partial_errors": false,
+                "host": "10.0.0.51",
+                "host_name": "rounder",
+                "memory_total_gib": "2.9 GiB",
+                "memory_used_gib": "1.0 GiB",
+                "metrics": {
+                  "collected_at": null,
+                  "containers": [],
+                  "cpu_core_count": null,
+                  "cpu_usage_percent": 84.95,
+                  "disk_usage": [
+                    {
+                      "available": "1G",
+                      "filesystem": "/dev/x",
+                      "mountpoint": "/x",
+                      "percent": "0.5%",
+                      "size": "1.5G",
+                      "used": "0.5G"
+                    },
+                    {
+                      "available": "0.667T",
+                      "filesystem": "/dev/y",
+                      "mountpoint": "/y",
+                      "percent": "33%",
+                      "size": "1T",
+                      "used": "0.333T"
+                    }
+                  ],
+                  "gpu_processes": [],
+                  "gpu_summary": [
+                    {
+                      "index": 0,
+                      "memory_total_mb": 3,
+                      "memory_used_mb": 1,
+                      "name": "T4",
+                      "temperature_c": 0,
+                      "utilization_percent": 0
+                    },
+                    {
+                      "index": 1,
+                      "memory_total_mb": 3,
+                      "memory_used_mb": 2,
+                      "name": "T4",
+                      "temperature_c": 50,
+                      "utilization_percent": 100
+                    }
+                  ],
+                  "hostname": "rounder",
+                  "kernel_version": null,
+                  "load_average": null,
+                  "logged_in_users": [],
+                  "memory": {
+                    "available_mb": 2000,
+                    "buff_cache_mb": 0,
+                    "free_mb": 2000,
+                    "shared_mb": 0,
+                    "swap_free_mb": 0,
+                    "swap_total_mb": 0,
+                    "swap_used_mb": 0,
+                    "total_mb": 3000,
+                    "used_mb": 1000
+                  },
+                  "net_rx_bytes": null,
+                  "net_tx_bytes": null,
+                  "os_pretty_name": null,
+                  "process_counts_by_user": [],
+                  "thermal_zones": [],
+                  "top_cpu_processes": [],
+                  "top_memory_processes": [],
+                  "total_processes": null,
+                  "uptime": null
+                },
+                "overview": "CPU 85.0% | MEM 1.0 GiB/2.9 GiB | DISK /y 33% | GPU 2 active",
+                "process_counts_text": "None",
+                "success": true,
+                "users_online": "None"
+              }
+            ],
+            "subject": "[Server Daily Report] 2024-05-06",
+            "summary": {
+              "failed_count": 0,
+              "success_count": 1,
+              "total_hosts": 1
+            }
+          },
+          "name": "rounding-edges"
+        }
+      ],
+      "executive": [
+        {
+          "context": {
+            "generated_at": "2024-05-01 09:30:15 UTC",
+            "hosts": [
+              {
+                "cpu_percent": 42.35,
+                "disk_total": {
+                  "available_gib": 762,
+                  "display_text": "已用 1.7 TiB / 2.5 TiB (70.1%)",
+                  "total_gib": 2548,
+                  "used_gib": 1786,
+                  "used_percent": 70.1
+                },
+                "disk_total_text": "已用 1.7 TiB / 2.5 TiB (70.1%)",
+                "gpu_total": {
+                  "display_text": "已用 50.0 GiB / 80.0 GiB (62.5%)",
+                  "gpu_count": 2,
+                  "total_gib": 80,
+                  "used_gib": 50,
+                  "used_percent": 62.5
+                },
+                "gpu_total_text": "已用 50.0 GiB / 80.0 GiB (62.5%)",
+                "host": "10.0.0.11",
+                "host_name": "alpha",
+                "memory_percent": 32.6,
+                "ownership_text": "alice=120 | abcdef123456 | root=80 | web | svc=40",
+                "status_color": "#047857",
+                "status_text": "正常",
+                "top_cpu_owner": "ml | alice",
+                "top_memory_owner": "bob"
+              },
+              {
+                "cpu_percent": null,
+                "disk_total": null,
+                "disk_total_text": "N/A",
+                "gpu_total": null,
+                "gpu_total_text": "N/A",
+                "host": "10.0.0.12",
+                "host_name": "beta",
+                "memory_percent": null,
+                "ownership_text": "N/A",
+                "status_color": "#047857",
+                "status_text": "正常",
+                "top_cpu_owner": "N/A",
+                "top_memory_owner": "N/A"
+              }
+            ],
+            "risk_items": [],
+            "subject": "[Server Daily Report] 2024-05-01",
+            "summary": {
+              "failed_count": 0,
+              "risk_count": 0,
+              "success_count": 2,
+              "total_hosts": 2
+            }
+          },
+          "name": "baseline-two-hosts"
+        },
+        {
+          "context": {
+            "generated_at": "2024-05-02 00:00:00 UTC",
+            "hosts": [],
+            "risk_items": [],
+            "subject": "[Server Daily Report] 2024-05-02",
+            "summary": {
+              "failed_count": 0,
+              "risk_count": 0,
+              "success_count": 0,
+              "total_hosts": 0
+            }
+          },
+          "name": "empty-report"
+        },
+        {
+          "context": {
+            "generated_at": "2024-05-03 18:05:09 UTC",
+            "hosts": [
+              {
+                "cpu_percent": null,
+                "disk_total": null,
+                "disk_total_text": "N/A",
+                "gpu_total": null,
+                "gpu_total_text": "N/A",
+                "host": "10.0.0.21",
+                "host_name": "down-a",
+                "memory_percent": null,
+                "ownership_text": "N/A",
+                "status_color": "#c2410c",
+                "status_text": "异常",
+                "top_cpu_owner": "N/A",
+                "top_memory_owner": "N/A"
+              },
+              {
+                "cpu_percent": null,
+                "disk_total": null,
+                "disk_total_text": "N/A",
+                "gpu_total": null,
+                "gpu_total_text": "N/A",
+                "host": "10.0.0.22",
+                "host_name": "down-b",
+                "memory_percent": null,
+                "ownership_text": "N/A",
+                "status_color": "#c2410c",
+                "status_text": "异常",
+                "top_cpu_owner": "N/A",
+                "top_memory_owner": "N/A"
+              },
+              {
+                "cpu_percent": 10,
+                "disk_total": null,
+                "disk_total_text": "N/A",
+                "gpu_total": null,
+                "gpu_total_text": "N/A",
+                "host": "10.0.0.23",
+                "host_name": "ok-c",
+                "memory_percent": 25,
+                "ownership_text": "N/A",
+                "status_color": "#047857",
+                "status_text": "正常",
+                "top_cpu_owner": "N/A",
+                "top_memory_owner": "N/A"
+              }
+            ],
+            "risk_items": [
+              "down-a：主机采集失败",
+              "down-b：主机采集失败"
+            ],
+            "subject": "[Emergency Daily] 2024-05-03",
+            "summary": {
+              "failed_count": 2,
+              "risk_count": 2,
+              "success_count": 1,
+              "total_hosts": 3
+            }
+          },
+          "name": "failed-hosts"
+        },
+        {
+          "context": {
+            "generated_at": "2024-05-04 06:00:00 UTC",
+            "hosts": [
+              {
+                "cpu_percent": 5.5,
+                "disk_total": {
+                  "available_gib": 2336,
+                  "display_text": "已用 9.2 TiB / 11.5 TiB (79.9%)",
+                  "total_gib": 11776,
+                  "used_gib": 9404,
+                  "used_percent": 79.9
+                },
+                "disk_total_text": "已用 9.2 TiB / 11.5 TiB (79.9%)",
+                "gpu_total": null,
+                "gpu_total_text": "N/A",
+                "host": "10.0.0.31",
+                "host_name": "storage",
+                "memory_percent": 9.8,
+                "ownership_text": "N/A",
+                "status_color": "#047857",
+                "status_text": "正常",
+                "top_cpu_owner": "N/A",
+                "top_memory_owner": "N/A"
+              }
+            ],
+            "risk_items": [],
+            "subject": "[Server Daily Report] 2024-05-04",
+            "summary": {
+              "failed_count": 0,
+              "risk_count": 0,
+              "success_count": 1,
+              "total_hosts": 1
+            }
+          },
+          "name": "no-gpu-multidisk"
+        },
+        {
+          "context": {
+            "generated_at": "2024-05-05 12:00:00 UTC",
+            "hosts": [
+              {
+                "cpu_percent": 92.4,
+                "disk_total": {
+                  "available_gib": 10,
+                  "display_text": "已用 90.0 GiB / 100.0 GiB (90.0%)",
+                  "total_gib": 100,
+                  "used_gib": 90,
+                  "used_percent": 90
+                },
+                "disk_total_text": "已用 90.0 GiB / 100.0 GiB (90.0%)",
+                "gpu_total": {
+                  "display_text": "已用 23.4 GiB / 24.0 GiB (97.7%)",
+                  "gpu_count": 1,
+                  "total_gib": 24,
+                  "used_gib": 23.4375,
+                  "used_percent": 97.7
+                },
+                "gpu_total_text": "已用 23.4 GiB / 24.0 GiB (97.7%)",
+                "host": "10.0.0.41",
+                "host_name": "hot-1",
+                "memory_percent": 95,
+                "ownership_text": "N/A",
+                "status_color": "#c2410c",
+                "status_text": "关注",
+                "top_cpu_owner": "N/A",
+                "top_memory_owner": "N/A"
+              },
+              {
+                "cpu_percent": 88,
+                "disk_total": null,
+                "disk_total_text": "N/A",
+                "gpu_total": null,
+                "gpu_total_text": "N/A",
+                "host": "10.0.0.42",
+                "host_name": "warm-2",
+                "memory_percent": null,
+                "ownership_text": "N/A",
+                "status_color": "#c2410c",
+                "status_text": "关注",
+                "top_cpu_owner": "N/A",
+                "top_memory_owner": "N/A"
+              },
+              {
+                "cpu_percent": null,
+                "disk_total": null,
+                "disk_total_text": "N/A",
+                "gpu_total": null,
+                "gpu_total_text": "N/A",
+                "host": "10.0.0.43",
+                "host_name": "dead-3",
+                "memory_percent": null,
+                "ownership_text": "N/A",
+                "status_color": "#c2410c",
+                "status_text": "异常",
+                "top_cpu_owner": "N/A",
+                "top_memory_owner": "N/A"
+              }
+            ],
+            "risk_items": [
+              "hot-1：采集异常：nvml query failed",
+              "hot-1：CPU 使用率 92.4%",
+              "hot-1：内存使用率 95.0%",
+              "hot-1：整体磁盘使用率 90.0%",
+              "hot-1：整体 GPU 显存使用率 97.7%"
+            ],
+            "subject": "[Server Daily Report] 2024-05-05",
+            "summary": {
+              "failed_count": 1,
+              "risk_count": 3,
+              "success_count": 2,
+              "total_hosts": 3
+            }
+          },
+          "name": "risk-heavy"
+        },
+        {
+          "context": {
+            "generated_at": "2024-05-06 23:59:59 UTC",
+            "hosts": [
+              {
+                "cpu_percent": 84.95,
+                "disk_total": {
+                  "available_gib": 684.008,
+                  "display_text": "已用 341.5 GiB / 1.0 TiB (33.3%)",
+                  "total_gib": 1025.5,
+                  "used_gib": 341.492,
+                  "used_percent": 33.3
+                },
+                "disk_total_text": "已用 341.5 GiB / 1.0 TiB (33.3%)",
+                "gpu_total": {
+                  "display_text": "已用 0.0 GiB / 0.0 GiB (50.0%)",
+                  "gpu_count": 2,
+                  "total_gib": 0.005859375,
+                  "used_gib": 0.0029296875,
+                  "used_percent": 50
+                },
+                "gpu_total_text": "已用 0.0 GiB / 0.0 GiB (50.0%)",
+                "host": "10.0.0.51",
+                "host_name": "rounder",
+                "memory_percent": 33.3,
+                "ownership_text": "N/A",
+                "status_color": "#047857",
+                "status_text": "正常",
+                "top_cpu_owner": "N/A",
+                "top_memory_owner": "N/A"
+              }
+            ],
+            "risk_items": [],
+            "subject": "[Server Daily Report] 2024-05-06",
+            "summary": {
+              "failed_count": 0,
+              "risk_count": 0,
+              "success_count": 1,
+              "total_hosts": 1
+            }
+          },
+          "name": "rounding-edges"
+        }
+      ],
+      "weekly": [
+        {
+          "context": {
+            "busy_hosts": [
+              {
+                "check_ok": 1,
+                "check_total": 2,
+                "checks": [
+                  {
+                    "latency_ms": 0.8,
+                    "message": "",
+                    "name": "ping",
+                    "status": "ok",
+                    "target": "10.0.0.11",
+                    "type": "icmp"
+                  },
+                  {
+                    "latency_ms": null,
+                    "message": "refused",
+                    "name": "ssh",
+                    "status": "fail",
+                    "target": "22",
+                    "type": "tcp"
+                  }
+                ],
+                "cpu_avg": 61.234,
+                "cpu_chart": "<svg width=\"360\" height=\"120\" xmlns=\"http://www.w3.org/2000/svg\" style=\"font-family: ui-sans-serif, system-ui, sans-serif;\">\n    <text x=\"36\" y=\"16\" font-size=\"11\" font-weight=\"bold\" fill=\"#374151\">CPU 使用率 (%)</text>\n    <line x1=\"36\" y1=\"92.0\" x2=\"348\" y2=\"92.0\" stroke=\"#e5e7eb\" stroke-width=\"1\" />\n<line x1=\"36\" y1=\"58.0\" x2=\"348\" y2=\"58.0\" stroke=\"#e5e7eb\" stroke-width=\"1\" />\n<line x1=\"36\" y1=\"24.0\" x2=\"348\" y2=\"24.0\" stroke=\"#e5e7eb\" stroke-width=\"1\" />\n    \n    <line x1=\"36\" y1=\"24\" x2=\"36\" y2=\"92\" stroke=\"#9ca3af\" stroke-width=\"1\" />\n    <line x1=\"36\" y1=\"92\" x2=\"348\" y2=\"92\" stroke=\"#9ca3af\" stroke-width=\"1\" />\n    \n    <text x=\"30\" y=\"96.0\" text-anchor=\"end\" font-size=\"9\" fill=\"#666\">0</text>\n<text x=\"30\" y=\"62.0\" text-anchor=\"end\" font-size=\"9\" fill=\"#666\">50</text>\n<text x=\"30\" y=\"28.0\" text-anchor=\"end\" font-size=\"9\" fill=\"#666\">100</text>\n    <text x=\"36.0\" y=\"112\" text-anchor=\"middle\" font-size=\"9\" fill=\"#666\">04-29</text>\n<text x=\"140.0\" y=\"112\" text-anchor=\"middle\" font-size=\"9\" fill=\"#666\">04-30</text>\n<text x=\"244.0\" y=\"112\" text-anchor=\"middle\" font-size=\"9\" fill=\"#666\">05-01</text>\n<text x=\"348.0\" y=\"112\" text-anchor=\"middle\" font-size=\"9\" fill=\"#666\">05-03</text>\n    <polyline fill=\"none\" stroke=\"#3b82f6\" stroke-width=\"2\" points=\"36.0,58.0 140.0,50.52 244.0,42.7 348.0,32.16\" />\n    <circle cx=\"36.0\" cy=\"58.0\" r=\"2.5\" fill=\"#2563eb\" />\n<circle cx=\"140.0\" cy=\"50.52\" r=\"2.5\" fill=\"#2563eb\" />\n<circle cx=\"244.0\" cy=\"42.7\" r=\"2.5\" fill=\"#2563eb\" />\n<circle cx=\"348.0\" cy=\"32.16\" r=\"2.5\" fill=\"#2563eb\" />\n</svg>\n",
+                "cpu_max": 88,
+                "cpu_min": 12.5,
+                "daily_points": [
+                  {
+                    "cpu_avg": 50,
+                    "day": "2024-04-29",
+                    "gpu_util": null,
+                    "memory_percent": 60
+                  },
+                  {
+                    "cpu_avg": 61,
+                    "day": "2024-04-30",
+                    "gpu_util": 55,
+                    "memory_percent": 70
+                  },
+                  {
+                    "cpu_avg": 72.5,
+                    "day": "2024-05-01",
+                    "gpu_util": 66.5,
+                    "memory_percent": 80
+                  },
+                  {
+                    "cpu_avg": null,
+                    "day": "2024-05-02",
+                    "gpu_util": null,
+                    "memory_percent": null
+                  },
+                  {
+                    "cpu_avg": 88,
+                    "day": "2024-05-03",
+                    "gpu_util": 90,
+                    "memory_percent": 82.2
+                  }
+                ],
+                "disk_avg_percent": 64.4,
+                "disk_max_percent": 75,
+                "gpu_chart": "<svg width=\"360\" height=\"120\" xmlns=\"http://www.w3.org/2000/svg\" style=\"font-family: ui-sans-serif, system-ui, sans-serif;\">\n    <text x=\"36\" y=\"16\" font-size=\"11\" font-weight=\"bold\" fill=\"#374151\">GPU 利用率 (%)</text>\n    <line x1=\"36\" y1=\"92.0\" x2=\"348\" y2=\"92.0\" stroke=\"#e5e7eb\" stroke-width=\"1\" />\n<line x1=\"36\" y1=\"58.0\" x2=\"348\" y2=\"58.0\" stroke=\"#e5e7eb\" stroke-width=\"1\" />\n<line x1=\"36\" y1=\"24.0\" x2=\"348\" y2=\"24.0\" stroke=\"#e5e7eb\" stroke-width=\"1\" />\n    \n    <line x1=\"36\" y1=\"24\" x2=\"36\" y2=\"92\" stroke=\"#9ca3af\" stroke-width=\"1\" />\n    <line x1=\"36\" y1=\"92\" x2=\"348\" y2=\"92\" stroke=\"#9ca3af\" stroke-width=\"1\" />\n    \n    <text x=\"30\" y=\"96.0\" text-anchor=\"end\" font-size=\"9\" fill=\"#666\">0</text>\n<text x=\"30\" y=\"62.0\" text-anchor=\"end\" font-size=\"9\" fill=\"#666\">50</text>\n<text x=\"30\" y=\"28.0\" text-anchor=\"end\" font-size=\"9\" fill=\"#666\">100</text>\n    <text x=\"36.0\" y=\"112\" text-anchor=\"middle\" font-size=\"9\" fill=\"#666\">04-30</text>\n<text x=\"192.0\" y=\"112\" text-anchor=\"middle\" font-size=\"9\" fill=\"#666\">05-01</text>\n<text x=\"348.0\" y=\"112\" text-anchor=\"middle\" font-size=\"9\" fill=\"#666\">05-03</text>\n    <polyline fill=\"none\" stroke=\"#3b82f6\" stroke-width=\"2\" points=\"36.0,54.599999999999994 192.0,46.78 348.0,30.799999999999997\" />\n    <circle cx=\"36.0\" cy=\"54.599999999999994\" r=\"2.5\" fill=\"#2563eb\" />\n<circle cx=\"192.0\" cy=\"46.78\" r=\"2.5\" fill=\"#2563eb\" />\n<circle cx=\"348.0\" cy=\"30.799999999999997\" r=\"2.5\" fill=\"#2563eb\" />\n</svg>\n",
+                "gpu_memory_avg_percent": 62,
+                "gpu_memory_max_percent": 80,
+                "gpu_util_avg": 55.5,
+                "gpu_util_max": 90,
+                "host": "10.0.0.11",
+                "host_name": "alpha",
+                "load_avg": 3.21,
+                "memory_avg_percent": 70.05,
+                "memory_chart": "<svg width=\"360\" height=\"120\" xmlns=\"http://www.w3.org/2000/svg\" style=\"font-family: ui-sans-serif, system-ui, sans-serif;\">\n    <text x=\"36\" y=\"16\" font-size=\"11\" font-weight=\"bold\" fill=\"#374151\">内存使用率 (%)</text>\n    <line x1=\"36\" y1=\"92.0\" x2=\"348\" y2=\"92.0\" stroke=\"#e5e7eb\" stroke-width=\"1\" />\n<line x1=\"36\" y1=\"58.0\" x2=\"348\" y2=\"58.0\" stroke=\"#e5e7eb\" stroke-width=\"1\" />\n<line x1=\"36\" y1=\"24.0\" x2=\"348\" y2=\"24.0\" stroke=\"#e5e7eb\" stroke-width=\"1\" />\n    \n    <line x1=\"36\" y1=\"24\" x2=\"36\" y2=\"92\" stroke=\"#9ca3af\" stroke-width=\"1\" />\n    <line x1=\"36\" y1=\"92\" x2=\"348\" y2=\"92\" stroke=\"#9ca3af\" stroke-width=\"1\" />\n    \n    <text x=\"30\" y=\"96.0\" text-anchor=\"end\" font-size=\"9\" fill=\"#666\">0</text>\n<text x=\"30\" y=\"62.0\" text-anchor=\"end\" font-size=\"9\" fill=\"#666\">50</text>\n<text x=\"30\" y=\"28.0\" text-anchor=\"end\" font-size=\"9\" fill=\"#666\">100</text>\n    <text x=\"36.0\" y=\"112\" text-anchor=\"middle\" font-size=\"9\" fill=\"#666\">04-29</text>\n<text x=\"140.0\" y=\"112\" text-anchor=\"middle\" font-size=\"9\" fill=\"#666\">04-30</text>\n<text x=\"244.0\" y=\"112\" text-anchor=\"middle\" font-size=\"9\" fill=\"#666\">05-01</text>\n<text x=\"348.0\" y=\"112\" text-anchor=\"middle\" font-size=\"9\" fill=\"#666\">05-03</text>\n    <polyline fill=\"none\" stroke=\"#3b82f6\" stroke-width=\"2\" points=\"36.0,51.2 140.0,44.400000000000006 244.0,37.599999999999994 348.0,36.104\" />\n    <circle cx=\"36.0\" cy=\"51.2\" r=\"2.5\" fill=\"#2563eb\" />\n<circle cx=\"140.0\" cy=\"44.400000000000006\" r=\"2.5\" fill=\"#2563eb\" />\n<circle cx=\"244.0\" cy=\"37.599999999999994\" r=\"2.5\" fill=\"#2563eb\" />\n<circle cx=\"348.0\" cy=\"36.104\" r=\"2.5\" fill=\"#2563eb\" />\n</svg>\n",
+                "memory_max_percent": 82.2,
+                "processes_avg": 310.5,
+                "sample_count": 5,
+                "success_count": 5,
+                "users_avg": 2.4
+              }
+            ],
+            "generated_at": "2024-05-06 16:00:00 UTC",
+            "hosts": [
+              {
+                "check_ok": 1,
+                "check_total": 2,
+                "checks": [
+                  {
+                    "latency_ms": 0.8,
+                    "message": "",
+                    "name": "ping",
+                    "status": "ok",
+                    "target": "10.0.0.11",
+                    "type": "icmp"
+                  },
+                  {
+                    "latency_ms": null,
+                    "message": "refused",
+                    "name": "ssh",
+                    "status": "fail",
+                    "target": "22",
+                    "type": "tcp"
+                  }
+                ],
+                "cpu_avg": 61.234,
+                "cpu_chart": "<svg width=\"360\" height=\"120\" xmlns=\"http://www.w3.org/2000/svg\" style=\"font-family: ui-sans-serif, system-ui, sans-serif;\">\n    <text x=\"36\" y=\"16\" font-size=\"11\" font-weight=\"bold\" fill=\"#374151\">CPU 使用率 (%)</text>\n    <line x1=\"36\" y1=\"92.0\" x2=\"348\" y2=\"92.0\" stroke=\"#e5e7eb\" stroke-width=\"1\" />\n<line x1=\"36\" y1=\"58.0\" x2=\"348\" y2=\"58.0\" stroke=\"#e5e7eb\" stroke-width=\"1\" />\n<line x1=\"36\" y1=\"24.0\" x2=\"348\" y2=\"24.0\" stroke=\"#e5e7eb\" stroke-width=\"1\" />\n    \n    <line x1=\"36\" y1=\"24\" x2=\"36\" y2=\"92\" stroke=\"#9ca3af\" stroke-width=\"1\" />\n    <line x1=\"36\" y1=\"92\" x2=\"348\" y2=\"92\" stroke=\"#9ca3af\" stroke-width=\"1\" />\n    \n    <text x=\"30\" y=\"96.0\" text-anchor=\"end\" font-size=\"9\" fill=\"#666\">0</text>\n<text x=\"30\" y=\"62.0\" text-anchor=\"end\" font-size=\"9\" fill=\"#666\">50</text>\n<text x=\"30\" y=\"28.0\" text-anchor=\"end\" font-size=\"9\" fill=\"#666\">100</text>\n    <text x=\"36.0\" y=\"112\" text-anchor=\"middle\" font-size=\"9\" fill=\"#666\">04-29</text>\n<text x=\"140.0\" y=\"112\" text-anchor=\"middle\" font-size=\"9\" fill=\"#666\">04-30</text>\n<text x=\"244.0\" y=\"112\" text-anchor=\"middle\" font-size=\"9\" fill=\"#666\">05-01</text>\n<text x=\"348.0\" y=\"112\" text-anchor=\"middle\" font-size=\"9\" fill=\"#666\">05-03</text>\n    <polyline fill=\"none\" stroke=\"#3b82f6\" stroke-width=\"2\" points=\"36.0,58.0 140.0,50.52 244.0,42.7 348.0,32.16\" />\n    <circle cx=\"36.0\" cy=\"58.0\" r=\"2.5\" fill=\"#2563eb\" />\n<circle cx=\"140.0\" cy=\"50.52\" r=\"2.5\" fill=\"#2563eb\" />\n<circle cx=\"244.0\" cy=\"42.7\" r=\"2.5\" fill=\"#2563eb\" />\n<circle cx=\"348.0\" cy=\"32.16\" r=\"2.5\" fill=\"#2563eb\" />\n</svg>\n",
+                "cpu_max": 88,
+                "cpu_min": 12.5,
+                "daily_points": [
+                  {
+                    "cpu_avg": 50,
+                    "day": "2024-04-29",
+                    "gpu_util": null,
+                    "memory_percent": 60
+                  },
+                  {
+                    "cpu_avg": 61,
+                    "day": "2024-04-30",
+                    "gpu_util": 55,
+                    "memory_percent": 70
+                  },
+                  {
+                    "cpu_avg": 72.5,
+                    "day": "2024-05-01",
+                    "gpu_util": 66.5,
+                    "memory_percent": 80
+                  },
+                  {
+                    "cpu_avg": null,
+                    "day": "2024-05-02",
+                    "gpu_util": null,
+                    "memory_percent": null
+                  },
+                  {
+                    "cpu_avg": 88,
+                    "day": "2024-05-03",
+                    "gpu_util": 90,
+                    "memory_percent": 82.2
+                  }
+                ],
+                "disk_avg_percent": 64.4,
+                "disk_max_percent": 75,
+                "gpu_chart": "<svg width=\"360\" height=\"120\" xmlns=\"http://www.w3.org/2000/svg\" style=\"font-family: ui-sans-serif, system-ui, sans-serif;\">\n    <text x=\"36\" y=\"16\" font-size=\"11\" font-weight=\"bold\" fill=\"#374151\">GPU 利用率 (%)</text>\n    <line x1=\"36\" y1=\"92.0\" x2=\"348\" y2=\"92.0\" stroke=\"#e5e7eb\" stroke-width=\"1\" />\n<line x1=\"36\" y1=\"58.0\" x2=\"348\" y2=\"58.0\" stroke=\"#e5e7eb\" stroke-width=\"1\" />\n<line x1=\"36\" y1=\"24.0\" x2=\"348\" y2=\"24.0\" stroke=\"#e5e7eb\" stroke-width=\"1\" />\n    \n    <line x1=\"36\" y1=\"24\" x2=\"36\" y2=\"92\" stroke=\"#9ca3af\" stroke-width=\"1\" />\n    <line x1=\"36\" y1=\"92\" x2=\"348\" y2=\"92\" stroke=\"#9ca3af\" stroke-width=\"1\" />\n    \n    <text x=\"30\" y=\"96.0\" text-anchor=\"end\" font-size=\"9\" fill=\"#666\">0</text>\n<text x=\"30\" y=\"62.0\" text-anchor=\"end\" font-size=\"9\" fill=\"#666\">50</text>\n<text x=\"30\" y=\"28.0\" text-anchor=\"end\" font-size=\"9\" fill=\"#666\">100</text>\n    <text x=\"36.0\" y=\"112\" text-anchor=\"middle\" font-size=\"9\" fill=\"#666\">04-30</text>\n<text x=\"192.0\" y=\"112\" text-anchor=\"middle\" font-size=\"9\" fill=\"#666\">05-01</text>\n<text x=\"348.0\" y=\"112\" text-anchor=\"middle\" font-size=\"9\" fill=\"#666\">05-03</text>\n    <polyline fill=\"none\" stroke=\"#3b82f6\" stroke-width=\"2\" points=\"36.0,54.599999999999994 192.0,46.78 348.0,30.799999999999997\" />\n    <circle cx=\"36.0\" cy=\"54.599999999999994\" r=\"2.5\" fill=\"#2563eb\" />\n<circle cx=\"192.0\" cy=\"46.78\" r=\"2.5\" fill=\"#2563eb\" />\n<circle cx=\"348.0\" cy=\"30.799999999999997\" r=\"2.5\" fill=\"#2563eb\" />\n</svg>\n",
+                "gpu_memory_avg_percent": 62,
+                "gpu_memory_max_percent": 80,
+                "gpu_util_avg": 55.5,
+                "gpu_util_max": 90,
+                "host": "10.0.0.11",
+                "host_name": "alpha",
+                "load_avg": 3.21,
+                "memory_avg_percent": 70.05,
+                "memory_chart": "<svg width=\"360\" height=\"120\" xmlns=\"http://www.w3.org/2000/svg\" style=\"font-family: ui-sans-serif, system-ui, sans-serif;\">\n    <text x=\"36\" y=\"16\" font-size=\"11\" font-weight=\"bold\" fill=\"#374151\">内存使用率 (%)</text>\n    <line x1=\"36\" y1=\"92.0\" x2=\"348\" y2=\"92.0\" stroke=\"#e5e7eb\" stroke-width=\"1\" />\n<line x1=\"36\" y1=\"58.0\" x2=\"348\" y2=\"58.0\" stroke=\"#e5e7eb\" stroke-width=\"1\" />\n<line x1=\"36\" y1=\"24.0\" x2=\"348\" y2=\"24.0\" stroke=\"#e5e7eb\" stroke-width=\"1\" />\n    \n    <line x1=\"36\" y1=\"24\" x2=\"36\" y2=\"92\" stroke=\"#9ca3af\" stroke-width=\"1\" />\n    <line x1=\"36\" y1=\"92\" x2=\"348\" y2=\"92\" stroke=\"#9ca3af\" stroke-width=\"1\" />\n    \n    <text x=\"30\" y=\"96.0\" text-anchor=\"end\" font-size=\"9\" fill=\"#666\">0</text>\n<text x=\"30\" y=\"62.0\" text-anchor=\"end\" font-size=\"9\" fill=\"#666\">50</text>\n<text x=\"30\" y=\"28.0\" text-anchor=\"end\" font-size=\"9\" fill=\"#666\">100</text>\n    <text x=\"36.0\" y=\"112\" text-anchor=\"middle\" font-size=\"9\" fill=\"#666\">04-29</text>\n<text x=\"140.0\" y=\"112\" text-anchor=\"middle\" font-size=\"9\" fill=\"#666\">04-30</text>\n<text x=\"244.0\" y=\"112\" text-anchor=\"middle\" font-size=\"9\" fill=\"#666\">05-01</text>\n<text x=\"348.0\" y=\"112\" text-anchor=\"middle\" font-size=\"9\" fill=\"#666\">05-03</text>\n    <polyline fill=\"none\" stroke=\"#3b82f6\" stroke-width=\"2\" points=\"36.0,51.2 140.0,44.400000000000006 244.0,37.599999999999994 348.0,36.104\" />\n    <circle cx=\"36.0\" cy=\"51.2\" r=\"2.5\" fill=\"#2563eb\" />\n<circle cx=\"140.0\" cy=\"44.400000000000006\" r=\"2.5\" fill=\"#2563eb\" />\n<circle cx=\"244.0\" cy=\"37.599999999999994\" r=\"2.5\" fill=\"#2563eb\" />\n<circle cx=\"348.0\" cy=\"36.104\" r=\"2.5\" fill=\"#2563eb\" />\n</svg>\n",
+                "memory_max_percent": 82.2,
+                "processes_avg": 310.5,
+                "sample_count": 5,
+                "success_count": 5,
+                "users_avg": 2.4
+              },
+              {
+                "check_ok": 0,
+                "check_total": 0,
+                "checks": [],
+                "cpu_avg": 12,
+                "cpu_chart": "<svg width=\"360\" height=\"120\" xmlns=\"http://www.w3.org/2000/svg\" style=\"font-family: ui-sans-serif, system-ui, sans-serif;\">\n    <text x=\"36\" y=\"16\" font-size=\"11\" font-weight=\"bold\" fill=\"#374151\">CPU 使用率 (%)</text>\n    <line x1=\"36\" y1=\"92.0\" x2=\"348\" y2=\"92.0\" stroke=\"#e5e7eb\" stroke-width=\"1\" />\n<line x1=\"36\" y1=\"58.0\" x2=\"348\" y2=\"58.0\" stroke=\"#e5e7eb\" stroke-width=\"1\" />\n<line x1=\"36\" y1=\"24.0\" x2=\"348\" y2=\"24.0\" stroke=\"#e5e7eb\" stroke-width=\"1\" />\n    \n    <line x1=\"36\" y1=\"24\" x2=\"36\" y2=\"92\" stroke=\"#9ca3af\" stroke-width=\"1\" />\n    <line x1=\"36\" y1=\"92\" x2=\"348\" y2=\"92\" stroke=\"#9ca3af\" stroke-width=\"1\" />\n    \n    <text x=\"30\" y=\"96.0\" text-anchor=\"end\" font-size=\"9\" fill=\"#666\">0</text>\n<text x=\"30\" y=\"62.0\" text-anchor=\"end\" font-size=\"9\" fill=\"#666\">50</text>\n<text x=\"30\" y=\"28.0\" text-anchor=\"end\" font-size=\"9\" fill=\"#666\">100</text>\n    <text x=\"36.0\" y=\"112\" text-anchor=\"middle\" font-size=\"9\" fill=\"#666\">04-29</text>\n<text x=\"348.0\" y=\"112\" text-anchor=\"middle\" font-size=\"9\" fill=\"#666\">05-01</text>\n    <polyline fill=\"none\" stroke=\"#3b82f6\" stroke-width=\"2\" points=\"36.0,89.28 348.0,78.4\" />\n    <circle cx=\"36.0\" cy=\"89.28\" r=\"2.5\" fill=\"#2563eb\" />\n<circle cx=\"348.0\" cy=\"78.4\" r=\"2.5\" fill=\"#2563eb\" />\n</svg>\n",
+                "cpu_max": 20,
+                "cpu_min": 4,
+                "daily_points": [
+                  {
+                    "cpu_avg": 4,
+                    "day": "2024-04-29",
+                    "gpu_util": null,
+                    "memory_percent": 30
+                  },
+                  {
+                    "cpu_avg": 20,
+                    "day": "2024-05-01",
+                    "gpu_util": null,
+                    "memory_percent": 40
+                  }
+                ],
+                "disk_avg_percent": null,
+                "disk_max_percent": null,
+                "gpu_chart": "<svg width=\"360\" height=\"120\" xmlns=\"http://www.w3.org/2000/svg\"><text x=\"10\" y=\"20\" font-size=\"12\" fill=\"#888\">GPU 利用率 (%): 数据不足</text></svg>",
+                "gpu_memory_avg_percent": null,
+                "gpu_memory_max_percent": null,
+                "gpu_util_avg": null,
+                "gpu_util_max": null,
+                "host": "10.0.0.12",
+                "host_name": "beta",
+                "load_avg": null,
+                "memory_avg_percent": 35,
+                "memory_chart": "<svg width=\"360\" height=\"120\" xmlns=\"http://www.w3.org/2000/svg\" style=\"font-family: ui-sans-serif, system-ui, sans-serif;\">\n    <text x=\"36\" y=\"16\" font-size=\"11\" font-weight=\"bold\" fill=\"#374151\">内存使用率 (%)</text>\n    <line x1=\"36\" y1=\"92.0\" x2=\"348\" y2=\"92.0\" stroke=\"#e5e7eb\" stroke-width=\"1\" />\n<line x1=\"36\" y1=\"58.0\" x2=\"348\" y2=\"58.0\" stroke=\"#e5e7eb\" stroke-width=\"1\" />\n<line x1=\"36\" y1=\"24.0\" x2=\"348\" y2=\"24.0\" stroke=\"#e5e7eb\" stroke-width=\"1\" />\n    \n    <line x1=\"36\" y1=\"24\" x2=\"36\" y2=\"92\" stroke=\"#9ca3af\" stroke-width=\"1\" />\n    <line x1=\"36\" y1=\"92\" x2=\"348\" y2=\"92\" stroke=\"#9ca3af\" stroke-width=\"1\" />\n    \n    <text x=\"30\" y=\"96.0\" text-anchor=\"end\" font-size=\"9\" fill=\"#666\">0</text>\n<text x=\"30\" y=\"62.0\" text-anchor=\"end\" font-size=\"9\" fill=\"#666\">50</text>\n<text x=\"30\" y=\"28.0\" text-anchor=\"end\" font-size=\"9\" fill=\"#666\">100</text>\n    <text x=\"36.0\" y=\"112\" text-anchor=\"middle\" font-size=\"9\" fill=\"#666\">04-29</text>\n<text x=\"348.0\" y=\"112\" text-anchor=\"middle\" font-size=\"9\" fill=\"#666\">05-01</text>\n    <polyline fill=\"none\" stroke=\"#3b82f6\" stroke-width=\"2\" points=\"36.0,71.6 348.0,64.8\" />\n    <circle cx=\"36.0\" cy=\"71.6\" r=\"2.5\" fill=\"#2563eb\" />\n<circle cx=\"348.0\" cy=\"64.8\" r=\"2.5\" fill=\"#2563eb\" />\n</svg>\n",
+                "memory_max_percent": 40,
+                "processes_avg": 44,
+                "sample_count": 2,
+                "success_count": 1,
+                "users_avg": 0
+              },
+              {
+                "check_ok": 0,
+                "check_total": 0,
+                "checks": [],
+                "cpu_avg": null,
+                "cpu_chart": "<svg width=\"360\" height=\"120\" xmlns=\"http://www.w3.org/2000/svg\"><text x=\"10\" y=\"20\" font-size=\"12\" fill=\"#888\">CPU 使用率 (%): 数据不足</text></svg>",
+                "cpu_max": null,
+                "cpu_min": null,
+                "daily_points": [],
+                "disk_avg_percent": null,
+                "disk_max_percent": null,
+                "gpu_chart": "<svg width=\"360\" height=\"120\" xmlns=\"http://www.w3.org/2000/svg\"><text x=\"10\" y=\"20\" font-size=\"12\" fill=\"#888\">GPU 利用率 (%): 数据不足</text></svg>",
+                "gpu_memory_avg_percent": null,
+                "gpu_memory_max_percent": null,
+                "gpu_util_avg": null,
+                "gpu_util_max": null,
+                "host": "10.0.0.13",
+                "host_name": "gamma",
+                "load_avg": null,
+                "memory_avg_percent": null,
+                "memory_chart": "<svg width=\"360\" height=\"120\" xmlns=\"http://www.w3.org/2000/svg\"><text x=\"10\" y=\"20\" font-size=\"12\" fill=\"#888\">内存使用率 (%): 数据不足</text></svg>",
+                "memory_max_percent": null,
+                "processes_avg": null,
+                "sample_count": 0,
+                "success_count": 0,
+                "users_avg": null
+              }
+            ],
+            "idle_hosts": [
+              {
+                "check_ok": 0,
+                "check_total": 0,
+                "checks": [],
+                "cpu_avg": null,
+                "cpu_chart": "<svg width=\"360\" height=\"120\" xmlns=\"http://www.w3.org/2000/svg\"><text x=\"10\" y=\"20\" font-size=\"12\" fill=\"#888\">CPU 使用率 (%): 数据不足</text></svg>",
+                "cpu_max": null,
+                "cpu_min": null,
+                "daily_points": [],
+                "disk_avg_percent": null,
+                "disk_max_percent": null,
+                "gpu_chart": "<svg width=\"360\" height=\"120\" xmlns=\"http://www.w3.org/2000/svg\"><text x=\"10\" y=\"20\" font-size=\"12\" fill=\"#888\">GPU 利用率 (%): 数据不足</text></svg>",
+                "gpu_memory_avg_percent": null,
+                "gpu_memory_max_percent": null,
+                "gpu_util_avg": null,
+                "gpu_util_max": null,
+                "host": "10.0.0.13",
+                "host_name": "gamma",
+                "load_avg": null,
+                "memory_avg_percent": null,
+                "memory_chart": "<svg width=\"360\" height=\"120\" xmlns=\"http://www.w3.org/2000/svg\"><text x=\"10\" y=\"20\" font-size=\"12\" fill=\"#888\">内存使用率 (%): 数据不足</text></svg>",
+                "memory_max_percent": null,
+                "processes_avg": null,
+                "sample_count": 0,
+                "success_count": 0,
+                "users_avg": null
+              }
+            ],
+            "subject": "[Server Weekly Report] 2024-04-29 ~ 2024-05-05",
+            "summary": {
+              "insufficient_data_count": 1,
+              "no_data_count": 1,
+              "total_hosts": 3,
+              "with_data_count": 2
+            },
+            "week_range": "2024-04-29 ~ 2024-05-05"
+          },
+          "name": "mixed-week"
+        },
+        {
+          "context": {
+            "busy_hosts": [],
+            "generated_at": "2024-05-13 16:00:00 UTC",
+            "hosts": [],
+            "idle_hosts": [],
+            "subject": "[Server Weekly Report] 2024-05-06 ~ 2024-05-12",
+            "summary": {
+              "insufficient_data_count": 0,
+              "no_data_count": 0,
+              "total_hosts": 0,
+              "with_data_count": 0
+            },
+            "week_range": "2024-05-06 ~ 2024-05-12"
+          },
+          "name": "empty-week"
+        },
+        {
+          "context": {
+            "busy_hosts": [],
+            "generated_at": "2024-05-20 16:00:00 UTC",
+            "hosts": [
+              {
+                "check_ok": 1,
+                "check_total": 2,
+                "checks": [
+                  {
+                    "latency_ms": 1,
+                    "message": "",
+                    "name": "a",
+                    "status": "ok",
+                    "target": "x",
+                    "type": "icmp"
+                  },
+                  {
+                    "latency_ms": null,
+                    "message": "",
+                    "name": "b",
+                    "status": "unknown",
+                    "target": "y",
+                    "type": "icmp"
+                  }
+                ],
+                "cpu_avg": 0,
+                "cpu_chart": "<svg width=\"360\" height=\"120\" xmlns=\"http://www.w3.org/2000/svg\"><text x=\"10\" y=\"20\" font-size=\"12\" fill=\"#888\">CPU 使用率 (%): 数据不足</text></svg>",
+                "cpu_max": 0,
+                "cpu_min": 0,
+                "daily_points": [
+                  {
+                    "cpu_avg": 12,
+                    "day": "2024-05-13",
+                    "gpu_util": null,
+                    "memory_percent": 34
+                  }
+                ],
+                "disk_avg_percent": 0,
+                "disk_max_percent": 0,
+                "gpu_chart": "<svg width=\"360\" height=\"120\" xmlns=\"http://www.w3.org/2000/svg\"><text x=\"10\" y=\"20\" font-size=\"12\" fill=\"#888\">GPU 利用率 (%): 数据不足</text></svg>",
+                "gpu_memory_avg_percent": 0,
+                "gpu_memory_max_percent": 0,
+                "gpu_util_avg": 0,
+                "gpu_util_max": 0,
+                "host": "10.0.0.61",
+                "host_name": "solo",
+                "load_avg": 0,
+                "memory_avg_percent": 0,
+                "memory_chart": "<svg width=\"360\" height=\"120\" xmlns=\"http://www.w3.org/2000/svg\"><text x=\"10\" y=\"20\" font-size=\"12\" fill=\"#888\">内存使用率 (%): 数据不足</text></svg>",
+                "memory_max_percent": 0,
+                "processes_avg": 0,
+                "sample_count": 4,
+                "success_count": 4,
+                "users_avg": 0
+              }
+            ],
+            "idle_hosts": [
+              {
+                "check_ok": 1,
+                "check_total": 2,
+                "checks": [
+                  {
+                    "latency_ms": 1,
+                    "message": "",
+                    "name": "a",
+                    "status": "ok",
+                    "target": "x",
+                    "type": "icmp"
+                  },
+                  {
+                    "latency_ms": null,
+                    "message": "",
+                    "name": "b",
+                    "status": "unknown",
+                    "target": "y",
+                    "type": "icmp"
+                  }
+                ],
+                "cpu_avg": 0,
+                "cpu_chart": "<svg width=\"360\" height=\"120\" xmlns=\"http://www.w3.org/2000/svg\"><text x=\"10\" y=\"20\" font-size=\"12\" fill=\"#888\">CPU 使用率 (%): 数据不足</text></svg>",
+                "cpu_max": 0,
+                "cpu_min": 0,
+                "daily_points": [
+                  {
+                    "cpu_avg": 12,
+                    "day": "2024-05-13",
+                    "gpu_util": null,
+                    "memory_percent": 34
+                  }
+                ],
+                "disk_avg_percent": 0,
+                "disk_max_percent": 0,
+                "gpu_chart": "<svg width=\"360\" height=\"120\" xmlns=\"http://www.w3.org/2000/svg\"><text x=\"10\" y=\"20\" font-size=\"12\" fill=\"#888\">GPU 利用率 (%): 数据不足</text></svg>",
+                "gpu_memory_avg_percent": 0,
+                "gpu_memory_max_percent": 0,
+                "gpu_util_avg": 0,
+                "gpu_util_max": 0,
+                "host": "10.0.0.61",
+                "host_name": "solo",
+                "load_avg": 0,
+                "memory_avg_percent": 0,
+                "memory_chart": "<svg width=\"360\" height=\"120\" xmlns=\"http://www.w3.org/2000/svg\"><text x=\"10\" y=\"20\" font-size=\"12\" fill=\"#888\">内存使用率 (%): 数据不足</text></svg>",
+                "memory_max_percent": 0,
+                "processes_avg": 0,
+                "sample_count": 4,
+                "success_count": 4,
+                "users_avg": 0
+              }
+            ],
+            "subject": "[Server Weekly Report] 2024-05-13 ~ 2024-05-19",
+            "summary": {
+              "insufficient_data_count": 0,
+              "no_data_count": 0,
+              "total_hosts": 1,
+              "with_data_count": 1
+            },
+            "week_range": "2024-05-13 ~ 2024-05-19"
+          },
+          "name": "gpu-sparse"
+        }
+      ]
+    }
+  }
+}

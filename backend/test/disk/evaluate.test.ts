@@ -28,11 +28,11 @@
  * If the Python interpreter / `servermanage.disk_health` is not importable the
  * differential suite is skipped; the Node-only suites still run.
  */
-import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 
 import { describe, expect, it } from 'vitest';
+import { golden } from '../golden/golden';
 
 import { evaluateDiskAlerts } from '../../src/alerts/rules';
 import {
@@ -58,43 +58,8 @@ import { diffValues, findRepoRoot, normalizeValue, type Diff } from '../diff/har
 const repoRoot = findRepoRoot();
 const TEST_DIR = path.join(repoRoot, 'backend', 'test', 'disk');
 const FIXTURE_PATH = path.join(TEST_DIR, 'fixtures', 'evaluate-scenarios.json');
-const ORACLE_SCRIPT = path.join(TEST_DIR, 'run_evaluate_oracle.py');
 
-function defaultPython(): string {
-  return process.env.PYTHON ?? 'python';
-}
-
-function mergePythonPath(): string {
-  const existing = process.env.PYTHONPATH;
-  const sep = process.platform === 'win32' ? ';' : ':';
-  return existing ? `${repoRoot}${sep}${existing}` : repoRoot;
-}
-
-/** Probe once whether the Python disk_health + alerts oracles can run here. */
-function detectOracle(): { ok: boolean; detail: string } {
-  const result = spawnSync(
-    defaultPython(),
-    ['-c', 'import servermanage.disk_health, servermanage.alerts'],
-    {
-      cwd: repoRoot,
-      encoding: 'utf-8',
-      env: { ...process.env, PYTHONPATH: mergePythonPath(), PYTHONWARNINGS: 'ignore' },
-    },
-  );
-  if (result.error) {
-    return { ok: false, detail: String(result.error) };
-  }
-  if (result.status !== 0) {
-    return { ok: false, detail: `exit ${result.status}: ${(result.stderr ?? '').trim()}` };
-  }
-  return { ok: true, detail: 'ok' };
-}
-
-const oracleProbe = detectOracle();
-const itPython = oracleProbe.ok ? it : it.skip;
-if (!oracleProbe.ok) {
-  console.warn(`Python disk-evaluate oracle unavailable; skipping diff groups: ${oracleProbe.detail}`);
-}
+const itPython = it;
 
 interface OracleDriveEntry {
   name: string;
@@ -116,35 +81,9 @@ interface OracleOutput {
   controllers: OracleControllerEntry[];
 }
 
+const GOLDEN_FILE = path.join(repoRoot, 'backend', 'test', 'disk', 'golden', 'evaluate.json');
 function runOracle(): OracleOutput {
-  const result = spawnSync(defaultPython(), [ORACLE_SCRIPT, FIXTURE_PATH], {
-    cwd: repoRoot,
-    encoding: 'utf-8',
-    env: {
-      ...process.env,
-      PYTHONPATH: mergePythonPath(),
-      PYTHONIOENCODING: 'utf-8',
-      PYTHONWARNINGS: 'ignore',
-    },
-    maxBuffer: 64 * 1024 * 1024,
-  });
-  if (result.error) {
-    throw result.error;
-  }
-  if (result.status !== 0) {
-    throw new Error(
-      `python disk-evaluate oracle exited with status ${result.status}\nstderr:\n${result.stderr ?? ''}`,
-    );
-  }
-  const lastLine = (result.stdout ?? '')
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0)
-    .pop();
-  if (!lastLine) {
-    throw new Error('python disk-evaluate oracle produced no JSON output');
-  }
-  return JSON.parse(lastLine) as OracleOutput;
+  return golden<OracleOutput>(GOLDEN_FILE, 'evaluate');
 }
 
 /** Read the fixture JSON once (drives + virtual_drives + controllers groups). */

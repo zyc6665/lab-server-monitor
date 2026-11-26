@@ -1,5 +1,12 @@
 # Cross-stack HTTP golden diff (P5 Task12)
 
+> **P8 冻结说明（2026-11-26）**：Python 实现已移除。本目录及其它 cross-stack
+> diff 测试中的 Python oracle 输出已在提交 `1ca108c` 上冻结为 `golden/` 下的入库快照
+> （`read.json` + `read-fixture.db` + `read-servers.json`、`full-read.json`、`write-flow.json`），
+> 测试改为 Node 输出对照 golden（重放时用 fake timers 把时钟钉在冻结时刻）。
+> 这些文件**不可再生成**；下文描述的 `*.py` 脚本已删除，仅作历史说明。
+
+
 Verifies that the Node/Express composition root (`createServerApp`) and the
 Python Flask application (`servermanage.web.create_app`) answer the same HTTP
 requests identically when fed the **same SQLite data**.

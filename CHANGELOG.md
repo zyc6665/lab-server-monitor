@@ -1,5 +1,14 @@
 # 更新日志
 
+## v0.2.0 单栈安装版（破坏性变更）
+
+项目收敛为 **Electron 桌面端 + Node 后端** 单栈，分发方式由绿色 zip 改为 NSIS 安装程序。
+
+- **破坏性变更**：移除 Python 后端（`servermanage/`、`tests/`、`pyproject.toml`、PyInstaller 打包）；不再提供绿色 zip 包与 `启动.bat` / `停止.bat` / `注册开机自启.ps1`；移除自研 zip 更新器。版本脚本 `tools/bump_version.py` 由 `scripts/bump-version.mjs` 取代（同步根/backend/desktop 三个 `package.json`，`--check` 不一致退出 1）。
+- **安装与更新**：NSIS 安装向导（可选安装目录/数据目录，`/S` 静默安装）；electron-updater 从 GitHub Release 的 `latest.yml` 增量/全量更新并校验 sha512；卸载时询问是否删除数据目录（默认保留，`/S` 一律保留）；开机自启改为系统登录项（`--start-hidden`）。
+- **迁移**：安装版首次启动自动导入旧绿色包 `data\servermonitor.db`。**旧绿色包用户需手动下载一次 `ServerMonitor-0.2.0-Setup.exe`**，旧更新器无法跨越到安装版。
+- **CI**：`ci.yml` 只保留 Node 门禁（backend typecheck/vitest/build + desktop node:test/typecheck/vitest/build:main + 版本一致性）；`release-windows.yml` 去除全部 Python 步骤，产出 `ServerMonitor-*-Setup.exe` + `latest.yml` + `.blockmap`，校验 `latest.yml` sha512 与 exe 一致后发布（带 `-` 后缀版本为 prerelease）。
+
 ## v0.1.239 点状加固与「软件单线」收敛
 
 承接 v0.1.238，本轮做两件事：按 P0–P3 清单做非重构的点状加固，并把项目收敛为纯 Windows 软件单线（不再提供 Docker 部署）。

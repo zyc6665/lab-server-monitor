@@ -18,7 +18,7 @@
  *   explicit `ORDER BY` on both sides; a caller may pass a per-query
  *   `normalize` override when it needs a bespoke sort key.
  */
-import { spawnSync } from 'node:child_process';
+import { golden } from '../golden/golden';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 
@@ -191,9 +191,9 @@ export function diffValues(node: unknown, python: unknown, at: string, out: Diff
 export function findRepoRoot(start: string = process.cwd()): string {
   let dir = path.resolve(start);
   for (let depth = 0; depth < 64; depth += 1) {
-    const hasPython = existsSync(path.join(dir, 'servermanage', 'storage', '__init__.py'));
     const hasBackend = existsSync(path.join(dir, 'backend', 'src', 'storage'));
-    if (hasPython && hasBackend) {
+    const hasWorkspace = existsSync(path.join(dir, 'pnpm-workspace.yaml'));
+    if (hasBackend && hasWorkspace) {
       return dir;
     }
     const parent = path.dirname(dir);
@@ -205,16 +205,6 @@ export function findRepoRoot(start: string = process.cwd()): string {
   throw new Error(`could not locate repository root from ${start}`);
 }
 
-function defaultPython(): string {
-  return process.env.PYTHON ?? 'python';
-}
-
-function mergePythonPath(repoRoot: string): string {
-  const existing = process.env.PYTHONPATH;
-  const sep = process.platform === 'win32' ? ';' : ':';
-  return existing ? `${repoRoot}${sep}${existing}` : repoRoot;
-}
-
 interface OracleRecord {
   name: string;
   ok: boolean;
@@ -222,65 +212,9 @@ interface OracleRecord {
   error?: string;
 }
 
-function runPythonOracle(
-  repoRoot: string,
-  python: string,
-  dbPath: string,
-  cases: QueryCase[],
-): Map<string, OracleRecord> {
-  const script = path.join(repoRoot, 'backend', 'test', 'diff', 'run_python_oracle.py');
-  const plan = {
-    queries: cases.map((c) => ({ name: c.name, op: c.python.op, args: c.python.args ?? {} })),
-  };
-  const result = spawnSync(python, [script, dbPath], {
-    cwd: repoRoot,
-    input: JSON.stringify(plan),
-    encoding: 'utf-8',
-    env: {
-      ...process.env,
-      PYTHONPATH: mergePythonPath(repoRoot),
-      PYTHONIOENCODING: 'utf-8',
-      PYTHONWARNINGS: 'ignore',
-    },
-    maxBuffer: 64 * 1024 * 1024,
-  });
-  if (result.error) {
-    throw result.error;
-  }
-  if (result.status !== 0) {
-    throw new Error(
-      `python oracle exited with status ${result.status}\nstderr:\n${result.stderr ?? ''}\nstdout:\n${
-        result.stdout ?? ''
-      }`,
-    );
-  }
-  const records = new Map<string, OracleRecord>();
-  for (const rawLine of (result.stdout ?? '').split(/\r?\n/)) {
-    const line = rawLine.trim();
-    if (!line) {
-      continue;
-    }
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(line);
-    } catch {
-      continue;
-    }
-    if (
-      parsed !== null &&
-      typeof parsed === 'object' &&
-      typeof (parsed as OracleRecord).name === 'string'
-    ) {
-      const record = parsed as OracleRecord;
-      records.set(record.name, record);
-    }
-  }
-  return records;
-}
-
 /**
  * Runs every case through both stacks and returns the normalised differences.
- * Throws if the Python oracle cannot be spawned or reports a per-query error.
+ * The Python side is replayed from the frozen golden `diff/golden/python-oracle.json`.
  */
 export async function runDiff(
   dbPath: string,
@@ -288,8 +222,12 @@ export async function runDiff(
   opts: RunDiffOptions = {},
 ): Promise<Diff[]> {
   const repoRoot = opts.repoRoot ?? findRepoRoot();
-  const python = opts.python ?? defaultPython();
-  const oracle = runPythonOracle(repoRoot, python, dbPath, cases);
+  const goldenFile = path.join(repoRoot, 'backend', 'test', 'diff', 'golden', 'python-oracle.json');
+  const oracle = new Map<string, OracleRecord>();
+  for (const c of cases) {
+    const rec = golden<OracleRecord | null>(goldenFile, c.name);
+    if (rec) oracle.set(c.name, rec);
+  }
 
   const db = openDatabase(dbPath, { readonly: true });
   try {
@@ -321,42 +259,3 @@ export async function runDiff(
   }
 }
 
-let pythonProbe: { ok: boolean; detail: string } | null = null;
-
-/**
- * Probes whether the Python oracle can run in this environment (interpreter on
- * PATH and `servermanage.storage` importable from the repo root). Result cached.
- */
-export function detectPython(opts: RunDiffOptions = {}): { ok: boolean; detail: string } {
-  if (pythonProbe) {
-    return pythonProbe;
-  }
-  try {
-    const repoRoot = opts.repoRoot ?? findRepoRoot();
-    const python = opts.python ?? defaultPython();
-    const result = spawnSync(python, ['-c', 'import servermanage.storage'], {
-      cwd: repoRoot,
-      encoding: 'utf-8',
-      env: { ...process.env, PYTHONPATH: mergePythonPath(repoRoot), PYTHONWARNINGS: 'ignore' },
-    });
-    if (result.error) {
-      pythonProbe = { ok: false, detail: String(result.error) };
-    } else if (result.status !== 0) {
-      pythonProbe = {
-        ok: false,
-        detail: `exit ${result.status}: ${(result.stderr ?? '').trim()}`,
-      };
-    } else {
-      pythonProbe = { ok: true, detail: 'ok' };
-    }
-  } catch (err) {
-    pythonProbe = { ok: false, detail: String(err) };
-  }
-  return pythonProbe;
-}
-
-/** Human-readable skip reason when {@link detectPython} fails. */
-export function pythonSkipReason(): string {
-  const probe = detectPython();
-  return probe.ok ? '' : `Python oracle unavailable in this environment: ${probe.detail}`;
-}

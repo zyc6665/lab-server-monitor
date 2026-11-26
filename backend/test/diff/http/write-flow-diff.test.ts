@@ -10,13 +10,13 @@
  * `normalizeValue`, explicit sort keys, masks limited to ids / wall-clock
  * stamps). Real differences fail and print both sides — nothing is loosened.
  */
-import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { golden } from '../../golden/golden';
 
 vi.mock('../../../src/storage/dpapi', () => ({
   dpapiAvailable: () => true,
@@ -34,11 +34,8 @@ import { applyMask, diffValues, findRepoRoot, normalizeValue, type Diff } from '
 const ADMIN_USERNAME = 'admin';
 const SECRET_FIELD = 'pass' + 'word';
 const ADMIN_SECRET = 'diff-admin-' + 'secret-123';
-const RESULT_PREFIX = '@@WRITE_DIFF_RESULT@@';
-const PYTHON = process.env.PYTHON ?? 'python';
 const REPO_ROOT = findRepoRoot(process.cwd());
 const SEED_DB = path.join(REPO_ROOT, 'backend', 'test', 'fixtures', 'seed', 'servermonitor-seed.db');
-const DRIVER = path.join(REPO_ROOT, 'backend', 'test', 'diff', 'http', 'write_flow_python.py');
 const APP_VERSION = '0.1.239';
 
 /** Fixed stub result for the on-demand check runner (both stacks). */
@@ -95,22 +92,6 @@ const STEPS: Step[] = [
 ];
 
 interface Rec { name: string; status: number; json: unknown; error?: string }
-
-function pythonPathEnv(): string {
-  const existing = process.env.PYTHONPATH;
-  return existing ? `${REPO_ROOT}${path.delimiter}${existing}` : REPO_ROOT;
-}
-
-const PYTHON_READY = (() => {
-  try {
-    const probe = spawnSync(PYTHON, ['-c', 'import servermanage, servermanage.security as s; print(bool(s.dpapi_available()))'], {
-      cwd: REPO_ROOT, env: { ...process.env, PYTHONPATH: pythonPathEnv(), PYTHONWARNINGS: 'ignore' }, encoding: 'utf8',
-    });
-    return probe.status === 0 && (probe.stdout ?? '').trim().endsWith('True');
-  } catch {
-    return false;
-  }
-})();
 
 function buildServers(): Array<Record<string, unknown>> {
   const base = {
@@ -201,6 +182,8 @@ export const WRITE_FLOW_ALLOWED_SECTIONS: Record<string, string> = {
 // Run both stacks
 // ---------------------------------------------------------------------------
 
+const GOLDEN_FILE = path.join(REPO_ROOT, 'backend', 'test', 'diff', 'http', 'golden', 'write-flow.json');
+
 let workDir: string;
 const nodeRecs = new Map<string, Rec>();
 const pyRecs = new Map<string, Rec>();
@@ -209,7 +192,10 @@ let pyDump: Record<string, unknown>;
 let pyStdErr = '';
 
 beforeAll(async () => {
-  if (!PYTHON_READY) return;
+  // Pin the Node clock to the instant the Python oracle ran so relative ages
+  // ("N 分钟前", 24h windows) match the frozen golden forever.
+  const frozenAtMs = golden<number>(GOLDEN_FILE, 'frozenAtMs');
+  vi.useFakeTimers({ toFake: ['Date'], now: frozenAtMs });
   workDir = fs.mkdtempSync(path.join(os.tmpdir(), 'writeflow-'));
   const nodeDbPath = path.join(workDir, 'node.db');
   const pyDbPath = path.join(workDir, 'python.db');
@@ -228,15 +214,8 @@ beforeAll(async () => {
   };
   const planPath = path.join(workDir, 'plan.json');
   fs.writeFileSync(planPath, JSON.stringify(plan), 'utf8');
-  const result = spawnSync(PYTHON, [DRIVER, '--db', pyDbPath, '--config', configPath, '--plan', planPath], {
-    cwd: REPO_ROOT, env: { ...process.env, PYTHONPATH: pythonPathEnv(), PYTHONWARNINGS: 'ignore' }, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024,
-  });
-  pyStdErr = result.stderr ?? '';
-  const line = (result.stdout ?? '').split(/\r?\n/).find((l) => l.startsWith(RESULT_PREFIX));
-  if (result.status !== 0 || !line) {
-    throw new Error(`write_flow_python.py failed (${result.status}):\n${result.stdout}\n${result.stderr}`);
-  }
-  for (const r of (JSON.parse(line.slice(RESULT_PREFIX.length)) as { responses: Rec[] }).responses) pyRecs.set(r.name, r);
+  const frozen = golden<{ responses: Rec[]; dump: Record<string, unknown> }>(GOLDEN_FILE, 'python');
+  for (const r of frozen.responses) pyRecs.set(r.name, r);
 
   // ---- Node ----
   const baseConfig = loadConfig({ SERVERMONITOR_DATA_DIR: workDir, SERVERMONITOR_APP_VERSION: APP_VERSION });
@@ -269,7 +248,7 @@ beforeAll(async () => {
   nodeDb.close();
 
   nodeDump = dumpTables(nodeDbPath);
-  pyDump = dumpTables(pyDbPath);
+  pyDump = frozen.dump;
   if (process.env.WF_RAW) {
     for (const [label, file] of [['node', nodeDbPath], ['python', pyDbPath]] as const) {
       const raw = openDatabase(file);
@@ -282,6 +261,7 @@ beforeAll(async () => {
 }, 120_000);
 
 afterAll(() => {
+  vi.useRealTimers();
   if (workDir && fs.existsSync(workDir)) fs.rmSync(workDir, { recursive: true, force: true });
 });
 
@@ -289,7 +269,7 @@ afterAll(() => {
 // Tests
 // ---------------------------------------------------------------------------
 
-describe.skipIf(!PYTHON_READY)('write-flow differential (Node vs Python)', () => {
+describe('write-flow differential (Node vs Python)', () => {
   it('logs in on both stacks', () => {
     expect([nodeRecs.get('login')?.status, pyRecs.get('login')?.status]).toEqual([302, 302]);
   });

@@ -1,0 +1,623 @@
+{% extends "base.html" %}
+{% block title %}{{ name }} - 服务器监控{% endblock %}
+
+{% macro pct(value) -%}
+{%- if value is undefined or value is none -%}—{%- elif value is string -%}{{ value }}{%- else -%}{{ '%.1f'|format(value) }}%{%- endif -%}
+{%- endmacro %}
+
+{% macro bytes_label(value) -%}
+{%- if value is undefined or value is none -%}—{%- elif value >= 1073741824 -%}{{ '%.1f'|format(value / 1073741824) }} GB{%- elif value >= 1048576 -%}{{ '%.1f'|format(value / 1048576) }} MB{%- elif value >= 1024 -%}{{ '%.1f'|format(value / 1024) }} KB{%- else -%}{{ value }} B{%- endif -%}
+{%- endmacro %}
+
+{% block content %}
+<nav class="breadcrumb"><a href="{{ url_for('hosts_page') }}">主机</a> / <span>{{ name }}</span></nav>
+
+{% if detail is none %}
+<section class="card">
+  <h1 class="page-title">未找到主机</h1>
+  <p class="empty">未找到主机 “{{ name }}” 的采集数据。</p>
+  <p><a href="{{ url_for('overview_page') }}">返回概览</a></p>
+</section>
+{% else %}
+{% set metrics = detail.metrics %}
+<div class="page-head host-head">
+  <div class="page-head-main">
+    <h1 class="page-title">{{ name }}</h1>
+    <p class="page-subtitle muted">
+      {{ detail.host or '—' }}{% if detail.group %} · {{ detail.group }}{% endif %}{% if detail.owner %} · 负责人 {{ detail.owner }}{% endif %}{% if detail.collected_at %} · 上次采集 <span class="mono" title="{{ detail.collected_at }}">{{ detail.collected_at|stamp }}</span>{% endif %}
+    </p>
+  </div>
+  <div class="page-actions">
+    <a class="secondary-button button-link" id="host-report-button" href="{{ url_for('api_host_report', name=name) }}">导出诊断报告</a>
+    <a class="primary-button button-link" href="/terminal?host={{ name|urlencode }}">打开终端</a>
+    <button type="button" class="secondary-button" id="host-auto-refresh" aria-pressed="false" title="每 30 秒原地刷新本页数据（可随时关闭）">自动刷新：关</button>
+  </div>
+</div>
+
+{% if detail.success is none or not detail.success or detail.errors %}
+<section class="card collect-notice" id="host-collect-notice">
+  <div class="collect-notice-text">
+    <strong id="host-collect-title">
+      {%- if detail.success is none -%}还没有采集到这台主机的数据
+      {%- elif detail.errors -%}最近一次采集有异常
+      {%- else -%}最近一次采集失败{%- endif -%}
+    </strong>
+    <p id="host-collect-detail">
+      {%- if detail.errors -%}{{ detail.errors|join('；') }}
+      {%- else -%}可能是 SSH 连接失败、sudo 权限不足或主机离线，可以点右侧重新采集一次。{%- endif -%}
+    </p>
+  </div>
+  <button type="button" class="secondary-button" id="host-collect-now" data-host-name="{{ name }}">立即采集</button>
+</section>
+{% endif %}
+
+{% set mem = metrics.memory %}
+{% set ns = namespace(root_disk=None, gpu=None) %}
+{% for row in metrics.disk_usage or [] %}
+  {% if row.mountpoint == '/' %}{% set ns.root_disk = row.percent %}{% endif %}
+{% endfor %}
+{% for gpu in metrics.gpu_summary or [] %}
+  {% if loop.first %}{% set ns.gpu = gpu.utilization_percent %}{% endif %}
+{% endfor %}
+<nav class="host-tabbar" id="host-tabbar" aria-label="主机详情分区">
+  <button type="button" class="host-tab active" data-host-tab="overview">概览</button>
+  <button type="button" class="host-tab" data-host-tab="metrics">指标</button>
+  <button type="button" class="host-tab" data-host-tab="storage">存储与磁盘阵列</button>
+  <button type="button" class="host-tab" data-host-tab="gpu">GPU</button>
+  <button type="button" class="host-tab" data-host-tab="containers">Docker 容器{% if metrics.containers %} ({{ metrics.containers|length }}){% endif %}</button>
+  <button type="button" class="host-tab" data-host-tab="sessions">登录用户</button>
+  <button type="button" class="host-tab" data-host-tab="checks">服务可用性</button>
+  <button type="button" class="host-tab" data-host-tab="alerts">最近告警{% if detail.alerts|selectattr('status', 'equalto', 'active')|list %} ({{ detail.alerts|selectattr('status', 'equalto', 'active')|list|length }}){% endif %}</button>
+  <button type="button" class="host-tab host-tab-link" id="host-tab-link" title="复制当前分区的链接，方便发给别人">复制链接</button>
+</nav>
+
+<section class="stat-grid host-stat-grid" data-host-panel="overview" aria-label="主机摘要">
+  <article class="card stat-card {% if detail.success %}stat-card-online{% elif detail.success is none %}stat-card-total{% else %}stat-card-offline{% endif %}">
+    <div class="stat-body">
+      <div class="stat-label">采集状态</div>
+      <div class="stat-value stat-value-text">{% if detail.success %}正常{% elif detail.success is none %}等待采集{% else %}异常{% endif %}</div>
+      <div class="stat-foot mono"{% if detail.collected_at %} title="{{ detail.collected_at }}"{% endif %}>{{ detail.collected_at|stamp }}</div>
+    </div>
+  </article>
+  <article class="card stat-card stat-card-total">
+    <div class="stat-body">
+      <div class="stat-label">CPU 使用率</div>
+      <div class="stat-value">{{ pct(metrics.cpu_usage_percent) }}</div>
+      <div class="stat-delta" data-stat-delta="cpu" hidden></div>
+      <div class="stat-foot">{{ metrics.cpu_core_count or '—' }} 核心</div>
+    </div>
+  </article>
+  <article class="card stat-card stat-card-total">
+    <div class="stat-body">
+      <div class="stat-label">内存使用率</div>
+      <div class="stat-value">{% if mem and mem.total_mb %}{{ '%.1f'|format(mem.used_mb / mem.total_mb * 100) }}%{% else %}—{% endif %}</div>
+      <div class="stat-delta" data-stat-delta="memory" hidden></div>
+      <div class="stat-foot">{% if mem %}{{ mem.used_mb }} / {{ mem.total_mb }} MB{% else %}—{% endif %}</div>
+    </div>
+  </article>
+  <article class="card stat-card stat-card-total">
+    <div class="stat-body">
+      <div class="stat-label">根目录磁盘</div>
+      <div class="stat-value">{{ pct(ns.root_disk) }}</div>
+      <div class="stat-delta" data-stat-delta="disk" hidden></div>
+      <div class="stat-foot">GPU 利用率 {{ pct(ns.gpu) }}</div>
+    </div>
+  </article>
+</section>
+
+<section class="card" id="host-actions" data-host-panel="overview">
+  <div class="section-head">
+    <h2>诊断与操作</h2>
+    <span class="muted" id="host-action-status"></span>
+  </div>
+  <div class="host-action-row">
+    <button type="button" class="secondary-button" id="host-test-button">测试连接</button>
+    <button type="button" class="primary-button" id="host-collect-button">立即采集</button>
+  </div>
+  <div class="probe-result" id="host-probe-result" hidden></div>
+  {% if detail.errors %}
+  <div class="host-error-box">
+    <strong>最近一次采集异常</strong>
+    <ul>
+      {% for err in detail.errors %}
+      <li><span class="mono">{{ err.stage or 'unknown' }}</span>：{{ err.message or '—' }}</li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+</section>
+
+<section class="card" id="host-diagnostics" data-host-panel="overview" data-host-name="{{ detail.name }}" data-host-address="{{ detail.host or '' }}" data-host-status="{{ detail.status }}" data-attention="{{ (detail.diagnostics_summary or {}).get('attention', 0) }}">
+  <div class="section-head">
+    <h2>健康诊断</h2>
+    <div class="diag-head-actions">
+      {% set diag = detail.diagnostics_summary or {} %}
+      {% if diag.get('attention') %}
+      <span class="badge badge-warning">{{ diag.get('attention') }} 项需关注</span>
+      {% elif diag %}
+      <span class="badge badge-online">全部正常</span>
+      {% endif %}
+      {% if detail.diagnostics %}
+      <button type="button" class="btn-link" id="host-diag-copy">复制摘要</button>
+      {% endif %}
+    </div>
+  </div>
+  {% if detail.diagnostics %}
+  <ul class="diag-list">
+    {% for row in detail.diagnostics %}
+    <li class="diag-item diag-{{ row.level }}" data-diag-key="{{ row.key }}">
+      <span class="diag-dot" aria-hidden="true"></span>
+      <div class="diag-body">
+        <div class="diag-head"><strong>{{ row.title }}</strong><span class="diag-detail">{{ row.detail }}</span></div>
+        {% if row.hint %}<p class="diag-hint">{{ row.hint }}</p>{% endif %}
+      </div>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="empty">暂无诊断结论，等待一次采集后再看。</p>
+  {% endif %}
+</section>
+
+<section class="card" id="host-uptime-strip" data-host-panel="overview">
+  <div class="section-head">
+    <h2>采集时间线</h2>
+    <p class="muted">最近 24 小时，每格 15 分钟；灰格表示当时没有采集</p>
+  </div>
+  <div class="uptime-strip" id="uptime-strip" role="img" aria-label="最近 24 小时采集情况">
+    {% for bucket in detail.uptime_strip.buckets %}
+    {% set ratio = (bucket.ok / bucket.total) if bucket.total else None %}
+    <span class="uptime-cell{% if ratio is none %} is-empty{% elif ratio >= 0.99 %} is-ok{% elif ratio >= 0.6 %} is-warn{% else %} is-bad{% endif %}"
+          data-uptime-cell="{{ bucket.index }}"
+          title="{{ bucket.start|stamp }} · {% if bucket.total %}采集 {{ bucket.total }} 次，成功 {{ bucket.ok }} 次{% else %}没有采集{% endif %}"></span>
+    {% endfor %}
+  </div>
+  <div class="uptime-strip-foot">
+    <span>成功 {{ detail.uptime_strip.ok }} / {{ detail.uptime_strip.samples }} 次</span>
+    <span class="uptime-key"><i class="uptime-cell is-ok"></i>正常</span>
+    <span class="uptime-key"><i class="uptime-cell is-warn"></i>部分失败</span>
+    <span class="uptime-key"><i class="uptime-cell is-bad"></i>全部失败</span>
+    <span class="uptime-key"><i class="uptime-cell is-empty"></i>未采集</span>
+  </div>
+</section>
+
+<section class="card" id="host-trend" data-host-panel="overview">
+  <div class="section-head">
+    <h2>历史趋势</h2>
+    <div class="range-tabs" role="group" aria-label="趋势时间范围">
+      <button type="button" class="range-tab active" data-history-range="24h">24 小时</button>
+      <button type="button" class="range-tab" data-history-range="7d">7 天</button>
+      <button type="button" class="range-tab" data-history-range="30d">30 天</button>
+      <button type="button" class="btn-link" id="trend-export" title="导出当前时间范围的趋势数据">导出 CSV</button>
+    </div>
+  </div>
+  <div class="trend-grid">
+    <div class="trend-block"><h3>CPU <span class="trend-latest" data-trend-latest="cpu"></span></h3><svg viewBox="0 0 300 84" data-trend="cpu" role="img" aria-label="CPU 使用率趋势"></svg></div>
+    <div class="trend-block"><h3>内存 <span class="trend-latest" data-trend-latest="memory"></span></h3><svg viewBox="0 0 300 84" data-trend="memory" role="img" aria-label="内存使用率趋势"></svg></div>
+    <div class="trend-block"><h3>磁盘 <span class="trend-latest" data-trend-latest="disk"></span></h3><svg viewBox="0 0 300 84" data-trend="disk" role="img" aria-label="磁盘使用率趋势"></svg></div>
+    <div class="trend-block"><h3>GPU 显存 <span class="trend-latest" data-trend-latest="gpu_memory"></span></h3><svg viewBox="0 0 300 84" data-trend="gpu_memory" role="img" aria-label="GPU 显存趋势"></svg></div>
+    <div class="trend-block"><h3>网络下行 <span class="trend-latest" data-trend-latest="net_rx"></span></h3><svg viewBox="0 0 300 84" data-trend="net_rx" role="img" aria-label="网络下行速率趋势"></svg></div>
+    <div class="trend-block"><h3>温度 <span class="trend-latest" data-trend-latest="temperature"></span></h3><svg viewBox="0 0 300 84" data-trend="temperature" role="img" aria-label="最高温度趋势"></svg></div>
+  </div>
+  <p class="empty" id="trend-empty" hidden>暂无历史数据，等待采集后生成趋势。</p>
+</section>
+
+<section class="card" data-host-panel="metrics">
+  <div class="section-head">
+    <h2>指标详情</h2>
+    <span class="badge {% if detail.success %}badge-online{% elif detail.success is none %}badge-muted{% else %}badge-offline{% endif %}">
+      {% if detail.success %}采集成功{% elif detail.success is none %}等待首次采集{% else %}采集失败{% endif %}
+    </span>
+  </div>
+  <div class="kv-group">
+    <h3 class="kv-group-title">系统</h3>
+    <dl class="kv-grid">
+      <div class="kv"><dt>主机地址</dt><dd class="mono">{{ detail.host or '—' }}</dd></div>
+      <div class="kv"><dt>采集时间</dt><dd class="mono"{% if detail.collected_at %} title="{{ detail.collected_at }}"{% endif %}>{{ detail.collected_at|stamp }}</dd></div>
+      <div class="kv"><dt>操作系统</dt><dd>{{ metrics.os_pretty_name or '—' }}</dd></div>
+      <div class="kv"><dt>内核版本</dt><dd>{{ metrics.kernel_version or '—' }}</dd></div>
+      <div class="kv"><dt>运行时长</dt><dd>{{ metrics.uptime or '—' }}</dd></div>
+    </dl>
+  </div>
+  <div class="kv-group">
+    <h3 class="kv-group-title">资源</h3>
+    <dl class="kv-grid">
+      <div class="kv"><dt>CPU 核心</dt><dd>{{ metrics.cpu_core_count if metrics.cpu_core_count is not none else '—' }}</dd></div>
+      <div class="kv"><dt>CPU 使用率</dt><dd>{{ pct(metrics.cpu_usage_percent) }}</dd></div>
+      <div class="kv"><dt>内存</dt><dd>
+        {% if metrics.memory %}{{ metrics.memory.used_mb }} / {{ metrics.memory.total_mb }} MB{% else %}—{% endif %}
+      </dd></div>
+      <div class="kv"><dt>负载 (1/5/15)</dt><dd>
+        {% if metrics.load_average %}
+          {{ metrics.load_average.load_1 }} / {{ metrics.load_average.load_5 }} / {{ metrics.load_average.load_15 }}
+        {% else %}—{% endif %}
+      </dd></div>
+    </dl>
+  </div>
+  <div class="kv-group">
+    <h3 class="kv-group-title">网络与温度</h3>
+    <dl class="kv-grid">
+      <div class="kv"><dt>网络吞吐</dt><dd class="mono net-throughput">
+      {% set net = detail.network or {} %}
+      {% if net.rx_bytes_per_second is not none or net.tx_bytes_per_second is not none %}
+          <span class="net-rx">↓ {{ net.rx_bytes_per_second|rate }}</span>
+          <span class="net-tx">↑ {{ net.tx_bytes_per_second|rate }}</span>
+        {% else %}—{% endif %}
+      </dd></div>
+      <div class="kv kv-thermal"><dt>温度</dt><dd>
+        {% if metrics.thermal_zones %}
+          {% set hottest = metrics.thermal_zones[0] %}
+          {% set hot_class = 'is-critical' if hottest.celsius >= 85 else ('is-hot' if hottest.celsius >= 70 else '') %}
+          <span class="thermal-max {{ hot_class }}">{{ '%.1f'|format(hottest.celsius) }} °C</span>
+          <span class="thermal-zones">{% for zone in metrics.thermal_zones[:4] %}<span class="thermal-chip" title="{{ zone.label }}">{{ zone.label }} {{ '%.0f'|format(zone.celsius) }}°</span>{% endfor %}{% if metrics.thermal_zones|length > 4 %}<span class="thermal-more">+{{ metrics.thermal_zones|length - 4 }}</span>{% endif %}</span>
+        {% else %}—{% endif %}
+      </dd></div>
+    </dl>
+  </div>
+</section>
+
+<section class="card" id="logged-in-users" data-host-panel="sessions">
+  <div class="section-head">
+    <h2>当前登录用户</h2>
+    <span class="muted">{{ metrics.logged_in_users|length if metrics.logged_in_users else 0 }} 个会话</span>
+  </div>
+  {% if metrics.logged_in_users %}
+  <div class="table-wrap">
+    <table class="data-table">
+      <thead>
+        <tr><th>用户名</th><th>终端</th><th>登录时间</th><th>来源 IP</th></tr>
+      </thead>
+      <tbody>
+        {% for user in metrics.logged_in_users %}
+        <tr>
+          <td>{{ user.username or '—' }}</td>
+          <td class="mono">{{ user.terminal or '—' }}</td>
+          <td class="mono">{{ user.login_at or '—' }}</td>
+          <td class="mono">{{ user.remote_host or '—' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="empty">当前没有已登录用户。</p>
+  {% endif %}
+</section>
+
+<section class="card" id="host-checks-panel" data-host-panel="checks">
+  <div class="section-head">
+    <h2>服务可用性</h2>
+    <div class="checks-actions">
+      <span class="muted">{{ detail.checks|length if detail.checks else 0 }} 项检查</span>
+      <label class="checks-filter">
+        <input type="checkbox" id="host-checks-only-bad">
+        <span>只看异常</span>
+      </label>
+      <button type="button" class="secondary-button checks-run" id="host-checks-run"{% if not detail.checks %} disabled{% endif %}>立即检查</button>
+      <span class="checks-hint" id="host-checks-hint" hidden></span>
+    </div>
+  </div>
+  <div class="table-wrap" id="host-checks-wrap"{% if not detail.checks %} hidden{% endif %}>
+    <table class="data-table" id="host-checks-table">
+      <thead>
+        <tr><th>名称</th><th>类型</th><th>目标</th><th>状态</th><th>最近 40 次</th><th>可用率</th><th>耗时</th><th>最近检查</th><th>消息</th></tr>
+      </thead>
+      <tbody id="host-checks-body">
+        {% for check in detail.checks %}
+        <tr data-check-status="{{ check.status or 'unknown' }}">
+          <td>{{ check.check_name or '—' }}</td>
+          <td>{{ check.check_type or '—' }}</td>
+          <td class="mono">{{ check.target or '—' }}</td>
+          <td><span class="status status-{{ check.status }}">{{ check.status or '—' }}</span></td>
+          <td class="heartbeat-cell">
+            {% set beats = (detail.check_history or {}).get(check.check_name) or [] %}
+            {% if beats %}
+            <span class="heartbeat" title="最近 {{ beats|length }} 次检查">
+              {% for beat in beats %}<i class="hb hb-{{ beat }}"></i>{% endfor %}
+            </span>
+            {% else %}<span class="muted">—</span>{% endif %}
+          </td>
+          {% set beats_uptime = (detail.check_history or {}).get(check.check_name) or [] %}
+          {% if beats_uptime %}
+            {% set ok_count = beats_uptime|select('equalto', 'ok')|list|length %}
+            {% set ratio = ok_count * 100 / beats_uptime|length %}
+            <td class="mono uptime-cell{% if ratio < 95 %} is-low{% endif %}" title="{{ ok_count }} / {{ beats_uptime|length }} 次检查正常">{{ '%.1f'|format(ratio) }}%</td>
+          {% else %}
+            <td class="mono uptime-cell">—</td>
+          {% endif %}
+          <td>{% if check.latency_ms is not none %}{{ '%.0f'|format(check.latency_ms) }} ms{% else %}—{% endif %}</td>
+          <td class="mono"{% if check.checked_at %} title="{{ check.checked_at }}"{% endif %}>{{ check.checked_at|stamp }}</td>
+          <td>{{ check.message or '—' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <p class="empty" id="host-checks-empty"{% if detail.checks %} hidden{% endif %}>这台主机还没有服务检查。到设置页的主机编辑里可以添加 TCP 端口、HTTP 状态码或进程检查。</p>
+</section>
+
+<section class="card" id="host-alerts" data-host-panel="alerts">
+  <div class="section-head">
+    <h2>最近告警</h2>
+    <span class="muted">{{ detail.alerts|length if detail.alerts else 0 }} 条</span>
+    <a class="btn-link" id="host-alerts-all"
+       href="{{ url_for('alerts_page', host=detail.name, status='all') }}">查看全部</a>
+  </div>
+  {% if detail.alerts %}
+  <div class="host-alert-days" aria-label="最近 7 天告警分布">
+    {% for day in detail.alert_days %}
+    <div class="host-alert-day{% if not day.total %} is-empty{% endif %}" data-alert-day="{{ day.key }}" title="{{ day.label }}：{{ day.total }} 条（严重 {{ day.critical }} · 警告 {{ day.warning }} · 提示 {{ day.info }}）">
+      <div class="host-alert-day-bar" style="height: {{ day.height }}%">
+        {% if day.critical %}<span class="host-alert-seg host-alert-seg-critical" style="flex-grow: {{ day.critical }}"></span>{% endif %}
+        {% if day.warning %}<span class="host-alert-seg host-alert-seg-warning" style="flex-grow: {{ day.warning }}"></span>{% endif %}
+        {% if day.info %}<span class="host-alert-seg host-alert-seg-info" style="flex-grow: {{ day.info }}"></span>{% endif %}
+      </div>
+      <span class="host-alert-day-label mono">{{ day.label }}</span>
+    </div>
+    {% endfor %}
+  </div>
+  <div class="table-wrap">
+    <table class="data-table">
+      <thead>
+        <tr><th>级别</th><th>类别</th><th>标题</th><th>内容</th><th>时间</th><th>状态</th><th>操作</th></tr>
+      </thead>
+      <tbody>
+        {% for alert in detail.alerts %}
+        <tr data-alert-row="{{ alert.id }}">
+          <td><span class="severity severity-{{ alert.severity }}">{% if alert.severity == 'critical' %}严重{% elif alert.severity == 'warning' %}警告{% elif alert.severity == 'info' %}提示{% else %}{{ alert.severity }}{% endif %}</span></td>
+          <td>{{ alert.category }}</td>
+          <td class="alert-title">{{ alert.title }}</td>
+          <td class="alert-message">{{ alert.message }}</td>
+          <td class="mono" title="{{ alert.created_at }}">{{ alert.created_at|stamp }}</td>
+          <td><span class="status status-{{ alert.status }} alert-status">{% if alert.status == 'active' %}活动{% elif alert.status == 'acknowledged' %}已确认{% elif alert.status == 'resolved' %}已恢复{% else %}{{ alert.status }}{% endif %}</span></td>
+          <td class="alert-actions">
+            {% if alert.status == 'active' %}
+            <button type="button" class="ack-btn" data-alert-id="{{ alert.id }}">确认</button>
+            {% else %}
+            <span class="muted">—</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="empty">这台主机还没有告警记录。</p>
+  {% endif %}
+</section>
+
+<section class="card" data-host-panel="storage">
+  <h2>磁盘</h2>
+  {% if metrics.disk_usage %}
+  <div class="table-wrap">
+    <table class="data-table">
+      <thead>
+        <tr><th>文件系统</th><th>挂载点</th><th>容量</th><th>已用</th><th>可用</th><th>使用率</th></tr>
+      </thead>
+      <tbody>
+        {% for row in metrics.disk_usage %}
+        <tr>
+          <td>{{ row.filesystem }}</td>
+          <td class="mono">{{ row.mountpoint }}</td>
+          <td>{{ row.size }}</td>
+          <td>{{ row.used }}</td>
+          <td>{{ row.available }}</td>
+          <td>{{ pct(row.percent) }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="empty">这台主机没有返回磁盘挂载信息。</p>
+  {% endif %}
+</section>
+
+<section class="card" data-host-panel="gpu">
+  <h2>GPU</h2>
+  {% if metrics.gpu_summary %}
+  <div class="table-wrap">
+    <table class="data-table">
+      <thead>
+        <tr><th>序号</th><th>型号</th><th>使用率</th><th>显存</th><th>温度</th></tr>
+      </thead>
+      <tbody>
+        {% for gpu in metrics.gpu_summary %}
+        <tr>
+          <td>{{ gpu.index }}</td>
+          <td>{{ gpu.name }}</td>
+          <td>{{ pct(gpu.utilization_percent) }}</td>
+          <td>{{ gpu.memory_used_mb }} / {{ gpu.memory_total_mb }} MB</td>
+          <td>{% if gpu.temperature_c is not none %}{{ gpu.temperature_c }} °C{% else %}—{% endif %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% set proc_ns = namespace(total=0) %}
+  {% for proc in metrics.gpu_processes or [] %}
+    {% set proc_ns.total = proc_ns.total + proc.memory_used_mb %}
+  {% endfor %}
+  <div class="gpu-proc-head">
+    <h3>占用显存的进程</h3>
+    <span class="muted">{% if metrics.gpu_processes %}共 {{ metrics.gpu_processes|length }} 个 · 合计 {{ proc_ns.total }} MB{% else %}当前没有进程占用显存{% endif %}</span>
+  </div>
+  {% if metrics.gpu_processes %}
+  <div class="table-wrap">
+    <table class="data-table gpu-proc-table">
+      <thead>
+        <tr><th>显卡</th><th>用户</th><th>PID</th><th>显存</th><th>命令</th></tr>
+      </thead>
+      <tbody>
+        {% for proc in metrics.gpu_processes %}
+        <tr data-gpu-proc="{{ proc.pid }}">
+          <td class="mono">#{{ proc.index }}</td>
+          <td>{{ proc.username or '—' }}</td>
+          <td class="mono">{{ proc.pid }}</td>
+          <td class="mono">{{ proc.memory_used_mb }} MB</td>
+          <td class="gpu-proc-cmd" title="{{ proc.command }}">{{ proc.command or '—' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+  {% else %}
+  <p class="empty">这台主机没有检测到 NVIDIA GPU，或未安装 nvidia-smi。</p>
+  {% endif %}
+</section>
+
+<section class="card" id="host-containers" data-host-panel="containers">
+  <div class="section-head">
+    <h2>Docker 容器</h2>
+    <div class="container-toolbar">
+      <input type="search" id="container-search" class="container-search" placeholder="搜索名称或镜像" autocomplete="off">
+      <select id="container-state" class="container-state">
+        <option value="">全部状态</option>
+        <option value="running">运行中</option>
+        <option value="exited">已退出</option>
+        <option value="paused">已暂停</option>
+        <option value="restarting">重启中</option>
+      </select>
+      <button type="button" class="secondary-button container-stats" id="container-stats"{% if not metrics.containers %} disabled{% endif %}>刷新占用</button>
+      <span class="muted" id="container-count">{{ metrics.containers|length if metrics.containers else 0 }} 个容器</span>
+      <span class="container-stats-hint" id="container-stats-hint" hidden></span>
+    </div>
+  </div>
+  {% if metrics.containers %}
+  <div class="table-wrap">
+    <table class="data-table">
+      <thead>
+        <tr><th>名称</th><th>镜像</th><th>状态</th><th>运行情况</th><th>CPU</th><th>内存</th></tr>
+      </thead>
+      <tbody id="container-rows">
+        {% for container in metrics.containers %}
+        <tr data-container-row data-container-search="{{ (container.name ~ ' ' ~ container.image)|lower }}" data-container-state="{{ (container.state or 'unknown')|lower }}">
+          <td class="mono">{{ container.name }}</td>
+          <td class="mono container-image" title="{{ container.image }}">{{ container.image }}</td>
+          <td><span class="status status-{{ 'ok' if container.state == 'running' else 'unknown' }}">{{ container.state or '—' }}</span></td>
+          <td class="muted">{{ container.status or '—' }}</td>
+          <td class="mono container-cpu" data-container-name="{{ container.name }}">—</td>
+          <td class="mono container-mem" data-container-name="{{ container.name }}">—</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <p class="empty" id="container-filter-empty" hidden>没有匹配的容器，换个关键字或状态试试。</p>
+  {% else %}
+  <p class="empty">这台主机没有运行中的 Docker 容器，或未安装 Docker。</p>
+  {% endif %}
+</section>
+
+<section class="card" id="disk-array" data-host-panel="storage">
+  <div class="section-head">
+    <h2>磁盘阵列</h2>
+    {% if detail.disk %}
+    <span class="health health-{{ detail.disk.status }}">{{ detail.disk.status }}</span>
+    {% endif %}
+    <a class="btn-link" href="{{ url_for('disk_health_page') }}#disk-{{ detail.name|anchor }}">在磁盘健康页查看</a>
+  </div>
+
+  {% if detail.disk %}
+  <p class="muted">
+    整体状态：<strong>{{ detail.disk.status }}</strong>
+    {% if detail.disk.message %} · {{ detail.disk.message }}{% endif %}
+    {% if detail.disk.collected_at %} · 采集时间 {{ detail.disk.collected_at|stamp }}{% endif %}
+  </p>
+
+  <h3>控制器</h3>
+  {% if detail.disk.controllers %}
+  <div class="table-wrap">
+    <table class="data-table">
+      <thead>
+        <tr><th>控制器</th><th>型号</th><th>固件</th><th>BBU 状态</th><th>健康</th></tr>
+      </thead>
+      <tbody>
+        {% for c in detail.disk.controllers %}
+        <tr>
+          <td>{{ c.controller }}</td>
+          <td>{{ c.model or '—' }}</td>
+          <td>{{ c.firmware or '—' }}</td>
+          <td>{{ c.bbu_state or '—' }}</td>
+          <td><span class="health health-{{ c.health }}">{{ c.health }}</span></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="empty">没有控制器信息。</p>
+  {% endif %}
+
+  <h3>Virtual Drives</h3>
+  {% if detail.disk.virtual_drives %}
+  <div class="table-wrap">
+    <table class="data-table">
+      <thead>
+        <tr><th>控制器</th><th>VD</th><th>RAID 级别</th><th>状态</th><th>容量</th><th>健康</th></tr>
+      </thead>
+      <tbody>
+        {% for vd in detail.disk.virtual_drives %}
+        <tr>
+          <td>{{ vd.controller }}</td>
+          <td>{{ vd.vd_id }}</td>
+          <td>{{ vd.raid_level or '—' }}</td>
+          <td>{{ vd.state or '—' }}</td>
+          <td>{{ vd.size or '—' }}</td>
+          <td><span class="health health-{{ vd.health }}">{{ vd.health }}</span></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="empty">没有虚拟磁盘信息。</p>
+  {% endif %}
+
+  <h3>Physical Drives</h3>
+  {% if detail.disk.physical_drives %}
+  <div class="table-wrap">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>控制器</th><th>Enclosure</th><th>Slot</th><th>型号</th><th>序列号</th>
+          <th>状态</th><th>介质错误</th><th>其他错误</th><th>Predictive</th><th>SMART</th><th>Shield</th><th>温度</th><th>健康</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for d in detail.disk.physical_drives %}
+        <tr>
+          <td>{{ d.controller }}</td>
+          <td>{{ d.enclosure }}</td>
+          <td>{{ d.slot }}</td>
+          <td>{{ d.model or '—' }}</td>
+          <td class="mono">{{ d.serial or '—' }}</td>
+          <td>{{ d.state or '—' }}</td>
+          <td>{{ d.media_errors if d.media_errors is not none else '—' }}</td>
+          <td>{{ d.other_errors if d.other_errors is not none else '—' }}</td>
+          <td>{{ d.predictive_failures if d.predictive_failures is not none else '—' }}</td>
+          <td>{% if d.smart_alert is not none %}{{ '是' if d.smart_alert else '否' }}{% else %}—{% endif %}</td>
+          <td>{{ d.shield_counter if d.shield_counter is not none else '—' }}</td>
+          <td>{% if d.temperature_c is not none %}{{ d.temperature_c }} °C{% else %}—{% endif %}</td>
+          <td><span class="health health-{{ d.health }}">{{ d.health }}</span></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="empty">没有物理磁盘信息。</p>
+  {% endif %}
+  {% else %}
+  <p class="empty">还没有磁盘阵列数据：可能是未在设置里启用磁盘健康采集、最近一次采集失败，或该主机没有 LSI 控制器。</p>
+  {% endif %}
+</section>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>window.__HOST_NAME__ = {{ name|tojson }};</script>
+<script src="{{ asset_url('host-detail.js') }}"></script>
+{% endblock %}

@@ -51,6 +51,8 @@ import {
   legacyDbCandidates,
   detectLegacyImport,
   buildLoginItemArgs,
+  createTrayGuard,
+  applyLoginItem,
 } from './lifecycle';
 import { createUpdater, type AutoUpdaterLike, type UpdaterControl } from './updater';
 
@@ -229,8 +231,15 @@ function createWindow(): BrowserWindow {
   return w;
 }
 
+const trayGuard = createTrayGuard(() => buildTray());
+
+/** Idempotent: at most one Tray is ever constructed per process. */
 function createTray(): void {
-  tray = new Tray(nativeImage.createEmpty());
+  tray = trayGuard.ensure();
+}
+
+function buildTray(): Tray {
+  const tray = new Tray(nativeImage.createEmpty());
   const menu = Menu.buildFromTemplate([
     { label: '显示主窗口', click: () => showWindow() },
     {
@@ -253,10 +262,7 @@ function createTray(): void {
       type: 'checkbox',
       checked: app.getLoginItemSettings().openAtLogin,
       click: (item) => {
-        app.setLoginItemSettings({
-          openAtLogin: item.checked,
-          args: buildLoginItemArgs(),
-        });
+        applyLoginItem(app, item.checked);
       },
     },
     { type: 'separator' },
@@ -265,6 +271,7 @@ function createTray(): void {
   tray.setToolTip('实验室服务器轮询维护');
   tray.setContextMenu(menu);
   tray.on('double-click', () => showWindow());
+  return tray;
 }
 
 /**

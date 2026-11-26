@@ -18,20 +18,12 @@ import { listSecretNames } from '../../src/storage/secrets';
 import { loadAppSettings } from '../../src/storage/settings';
 import { buildFixture, type Fixture } from './fixture';
 import {
-  detectPython,
-  pythonSkipReason,
   runDiff,
   type QueryCase,
 } from './harness';
 
-const python = detectPython();
-if (!python.ok) {
-  // Visible during `vitest run`; the reliable signal is the skipped tests below.
-  console.warn(pythonSkipReason());
-}
-
 /** `describe` that skips wholesale when the Python oracle is unavailable. */
-const describePython = python.ok ? describe : describe.skip;
+const describePython = describe;
 
 /** Clock injected into the metrics readers so cutoffs are reproducible. */
 const NOW = new Date('2026-01-15T12:00:00.000Z');

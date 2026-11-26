@@ -12,7 +12,7 @@
  * the same `db` used by the rest of the backend drives session lifetime, auth
  * enabled, first-run setup state and the active view mode.
  */
-import * as path from 'node:path';
+import { assetPath } from '../assets';
 import express, { type Express, type RequestHandler } from 'express';
 
 import type { AppConfig } from '../config/config';
@@ -82,7 +82,7 @@ export function resolveWebSettings(db: SqliteDatabase): ResolvedWebSettings {
 
 /** Default location of the read-only static assets reused from the oracle. */
 function defaultStaticDir(): string {
-  return path.resolve(__dirname, '../../../servermanage/web/static');
+  return assetPath('web', 'static');
 }
 
 /**

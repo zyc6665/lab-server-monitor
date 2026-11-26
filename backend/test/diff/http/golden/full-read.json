@@ -1,0 +1,2421 @@
+{
+  "_commit": "1ca108c",
+  "_source": "full-read.json",
+  "entries": {
+    "frozenAtMs": 1795664117298,
+    "responses": [
+      {
+        "content_type": "application/json",
+        "json": {
+          "capacity": [
+            {
+              "host": "lab-01.lab.example.edu",
+              "host_name": "lab-01",
+              "metrics": [
+                {
+                  "current": null,
+                  "days_to_threshold": null,
+                  "key": "memory",
+                  "label": "内存",
+                  "slope_per_day": null,
+                  "status": "insufficient_data",
+                  "threshold": 90
+                },
+                {
+                  "current": null,
+                  "days_to_threshold": null,
+                  "key": "disk",
+                  "label": "磁盘",
+                  "slope_per_day": null,
+                  "status": "insufficient_data",
+                  "threshold": 90
+                },
+                {
+                  "current": null,
+                  "days_to_threshold": null,
+                  "key": "gpu_memory",
+                  "label": "GPU 显存",
+                  "slope_per_day": null,
+                  "status": "insufficient_data",
+                  "threshold": 90
+                }
+              ]
+            },
+            {
+              "host": "lab-02.lab.example.edu",
+              "host_name": "lab-02",
+              "metrics": [
+                {
+                  "current": null,
+                  "days_to_threshold": null,
+                  "key": "memory",
+                  "label": "内存",
+                  "slope_per_day": null,
+                  "status": "insufficient_data",
+                  "threshold": 90
+                },
+                {
+                  "current": null,
+                  "days_to_threshold": null,
+                  "key": "disk",
+                  "label": "磁盘",
+                  "slope_per_day": null,
+                  "status": "insufficient_data",
+                  "threshold": 90
+                },
+                {
+                  "current": null,
+                  "days_to_threshold": null,
+                  "key": "gpu_memory",
+                  "label": "GPU 显存",
+                  "slope_per_day": null,
+                  "status": "insufficient_data",
+                  "threshold": 90
+                }
+              ]
+            },
+            {
+              "host": "gpu-01.lab.example.edu",
+              "host_name": "gpu-01",
+              "metrics": [
+                {
+                  "current": null,
+                  "days_to_threshold": null,
+                  "key": "memory",
+                  "label": "内存",
+                  "slope_per_day": null,
+                  "status": "insufficient_data",
+                  "threshold": 90
+                },
+                {
+                  "current": null,
+                  "days_to_threshold": null,
+                  "key": "disk",
+                  "label": "磁盘",
+                  "slope_per_day": null,
+                  "status": "insufficient_data",
+                  "threshold": 90
+                },
+                {
+                  "current": null,
+                  "days_to_threshold": null,
+                  "key": "gpu_memory",
+                  "label": "GPU 显存",
+                  "slope_per_day": null,
+                  "status": "insufficient_data",
+                  "threshold": 90
+                }
+              ]
+            }
+          ],
+          "hosts": [
+            {
+              "active_alert_count": 1,
+              "checks": {
+                "failed": 0,
+                "ok": 0,
+                "total": 0,
+                "unknown": 0
+              },
+              "collected_at": "2026-11-25T20:00:00.123456+08:00",
+              "collection_uptime": {
+                "expected": 144,
+                "samples": 1
+              },
+              "container_count": 0,
+              "cpu_cores": 64,
+              "cpu_percent": 74.9,
+              "disk_health": {
+                "critical": 0,
+                "healthy": 0,
+                "status": "ok",
+                "warning": 0
+              },
+              "disk_percent": 83,
+              "gpu_memory": {
+                "total_mb": 163840,
+                "used_mb": 61284
+              },
+              "gpu_memory_percent": 37.4,
+              "group": "lab",
+              "host": "gpu-01.lab.example.edu",
+              "load_1": 43.14,
+              "location": "Lab",
+              "logged_in_sessions": 0,
+              "logged_in_user_count": 0,
+              "memory_percent": 64.45,
+              "name": "gpu-01",
+              "online": false,
+              "owner": "ops",
+              "silenced": false,
+              "silenced_until": null,
+              "spark": {
+                "cpu": [
+                  74.9
+                ],
+                "memory": [
+                  64.4
+                ]
+              },
+              "tags": [
+                "lab",
+                "gpu"
+              ],
+              "temperature_c": 58.7,
+              "uptime": "209 days, 4:32"
+            },
+            {
+              "active_alert_count": 1,
+              "checks": {
+                "failed": 0,
+                "ok": 0,
+                "total": 0,
+                "unknown": 0
+              },
+              "collected_at": "2026-11-25T20:00:00.123456+08:00",
+              "collection_uptime": {
+                "expected": 144,
+                "samples": 1
+              },
+              "container_count": 0,
+              "cpu_cores": 16,
+              "cpu_percent": 55.6,
+              "disk_health": {
+                "critical": 0,
+                "healthy": 0,
+                "status": "unknown",
+                "warning": 0
+              },
+              "disk_percent": 52,
+              "gpu_memory": {
+                "total_mb": 16384,
+                "used_mb": 4085
+              },
+              "gpu_memory_percent": 24.93,
+              "group": "lab",
+              "host": "lab-01.lab.example.edu",
+              "load_1": 8.01,
+              "location": "Lab",
+              "logged_in_sessions": 0,
+              "logged_in_user_count": 0,
+              "memory_percent": 55.15,
+              "name": "lab-01",
+              "online": false,
+              "owner": "ops",
+              "silenced": false,
+              "silenced_until": null,
+              "spark": {
+                "cpu": [
+                  55.6
+                ],
+                "memory": [
+                  55.2
+                ]
+              },
+              "tags": [
+                "lab",
+                "cpu"
+              ],
+              "temperature_c": 53.9,
+              "uptime": "209 days, 4:32"
+            },
+            {
+              "active_alert_count": 0,
+              "checks": {
+                "failed": 0,
+                "ok": 0,
+                "total": 0,
+                "unknown": 0
+              },
+              "collected_at": "2026-11-25T20:00:00.123456+08:00",
+              "collection_uptime": {
+                "expected": 144,
+                "samples": 1
+              },
+              "container_count": 0,
+              "cpu_cores": 32,
+              "cpu_percent": 57.5,
+              "disk_health": {
+                "critical": 0,
+                "healthy": 0,
+                "status": "unknown",
+                "warning": 0
+              },
+              "disk_percent": 58,
+              "gpu_memory": {
+                "total_mb": 16384,
+                "used_mb": 5199
+              },
+              "gpu_memory_percent": 31.73,
+              "group": "lab",
+              "host": "lab-02.lab.example.edu",
+              "load_1": 16.57,
+              "location": "Lab",
+              "logged_in_sessions": 0,
+              "logged_in_user_count": 0,
+              "memory_percent": 59.6,
+              "name": "lab-02",
+              "online": false,
+              "owner": "ops",
+              "silenced": true,
+              "silenced_until": "2026-12-24T16:00:00.666666+08:00",
+              "spark": {
+                "cpu": [
+                  57.5
+                ],
+                "memory": [
+                  59.6
+                ]
+              },
+              "tags": [
+                "lab"
+              ],
+              "temperature_c": 54.4,
+              "uptime": "209 days, 4:32"
+            }
+          ],
+          "meta": {
+            "groups": [
+              "lab"
+            ],
+            "has_groups": true,
+            "has_tags": true,
+            "silenced_count": 1,
+            "tags": [
+              "cpu",
+              "gpu",
+              "lab"
+            ]
+          },
+          "summary": {
+            "active_alerts": 2,
+            "offline": 3,
+            "online": 0
+          }
+        },
+        "name": "overview",
+        "set_cookie": true,
+        "status": 200,
+        "text": null
+      },
+      {
+        "content_type": "application/json",
+        "json": {
+          "days": 7,
+          "hosts": [
+            {
+              "host": "lab-01.lab.example.edu",
+              "host_name": "lab-01",
+              "metrics": [
+                {
+                  "current": null,
+                  "days_to_threshold": null,
+                  "key": "memory",
+                  "label": "内存",
+                  "slope_per_day": null,
+                  "status": "insufficient_data",
+                  "threshold": 90
+                },
+                {
+                  "current": null,
+                  "days_to_threshold": null,
+                  "key": "disk",
+                  "label": "磁盘",
+                  "slope_per_day": null,
+                  "status": "insufficient_data",
+                  "threshold": 90
+                },
+                {
+                  "current": null,
+                  "days_to_threshold": null,
+                  "key": "gpu_memory",
+                  "label": "GPU 显存",
+                  "slope_per_day": null,
+                  "status": "insufficient_data",
+                  "threshold": 90
+                }
+              ]
+            },
+            {
+              "host": "lab-02.lab.example.edu",
+              "host_name": "lab-02",
+              "metrics": [
+                {
+                  "current": null,
+                  "days_to_threshold": null,
+                  "key": "memory",
+                  "label": "内存",
+                  "slope_per_day": null,
+                  "status": "insufficient_data",
+                  "threshold": 90
+                },
+                {
+                  "current": null,
+                  "days_to_threshold": null,
+                  "key": "disk",
+                  "label": "磁盘",
+                  "slope_per_day": null,
+                  "status": "insufficient_data",
+                  "threshold": 90
+                },
+                {
+                  "current": null,
+                  "days_to_threshold": null,
+                  "key": "gpu_memory",
+                  "label": "GPU 显存",
+                  "slope_per_day": null,
+                  "status": "insufficient_data",
+                  "threshold": 90
+                }
+              ]
+            },
+            {
+              "host": "gpu-01.lab.example.edu",
+              "host_name": "gpu-01",
+              "metrics": [
+                {
+                  "current": null,
+                  "days_to_threshold": null,
+                  "key": "memory",
+                  "label": "内存",
+                  "slope_per_day": null,
+                  "status": "insufficient_data",
+                  "threshold": 90
+                },
+                {
+                  "current": null,
+                  "days_to_threshold": null,
+                  "key": "disk",
+                  "label": "磁盘",
+                  "slope_per_day": null,
+                  "status": "insufficient_data",
+                  "threshold": 90
+                },
+                {
+                  "current": null,
+                  "days_to_threshold": null,
+                  "key": "gpu_memory",
+                  "label": "GPU 显存",
+                  "slope_per_day": null,
+                  "status": "insufficient_data",
+                  "threshold": 90
+                }
+              ]
+            }
+          ],
+          "thresholds": {
+            "disk": 90,
+            "gpu_memory": 90,
+            "memory": 90
+          }
+        },
+        "name": "overview_capacity_7",
+        "set_cookie": true,
+        "status": 200,
+        "text": null
+      },
+      {
+        "content_type": "application/json",
+        "json": {
+          "days": 30,
+          "hosts": [
+            {
+              "host": "lab-01.lab.example.edu",
+              "host_name": "lab-01",
+              "metrics": [
+                {
+                  "current": null,
+                  "days_to_threshold": null,
+                  "key": "memory",
+                  "label": "内存",
+                  "slope_per_day": null,
+                  "status": "insufficient_data",
+                  "threshold": 90
+                },
+                {
+                  "current": null,
+                  "days_to_threshold": null,
+                  "key": "disk",
+                  "label": "磁盘",
+                  "slope_per_day": null,
+                  "status": "insufficient_data",
+                  "threshold": 90
+                },
+                {
+                  "current": null,
+                  "days_to_threshold": null,
+                  "key": "gpu_memory",
+                  "label": "GPU 显存",
+                  "slope_per_day": null,
+                  "status": "insufficient_data",
+                  "threshold": 90
+                }
+              ]
+            },
+            {
+              "host": "lab-02.lab.example.edu",
+              "host_name": "lab-02",
+              "metrics": [
+                {
+                  "current": null,
+                  "days_to_threshold": null,
+                  "key": "memory",
+                  "label": "内存",
+                  "slope_per_day": null,
+                  "status": "insufficient_data",
+                  "threshold": 90
+                },
+                {
+                  "current": null,
+                  "days_to_threshold": null,
+                  "key": "disk",
+                  "label": "磁盘",
+                  "slope_per_day": null,
+                  "status": "insufficient_data",
+                  "threshold": 90
+                },
+                {
+                  "current": null,
+                  "days_to_threshold": null,
+                  "key": "gpu_memory",
+                  "label": "GPU 显存",
+                  "slope_per_day": null,
+                  "status": "insufficient_data",
+                  "threshold": 90
+                }
+              ]
+            },
+            {
+              "host": "gpu-01.lab.example.edu",
+              "host_name": "gpu-01",
+              "metrics": [
+                {
+                  "current": null,
+                  "days_to_threshold": null,
+                  "key": "memory",
+                  "label": "内存",
+                  "slope_per_day": null,
+                  "status": "insufficient_data",
+                  "threshold": 90
+                },
+                {
+                  "current": null,
+                  "days_to_threshold": null,
+                  "key": "disk",
+                  "label": "磁盘",
+                  "slope_per_day": null,
+                  "status": "insufficient_data",
+                  "threshold": 90
+                },
+                {
+                  "current": null,
+                  "days_to_threshold": null,
+                  "key": "gpu_memory",
+                  "label": "GPU 显存",
+                  "slope_per_day": null,
+                  "status": "insufficient_data",
+                  "threshold": 90
+                }
+              ]
+            }
+          ],
+          "thresholds": {
+            "disk": 90,
+            "gpu_memory": 90,
+            "memory": 90
+          }
+        },
+        "name": "overview_capacity_30",
+        "set_cookie": true,
+        "status": 200,
+        "text": null
+      },
+      {
+        "content_type": "application/json",
+        "json": {
+          "days": 90,
+          "hosts": [
+            {
+              "host": "lab-01.lab.example.edu",
+              "host_name": "lab-01",
+              "metrics": [
+                {
+                  "current": null,
+                  "days_to_threshold": null,
+                  "key": "memory",
+                  "label": "内存",
+                  "slope_per_day": null,
+                  "status": "insufficient_data",
+                  "threshold": 90
+                },
+                {
+                  "current": null,
+                  "days_to_threshold": null,
+                  "key": "disk",
+                  "label": "磁盘",
+                  "slope_per_day": null,
+                  "status": "insufficient_data",
+                  "threshold": 90
+                },
+                {
+                  "current": null,
+                  "days_to_threshold": null,
+                  "key": "gpu_memory",
+                  "label": "GPU 显存",
+                  "slope_per_day": null,
+                  "status": "insufficient_data",
+                  "threshold": 90
+                }
+              ]
+            },
+            {
+              "host": "lab-02.lab.example.edu",
+              "host_name": "lab-02",
+              "metrics": [
+                {
+                  "current": null,
+                  "days_to_threshold": null,
+                  "key": "memory",
+                  "label": "内存",
+                  "slope_per_day": null,
+                  "status": "insufficient_data",
+                  "threshold": 90
+                },
+                {
+                  "current": null,
+                  "days_to_threshold": null,
+                  "key": "disk",
+                  "label": "磁盘",
+                  "slope_per_day": null,
+                  "status": "insufficient_data",
+                  "threshold": 90
+                },
+                {
+                  "current": null,
+                  "days_to_threshold": null,
+                  "key": "gpu_memory",
+                  "label": "GPU 显存",
+                  "slope_per_day": null,
+                  "status": "insufficient_data",
+                  "threshold": 90
+                }
+              ]
+            },
+            {
+              "host": "gpu-01.lab.example.edu",
+              "host_name": "gpu-01",
+              "metrics": [
+                {
+                  "current": null,
+                  "days_to_threshold": null,
+                  "key": "memory",
+                  "label": "内存",
+                  "slope_per_day": null,
+                  "status": "insufficient_data",
+                  "threshold": 90
+                },
+                {
+                  "current": null,
+                  "days_to_threshold": null,
+                  "key": "disk",
+                  "label": "磁盘",
+                  "slope_per_day": null,
+                  "status": "insufficient_data",
+                  "threshold": 90
+                },
+                {
+                  "current": null,
+                  "days_to_threshold": null,
+                  "key": "gpu_memory",
+                  "label": "GPU 显存",
+                  "slope_per_day": null,
+                  "status": "insufficient_data",
+                  "threshold": 90
+                }
+              ]
+            }
+          ],
+          "thresholds": {
+            "disk": 90,
+            "gpu_memory": 90,
+            "memory": 90
+          }
+        },
+        "name": "overview_capacity_90",
+        "set_cookie": true,
+        "status": 200,
+        "text": null
+      },
+      {
+        "content_type": "application/json",
+        "json": {
+          "points": [
+            {
+              "cpu": 62.666666666666664,
+              "disk": 76,
+              "gpu_memory": 31.356608072916668,
+              "gpu_util": 25.666666666666668,
+              "load_1": 22.573333333333334,
+              "memory": 59.73218282063802,
+              "t": "2026-11-25T20:00:00.123456+08:00"
+            }
+          ],
+          "range": "24h"
+        },
+        "name": "overview_history_24h",
+        "set_cookie": true,
+        "status": 200,
+        "text": null
+      },
+      {
+        "content_type": "application/json",
+        "json": {
+          "points": [],
+          "range": "7d"
+        },
+        "name": "overview_history_7d",
+        "set_cookie": true,
+        "status": 200,
+        "text": null
+      },
+      {
+        "content_type": "application/json",
+        "json": {
+          "points": [],
+          "range": "30d"
+        },
+        "name": "overview_history_30d",
+        "set_cookie": true,
+        "status": 200,
+        "text": null
+      },
+      {
+        "content_type": "application/json",
+        "json": {
+          "points": [],
+          "range": "90d"
+        },
+        "name": "overview_history_90d",
+        "set_cookie": true,
+        "status": 200,
+        "text": null
+      },
+      {
+        "content_type": "application/json",
+        "json": {
+          "buckets": [
+            {
+              "critical": 0,
+              "info": 0,
+              "key": "2026-11-20",
+              "label": "11-20",
+              "total": 1,
+              "warning": 1
+            },
+            {
+              "critical": 0,
+              "info": 0,
+              "key": "2026-11-21",
+              "label": "11-21",
+              "total": 0,
+              "warning": 0
+            },
+            {
+              "critical": 0,
+              "info": 0,
+              "key": "2026-11-22",
+              "label": "11-22",
+              "total": 0,
+              "warning": 0
+            },
+            {
+              "critical": 1,
+              "info": 0,
+              "key": "2026-11-23",
+              "label": "11-23",
+              "total": 1,
+              "warning": 0
+            },
+            {
+              "critical": 0,
+              "info": 0,
+              "key": "2026-11-24",
+              "label": "11-24",
+              "total": 1,
+              "warning": 1
+            },
+            {
+              "critical": 0,
+              "info": 0,
+              "key": "2026-11-25",
+              "label": "11-25",
+              "total": 0,
+              "warning": 0
+            },
+            {
+              "critical": 0,
+              "info": 0,
+              "key": "2026-11-26",
+              "label": "11-26",
+              "total": 0,
+              "warning": 0
+            }
+          ],
+          "range": "7d"
+        },
+        "name": "overview_alert_history_7d",
+        "set_cookie": true,
+        "status": 200,
+        "text": null
+      },
+      {
+        "content_type": "application/json",
+        "json": {
+          "alerts": {
+            "aggregate_by_host": true,
+            "consecutive_periods": 2,
+            "cooldown_minutes": 60,
+            "desktop_notification": true,
+            "email": false,
+            "enabled": true,
+            "notify_on_recovery": true,
+            "offline_failures": 2,
+            "repeat_while_active": false,
+            "thresholds": {
+              "cpu_percent": 90,
+              "disk_percent": 90,
+              "disk_temperature_c": 55,
+              "gpu_memory_percent": 90,
+              "memory_percent": 90
+            },
+            "webhook": {
+              "enabled": false,
+              "type": "wecom",
+              "url_configured": false
+            }
+          },
+          "dashboard": {
+            "host": "0.0.0.0",
+            "port": 8080,
+            "session_lifetime_hours": 12,
+            "username": "admin"
+          },
+          "desktop_mode": false,
+          "disk_health": {
+            "enabled": true,
+            "rules": {
+              "alert_on_error_increase": true,
+              "alert_on_media_errors": true,
+              "alert_on_other_errors": true,
+              "alert_on_predictive_failure": true,
+              "alert_on_smart_flag": true,
+              "alert_on_state_not_optimal": true
+            },
+            "storcli_candidates": [
+              "storcli",
+              "storcli64",
+              "/opt/MegaRAID/storcli/storcli64",
+              "/opt/lsi/storcli/storcli64",
+              "/usr/local/bin/storcli",
+              "/usr/sbin/storcli"
+            ],
+            "use_sudo": true
+          },
+          "hosts": [
+            {
+              "alert_rules": null,
+              "allow_user_write": false,
+              "auth_type": "key",
+              "checks": [],
+              "disk_health": null,
+              "disk_mounts": [
+                "/"
+              ],
+              "group": "lab",
+              "host": "lab-01.lab.example.edu",
+              "key_configured": true,
+              "key_path": "\\home\\monitor\\.ssh\\id_rsa",
+              "location": "Lab",
+              "name": "lab-01",
+              "notes": "",
+              "owner": "ops",
+              "passphrase_configured": false,
+              "password_configured": false,
+              "port": 22,
+              "sudo_configured": false,
+              "tags": [
+                "lab",
+                "cpu"
+              ],
+              "user_monitoring": null,
+              "username": "monitor"
+            },
+            {
+              "alert_rules": null,
+              "allow_user_write": false,
+              "auth_type": "key",
+              "checks": [],
+              "disk_health": null,
+              "disk_mounts": [
+                "/"
+              ],
+              "group": "lab",
+              "host": "lab-02.lab.example.edu",
+              "key_configured": true,
+              "key_path": "\\home\\monitor\\.ssh\\id_rsa",
+              "location": "Lab",
+              "name": "lab-02",
+              "notes": "",
+              "owner": "ops",
+              "passphrase_configured": false,
+              "password_configured": false,
+              "port": 22,
+              "sudo_configured": false,
+              "tags": [
+                "lab"
+              ],
+              "user_monitoring": null,
+              "username": "monitor"
+            },
+            {
+              "alert_rules": null,
+              "allow_user_write": false,
+              "auth_type": "key",
+              "checks": [],
+              "disk_health": null,
+              "disk_mounts": [
+                "/",
+                "/data"
+              ],
+              "group": "lab",
+              "host": "gpu-01.lab.example.edu",
+              "key_configured": true,
+              "key_path": "\\home\\monitor\\.ssh\\id_rsa",
+              "location": "Lab",
+              "name": "gpu-01",
+              "notes": "",
+              "owner": "ops",
+              "passphrase_configured": false,
+              "password_configured": false,
+              "port": 22,
+              "sudo_configured": false,
+              "tags": [
+                "lab",
+                "gpu"
+              ],
+              "user_monitoring": null,
+              "username": "monitor"
+            }
+          ],
+          "monitoring": {
+            "alert_history_retention_days": 30,
+            "auto_port_fallback": true,
+            "concurrency": 8,
+            "disk_health_max_batches": 100,
+            "disk_health_retention_days": 7,
+            "disk_poll_interval_seconds": 86400,
+            "host_daily_summary_retention_days": 90,
+            "host_metrics_max_points": 100,
+            "member_account": "",
+            "mode": "admin",
+            "open_browser_on_start": true,
+            "poll_interval_seconds": 600,
+            "retention_days": 90,
+            "ssh_audit_retention_days": 30,
+            "timezone": "Asia/Shanghai",
+            "tray_enabled": true
+          },
+          "report": {
+            "daily_enabled": true,
+            "daily_time": "09:00",
+            "weekly": {
+              "busy_threshold": 70,
+              "enabled": true,
+              "idle_threshold": 20,
+              "subject_prefix": "[Server Weekly Report]",
+              "time": "16:00",
+              "weekday": 4
+            }
+          },
+          "setup_required": false,
+          "smtp": {
+            "from_addr": "",
+            "host": "",
+            "password_configured": false,
+            "port": 587,
+            "to_addrs": [],
+            "use_ssl": false,
+            "username": ""
+          },
+          "ssh": {
+            "command_timeout": 20,
+            "connect_timeout": 10,
+            "host_key_policy": "tofu"
+          },
+          "user_monitoring": {
+            "command_timeout": 120,
+            "enabled": true,
+            "scan_interval_seconds": 3600,
+            "usage_interval_seconds": 259200,
+            "usage_timeout_seconds": 1800,
+            "write_enabled": false
+          },
+          "version": "0.1.239",
+          "writable": true
+        },
+        "name": "settings",
+        "set_cookie": true,
+        "status": 200,
+        "text": null
+      },
+      {
+        "content_type": "application/json",
+        "json": {
+          "hosts": [
+            {
+              "alert_rules": null,
+              "allow_user_write": false,
+              "auth_type": "key",
+              "checks": [],
+              "disk_health": null,
+              "disk_mounts": [
+                "/"
+              ],
+              "group": "lab",
+              "host": "lab-01.lab.example.edu",
+              "key_configured": true,
+              "key_path": "\\home\\monitor\\.ssh\\id_rsa",
+              "location": "Lab",
+              "name": "lab-01",
+              "notes": "",
+              "owner": "ops",
+              "passphrase_configured": false,
+              "password_configured": false,
+              "port": 22,
+              "sudo_configured": false,
+              "tags": [
+                "lab",
+                "cpu"
+              ],
+              "user_monitoring": null,
+              "username": "monitor"
+            },
+            {
+              "alert_rules": null,
+              "allow_user_write": false,
+              "auth_type": "key",
+              "checks": [],
+              "disk_health": null,
+              "disk_mounts": [
+                "/"
+              ],
+              "group": "lab",
+              "host": "lab-02.lab.example.edu",
+              "key_configured": true,
+              "key_path": "\\home\\monitor\\.ssh\\id_rsa",
+              "location": "Lab",
+              "name": "lab-02",
+              "notes": "",
+              "owner": "ops",
+              "passphrase_configured": false,
+              "password_configured": false,
+              "port": 22,
+              "sudo_configured": false,
+              "tags": [
+                "lab"
+              ],
+              "user_monitoring": null,
+              "username": "monitor"
+            },
+            {
+              "alert_rules": null,
+              "allow_user_write": false,
+              "auth_type": "key",
+              "checks": [],
+              "disk_health": null,
+              "disk_mounts": [
+                "/",
+                "/data"
+              ],
+              "group": "lab",
+              "host": "gpu-01.lab.example.edu",
+              "key_configured": true,
+              "key_path": "\\home\\monitor\\.ssh\\id_rsa",
+              "location": "Lab",
+              "name": "gpu-01",
+              "notes": "",
+              "owner": "ops",
+              "passphrase_configured": false,
+              "password_configured": false,
+              "port": 22,
+              "sudo_configured": false,
+              "tags": [
+                "lab",
+                "gpu"
+              ],
+              "user_monitoring": null,
+              "username": "monitor"
+            }
+          ]
+        },
+        "name": "settings_hosts",
+        "set_cookie": true,
+        "status": 200,
+        "text": null
+      },
+      {
+        "content_type": "application/json",
+        "json": {
+          "statuses": {}
+        },
+        "name": "settings_collection_status",
+        "set_cookie": true,
+        "status": 200,
+        "text": null
+      },
+      {
+        "content_type": "application/json",
+        "json": {
+          "alert_days": [
+            {
+              "critical": 0,
+              "height": 0,
+              "info": 0,
+              "key": "2026-11-20",
+              "label": "11-20",
+              "total": 0,
+              "warning": 0
+            },
+            {
+              "critical": 0,
+              "height": 0,
+              "info": 0,
+              "key": "2026-11-21",
+              "label": "11-21",
+              "total": 0,
+              "warning": 0
+            },
+            {
+              "critical": 0,
+              "height": 0,
+              "info": 0,
+              "key": "2026-11-22",
+              "label": "11-22",
+              "total": 0,
+              "warning": 0
+            },
+            {
+              "critical": 1,
+              "height": 100,
+              "info": 0,
+              "key": "2026-11-23",
+              "label": "11-23",
+              "total": 1,
+              "warning": 0
+            },
+            {
+              "critical": 0,
+              "height": 0,
+              "info": 0,
+              "key": "2026-11-24",
+              "label": "11-24",
+              "total": 0,
+              "warning": 0
+            },
+            {
+              "critical": 0,
+              "height": 0,
+              "info": 0,
+              "key": "2026-11-25",
+              "label": "11-25",
+              "total": 0,
+              "warning": 0
+            },
+            {
+              "critical": 0,
+              "height": 0,
+              "info": 0,
+              "key": "2026-11-26",
+              "label": "11-26",
+              "total": 0,
+              "warning": 0
+            }
+          ],
+          "alerts": [
+            {
+              "ack_at": null,
+              "category": "system",
+              "created_at": "2026-11-23T17:00:00.111111+08:00",
+              "fingerprint": "lab-01:system:cpu_high",
+              "host_name": "lab-01",
+              "id": 1,
+              "message": "lab-01 CPU 使用率连续 3 个周期超过 90%",
+              "notified_channels": null,
+              "severity": "critical",
+              "status": "active",
+              "title": "CPU 使用率持续过高"
+            }
+          ],
+          "check_history": {},
+          "checks": [],
+          "collected_at": "2026-11-25T20:00:00.123456+08:00",
+          "collection_uptime": {
+            "expected": 144,
+            "samples": 1
+          },
+          "diagnostics": [
+            {
+              "detail": "最近 24 小时应采 144 次，只成功 1 次（1%）。",
+              "hint": "确认主机在线与 SSH 凭据，必要时手动执行一次采集看报错。",
+              "key": "uptime",
+              "level": "crit",
+              "title": "采集大量失败"
+            },
+            {
+              "detail": "最近一次采集在 935 分钟前，超过轮询周期的 3 倍。",
+              "hint": "确认后台调度是否在运行，或检查该主机的 SSH 连接是否超时。",
+              "key": "collect",
+              "level": "warn",
+              "title": "采集数据已过期"
+            },
+            {
+              "detail": "当前 55.6%",
+              "hint": "",
+              "key": "cpu",
+              "level": "ok",
+              "title": "CPU 使用率"
+            },
+            {
+              "detail": "1 分钟负载 8.01，16 核，平均每核 0.50",
+              "hint": "",
+              "key": "load",
+              "level": "ok",
+              "title": "系统负载"
+            },
+            {
+              "detail": "55.2%（36144 / 65536 MB）",
+              "hint": "",
+              "key": "memory",
+              "level": "ok",
+              "title": "内存占用"
+            },
+            {
+              "detail": "GPU 0 显存已用 24.9%",
+              "hint": "",
+              "key": "gpu_memory",
+              "level": "ok",
+              "title": "GPU 显存"
+            },
+            {
+              "detail": "最高 53.9 °C",
+              "hint": "",
+              "key": "temperature",
+              "level": "ok",
+              "title": "温度"
+            },
+            {
+              "detail": "1 个普通账号无异常。",
+              "hint": "",
+              "key": "accounts",
+              "level": "ok",
+              "title": "服务器账号"
+            }
+          ],
+          "diagnostics_summary": {
+            "attention": 2,
+            "crit": 1,
+            "ok": 6,
+            "warn": 1
+          },
+          "disk": null,
+          "errors": [],
+          "group": "lab",
+          "host": "lab-01.lab.example.edu",
+          "location": "Lab",
+          "metrics": {
+            "collected_at": "2026-11-25T12:00:00.123456+00:00",
+            "containers": [],
+            "cpu_core_count": 16,
+            "cpu_usage_percent": 55.6,
+            "disk_usage": [
+              {
+                "available": "237G",
+                "filesystem": "/dev/sda1",
+                "mountpoint": "/",
+                "percent": "52%",
+                "size": "500G",
+                "used": "262G"
+              },
+              {
+                "available": "1222G",
+                "filesystem": "/dev/sdb1",
+                "mountpoint": "/data",
+                "percent": "69%",
+                "size": "4000G",
+                "used": "2777G"
+              }
+            ],
+            "gpu_processes": [],
+            "gpu_summary": [
+              {
+                "index": 0,
+                "memory_total_mb": 16384,
+                "memory_used_mb": 4085,
+                "name": "NVIDIA T4",
+                "temperature_c": 36,
+                "utilization_percent": 7
+              }
+            ],
+            "hostname": "lab-01.lab.example.edu",
+            "kernel_version": "6.8.0-45-generic",
+            "load_average": {
+              "load_1": 8.01,
+              "load_15": 5.61,
+              "load_5": 6.81
+            },
+            "logged_in_users": [],
+            "memory": {
+              "available_mb": 34634,
+              "buff_cache_mb": 5242,
+              "free_mb": 29392,
+              "shared_mb": 655,
+              "swap_free_mb": 15565,
+              "swap_total_mb": 16384,
+              "swap_used_mb": 819,
+              "total_mb": 65536,
+              "used_mb": 36144
+            },
+            "net_rx_bytes": 3335000000,
+            "net_tx_bytes": 1523000000,
+            "os_pretty_name": "Ubuntu 24.04.1 LTS",
+            "process_counts_by_user": [],
+            "thermal_zones": [
+              {
+                "celsius": 53.9,
+                "label": "cpu"
+              }
+            ],
+            "top_cpu_processes": [],
+            "top_memory_processes": [],
+            "total_processes": 201,
+            "uptime": "209 days, 4:32"
+          },
+          "name": "lab-01",
+          "network": {
+            "rx_bytes_per_second": 173.6,
+            "tx_bytes_per_second": 81
+          },
+          "owner": "ops",
+          "success": true,
+          "tags": [
+            "lab",
+            "cpu"
+          ],
+          "uptime_strip": {
+            "bucket_minutes": 15,
+            "buckets": [
+              {
+                "index": 0,
+                "ok": 0,
+                "start": "2026-11-25T03:35:18.541796+00:00",
+                "total": 0
+              },
+              {
+                "index": 1,
+                "ok": 0,
+                "start": "2026-11-25T03:50:18.541796+00:00",
+                "total": 0
+              },
+              {
+                "index": 2,
+                "ok": 0,
+                "start": "2026-11-25T04:05:18.541796+00:00",
+                "total": 0
+              },
+              {
+                "index": 3,
+                "ok": 0,
+                "start": "2026-11-25T04:20:18.541796+00:00",
+                "total": 0
+              },
+              {
+                "index": 4,
+                "ok": 0,
+                "start": "2026-11-25T04:35:18.541796+00:00",
+                "total": 0
+              },
+              {
+                "index": 5,
+                "ok": 0,
+                "start": "2026-11-25T04:50:18.541796+00:00",
+                "total": 0
+              },
+              {
+                "index": 6,
+                "ok": 0,
+                "start": "2026-11-25T05:05:18.541796+00:00",
+                "total": 0
+              },
+              {
+                "index": 7,
+                "ok": 0,
+                "start": "2026-11-25T05:20:18.541796+00:00",
+                "total": 0
+              },
+              {
+                "index": 8,
+                "ok": 0,
+                "start": "2026-11-25T05:35:18.541796+00:00",
+                "total": 0
+              },
+              {
+                "index": 9,
+                "ok": 0,
+                "start": "2026-11-25T05:50:18.541796+00:00",
+                "total": 0
+              },
+              {
+                "index": 10,
+                "ok": 0,
+                "start": "2026-11-25T06:05:18.541796+00:00",
+                "total": 0
+              },
+              {
+                "index": 11,
+                "ok": 0,
+                "start": "2026-11-25T06:20:18.541796+00:00",
+                "total": 0
+              },
+              {
+                "index": 12,
+                "ok": 0,
+                "start": "2026-11-25T06:35:18.541796+00:00",
+                "total": 0
+              },
+              {
+                "index": 13,
+                "ok": 0,
+                "start": "2026-11-25T06:50:18.541796+00:00",
+                "total": 0
+              },
+              {
+                "index": 14,
+                "ok": 0,
+                "start": "2026-11-25T07:05:18.541796+00:00",
+                "total": 0
+              },
+              {
+                "index": 15,
+                "ok": 0,
+                "start": "2026-11-25T07:20:18.541796+00:00",
+                "total": 0
+              },
+              {
+                "index": 16,
+                "ok": 0,
+                "start": "2026-11-25T07:35:18.541796+00:00",
+                "total": 0
+              },
+              {
+                "index": 17,
+                "ok": 0,
+                "start": "2026-11-25T07:50:18.541796+00:00",
+                "total": 0
+              },
+              {
+                "index": 18,
+                "ok": 0,
+                "start": "2026-11-25T08:05:18.541796+00:00",
+                "total": 0
+              },
+              {
+                "index": 19,
+                "ok": 0,
+                "start": "2026-11-25T08:20:18.541796+00:00",
+                "total": 0
+              },
+              {
+                "index": 20,
+                "ok": 0,
+                "start": "2026-11-25T08:35:18.541796+00:00",
+                "total": 0
+              },
+              {
+                "index": 21,
+                "ok": 0,
+                "start": "2026-11-25T08:50:18.541796+00:00",
+                "total": 0
+              },
+              {
+                "index": 22,
+                "ok": 0,
+                "start": "2026-11-25T09:05:18.541796+00:00",
+                "total": 0
+              },
+              {
+                "index": 23,
+                "ok": 0,
+                "start": "2026-11-25T09:20:18.541796+00:00",
+                "total": 0
+              },
+              {
+                "index": 24,
+                "ok": 0,
+                "start": "2026-11-25T09:35:18.541796+00:00",
+                "total": 0
+              },
+              {
+                "index": 25,
+                "ok": 0,
+                "start": "2026-11-25T09:50:18.541796+00:00",
+                "total": 0
+              },
+              {
+                "index": 26,
+                "ok": 0,
+                "start": "2026-11-25T10:05:18.541796+00:00",
+                "total": 0
+              },
+              {
+                "index": 27,
+                "ok": 0,
+                "start": "2026-11-25T10:20:18.541796+00:00",
+                "total": 0
+              },
+              {
+                "index": 28,
+                "ok": 0,
+                "start": "2026-11-25T10:35:18.541796+00:00",
+                "total": 0
+              },
+              {
+                "index": 29,
+                "ok": 0,
+                "start": "2026-11-25T10:50:18.541796+00:00",
+                "total": 0
+              },
+              {
+                "index": 30,
+                "ok": 0,
+                "start": "2026-11-25T11:05:18.541796+00:00",
+                "total": 0
+              },
+              {
+                "index": 31,
+                "ok": 0,
+                "start": "2026-11-25T11:20:18.541796+00:00",
+                "total": 0
+              },
+              {
+                "index": 32,
+                "ok": 0,
+                "start": "2026-11-25T11:35:18.541796+00:00",
+                "total": 0
+              },
+              {
+                "index": 33,
+                "ok": 1,
+                "start": "2026-11-25T11:50:18.541796+00:00",
+                "total": 1
+              },
+              {
+                "index": 34,
+                "ok": 0,
+                "start": "2026-11-25T12:05:18.541796+00:00",
+                "total": 0
+              },
+              {
+                "index": 35,
+                "ok": 0,
+                "start": "2026-11-25T12:20:18.541796+00:00",
+                "total": 0
+              },
+              {
+                "index": 36,
+                "ok": 0,
+                "start": "2026-11-25T12:35:18.541796+00:00",
+                "total": 0
+              },
+              {
+                "index": 37,
+                "ok": 0,
+                "start": "2026-11-25T12:50:18.541796+00:00",
+                "total": 0
+              },
+              {
+                "index": 38,
+                "ok": 0,
+                "start": "2026-11-25T13:05:18.541796+00:00",
+                "total": 0
+              },
+              {
+                "index": 39,
+                "ok": 0,
+                "start": "2026-11-25T13:20:18.541796+00:00",
+                "total": 0
+              },
+              {
+                "index": 40,
+                "ok": 0,
+                "start": "2026-11-25T13:35:18.541796+00:00",
+                "total": 0
+              },
+              {
+                "index": 41,
+                "ok": 0,
+                "start": "2026-11-25T13:50:18.541796+00:00",
+                "total": 0
+              },
+              {
+                "index": 42,
+                "ok": 0,
+                "start": "2026-11-25T14:05:18.541796+00:00",
+                "total": 0
+              },
+              {
+                "index": 43,
+                "ok": 0,
+                "start": "2026-11-25T14:20:18.541796+00:00",
+                "total": 0
+              },
+              {
+                "index": 44,
+                "ok": 0,
+                "start": "2026-11-25T14:35:18.541796+00:00",
+                "total": 0
+              },
+              {
+                "index": 45,
+                "ok": 0,
+                "start": "2026-11-25T14:50:18.541796+00:00",
+                "total": 0
+              },
+              {
+                "index": 46,
+                "ok": 0,
+                "start": "2026-11-25T15:05:18.541796+00:00",
+                "total": 0
+              },
+              {
+                "index": 47,
+                "ok": 0,
+                "start": "2026-11-25T15:20:18.541796+00:00",
+                "total": 0
+              },
+              {
+                "index": 48,
+                "ok": 0,
+                "start": "2026-11-25T15:35:18.541796+00:00",
+                "total": 0
+              },
+              {
+                "index": 49,
+                "ok": 0,
+                "start": "2026-11-25T15:50:18.541796+00:00",
+                "total": 0
+              },
+              {
+                "index": 50,
+                "ok": 0,
+                "start": "2026-11-25T16:05:18.541796+00:00",
+                "total": 0
+              },
+              {
+                "index": 51,
+                "ok": 0,
+                "start": "2026-11-25T16:20:18.541796+00:00",
+                "total": 0
+              },
+              {
+                "index": 52,
+                "ok": 0,
+                "start": "2026-11-25T16:35:18.541796+00:00",
+                "total": 0
+              },
+              {
+                "index": 53,
+                "ok": 0,
+                "start": "2026-11-25T16:50:18.541796+00:00",
+                "total": 0
+              },
+              {
+                "index": 54,
+                "ok": 0,
+                "start": "2026-11-25T17:05:18.541796+00:00",
+                "total": 0
+              },
+              {
+                "index": 55,
+                "ok": 0,
+                "start": "2026-11-25T17:20:18.541796+00:00",
+                "total": 0
+              },
+              {
+                "index": 56,
+                "ok": 0,
+                "start": "2026-11-25T17:35:18.541796+00:00",
+                "total": 0
+              },
+              {
+                "index": 57,
+                "ok": 0,
+                "start": "2026-11-25T17:50:18.541796+00:00",
+                "total": 0
+              },
+              {
+                "index": 58,
+                "ok": 0,
+                "start": "2026-11-25T18:05:18.541796+00:00",
+                "total": 0
+              },
+              {
+                "index": 59,
+                "ok": 0,
+                "start": "2026-11-25T18:20:18.541796+00:00",
+                "total": 0
+              },
+              {
+                "index": 60,
+                "ok": 0,
+                "start": "2026-11-25T18:35:18.541796+00:00",
+                "total": 0
+              },
+              {
+                "index": 61,
+                "ok": 0,
+                "start": "2026-11-25T18:50:18.541796+00:00",
+                "total": 0
+              },
+              {
+                "index": 62,
+                "ok": 0,
+                "start": "2026-11-25T19:05:18.541796+00:00",
+                "total": 0
+              },
+              {
+                "index": 63,
+                "ok": 0,
+                "start": "2026-11-25T19:20:18.541796+00:00",
+                "total": 0
+              },
+              {
+                "index": 64,
+                "ok": 0,
+                "start": "2026-11-25T19:35:18.541796+00:00",
+                "total": 0
+              },
+              {
+                "index": 65,
+                "ok": 0,
+                "start": "2026-11-25T19:50:18.541796+00:00",
+                "total": 0
+              },
+              {
+                "index": 66,
+                "ok": 0,
+                "start": "2026-11-25T20:05:18.541796+00:00",
+                "total": 0
+              },
+              {
+                "index": 67,
+                "ok": 0,
+                "start": "2026-11-25T20:20:18.541796+00:00",
+                "total": 0
+              },
+              {
+                "index": 68,
+                "ok": 0,
+                "start": "2026-11-25T20:35:18.541796+00:00",
+                "total": 0
+              },
+              {
+                "index": 69,
+                "ok": 0,
+                "start": "2026-11-25T20:50:18.541796+00:00",
+                "total": 0
+              },
+              {
+                "index": 70,
+                "ok": 0,
+                "start": "2026-11-25T21:05:18.541796+00:00",
+                "total": 0
+              },
+              {
+                "index": 71,
+                "ok": 0,
+                "start": "2026-11-25T21:20:18.541796+00:00",
+                "total": 0
+              },
+              {
+                "index": 72,
+                "ok": 0,
+                "start": "2026-11-25T21:35:18.541796+00:00",
+                "total": 0
+              },
+              {
+                "index": 73,
+                "ok": 0,
+                "start": "2026-11-25T21:50:18.541796+00:00",
+                "total": 0
+              },
+              {
+                "index": 74,
+                "ok": 0,
+                "start": "2026-11-25T22:05:18.541796+00:00",
+                "total": 0
+              },
+              {
+                "index": 75,
+                "ok": 0,
+                "start": "2026-11-25T22:20:18.541796+00:00",
+                "total": 0
+              },
+              {
+                "index": 76,
+                "ok": 0,
+                "start": "2026-11-25T22:35:18.541796+00:00",
+                "total": 0
+              },
+              {
+                "index": 77,
+                "ok": 0,
+                "start": "2026-11-25T22:50:18.541796+00:00",
+                "total": 0
+              },
+              {
+                "index": 78,
+                "ok": 0,
+                "start": "2026-11-25T23:05:18.541796+00:00",
+                "total": 0
+              },
+              {
+                "index": 79,
+                "ok": 0,
+                "start": "2026-11-25T23:20:18.541796+00:00",
+                "total": 0
+              },
+              {
+                "index": 80,
+                "ok": 0,
+                "start": "2026-11-25T23:35:18.541796+00:00",
+                "total": 0
+              },
+              {
+                "index": 81,
+                "ok": 0,
+                "start": "2026-11-25T23:50:18.541796+00:00",
+                "total": 0
+              },
+              {
+                "index": 82,
+                "ok": 0,
+                "start": "2026-11-26T00:05:18.541796+00:00",
+                "total": 0
+              },
+              {
+                "index": 83,
+                "ok": 0,
+                "start": "2026-11-26T00:20:18.541796+00:00",
+                "total": 0
+              },
+              {
+                "index": 84,
+                "ok": 0,
+                "start": "2026-11-26T00:35:18.541796+00:00",
+                "total": 0
+              },
+              {
+                "index": 85,
+                "ok": 0,
+                "start": "2026-11-26T00:50:18.541796+00:00",
+                "total": 0
+              },
+              {
+                "index": 86,
+                "ok": 0,
+                "start": "2026-11-26T01:05:18.541796+00:00",
+                "total": 0
+              },
+              {
+                "index": 87,
+                "ok": 0,
+                "start": "2026-11-26T01:20:18.541796+00:00",
+                "total": 0
+              },
+              {
+                "index": 88,
+                "ok": 0,
+                "start": "2026-11-26T01:35:18.541796+00:00",
+                "total": 0
+              },
+              {
+                "index": 89,
+                "ok": 0,
+                "start": "2026-11-26T01:50:18.541796+00:00",
+                "total": 0
+              },
+              {
+                "index": 90,
+                "ok": 0,
+                "start": "2026-11-26T02:05:18.541796+00:00",
+                "total": 0
+              },
+              {
+                "index": 91,
+                "ok": 0,
+                "start": "2026-11-26T02:20:18.541796+00:00",
+                "total": 0
+              },
+              {
+                "index": 92,
+                "ok": 0,
+                "start": "2026-11-26T02:35:18.541796+00:00",
+                "total": 0
+              },
+              {
+                "index": 93,
+                "ok": 0,
+                "start": "2026-11-26T02:50:18.541796+00:00",
+                "total": 0
+              },
+              {
+                "index": 94,
+                "ok": 0,
+                "start": "2026-11-26T03:05:18.541796+00:00",
+                "total": 0
+              },
+              {
+                "index": 95,
+                "ok": 0,
+                "start": "2026-11-26T03:20:18.541796+00:00",
+                "total": 0
+              }
+            ],
+            "hours": 24,
+            "ok": 1,
+            "samples": 1
+          },
+          "users": [
+            {
+              "collected_at": "2026-11-25 15:00",
+              "data_exists": true,
+              "data_group": "alice",
+              "data_mode": "0750",
+              "data_owner": "alice",
+              "data_size_bytes": 98765432,
+              "data_supported": true,
+              "first_seen_at": null,
+              "gecos": "Alice Zhang",
+              "gid": 1001,
+              "gpu_memory_mb": null,
+              "gpu_process_count": 0,
+              "groups": [
+                "alice",
+                "docker",
+                "sudo"
+              ],
+              "home": "/home/alice",
+              "home_exists": true,
+              "home_group": "alice",
+              "home_mode": "0700",
+              "home_owner": "alice",
+              "home_size_bytes": 12345678,
+              "host_name": "lab-01",
+              "in_docker": true,
+              "in_sudo": true,
+              "issues": [],
+              "last_seen_at": null,
+              "primary_group": "alice",
+              "shell": "/bin/bash",
+              "state": "present",
+              "uid": 1001,
+              "usage_collected_at": "2026-11-25 15:00",
+              "usage_delta_bytes": null,
+              "usage_delta_days": null,
+              "usage_delta_since": null,
+              "usage_hint": "",
+              "usage_readable": true,
+              "usage_stale": false,
+              "username": "alice"
+            }
+          ]
+        },
+        "name": "host_detail",
+        "set_cookie": true,
+        "status": 200,
+        "text": null
+      },
+      {
+        "content_type": "application/json",
+        "json": {
+          "points": [],
+          "range": "7d"
+        },
+        "name": "host_history_7d",
+        "set_cookie": true,
+        "status": 200,
+        "text": null
+      },
+      {
+        "content_type": "text/plain",
+        "json": null,
+        "name": "host_report",
+        "set_cookie": true,
+        "status": 200,
+        "text": "﻿服务器轮询监测 · 主机诊断报告\n==============================================\n生成时间：2026-11-26 11:35:18 CST\n主机名称：lab-01\n主机地址：lab-01.lab.example.edu\n分组：lab\n负责人：ops\n位置：Lab\n标签：lab, cpu\n采集状态：成功\n采集时间：2026-11-25T20:00:00.123456+08:00\n\n[系统概览]\n  操作系统：Ubuntu 24.04.1 LTS\n  内核版本：6.8.0-45-generic\n  主机名：lab-01.lab.example.edu\n  运行时长：209 days, 4:32\n  CPU 核心：16\n  CPU 使用率：55.6%\n  内存：36144 / 65536 MB（55.2%）\n  负载（1/5/15）：8.01 / 6.81 / 5.61\n\n[磁盘挂载]\n  /  /dev/sda1  262G/500G（52%）\n  /data  /dev/sdb1  2777G/4000G（69%）\n\n[GPU]\n  GPU0 NVIDIA T4：利用率 7%，显存 4085/16384 MB，温度 36°C\n\n[当前登录用户]\n  （无登录会话）\n\n[CPU 占用前 3 进程]\n  （无进程数据）\n\n[磁盘阵列健康]\n  （暂无磁盘阵列数据）\n\n[服务可用性]\n  未配置服务检查\n\n[最近采集异常]\n  （无）\n\n[最近告警]\n  2026-11-23T17:00:00.111111+08:00 [critical] CPU 使用率持续过高（active）\n\n[重点关注]\n  - 未发现明显异常。\n\n（报告由服务器轮询监测工具自动生成）\n"
+      },
+      {
+        "content_type": "application/json",
+        "json": {
+          "alerts": [
+            {
+              "ack_at": null,
+              "category": "disk",
+              "created_at": "2026-11-24T16:00:00.555555+08:00",
+              "fingerprint": "gpu-01:disk:temperature",
+              "host_name": "gpu-01",
+              "id": 4,
+              "message": "磁盘槽位 1 温度 54°C，接近告警阈值",
+              "notified_channels": null,
+              "severity": "warning",
+              "status": "active",
+              "title": "磁盘温度偏高"
+            },
+            {
+              "ack_at": null,
+              "category": "system",
+              "created_at": "2026-11-23T17:00:00.111111+08:00",
+              "fingerprint": "lab-01:system:cpu_high",
+              "host_name": "lab-01",
+              "id": 1,
+              "message": "lab-01 CPU 使用率连续 3 个周期超过 90%",
+              "notified_channels": null,
+              "severity": "critical",
+              "status": "active",
+              "title": "CPU 使用率持续过高"
+            }
+          ],
+          "counts": {
+            "acknowledged": 1,
+            "active": 2,
+            "resolved": 1,
+            "total": 4
+          }
+        },
+        "name": "alerts",
+        "set_cookie": true,
+        "status": 200,
+        "text": null
+      },
+      {
+        "content_type": "application/json",
+        "json": {
+          "accounts": [
+            {
+              "collected_at": "2026-11-25 15:00",
+              "data_exists": true,
+              "data_group": "alice",
+              "data_mode": "0750",
+              "data_owner": "alice",
+              "data_size_bytes": 98765432,
+              "data_supported": true,
+              "first_seen_at": null,
+              "gecos": "Alice Zhang",
+              "gid": 1001,
+              "gpu_memory_mb": null,
+              "gpu_process_count": 0,
+              "groups": [
+                "alice",
+                "docker",
+                "sudo"
+              ],
+              "home": "/home/alice",
+              "home_exists": true,
+              "home_group": "alice",
+              "home_mode": "0700",
+              "home_owner": "alice",
+              "home_size_bytes": 12345678,
+              "host_name": "lab-01",
+              "in_docker": true,
+              "in_sudo": true,
+              "issues": [],
+              "last_seen_at": null,
+              "primary_group": "alice",
+              "shell": "/bin/bash",
+              "state": "present",
+              "uid": 1001,
+              "usage_collected_at": "2026-11-25 15:00",
+              "usage_delta_bytes": null,
+              "usage_delta_days": null,
+              "usage_delta_since": null,
+              "usage_hint": "",
+              "usage_readable": true,
+              "usage_stale": false,
+              "username": "alice"
+            }
+          ],
+          "filters": {
+            "host": "",
+            "q": "",
+            "status": "all"
+          },
+          "hosts": [
+            {
+              "accounts": 1,
+              "address": "lab-01.lab.example.edu",
+              "allow_user_write": false,
+              "bytes": 111111110,
+              "data_bytes": 98765432,
+              "delta_bytes": 0,
+              "delta_days": 7,
+              "directory_issues": 0,
+              "docker_issues": 0,
+              "gpu_memory_mb": 0,
+              "gpu_processes": 0,
+              "home_bytes": 12345678,
+              "last_error": null,
+              "last_scan_at": "2026-11-25T15:00:00.888888+08:00",
+              "last_usage_at": "2026-11-25T15:00:00.888888+08:00",
+              "missing": 0,
+              "monitored": true,
+              "name": "lab-01",
+              "present": 1,
+              "status": "ok",
+              "sudo_configured": false,
+              "usage_readable": true
+            },
+            {
+              "accounts": 0,
+              "address": "lab-02.lab.example.edu",
+              "allow_user_write": false,
+              "bytes": 0,
+              "data_bytes": 0,
+              "delta_bytes": 0,
+              "delta_days": 7,
+              "directory_issues": 0,
+              "docker_issues": 0,
+              "gpu_memory_mb": 0,
+              "gpu_processes": 0,
+              "home_bytes": 0,
+              "last_error": null,
+              "last_scan_at": null,
+              "last_usage_at": null,
+              "missing": 0,
+              "monitored": true,
+              "name": "lab-02",
+              "present": 0,
+              "status": "unknown",
+              "sudo_configured": false,
+              "usage_readable": true
+            },
+            {
+              "accounts": 0,
+              "address": "gpu-01.lab.example.edu",
+              "allow_user_write": false,
+              "bytes": 0,
+              "data_bytes": 0,
+              "delta_bytes": 0,
+              "delta_days": 7,
+              "directory_issues": 0,
+              "docker_issues": 0,
+              "gpu_memory_mb": 0,
+              "gpu_processes": 0,
+              "home_bytes": 0,
+              "last_error": null,
+              "last_scan_at": null,
+              "last_usage_at": null,
+              "missing": 0,
+              "monitored": true,
+              "name": "gpu-01",
+              "present": 0,
+              "status": "unknown",
+              "sudo_configured": false,
+              "usage_readable": true
+            }
+          ],
+          "summary": {
+            "data_bytes": 98765432,
+            "directory_issues": 0,
+            "docker_issues": 0,
+            "home_bytes": 12345678,
+            "missing": 0,
+            "present": 1,
+            "total": 1
+          },
+          "usage_hint": "1 台主机没有 sudo 密码，目录占用无法统计（lab-01）。在设置 → 主机里填写 sudo 密码后会立刻开始统计。",
+          "usage_scan": {
+            "running": false
+          },
+          "usage_totals": {
+            "gpu-01": [],
+            "lab-01": [],
+            "lab-02": []
+          },
+          "write_enabled": false
+        },
+        "name": "users",
+        "set_cookie": true,
+        "status": 200,
+        "text": null
+      },
+      {
+        "content_type": "application/json",
+        "json": {
+          "accounts": {},
+          "days": 30,
+          "host": "lab-01"
+        },
+        "name": "users_history",
+        "set_cookie": true,
+        "status": 200,
+        "text": null
+      },
+      {
+        "content_type": "application/json",
+        "json": {
+          "days": 7,
+          "items": []
+        },
+        "name": "users_top",
+        "set_cookie": true,
+        "status": 200,
+        "text": null
+      },
+      {
+        "content_type": "application/json",
+        "json": {
+          "items": []
+        },
+        "name": "users_operations",
+        "set_cookie": true,
+        "status": 200,
+        "text": null
+      },
+      {
+        "content_type": "application/json",
+        "json": {
+          "alerts_active": 2,
+          "db_path": "C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\fullread-MCsBMK\\python.db",
+          "db_size_bytes": 372736,
+          "diagnostics": {
+            "checks": [
+              {
+                "key": "database",
+                "label": "数据库",
+                "message": "完整性检查通过",
+                "status": "ok"
+              },
+              {
+                "key": "timezone",
+                "label": "时区",
+                "message": "时区 Asia/Shanghai 已生效",
+                "status": "ok"
+              },
+              {
+                "key": "hosts",
+                "label": "主机采集",
+                "message": "3 台主机均未成功采集",
+                "status": "error"
+              },
+              {
+                "key": "disk",
+                "label": "磁盘阵列",
+                "message": "1 台磁盘阵列健康",
+                "status": "ok"
+              },
+              {
+                "key": "tasks",
+                "label": "调度任务",
+                "message": "暂无调度记录",
+                "status": "ok"
+              },
+              {
+                "key": "alerts",
+                "label": "严重告警",
+                "message": "1 条严重告警待处理",
+                "status": "warning"
+              }
+            ],
+            "status": "error"
+          },
+          "disk_batches": 1,
+          "history_rows": 270,
+          "host_snapshots": 3,
+          "hosts_configured": 3,
+          "runtime": {
+            "pid": 66348,
+            "port": 8129,
+            "url": "http://127.0.0.1:8129"
+          },
+          "tasks": [],
+          "version": "0.1.239"
+        },
+        "name": "system_health",
+        "set_cookie": true,
+        "status": 200,
+        "text": null
+      },
+      {
+        "content_type": "application/json",
+        "json": {
+          "db_path": "C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\fullread-MCsBMK\\python.db",
+          "log_retention_hours": 24,
+          "usage": {
+            "database": 372736,
+            "electron": 0,
+            "logs": 0,
+            "total": 2540711915,
+            "updates": 0
+          }
+        },
+        "name": "system_storage",
+        "set_cookie": true,
+        "status": 200,
+        "text": null
+      },
+      {
+        "content_type": "application/json",
+        "json": {
+          "hosts": {}
+        },
+        "name": "system_host_keys",
+        "set_cookie": true,
+        "status": 200,
+        "text": null
+      },
+      {
+        "content_type": "text/html",
+        "html_length": 30545,
+        "json": null,
+        "markers": {
+          "gpu-01": true,
+          "lab-01": true
+        },
+        "name": "page_root",
+        "set_cookie": true,
+        "status": 200,
+        "text": null,
+        "title": "概览 - 服务器监控"
+      },
+      {
+        "content_type": "text/html",
+        "html_length": 19642,
+        "json": null,
+        "markers": {
+          "lab-01": true,
+          "lab-02": true
+        },
+        "name": "page_hosts",
+        "set_cookie": true,
+        "status": 200,
+        "text": null,
+        "title": "主机 - 服务器监控"
+      },
+      {
+        "content_type": "text/html",
+        "html_length": 40902,
+        "json": null,
+        "markers": {
+          "lab-01": true
+        },
+        "name": "page_host",
+        "set_cookie": true,
+        "status": 200,
+        "text": null,
+        "title": "lab-01 - 服务器监控"
+      },
+      {
+        "content_type": "text/html",
+        "html_length": 21306,
+        "json": null,
+        "markers": {
+          "CPU 使用率持续过高": true
+        },
+        "name": "page_alerts",
+        "set_cookie": true,
+        "status": 200,
+        "text": null,
+        "title": "告警 - 服务器监控"
+      },
+      {
+        "content_type": "text/html",
+        "html_length": 51852,
+        "json": null,
+        "markers": {
+          "lab-01": true
+        },
+        "name": "page_settings",
+        "set_cookie": true,
+        "status": 200,
+        "text": null,
+        "title": "设置 - 服务器监控"
+      },
+      {
+        "content_type": "text/html",
+        "html_length": 20035,
+        "json": null,
+        "markers": {
+          "alice": false
+        },
+        "name": "page_users",
+        "set_cookie": true,
+        "status": 200,
+        "text": null,
+        "title": "服务器用户 - 服务器监控"
+      },
+      {
+        "content_type": "text/html",
+        "html_length": 16606,
+        "json": null,
+        "markers": {
+          "lab-01": true
+        },
+        "name": "page_compute",
+        "set_cookie": true,
+        "status": 200,
+        "text": null,
+        "title": "服务器监控"
+      },
+      {
+        "content_type": "text/html",
+        "html_length": 21361,
+        "json": null,
+        "markers": {
+          "gpu-01": true
+        },
+        "name": "page_disk_health",
+        "set_cookie": true,
+        "status": 200,
+        "text": null,
+        "title": "磁盘健康 - 服务器监控"
+      },
+      {
+        "content_type": "text/html",
+        "html_length": 12960,
+        "json": null,
+        "markers": {},
+        "name": "page_my",
+        "set_cookie": true,
+        "status": 200,
+        "text": null,
+        "title": "服务器监控"
+      },
+      {
+        "content_type": "text/html",
+        "json": null,
+        "name": "missing_api_hosts",
+        "set_cookie": true,
+        "status": 404,
+        "text": null
+      },
+      {
+        "content_type": "text/html",
+        "json": null,
+        "name": "missing_api_disk_health",
+        "set_cookie": true,
+        "status": 404,
+        "text": null
+      }
+    ]
+  }
+}

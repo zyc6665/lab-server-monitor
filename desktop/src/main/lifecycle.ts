@@ -260,3 +260,34 @@ export function shutdownPlan(deps: ShutdownDeps): ShutdownPlan {
     },
   };
 }
+
+// ---------------------------------------------------------------------------
+// P8 Task 6: single tray + login item (injectable for unit tests)
+// ---------------------------------------------------------------------------
+
+/**
+ * Returns an idempotent `ensure()` that constructs the tray at most once.
+ * Repeated `window-all-closed` / startup calls reuse the same instance.
+ */
+export function createTrayGuard<T>(factory: () => T): { ensure: () => T; get: () => T | null } {
+  let instance: T | null = null;
+  return {
+    ensure: () => {
+      if (instance === null) {
+        instance = factory();
+      }
+      return instance;
+    },
+    get: () => instance,
+  };
+}
+
+/** Minimal slice of Electron `app` used for the login item. */
+export interface LoginItemApp {
+  setLoginItemSettings(settings: { openAtLogin: boolean; args?: string[] }): void;
+}
+
+/** Enable/disable autostart; always registers `--start-hidden`. */
+export function applyLoginItem(app: LoginItemApp, openAtLogin: boolean): void {
+  app.setLoginItemSettings({ openAtLogin, args: buildLoginItemArgs() });
+}

@@ -32,6 +32,7 @@ import { buildContext, buildExecutiveContext, buildWeeklyContext } from './conte
 import type { DailyReport, RenderedReport, WeeklyReport } from './model';
 import { toSnakeCaseDeep } from './model';
 import { pythonFloatRepr } from './svg';
+import { assetPath } from '../assets';
 
 /** The three report flavours understood by the Python oracle. */
 export type ReportVariant = 'technical' | 'executive' | 'weekly';
@@ -265,25 +266,9 @@ function getEnvironment(templatesDir: string): nunjucks.Environment {
   return environment;
 }
 
-function* upwardDirectories(start: string): Generator<string> {
-  let current = path.resolve(start);
-  for (let depth = 0; depth < 12; depth += 1) {
-    yield current;
-    const parent = path.dirname(current);
-    if (parent === current) {
-      return;
-    }
-    current = parent;
-  }
-}
-
 /**
- * Resolve `servermanage/templates` from the repository root.
- *
- * Both the test runner (`backend/`, cwd may be the repo root or the backend
- * package) and the packaged application (templates copied next to the bundle)
- * need to find the same directory, so we walk upwards from the cwd and from
- * the module directory looking for `servermanage/templates/report.txt.j2`.
+ * Resolve the report template root (`backend/assets/report-templates`;
+ * packaged: `resources/backend/assets/report-templates`).
  * `SERVERMANAGE_REPORT_TEMPLATES` can override the result explicitly.
  */
 export function defaultReportTemplatesDir(): string {
@@ -291,20 +276,7 @@ export function defaultReportTemplatesDir(): string {
   if (override && override.trim() !== '') {
     return path.resolve(override);
   }
-  const starts: string[] = [process.cwd()];
-  if (typeof __dirname === 'string') {
-    starts.push(__dirname);
-  }
-  for (const start of starts) {
-    for (const directory of upwardDirectories(start)) {
-      const candidate = path.join(directory, 'servermanage', 'templates');
-      if (fs.existsSync(path.join(candidate, 'report.txt.j2'))) {
-        return candidate;
-      }
-    }
-  }
-  const moduleDir = typeof __dirname === 'string' ? __dirname : process.cwd();
-  return path.resolve(moduleDir, '../../../servermanage/templates');
+  return assetPath('report-templates');
 }
 
 // ---------------------------------------------------------------------------

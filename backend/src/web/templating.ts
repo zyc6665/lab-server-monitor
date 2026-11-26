@@ -19,7 +19,7 @@
  * than worked around by editing the read-only templates.
  */
 import { AsyncLocalStorage } from 'node:async_hooks';
-import * as path from 'node:path';
+import { assetPath } from '../assets';
 
 import * as nunjucks from 'nunjucks';
 import type { Response } from 'express';
@@ -37,9 +37,9 @@ export interface TemplatingOptions {
   autoescape?: boolean;
 }
 
-/** Default root: the read-only `servermanage/web/templates` tree. */
+/** Default root: the `backend/assets/web/templates` tree. */
 export function defaultTemplatesDir(): string {
-  return path.resolve(__dirname, '../../../servermanage/web/templates');
+  return assetPath('web', 'templates');
 }
 
 /**

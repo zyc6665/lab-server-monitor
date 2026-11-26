@@ -20,11 +20,11 @@
  * If `servermanage.disk_health` is not importable the differential suite is
  * skipped; the Node-only suite always runs.
  */
-import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 
 import { describe, expect, it } from 'vitest';
+import { golden } from '../golden/golden';
 
 import { aggregateDiskHealth, diskReportFromSnapshot } from '../../src/disk/report';
 import type { DiskHealthReport } from '../../src/disk/report';
@@ -35,39 +35,8 @@ const repoRoot = findRepoRoot();
 const TEST_DIR = path.join(repoRoot, 'backend', 'test', 'disk');
 const FIXTURE_DIR = path.join(TEST_DIR, 'fixtures');
 const REPORT_FIXTURES = path.join(FIXTURE_DIR, 'report_snapshots.json');
-const ORACLE_SCRIPT = path.join(TEST_DIR, 'run_disk_report_oracle.py');
 
-function defaultPython(): string {
-  return process.env.PYTHON ?? 'python';
-}
-
-function mergePythonPath(): string {
-  const existing = process.env.PYTHONPATH;
-  const sep = process.platform === 'win32' ? ';' : ':';
-  return existing ? `${repoRoot}${sep}${existing}` : repoRoot;
-}
-
-/** Probe once whether the Python disk_health oracle can run here. */
-function detectOracle(): { ok: boolean; detail: string } {
-  const result = spawnSync(defaultPython(), ['-c', 'import servermanage.disk_health'], {
-    cwd: repoRoot,
-    encoding: 'utf-8',
-    env: { ...process.env, PYTHONPATH: mergePythonPath(), PYTHONWARNINGS: 'ignore' },
-  });
-  if (result.error) {
-    return { ok: false, detail: String(result.error) };
-  }
-  if (result.status !== 0) {
-    return { ok: false, detail: `exit ${result.status}: ${(result.stderr ?? '').trim()}` };
-  }
-  return { ok: true, detail: 'ok' };
-}
-
-const oracleProbe = detectOracle();
-const itPython = oracleProbe.ok ? it : it.skip;
-if (!oracleProbe.ok) {
-  console.warn(`Python disk_health oracle unavailable; skipping diff groups: ${oracleProbe.detail}`);
-}
+const itPython = it;
 
 interface OracleResult {
   ok: boolean;
@@ -76,35 +45,9 @@ interface OracleResult {
   message?: string;
 }
 
+const GOLDEN_FILE = path.join(repoRoot, 'backend', 'test', 'disk', 'golden', 'report.json');
 function runOracle(group: string): OracleResult {
-  const result = spawnSync(defaultPython(), [ORACLE_SCRIPT, 'snapshot', REPORT_FIXTURES, group], {
-    cwd: repoRoot,
-    encoding: 'utf-8',
-    env: {
-      ...process.env,
-      PYTHONPATH: mergePythonPath(),
-      PYTHONIOENCODING: 'utf-8',
-      PYTHONWARNINGS: 'ignore',
-    },
-    maxBuffer: 64 * 1024 * 1024,
-  });
-  if (result.error) {
-    throw result.error;
-  }
-  if (result.status !== 0) {
-    throw new Error(
-      `python disk report oracle exited with status ${result.status}\nstderr:\n${result.stderr ?? ''}`,
-    );
-  }
-  const lastLine = (result.stdout ?? '')
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0)
-    .pop();
-  if (!lastLine) {
-    throw new Error('python disk report oracle produced no JSON output');
-  }
-  return JSON.parse(lastLine) as OracleResult;
+  return golden<OracleResult>(GOLDEN_FILE, group);
 }
 
 const SNAPSHOTS: Record<string, unknown> = JSON.parse(readFileSync(REPORT_FIXTURES, 'utf-8'));

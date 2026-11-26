@@ -1,0 +1,1147 @@
+/* 主机详情：诊断、立即采集、历史趋势。
+ * 纯原生 JS，无第三方依赖；所有文本使用 textContent，绝不拼接 HTML。 */
+(function () {
+  'use strict';
+
+  var HOST_NAME = window.__HOST_NAME__ || '';
+  var SVG_NS = 'http://www.w3.org/2000/svg';
+  // {check_name: [oldest…newest status]}，由 /api/host/<name> 返回。
+  var checkHistory = {};
+  var COLORS = {
+    cpu: '#2563eb',
+    memory: '#7c3aed',
+    disk: '#059669',
+    gpu_memory: '#d97706',
+    temperature: '#e11d48',
+    net_rx: '#0891b2'
+  };
+  var TITLES = {
+    cpu: 'CPU',
+    memory: '内存',
+    disk: '磁盘',
+    gpu_memory: 'GPU 显存',
+    temperature: '温度',
+    net_rx: '网络下行'
+  };
+
+  function csrfToken() {
+    var meta = document.querySelector('meta[name="csrf-token"]');
+    return meta ? (meta.getAttribute('content') || '') : '';
+  }
+
+  function fetchJson(url, options) {
+    var opts = options || {};
+    var method = (opts.method || 'GET').toUpperCase();
+    var headers = { Accept: 'application/json' };
+    if (method !== 'GET' && method !== 'HEAD') {
+      var token = csrfToken();
+      if (token) { headers['X-CSRF-Token'] = token; }
+    }
+    return fetch(url, {
+      method: method,
+      credentials: 'same-origin',
+      headers: headers
+    }).then(function (response) {
+      if (response.status === 401) {
+        window.location.assign('/login');
+        return null;
+      }
+      if (!response.ok) { return null; }
+      return response.json();
+    });
+  }
+
+  function setStatus(text) {
+    var el = document.getElementById('host-action-status');
+    if (el) { el.textContent = text || ''; }
+  }
+
+  // 全局（window/document）监听器登记表：软刷新会反复 mountDetail，
+  // 若每次都 addEventListener 会让监听器无限累积。这里按 target+type 去重，
+  // 重挂载时先移除旧的、再挂新的，保证同名全局监听器始终只有一份。
+  var globalListeners = [];
+  function addGlobalListener(target, type, handler) {
+    for (var i = 0; i < globalListeners.length; i += 1) {
+      var entry = globalListeners[i];
+      if (entry.target === target && entry.type === type) {
+        target.removeEventListener(type, entry.handler);
+        entry.handler = handler;
+        target.addEventListener(type, handler);
+        return;
+      }
+    }
+    target.addEventListener(type, handler);
+    globalListeners.push({ target: target, type: type, handler: handler });
+  }
+
+  function fmt(value) {
+    if (value === null || value === undefined || value === '') { return '—'; }
+    var num = Number(value);
+    return isNaN(num) ? '—' : num.toFixed(1) + '%';
+  }
+
+  // 与服务端 `stamp` 过滤器保持一致：MM-DD HH:MM，原始值放 title。
+  function stamp(value) {
+    if (!value) { return '—'; }
+    var date = new Date(String(value));
+    if (isNaN(date.getTime())) { return String(value); }
+    function pad(n) { return n < 10 ? '0' + n : String(n); }
+    return pad(date.getMonth() + 1) + '-' + pad(date.getDate()) +
+      ' ' + pad(date.getHours()) + ':' + pad(date.getMinutes());
+  }
+
+  function makeSvgEl(name, attrs) {
+    var el = document.createElementNS(SVG_NS, name);
+    Object.keys(attrs || {}).forEach(function (key) {
+      el.setAttribute(key, attrs[key]);
+    });
+    return el;
+  }
+
+  function formatRate(bytesPerSecond) {
+    var num = Number(bytesPerSecond);
+    if (isNaN(num) || num < 0) { return '—'; }
+    var units = ['B/s', 'KB/s', 'MB/s', 'GB/s'];
+    var index = 0;
+    while (num >= 1024 && index < units.length - 1) {
+      num = num / 1024;
+      index += 1;
+    }
+    var digits = index === 0 ? 0 : (num >= 100 ? 0 : 1);
+    return num.toFixed(digits) + ' ' + units[index];
+  }
+
+  function trendText(value, key) {
+    if (value === null || value === undefined || value === '') { return '—'; }
+    var num = Number(value);
+    if (isNaN(num)) { return '—'; }
+    if (key === 'temperature') { return num.toFixed(1) + ' °C'; }
+    if (key === 'net_rx') { return formatRate(num); }
+    return fmt(num);
+  }
+
+  function stampOf(value) {
+    if (!value) { return ''; }
+    var date = new Date(value);
+    if (isNaN(date.getTime())) { return String(value); }
+    function pad(n) { return n < 10 ? '0' + n : String(n); }
+    return pad(date.getMonth() + 1) + '-' + pad(date.getDate()) + ' ' + pad(date.getHours()) + ':' + pad(date.getMinutes());
+  }
+
+  function drawTrend(svg, values, key, stamps) {
+    if (!svg) { return; }
+    while (svg.firstChild) { svg.removeChild(svg.firstChild); }
+    var numbers = values.filter(function (v) { return v !== null && v !== undefined && !isNaN(Number(v)); }).map(Number);
+    var latest = document.querySelector('[data-trend-latest="' + key + '"]');
+    if (latest) { latest.textContent = numbers.length ? trendText(numbers[numbers.length - 1], key) : ''; }
+    if (numbers.length < 2) { return; }
+    var width = 300, height = 84, padX = 8, padY = 8;
+    var min = Math.min.apply(null, numbers);
+    var max = Math.max.apply(null, numbers);
+    if (max - min < 1) { max = min + 1; }
+    var points = [];
+    values.forEach(function (value, index) {
+      if (value === null || value === undefined || isNaN(Number(value))) { return; }
+      var x = padX + (width - padX * 2) * (index / Math.max(1, values.length - 1));
+      var y = height - padY - (height - padY * 2) * ((Number(value) - min) / (max - min));
+      points.push([x, y, index]);
+    });
+    // horizontal guide lines
+    [0, 0.5, 1].forEach(function (fraction) {
+      var y = padY + (height - padY * 2) * fraction;
+      svg.appendChild(makeSvgEl('line', {
+        x1: padX, x2: width - padX, y1: y, y2: y,
+        stroke: '#e8edf5', 'stroke-width': '1'
+      }));
+    });
+    var d = points.map(function (point, index) {
+      return (index ? 'L' : 'M') + point[0].toFixed(1) + ' ' + point[1].toFixed(1);
+    }).join(' ');
+    svg.appendChild(makeSvgEl('path', {
+      d: d, fill: 'none', stroke: COLORS[key], 'stroke-width': '2',
+      'stroke-linecap': 'round', 'stroke-linejoin': 'round'
+    }));
+    var last = points[points.length - 1];
+    svg.appendChild(makeSvgEl('circle', {
+      cx: last[0], cy: last[1], r: '2.8', fill: COLORS[key]
+    }));
+    svg.appendChild(makeSvgEl('text', {
+      x: padX, y: 12, fill: '#8a94a6', 'font-size': '9'
+    })).textContent = '最低 ' + trendText(min, key) + ' · 最高 ' + trendText(max, key);
+    bindTrendHover(svg, points, values, key, stamps || []);
+  }
+
+  function bindTrendHover(svg, points, values, key, stamps) {
+    if (!points.length) { return; }
+    var width = 300, height = 84;
+    var cross = makeSvgEl('line', {
+      x1: 0, x2: 0, y1: 8, y2: height - 8,
+      stroke: '#b8c2d4', 'stroke-width': '1', 'stroke-dasharray': '3 3', opacity: '0'
+    });
+    var dot = makeSvgEl('circle', { cx: 0, cy: 0, r: '3', fill: COLORS[key], opacity: '0' });
+    var label = makeSvgEl('text', {
+      x: width - 8, y: height - 4, 'text-anchor': 'end',
+      fill: '#5b6472', 'font-size': '9', opacity: '0'
+    });
+    svg.appendChild(cross);
+    svg.appendChild(dot);
+    svg.appendChild(label);
+    svg.addEventListener('mousemove', function (event) {
+      var rect = svg.getBoundingClientRect();
+      if (!rect.width) { return; }
+      var x = (event.clientX - rect.left) / rect.width * width;
+      var best = 0;
+      for (var i = 1; i < points.length; i += 1) {
+        if (Math.abs(points[i][0] - x) < Math.abs(points[best][0] - x)) { best = i; }
+      }
+      var point = points[best];
+      var stamp = stamps[point[2]] || '';
+      var value = values[point[2]];
+      cross.setAttribute('x1', point[0]);
+      cross.setAttribute('x2', point[0]);
+      cross.setAttribute('opacity', '0.9');
+      dot.setAttribute('cx', point[0]);
+      dot.setAttribute('cy', point[1]);
+      dot.setAttribute('opacity', '1');
+      label.textContent = (stamp ? stamp + ' · ' : '') + trendText(value, key);
+      label.setAttribute('opacity', '1');
+    });
+    svg.addEventListener('mouseleave', function () {
+      cross.setAttribute('opacity', '0');
+      dot.setAttribute('opacity', '0');
+      label.setAttribute('opacity', '0');
+    });
+  }
+
+  var historyPoints = [];
+  var historyRange = '24h';
+
+
+  function csvCell(value) {
+    var text = value === null || value === undefined ? '' : String(value);
+    if (text.indexOf(',') >= 0 || text.indexOf('"') >= 0 || text.indexOf('\n') >= 0) {
+      return '"' + text.replace(/"/g, '""') + '"';
+    }
+    return text;
+  }
+
+  function trendCsv() {
+    var keys = Object.keys(TITLES);
+    var head = ['时间'].concat(keys.map(function (key) { return TITLES[key]; }));
+    var lines = [head.join(',')];
+    historyPoints.forEach(function (point) {
+      var row = [csvCell(stampOf(point.t))];
+      keys.forEach(function (key) { row.push(csvCell(trendText(point[key], key))); });
+      lines.push(row.join(','));
+    });
+    return lines.join('\r\n');
+  }
+
+  function exportTrend() {
+    if (!historyPoints.length) { return; }
+    var text = '\ufeff' + trendCsv();
+    var blob = new Blob([text], { type: 'text/csv;charset=utf-8' });
+    var url = URL.createObjectURL(blob);
+    var link = document.createElement('a');
+    link.href = url;
+    link.download = HOST_NAME + '-trend-' + historyRange + '-' + new Date().toISOString().slice(0, 10) + '.csv';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  }
+
+  function bindTrendExport() {
+    var button = document.getElementById('trend-export');
+    if (button) { button.addEventListener('click', exportTrend); }
+  }
+
+  // v0.1.211：概览卡片展示「较 24 小时前」的变化，数据来自同一份历史接口。
+  function renderStatDeltas(points) {
+    var keys = ['cpu', 'memory', 'disk'];
+    keys.forEach(function (key) {
+      var box = document.querySelector('[data-stat-delta="' + key + '"]');
+      if (!box) { return; }
+      var series = (points || [])
+        .map(function (point) { return Number(point && point[key]); })
+        .filter(function (value) { return !isNaN(value); });
+      if (series.length < 2) { box.hidden = true; return; }
+      var delta = series[series.length - 1] - series[0];
+      box.hidden = false;
+      box.classList.toggle('is-up', delta > 0.05);
+      box.classList.toggle('is-down', delta < -0.05);
+      box.textContent = Math.abs(delta) < 0.05
+        ? '较 24 小时前 持平'
+        : '较 24 小时前 ' + (delta > 0 ? '+' : '') + delta.toFixed(1) + '%';
+      box.title = series[0].toFixed(1) + '% → ' + series[series.length - 1].toFixed(1) + '%';
+    });
+  }
+
+  function loadHistory(rangeKey) {
+    historyRange = rangeKey;
+    var url = '/api/host/' + encodeURIComponent(HOST_NAME) + '/history?range=' + encodeURIComponent(rangeKey);
+    fetchJson(url).then(function (payload) {
+      var points = (payload && payload.points) || [];
+      historyPoints = points;
+      if (historyRange === '24h') { renderStatDeltas(points); }
+      var empty = document.getElementById('trend-empty');
+      if (empty) { empty.hidden = points.length > 0; }
+      var stamps = points.map(function (point) { return stampOf(point.t); });
+      Object.keys(TITLES).forEach(function (key) {
+        var svg = document.querySelector('[data-trend="' + key + '"]');
+        var values = points.map(function (point) { return point[key]; });
+        drawTrend(svg, values, key, stamps);
+      });
+    }).catch(function () {
+      var empty = document.getElementById('trend-empty');
+      if (empty) {
+        empty.hidden = false;
+        empty.textContent = '趋势数据加载失败。';
+      }
+    });
+  }
+
+  function bindRanges() {
+    var tabs = document.querySelectorAll('[data-history-range]');
+    Array.prototype.forEach.call(tabs, function (tab) {
+      tab.addEventListener('click', function () {
+        Array.prototype.forEach.call(tabs, function (other) { other.classList.remove('active'); });
+        tab.classList.add('active');
+        loadHistory(tab.getAttribute('data-history-range'));
+      });
+    });
+  }
+
+  function showProbe(payload) {
+    var box = document.getElementById('host-probe-result');
+    if (!box) { return; }
+    box.hidden = false;
+    box.textContent = '';
+    if (!payload) {
+      box.textContent = '连接测试失败：服务返回异常。';
+      return;
+    }
+    var lines = [];
+    lines.push(payload.ok ? '连接成功' : ('连接失败：' + (payload.message || '未知原因')));
+    if (payload.hostname) { lines.push('主机名：' + payload.hostname); }
+    if (payload.os_release) { lines.push('系统：' + payload.os_release); }
+    if (payload.cpu_cores) { lines.push('CPU 核心：' + payload.cpu_cores); }
+    if (payload.memory_total_mb) { lines.push('内存：' + payload.memory_total_mb + ' MB'); }
+    if (payload.storcli_available !== undefined) {
+      lines.push('storcli：' + (payload.storcli_available ? '可用' : '不可用'));
+    }
+    if (payload.sudo_available !== undefined) {
+      lines.push('免密 sudo：' + (payload.sudo_available ? '可用' : '不可用'));
+    }
+    (payload.warnings || []).forEach(function (warning) { lines.push('提示：' + warning); });
+    lines.forEach(function (line) {
+      var div = document.createElement('div');
+      div.textContent = line;
+      box.appendChild(div);
+    });
+  }
+
+  // v0.1.232：采集/检查完成后软刷新——重新拉取当前页面并只替换 <main>，
+  // 重新绑定事件，不再整页 reload（Electron 下白屏闪烁、滚动位置丢失）。
+  // 去重：自动刷新、可见性变化与采集轮询可能同时触发，只保留一次在途刷新，
+  // 避免重复请求与并发替换 DOM。
+  var refreshInFlight = null;
+  function softRefreshDetail() {
+    if (refreshInFlight) { return refreshInFlight; }
+    // 记录滚动与焦点，替换 <main> 后尽量恢复，减少位置丢失。
+    var scrollX = window.pageXOffset || 0;
+    var scrollY = window.pageYOffset || 0;
+    var active = document.activeElement;
+    var activeId = active && active.id ? active.id : '';
+    var request = fetch(window.location.href, { credentials: 'same-origin' })
+      .then(function (response) {
+        if (response.redirected || response.url.indexOf('/login') !== -1) {
+          window.location.assign('/login');
+          return null;
+        }
+        if (!response.ok) { throw new Error('bad status ' + response.status); }
+        return response.text();
+      })
+      .then(function (html) {
+        if (!html) { return; }
+        var doc = new DOMParser().parseFromString(html, 'text/html');
+        var fresh = doc.querySelector('main');
+        var current = document.querySelector('main');
+        if (!fresh || !current) { window.location.reload(); return; }
+        while (current.firstChild) { current.removeChild(current.firstChild); }
+        Array.prototype.forEach.call(fresh.children, function (node) {
+          current.appendChild(document.importNode(node, true));
+        });
+        mountDetail();
+        if (activeId) {
+          var again = document.getElementById(activeId);
+          if (again && typeof again.focus === 'function') {
+            try { again.focus({ preventScroll: true }); } catch (err) { again.focus(); }
+          }
+        }
+        if (typeof window.scrollTo === 'function') {
+          try { window.scrollTo(scrollX, scrollY); } catch (err) { /* 忽略 */ }
+        }
+      })
+      .catch(function () { /* 网络异常时保留当前页面 */ });
+    refreshInFlight = request;
+    request.then(function () {
+      if (refreshInFlight === request) { refreshInFlight = null; }
+    });
+    return request;
+  }
+
+  function pollCollection() {
+    var deadline = Date.now() + 60000;
+    var url = '/api/settings/hosts/collection-status?names=' + encodeURIComponent(HOST_NAME);
+    function tick() {
+      fetchJson(url).then(function (payload) {
+        var status = payload && payload.statuses && payload.statuses[HOST_NAME];
+        if (status && status.state === 'done') {
+          setStatus('采集完成，正在刷新…');
+          softRefreshDetail().then(function () { setStatus(''); });
+          return;
+        }
+        if (status && status.state === 'error') {
+          setStatus('采集失败：' + (status.error || '未知错误'));
+          return;
+        }
+        if (Date.now() < deadline) {
+          setStatus('采集中…');
+          window.setTimeout(tick, 1000);
+        } else {
+          setStatus('采集任务已提交，请稍后刷新查看。');
+        }
+      }).catch(function () { setStatus('无法获取采集状态。'); });
+    }
+    tick();
+  }
+
+  function bindActions() {
+    var testButton = document.getElementById('host-test-button');
+    if (testButton) {
+      testButton.addEventListener('click', function () {
+        setStatus('正在测试连接…');
+        testButton.disabled = true;
+        fetchJson('/api/settings/hosts/' + encodeURIComponent(HOST_NAME) + '/probe', { method: 'POST' })
+          .then(function (payload) { showProbe(payload); setStatus(''); })
+          .catch(function () { showProbe(null); setStatus('测试连接失败。'); })
+          .then(function () { testButton.disabled = false; });
+      });
+    }
+    var collectButton = document.getElementById('host-collect-button');
+    if (collectButton) {
+      collectButton.addEventListener('click', function () {
+        setStatus('正在提交采集任务…');
+        collectButton.disabled = true;
+        fetchJson('/api/settings/hosts/' + encodeURIComponent(HOST_NAME) + '/collect', { method: 'POST' })
+          .then(function (payload) {
+            if (payload && payload.ok) { pollCollection(); }
+            else { setStatus('采集任务提交失败。'); }
+          })
+          .catch(function () { setStatus('采集任务提交失败。'); })
+          .then(function () { collectButton.disabled = false; });
+      });
+    }
+  }
+
+  function bindAlertAcks() {
+    var buttons = document.querySelectorAll('#host-alerts .ack-btn');
+    Array.prototype.forEach.call(buttons, function (button) {
+      button.addEventListener('click', function () {
+        var alertId = button.getAttribute('data-alert-id');
+        if (!alertId) { return; }
+        button.disabled = true;
+        fetchJson('/api/alerts/' + encodeURIComponent(alertId) + '/ack', { method: 'POST' })
+          .then(function (payload) {
+            if (!payload || !payload.ok) {
+              setStatus('告警确认失败');
+              button.disabled = false;
+              return;
+            }
+            var row = button.closest('tr');
+            if (row) {
+              var status = row.querySelector('.alert-status');
+              if (status) {
+                status.textContent = '已确认';
+                status.classList.remove('status-active');
+                status.classList.add('status-acknowledged');
+              }
+              var actions = row.querySelector('.alert-actions');
+              if (actions) {
+                while (actions.firstChild) { actions.removeChild(actions.firstChild); }
+                var placeholder = document.createElement('span');
+                placeholder.className = 'muted';
+                placeholder.textContent = '—';
+                actions.appendChild(placeholder);
+              }
+            }
+            var remaining = document.querySelectorAll('#host-alerts .status-active').length;
+            var tab = document.querySelector('[data-host-tab="alerts"]');
+            if (tab) { tab.textContent = '最近告警' + (remaining ? ' (' + remaining + ')' : ''); }
+            setStatus('告警已确认');
+          })
+          .catch(function () {
+            setStatus('告警确认失败');
+            button.disabled = false;
+          });
+      });
+    });
+  }
+
+  function fmtLatency(value) {
+    if (value === null || value === undefined || value === '') { return '—'; }
+    var num = Number(value);
+    return isNaN(num) ? '—' : num.toFixed(0) + ' ms';
+  }
+
+  function checkText(value) {
+    return (value === null || value === undefined || value === '') ? '—' : String(value);
+  }
+
+  function appendCheckCell(tr, text, extraClass) {
+    var td = document.createElement('td');
+    if (extraClass) { td.className = extraClass; }
+    td.textContent = text;
+    tr.appendChild(td);
+    return td;
+  }
+
+  function buildHeartbeat(statuses) {
+    var list = statuses || [];
+    if (!list.length) {
+      var none = document.createElement('span');
+      none.className = 'muted';
+      none.textContent = '—';
+      return none;
+    }
+    var wrap = document.createElement('span');
+    wrap.className = 'heartbeat';
+    wrap.title = '最近 ' + list.length + ' 次检查';
+    list.forEach(function (status) {
+      var beat = document.createElement('i');
+      beat.className = 'hb hb-' + String(status || 'unknown');
+      wrap.appendChild(beat);
+    });
+    return wrap;
+  }
+
+  // 可用率：最近若干次检查里 ok 的占比，让“偶尔挂一下”也能一眼看出来。
+  function uptimeFor(statuses) {
+    var list = statuses || [];
+    if (!list.length) { return null; }
+    var ok = list.filter(function (item) { return item === 'ok'; }).length;
+    return { ratio: (ok * 100) / list.length, ok: ok, total: list.length };
+  }
+
+  function uptimeText(statuses) {
+    var summary = uptimeFor(statuses);
+    if (!summary) { return '—'; }
+    return summary.ratio.toFixed(1) + '%';
+  }
+
+  function renderChecksTable(checks) {
+    var body = document.getElementById('host-checks-body');
+    if (!body) { return; }
+    var list = checks || [];
+    while (body.firstChild) { body.removeChild(body.firstChild); }
+    var empty = document.getElementById('host-checks-empty');
+    var wrap = document.getElementById('host-checks-wrap');
+    if (wrap) { wrap.hidden = list.length === 0; }
+    if (empty) { empty.hidden = list.length > 0; }
+    list.forEach(function (check) {
+      var tr = document.createElement('tr');
+      tr.setAttribute('data-check-status', check.status || 'unknown');
+      appendCheckCell(tr, checkText(check.check_name));
+      appendCheckCell(tr, checkText(check.check_type));
+      appendCheckCell(tr, checkText(check.target), 'mono');
+      var statusCell = document.createElement('td');
+      var status = document.createElement('span');
+      status.className = 'status status-' + (check.status || 'unknown');
+      status.textContent = checkText(check.status);
+      statusCell.appendChild(status);
+      tr.appendChild(statusCell);
+      var beatCell = document.createElement('td');
+      beatCell.className = 'heartbeat-cell';
+      beatCell.appendChild(buildHeartbeat(checkHistory[check.check_name]));
+      tr.appendChild(beatCell);
+      var uptimeSummary = uptimeFor(checkHistory[check.check_name]);
+      var uptimeCell = document.createElement('td');
+      uptimeCell.className = 'mono uptime-cell' + (uptimeSummary && uptimeSummary.ratio < 95 ? ' is-low' : '');
+      uptimeCell.textContent = uptimeText(checkHistory[check.check_name]);
+      if (uptimeSummary) {
+        uptimeCell.title = uptimeSummary.ok + ' / ' + uptimeSummary.total + ' 次检查正常';
+      }
+      tr.appendChild(uptimeCell);
+      appendCheckCell(tr, fmtLatency(check.latency_ms));
+      var stampCell = appendCheckCell(tr, stamp(check.checked_at), 'mono');
+      if (check.checked_at) { stampCell.title = String(check.checked_at); }
+      appendCheckCell(tr, checkText(check.message));
+      body.appendChild(tr);
+    });
+    applyCheckFilter();
+  }
+
+  // 检查项多的时候，只看异常的那几行，省得逐行扫。
+  function applyCheckFilter() {
+    var toggle = document.getElementById('host-checks-only-bad');
+    var body = document.getElementById('host-checks-body');
+    if (!body) { return; }
+    var onlyBad = !!(toggle && toggle.checked);
+    var hidden = 0;
+    var total = 0;
+    Array.prototype.forEach.call(body.querySelectorAll('tr'), function (row) {
+      total += 1;
+      var bad = row.getAttribute('data-check-status') !== 'ok';
+      row.hidden = onlyBad && !bad;
+      if (row.hidden) { hidden += 1; }
+    });
+    var hint = document.getElementById('host-checks-hint');
+    if (hint && onlyBad) {
+      hint.hidden = false;
+      hint.className = 'checks-hint';
+      hint.textContent = hidden === total && total
+        ? '所有 ' + total + ' 项检查都正常'
+        : '只看异常：' + (total - hidden) + ' / ' + total + ' 项';
+    } else if (hint && !hint.textContent) {
+      hint.hidden = true;
+    }
+  }
+
+  function bindCheckFilter() {
+    var toggle = document.getElementById('host-checks-only-bad');
+    if (!toggle) { return; }
+    toggle.addEventListener('change', applyCheckFilter);
+    applyCheckFilter();
+  }
+
+  function loadChecks() {
+    fetchJson('/api/host/' + encodeURIComponent(HOST_NAME)).then(function (payload) {
+      if (!payload) { return; }
+      checkHistory = payload.check_history || {};
+      if (payload.checks) {
+        renderChecksTable(payload.checks);
+      }
+    }).catch(function () {
+      // 检查项加载失败时说一声，别静默留白。
+      if (window.servermonitorToast) {
+        window.servermonitorToast('检查数据加载失败，请稍后重试', 'error');
+      } else {
+        setStatus('检查数据加载失败。');
+      }
+    });
+  }
+
+  function bindHostTabs() {
+    var tabs = document.querySelectorAll('[data-host-tab]');
+    var panels = document.querySelectorAll('[data-host-panel]');
+    if (!tabs.length || !panels.length) { return; }
+    var list = Array.prototype.slice.call(tabs);
+    function activate(key, focus) {
+      var index = 0;
+      list.forEach(function (tab, position) {
+        var active = tab.getAttribute('data-host-tab') === key;
+        tab.classList.toggle('active', active);
+        tab.setAttribute('aria-selected', active ? 'true' : 'false');
+        tab.setAttribute('tabindex', active ? '0' : '-1');
+        if (active) { index = position; }
+      });
+      Array.prototype.forEach.call(panels, function (panel) {
+        var show = panel.getAttribute('data-host-panel') === key;
+        panel.hidden = !show;
+        // 换分区时轻轻淡入，避免内容“跳”出来；隐藏的面板不保留动画类。
+        panel.classList.remove('panel-enter');
+        if (show) {
+          void panel.offsetWidth;
+          panel.classList.add('panel-enter');
+        }
+      });
+      if (focus && list[index]) { list[index].focus(); }
+      rememberTab(key);
+      // 窄屏时标签条是横向滚动的，把当前分区滚到可见范围中间。
+      var bar = list[index] ? list[index].parentNode : null;
+      if (bar && list[index] && bar.scrollWidth > bar.clientWidth + 4) {
+        list[index].scrollIntoView({ block: 'nearest', inline: 'center' });
+      }
+    }
+    function bindTabLink() {
+      var button = document.getElementById('host-tab-link');
+      if (!button) { return; }
+      var reset = function () { button.textContent = '复制链接'; };
+      button.addEventListener('click', function () {
+        var base = window.location.origin + window.location.pathname;
+        var url = base + '#tab-' + currentKey();
+        var done = function () {
+          button.textContent = '已复制';
+          setTimeout(reset, 1600);
+        };
+        var failed = function () {
+          button.textContent = '复制失败';
+          setTimeout(reset, 1600);
+        };
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(url).then(done, failed);
+          return;
+        }
+        var area = document.createElement('textarea');
+        area.value = url;
+        document.body.appendChild(area);
+        area.select();
+        var ok = false;
+        try { ok = document.execCommand('copy'); } catch (err) { ok = false; }
+        document.body.removeChild(area);
+        if (ok) { done(); } else { failed(); }
+      });
+    }
+
+    var TAB_STORE = 'host:tab:' + (HOST_NAME || '');
+    function rememberTab(key) {
+      try { window.localStorage.setItem(TAB_STORE, key); } catch (err) { /* 隐私模式忽略 */ }
+    }
+    function storedTab() {
+      try { return window.localStorage.getItem(TAB_STORE) || ''; } catch (err) { return ''; }
+    }
+    function scrollParent(el) {
+      var node = el.parentElement;
+      while (node && node !== document.body) {
+        var style = window.getComputedStyle(node);
+        if (/(auto|scroll)/.test(style.overflowY) && node.scrollHeight > node.clientHeight) {
+          return node;
+        }
+        node = node.parentElement;
+      }
+      return document.scrollingElement || document.documentElement;
+    }
+
+    function scrollToTabs() {
+      // 从页面中部切分区时，新分区的内容在视口上方，看不到开头。
+      // 把分区顶端对齐到吸顶标签条下方，切换到哪儿就从哪儿读起。
+      var bar = document.getElementById('host-tabbar');
+      if (!bar) { return; }
+      var panel = null;
+      for (var i = 0; i < panels.length; i += 1) {
+        if (!panels[i].hidden) { panel = panels[i]; break; }
+      }
+      if (!panel) { return; }
+      var barBottom = bar.getBoundingClientRect().bottom;
+      var panelTop = panel.getBoundingClientRect().top;
+      if (panelTop >= barBottom + 4) { return; }
+      var scroller = scrollParent(panel);
+      scroller.scrollBy({ top: panelTop - barBottom - 8, behavior: 'smooth' });
+    }
+
+    function currentKey() {
+      for (var i = 0; i < list.length; i += 1) {
+        if (list[i].classList.contains('active')) { return list[i].getAttribute('data-host-tab'); }
+      }
+      return 'overview';
+    }
+    function step(delta) {
+      var key = currentKey();
+      var index = 0;
+      list.forEach(function (tab, position) {
+        if (tab.getAttribute('data-host-tab') === key) { index = position; }
+      });
+      var next = (index + delta + list.length) % list.length;
+      var target = list[next].getAttribute('data-host-tab') || 'overview';
+      activate(target, true);
+      if (window.history && window.history.replaceState) {
+        window.history.replaceState(null, '', '#tab-' + target);
+      }
+    }
+    list.forEach(function (tab) {
+      tab.addEventListener('click', function () {
+        var key = tab.getAttribute('data-host-tab') || 'overview';
+        activate(key, false);
+        scrollToTabs();
+        if (window.history && window.history.replaceState) {
+          window.history.replaceState(null, '', '#tab-' + key);
+        }
+      });
+      tab.addEventListener('keydown', function (event) {
+        if (event.key === 'ArrowRight') { event.preventDefault(); step(1); }
+        else if (event.key === 'ArrowLeft') { event.preventDefault(); step(-1); }
+        else if (event.key === 'Home') { event.preventDefault(); activate(list[0].getAttribute('data-host-tab') || 'overview', true); }
+        else if (event.key === 'End') { event.preventDefault(); activate(list[list.length - 1].getAttribute('data-host-tab') || 'overview', true); }
+      });
+    });
+    // 别的页面用元素 id 直接跳进来（例如磁盘健康页的 #disk-array），
+    // 这时先切到该元素所在的分区，再把元素滚到视口顶部。
+    var HASH_PANELS = { 'disk-array': 'storage', 'host-users': 'sessions' };
+    function fromHash() {
+      var raw = (window.location.hash || '').replace('#', '');
+      var key = raw.replace(/^tab-/, '');
+      var elementId = '';
+      var known = false;
+      for (var i = 0; i < list.length; i += 1) {
+        if (list[i].getAttribute('data-host-tab') === key) { known = true; break; }
+      }
+      if (HASH_PANELS[key]) {
+        elementId = key;
+        key = HASH_PANELS[key];
+      } else if (key && !known) {
+        elementId = key;
+        key = 'overview';
+      }
+      activate(key || 'overview', false);
+      if (elementId) {
+        var element = document.getElementById(elementId);
+        if (element) { element.scrollIntoView({ block: 'start' }); }
+      }
+    }
+    addGlobalListener(window, 'hashchange', fromHash);
+    bindTabLink();
+    var initialHash = (window.location.hash || '').replace('#', '');
+    if (!initialHash) {
+      var remembered = storedTab();
+      for (var t = 0; t < list.length; t += 1) {
+        if (list[t].getAttribute('data-host-tab') === remembered) {
+          activate(remembered, false);
+          return;
+        }
+      }
+    }
+    fromHash();
+  }
+
+  function diagSummaryText() {
+    var card = document.getElementById('host-diagnostics');
+    if (!card) return '';
+    var hostName = card.getAttribute('data-host-name') || '';
+    var address = card.getAttribute('data-host-address') || '';
+    var status = card.getAttribute('data-host-status') || '';
+    var attention = parseInt(card.getAttribute('data-attention') || '0', 10) || 0;
+    var verdict = attention > 0 ? attention + ' 项需关注' : '全部正常';
+    var where = address ? hostName + '（' + address + '）' : hostName;
+    if (status && status !== 'online') { verdict += ' · 主机' + status; }
+    var lines = ['主机健康诊断 · ' + where + ' · ' + verdict + ' · ' + stamp(new Date().toISOString())];
+    var items = card.querySelectorAll('.diag-item');
+    for (var i = 0; i < items.length; i += 1) {
+      var item = items[i];
+      var level = item.classList.contains('diag-crit')
+        ? '严重'
+        : item.classList.contains('diag-warn')
+          ? '需关注'
+          : '正常';
+      var titleEl = item.querySelector('strong');
+      var detailEl = item.querySelector('.diag-detail');
+      var hintEl = item.querySelector('.diag-hint');
+      var line = '- [' + level + '] ' + (titleEl ? titleEl.textContent : '')
+        + '：' + (detailEl ? detailEl.textContent : '');
+      if (hintEl && level !== '正常') {
+        line += '（建议：' + hintEl.textContent + '）';
+      }
+      lines.push(line);
+    }
+    return lines.join('\n');
+  }
+
+  function bindDiagCopy() {
+    var button = document.getElementById('host-diag-copy');
+    if (!button) return;
+    button.addEventListener('click', function () {
+      var text = diagSummaryText();
+      if (!text) return;
+      var done = function () {
+        var original = button.textContent;
+        button.textContent = '已复制';
+        setTimeout(function () { button.textContent = original; }, 1600);
+      };
+      var failed = function () {
+        var original = button.textContent;
+        button.textContent = '复制失败';
+        setTimeout(function () { button.textContent = original; }, 1600);
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(done, failed);
+      } else {
+        var area = document.createElement('textarea');
+        area.value = text;
+        document.body.appendChild(area);
+        area.select();
+        try { document.execCommand('copy'); } catch (err) { /* ignore */ }
+        document.body.removeChild(area);
+        done();
+      }
+    });
+  }
+
+  function bindCollectNow() {
+    var button = document.getElementById('host-collect-now');
+    var notice = document.getElementById('host-collect-notice');
+    if (!button || !notice) { return; }
+    var detailEl = document.getElementById('host-collect-detail');
+    var titleEl = document.getElementById('host-collect-title');
+    var original = button.textContent;
+    var timer = null;
+
+    function stop(status, message, failed) {
+      if (timer) { window.clearInterval(timer); timer = null; }
+      button.disabled = false;
+      button.textContent = original;
+      if (titleEl) { titleEl.textContent = failed ? '采集失败' : '采集完成'; }
+      if (detailEl && message) { detailEl.textContent = message; }
+      if (!failed) { window.setTimeout(softRefreshDetail, 900); }
+    }
+
+    function poll() {
+      fetchJson('/api/settings/hosts/collection-status?names=' + encodeURIComponent(HOST_NAME))
+        .then(function (payload) {
+          var entry = (payload && payload.statuses && payload.statuses[HOST_NAME]) || {};
+          var state = entry.state || 'unknown';
+          if (state === 'done') { stop('done', '采集完成，正在刷新页面…', false); }
+          else if (state === 'error') { stop('error', entry.message || '采集失败，请检查 SSH 与 sudo 设置。', true); }
+        })
+        .catch(function () { /* 单次轮询失败继续等下一次 */ });
+    }
+
+    button.addEventListener('click', function () {
+      button.disabled = true;
+      button.textContent = '采集中…';
+      if (titleEl) { titleEl.textContent = '正在重新采集'; }
+      if (detailEl) { detailEl.textContent = '正在通过 SSH 读取这台主机的指标，通常需要几秒钟。'; }
+      fetchJson('/api/settings/hosts/' + encodeURIComponent(HOST_NAME) + '/collect', { method: 'POST' })
+        .then(function () {
+          if (timer) { window.clearInterval(timer); }
+          timer = window.setInterval(poll, 1500);
+          poll();
+        })
+        .catch(function (error) {
+          stop('error', error.message, true);
+        });
+    });
+  }
+
+
+  function fmtPercent(value) {
+    return value === null || value === undefined ? '—' : value.toFixed(1) + '%';
+  }
+
+  function bindChecksRun() {
+    var button = document.getElementById('host-checks-run');
+    var hint = document.getElementById('host-checks-hint');
+    if (!button) { return; }
+    button.addEventListener('click', function () {
+      if (button.disabled) { return; }
+      var label = button.textContent;
+      button.disabled = true;
+      button.textContent = '检查中…';
+      if (hint) { hint.hidden = true; }
+      var request = HOST_NAME
+        ? fetchJson('/api/host/' + encodeURIComponent(HOST_NAME) + '/checks/run', { method: 'POST' })
+        : Promise.reject(new Error('缺少主机信息'));
+      request
+        .then(function (payload) {
+          if (!payload || !payload.ok) {
+            throw new Error((payload && payload.error) || '检查失败');
+          }
+          var rows = payload.checks || [];
+          var bad = rows.filter(function (row) { return row.status !== 'ok'; }).length;
+          if (hint) {
+            hint.hidden = false;
+            hint.textContent = bad
+              ? '已检查 ' + rows.length + ' 项，' + bad + ' 项异常'
+              : '已检查 ' + rows.length + ' 项，全部正常';
+            hint.className = 'checks-hint' + (bad ? ' is-warn' : '');
+          }
+          loadChecks();
+        })
+        .catch(function (error) {
+          if (hint) {
+            hint.hidden = false;
+            hint.textContent = '检查失败：' + error.message;
+            hint.className = 'checks-hint is-error';
+          }
+        })
+        .then(function () {
+          button.disabled = false;
+          button.textContent = label;
+        });
+    });
+  }
+
+  function usageValue(row, selector) {
+    var cell = row.querySelector(selector);
+    if (!cell) { return -1; }
+    var text = (cell.textContent || '').replace('%', '').trim();
+    var num = Number(text);
+    return isNaN(num) ? -1 : num;
+  }
+
+  function sortContainerRowsByUsage() {
+    var body = document.getElementById('container-rows');
+    if (!body) { return; }
+    var rows = Array.prototype.slice.call(body.querySelectorAll('[data-container-row]'));
+    if (rows.length < 2) { return; }
+    rows.sort(function (a, b) {
+      var diff = usageValue(b, '.container-cpu') - usageValue(a, '.container-cpu');
+      if (diff) { return diff; }
+      return usageValue(b, '.container-mem') - usageValue(a, '.container-mem');
+    });
+    rows.forEach(function (row) { body.appendChild(row); });
+  }
+
+  function bindContainerStats() {
+    var button = document.getElementById('container-stats');
+    var hint = document.getElementById('container-stats-hint');
+    if (!button) { return; }
+    button.addEventListener('click', function () {
+      var label = button.textContent;
+      button.disabled = true;
+      button.textContent = '读取中…';
+      if (hint) { hint.hidden = true; }
+      var request = HOST_NAME
+        ? fetchJson('/api/host/' + encodeURIComponent(HOST_NAME) + '/containers/stats', { method: 'POST' })
+        : Promise.reject(new Error('缺少主机信息'));
+      request
+        .then(function (payload) {
+          if (!payload || !payload.ok) {
+            throw new Error((payload && payload.error) || '读取失败');
+          }
+          var stats = {};
+          (payload.containers || []).forEach(function (row) { stats[row.name] = row; });
+          Array.prototype.forEach.call(document.querySelectorAll('[data-container-row]'), function (row) {
+            var name = row.querySelector('.container-cpu');
+            var data = name ? stats[name.getAttribute('data-container-name')] : null;
+            var cpuCell = row.querySelector('.container-cpu');
+            var memCell = row.querySelector('.container-mem');
+            if (!data) {
+              if (cpuCell) { cpuCell.textContent = '—'; }
+              if (memCell) { memCell.textContent = '—'; }
+              return;
+            }
+            if (cpuCell) { cpuCell.textContent = fmtPercent(data.cpu_percent); }
+            if (memCell) {
+              memCell.textContent = fmtPercent(data.memory_percent);
+              if (data.memory_usage) { memCell.title = data.memory_usage; }
+            }
+            row.classList.toggle(
+              'is-hot',
+              (data.cpu_percent || 0) >= 50 || (data.memory_percent || 0) >= 80
+            );
+          });
+          sortContainerRowsByUsage();
+          if (hint) {
+            hint.className = 'container-stats-hint';
+            hint.textContent = '占用为执行瞬间的单次采样 · 已按 CPU 占用排序';
+            hint.hidden = false;
+          }
+        })
+        .catch(function (error) {
+          if (hint) {
+            hint.className = 'container-stats-hint is-error';
+            hint.textContent = '读取失败：' + (error && error.message ? error.message : '未知错误');
+            hint.hidden = false;
+          }
+        })
+        .then(function () {
+          button.disabled = false;
+          button.textContent = label;
+        });
+    });
+  }
+
+  function bindContainerFilter() {
+    var search = document.getElementById('container-search');
+    var state = document.getElementById('container-state');
+    var countEl = document.getElementById('container-count');
+    var emptyEl = document.getElementById('container-filter-empty');
+    var rows = Array.prototype.slice.call(document.querySelectorAll('[data-container-row]'));
+    if (!rows.length) { return; }
+
+    function apply() {
+      var keyword = search ? search.value.trim().toLowerCase() : '';
+      var wanted = state ? state.value : '';
+      var visible = 0;
+      rows.forEach(function (row) {
+        var haystack = row.getAttribute('data-container-search') || '';
+        var rowState = row.getAttribute('data-container-state') || '';
+        var ok = (!keyword || haystack.indexOf(keyword) !== -1) && (!wanted || rowState === wanted);
+        row.hidden = !ok;
+        if (ok) { visible += 1; }
+      });
+      if (countEl) { countEl.textContent = visible === rows.length ? rows.length + ' 个容器' : visible + ' / ' + rows.length + ' 个容器'; }
+      if (emptyEl) { emptyEl.hidden = visible !== 0; }
+    }
+
+    if (search) { search.addEventListener('input', apply); }
+    if (state) { state.addEventListener('change', apply); }
+    apply();
+  }
+
+  var AUTO_REFRESH_KEY = "host-detail:auto-refresh";
+  var autoRefreshTimer = null;
+
+  function setAutoRefresh(on) {
+    try { window.localStorage.setItem(AUTO_REFRESH_KEY, on ? "1" : ""); } catch (err) { /* 无痕模式等 */ }
+  }
+
+  function autoRefreshOn() {
+    try { return window.localStorage.getItem(AUTO_REFRESH_KEY) === "1"; } catch (err) { return false; }
+  }
+
+  function applyAutoRefresh() {
+    var button = document.getElementById("host-auto-refresh");
+    if (button) {
+      var on = autoRefreshOn();
+      button.textContent = on ? "自动刷新：开" : "自动刷新：关";
+      button.setAttribute("aria-pressed", on ? "true" : "false");
+    }
+    if (autoRefreshOn() && !autoRefreshTimer) {
+      autoRefreshTimer = window.setInterval(function () {
+        if (document.hidden) { return; }
+        softRefreshDetail();
+      }, 30000);
+    } else if (!autoRefreshOn() && autoRefreshTimer) {
+      window.clearInterval(autoRefreshTimer);
+      autoRefreshTimer = null;
+    }
+  }
+
+  function onVisibilityRefresh() {
+    if (!document.hidden && autoRefreshOn()) { softRefreshDetail(); }
+  }
+
+  function bindAutoRefresh() {
+    var button = document.getElementById("host-auto-refresh");
+    if (!button) { return; }
+    if (!button.dataset.bound) {
+      button.dataset.bound = "1";
+      button.addEventListener("click", function () {
+        setAutoRefresh(!autoRefreshOn());
+        applyAutoRefresh();
+      });
+    }
+    // visibilitychange 挂在 document 上：用登记去重，避免每次软刷新重复添加。
+    addGlobalListener(document, "visibilitychange", onVisibilityRefresh);
+    applyAutoRefresh();
+  }
+
+  function mountDetail() {
+    bindAutoRefresh();
+    bindHostTabs();
+    bindAlertAcks();
+    bindRanges();
+    bindActions();
+    bindCollectNow();
+    bindTrendExport();
+    bindCheckFilter();
+    bindDiagCopy();
+    bindContainerFilter();
+    bindContainerStats();
+    bindChecksRun();
+    // 软刷新后保留用户之前选中的趋势区间。
+    var rangeTabs = document.querySelectorAll('[data-history-range]');
+    Array.prototype.forEach.call(rangeTabs, function (tab) {
+      tab.classList.toggle('active', tab.getAttribute('data-history-range') === historyRange);
+    });
+    loadHistory(historyRange || '24h');
+    loadChecks();
+  }
+
+
+  // 供命令面板等外部流程触发的原地刷新钩子。
+  window.servermonitorSoftRefresh = softRefreshDetail;
+
+  mountDetail();
+})();

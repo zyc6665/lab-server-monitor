@@ -34,11 +34,11 @@
  * tests are skipped and a Node-only sanity suite still runs so a broken fixture
  * or Node port cannot hide behind the skip.
  */
-import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 
 import { afterEach, describe, expect, it } from 'vitest';
+import { golden } from '../../golden/golden';
 
 import {
   AlertEngine,
@@ -72,7 +72,6 @@ afterEach(cleanupStorageTests);
 const repoRoot = findRepoRoot();
 const DIR = path.join(repoRoot, 'backend', 'test', 'diff', 'scheduler-alerts');
 const FIXTURE_DIR = path.join(DIR, 'fixtures');
-const ORACLE_SCRIPT = path.join(DIR, 'run_schedule_oracle.py');
 
 interface TimePointFixture {
   id: string;
@@ -159,86 +158,11 @@ function loadJson<T>(name: string): T {
   return JSON.parse(readFileSync(path.join(FIXTURE_DIR, name), 'utf-8')) as T;
 }
 
-// ---------------------------------------------------------------------------
-// Python oracle invocation
-// ---------------------------------------------------------------------------
-function defaultPython(): string {
-  return process.env.PYTHON ?? 'python';
-}
+const itPython = it;
 
-function mergePythonPath(): string {
-  const existing = process.env.PYTHONPATH;
-  const sep = process.platform === 'win32' ? ';' : ':';
-  return existing ? `${repoRoot}${sep}${existing}` : repoRoot;
-}
-
-function detectPython(): { ok: boolean; detail: string } {
-  const result = spawnSync(
-    defaultPython(),
-    ['-c', 'import servermanage.alerts, servermanage.scheduler'],
-    {
-      cwd: repoRoot,
-      encoding: 'utf-8',
-      env: { ...process.env, PYTHONPATH: mergePythonPath(), PYTHONWARNINGS: 'ignore' },
-    },
-  );
-  if (result.error) {
-    return { ok: false, detail: String(result.error) };
-  }
-  if (result.status !== 0) {
-    return {
-      ok: false,
-      detail: `exit ${result.status}: ${(result.stderr ?? '').trim()}`,
-    };
-  }
-  return { ok: true, detail: 'ok' };
-}
-
-const pythonProbe = detectPython();
-const itPython = pythonProbe.ok ? it : it.skip;
-if (!pythonProbe.ok) {
-  console.warn(
-    `Python scheduler/alerts oracle unavailable; skipping diff groups: ${pythonProbe.detail}`,
-  );
-}
-
-let oracleCache: OraclePayload | null = null;
-
+const GOLDEN_FILE = path.join(repoRoot, 'backend', 'test', 'diff', 'scheduler-alerts', 'golden', 'schedule.json');
 function runOracle(): OraclePayload {
-  if (oracleCache !== null) {
-    return oracleCache;
-  }
-  const result = spawnSync(defaultPython(), [ORACLE_SCRIPT], {
-    cwd: repoRoot,
-    encoding: 'utf-8',
-    env: {
-      ...process.env,
-      PYTHONPATH: mergePythonPath(),
-      PYTHONIOENCODING: 'utf-8',
-      PYTHONWARNINGS: 'ignore',
-    },
-    maxBuffer: 64 * 1024 * 1024,
-  });
-  if (result.error) {
-    throw result.error;
-  }
-  if (result.status !== 0) {
-    throw new Error(
-      `python scheduler-alerts oracle exited with status ${result.status}\nstderr:\n${
-        result.stderr ?? ''
-      }`,
-    );
-  }
-  const lastLine = (result.stdout ?? '')
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0)
-    .pop();
-  if (!lastLine) {
-    throw new Error('python scheduler-alerts oracle produced no JSON output');
-  }
-  oracleCache = JSON.parse(lastLine) as OraclePayload;
-  return oracleCache;
+  return golden<OraclePayload>(GOLDEN_FILE, 'schedule');
 }
 
 // ---------------------------------------------------------------------------

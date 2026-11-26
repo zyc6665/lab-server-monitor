@@ -1,0 +1,56 @@
+[
+  {
+    "name": "host-a",
+    "host": "10.0.0.11",
+    "port": 22,
+    "username": "monitor",
+    "auth": {
+      "type": "key",
+      "key_path": "/home/monitor/.ssh/id_rsa"
+    },
+    "tags": [
+      "lab",
+      "gpu"
+    ],
+    "disk_mounts": [
+      "/",
+      "/data"
+    ],
+    "group": "GPU 集群",
+    "owner": "alice",
+    "location": "机房 A",
+    "notes": "primary gpu node",
+    "checks": [
+      {
+        "name": "gateway",
+        "type": "ping",
+        "target": "10.0.0.1",
+        "timeout_seconds": 5,
+        "enabled": true
+      }
+    ],
+    "allow_user_write": false
+  },
+  {
+    "name": "host-b",
+    "host": "10.0.0.12",
+    "port": 22,
+    "username": "monitor",
+    "auth": {
+      "type": "key",
+      "key_path": "/home/monitor/.ssh/id_rsa"
+    },
+    "tags": [
+      "lab"
+    ],
+    "disk_mounts": [
+      "/"
+    ],
+    "group": "CPU 集群",
+    "owner": "bob",
+    "location": "机房 B",
+    "notes": "",
+    "checks": [],
+    "allow_user_write": false
+  }
+]

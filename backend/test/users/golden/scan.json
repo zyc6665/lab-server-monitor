@@ -1,0 +1,401 @@
+{
+  "_commit": "1ca108c",
+  "_source": "scan.json",
+  "entries": {
+    "[{\"id\":\"a\",\"op\":\"optional_field\",\"fields\":[\"H\",\"alice\",\"1\",\"root\",\"-\",\"  \"],\"index\":3},{\"id\":\"b\",\"op\":\"optional_field\",\"fields\":[\"H\",\"alice\",\"1\",\"root\",\"-\",\"  \"],\"index\":4},{\"id\":\"c\",\"op\":\"optional_field\",\"fields\":[\"H\",\"alice\",\"1\",\"root\",\"-\",\"  \"],\"index\":5},{\"id\":\"d\",\"op\":\"optional_field\",\"fields\":[\"H\",\"alice\"],\"index\":5},{\"id\":\"m1\",\"op\":\"scan_metadata\",\"fields\":[\"H\",\"alice\",\"1\",\"root\",\"-\",\"  \"]},{\"id\":\"m2\",\"op\":\"scan_metadata\",\"fields\":[\"D\",\"alice\",\"0\"]}]": {
+      "a": {
+        "ok": true,
+        "value": "root"
+      },
+      "b": {
+        "ok": true,
+        "value": null
+      },
+      "c": {
+        "ok": true,
+        "value": null
+      },
+      "d": {
+        "ok": true,
+        "value": null
+      },
+      "m1": {
+        "ok": true,
+        "value": {
+          "exists": true,
+          "group": null,
+          "mode": null,
+          "owner": "root"
+        }
+      },
+      "m2": {
+        "ok": true,
+        "value": {
+          "exists": false,
+          "group": null,
+          "mode": null,
+          "owner": null
+        }
+      }
+    },
+    "[{\"id\":\"a\",\"op\":\"parse_passwd\",\"text\":\"# comment line, ignored\\n\\nroot:x:0:0:root:/root:/bin/bash\\ndaemon:x:1:1:daemon:/usr/sbin:/usr/sbin/nologin\\nalice:x:1001:1001:Alice A:/home/alice:/bin/bash\\nbob:x:1002:1002:Bob:/home/bob:/bin/zsh\\nmalformed line without enough fields\\ncarol:x:1003:notanumber:Carol:/home/carol:/bin/bash\\ndave:x:1004:1004:Dave:/home/dave:/usr/sbin/nologin\\neve:x:1005:1005:Eve:/home/eve:/bin/false\\n张三:x:1006:1006:张三:/home/张三:/bin/bash\\n:x:1007:1007:empty name:/home/x:/bin/bash\\nfrank:x:1008:1008:Frank:/home/frank:/bin/bash:extra:field\\ngrace:x:1009:1009:Grace:/home/grace:/bin/bash\"},{\"id\":\"b\",\"op\":\"parse_passwd\",\"text\":\"alice:x:1010:1010:Alice:/home/alice:/bin/bash\\nbob:x:1010:1010:Bob:/home/bob:/bin/bash\"},{\"id\":\"c\",\"op\":\"parse_passwd\",\"text\":\"alice:x:1001:1001:Alice:/home/alice:/bin/bash\\r\\ndaemon:x:1:1:d:/:/sbin/nologin\\r\"}]": {
+      "a": {
+        "ok": true,
+        "value": [
+          {
+            "gecos": "Alice A",
+            "gid": 1001,
+            "home": "/home/alice",
+            "shell": "/bin/bash",
+            "uid": 1001,
+            "username": "alice"
+          },
+          {
+            "gecos": "Bob",
+            "gid": 1002,
+            "home": "/home/bob",
+            "shell": "/bin/zsh",
+            "uid": 1002,
+            "username": "bob"
+          },
+          {
+            "gecos": "张三",
+            "gid": 1006,
+            "home": "/home/张三",
+            "shell": "/bin/bash",
+            "uid": 1006,
+            "username": "张三"
+          },
+          {
+            "gecos": "Grace",
+            "gid": 1009,
+            "home": "/home/grace",
+            "shell": "/bin/bash",
+            "uid": 1009,
+            "username": "grace"
+          }
+        ]
+      },
+      "b": {
+        "ok": true,
+        "value": [
+          {
+            "gecos": "Alice",
+            "gid": 1010,
+            "home": "/home/alice",
+            "shell": "/bin/bash",
+            "uid": 1010,
+            "username": "alice"
+          },
+          {
+            "gecos": "Bob",
+            "gid": 1010,
+            "home": "/home/bob",
+            "shell": "/bin/bash",
+            "uid": 1010,
+            "username": "bob"
+          }
+        ]
+      },
+      "c": {
+        "ok": true,
+        "value": [
+          {
+            "gecos": "Alice",
+            "gid": 1001,
+            "home": "/home/alice",
+            "shell": "/bin/bash",
+            "uid": 1001,
+            "username": "alice"
+          }
+        ]
+      }
+    },
+    "[{\"id\":\"g\",\"op\":\"parse_group\",\"text\":\"# groups\\nroot:x:0:\\nsudo:x:27:alice,bob\\ndocker:x:999:alice\\nalice:x:1001: , bob ,,\\nempty:x:1002:\\ndup:x:1003:a\\ndup:x:1004:b\\nconflictA:x:2000:\\nconflictB:x:2000:\\nmalformed\\nbadgid:x:notnum:alice\"}]": {
+      "g": {
+        "ok": true,
+        "value": {
+          "gidMap": {
+            "0": "root",
+            "27": "sudo",
+            "999": "docker",
+            "1001": "alice",
+            "1002": "empty",
+            "1003": "dup",
+            "1004": "dup",
+            "2000": "conflictA"
+          },
+          "groups": {
+            "alice": [
+              "bob"
+            ],
+            "conflictA": [],
+            "conflictB": [],
+            "docker": [
+              "alice"
+            ],
+            "dup": [
+              "b"
+            ],
+            "empty": [],
+            "root": [],
+            "sudo": [
+              "alice",
+              "bob"
+            ]
+          }
+        }
+      }
+    },
+    "[{\"id\":\"n0\",\"op\":\"validate_username\",\"text\":\"alice\"},{\"id\":\"n1\",\"op\":\"validate_username\",\"text\":\"a\"},{\"id\":\"n2\",\"op\":\"validate_username\",\"text\":\"A_1.b-c\"},{\"id\":\"n3\",\"op\":\"validate_username\",\"text\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},{\"id\":\"n4\",\"op\":\"validate_username\",\"text\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},{\"id\":\"n5\",\"op\":\"validate_username\",\"text\":\"\"},{\"id\":\"n6\",\"op\":\"validate_username\",\"text\":\" spaced\"},{\"id\":\"n7\",\"op\":\"validate_username\",\"text\":\"bad name\"},{\"id\":\"n8\",\"op\":\"validate_username\",\"text\":\"张三\"},{\"id\":\"n9\",\"op\":\"validate_username\",\"text\":\"-lead\"},{\"id\":\"n10\",\"op\":\"validate_username\",\"text\":\".dotted\"},{\"id\":\"n11\",\"op\":\"validate_username\",\"text\":\"root\"},{\"id\":\"n12\",\"op\":\"validate_username\",\"text\":\"admin\"},{\"id\":\"n13\",\"op\":\"validate_username\",\"text\":\"../../../etc\"},{\"id\":\"n14\",\"op\":\"validate_username\",\"text\":\"a/b\"},{\"id\":\"n15\",\"op\":\"validate_username\",\"text\":\"a\\n\"}]": {
+      "n0": {
+        "ok": true,
+        "value": true
+      },
+      "n1": {
+        "ok": true,
+        "value": true
+      },
+      "n10": {
+        "ok": true,
+        "value": true
+      },
+      "n11": {
+        "ok": true,
+        "value": true
+      },
+      "n12": {
+        "ok": true,
+        "value": true
+      },
+      "n13": {
+        "ok": true,
+        "value": false
+      },
+      "n14": {
+        "ok": true,
+        "value": false
+      },
+      "n15": {
+        "ok": true,
+        "value": false
+      },
+      "n2": {
+        "ok": true,
+        "value": true
+      },
+      "n3": {
+        "ok": true,
+        "value": true
+      },
+      "n4": {
+        "ok": true,
+        "value": false
+      },
+      "n5": {
+        "ok": true,
+        "value": false
+      },
+      "n6": {
+        "ok": true,
+        "value": false
+      },
+      "n7": {
+        "ok": true,
+        "value": false
+      },
+      "n8": {
+        "ok": true,
+        "value": false
+      },
+      "n9": {
+        "ok": true,
+        "value": true
+      }
+    },
+    "[{\"id\":\"p\",\"op\":\"build_usage_command\",\"paths\":[\"/home/alice\",\"/data/bob\"]},{\"id\":\"q\",\"op\":\"build_usage_command\",\"paths\":[\"/home/with space\"]},{\"id\":\"r\",\"op\":\"build_usage_command\",\"paths\":[\"/home/o'brien\"]},{\"id\":\"x\",\"op\":\"build_usage_command\",\"paths\":[\"/etc/passwd\"]}]": {
+      "p": {
+        "ok": true,
+        "value": "if command -v ionice >/dev/null 2>&1; then ionice -c3 nice -n 19 du -sx --block-size=1 -- /home/alice /data/bob; else nice -n 19 du -sx --block-size=1 -- /home/alice /data/bob; fi"
+      },
+      "q": {
+        "ok": true,
+        "value": "if command -v ionice >/dev/null 2>&1; then ionice -c3 nice -n 19 du -sx --block-size=1 -- '/home/with space'; else nice -n 19 du -sx --block-size=1 -- '/home/with space'; fi"
+      },
+      "r": {
+        "ok": true,
+        "value": "if command -v ionice >/dev/null 2>&1; then ionice -c3 nice -n 19 du -sx --block-size=1 -- '/home/o'\"'\"'brien'; else nice -n 19 du -sx --block-size=1 -- '/home/o'\"'\"'brien'; fi"
+      },
+      "x": {
+        "error": "不允许统计该路径的占用: '/etc/passwd'",
+        "ok": false
+      }
+    },
+    "[{\"id\":\"s\",\"op\":\"build_scan_command\"}]": {
+      "s": {
+        "ok": true,
+        "value": "export LC_ALL=C\nif test -d /data; then printf 'P\\t1\\n'; else printf 'P\\t0\\n'; fi\nawk -F: '{ printf \"U\\t%s\\t%s\\t%s\\t%s\\t%s\\t%s\\n\", $1, $3, $4, $6, $7, $5 }' /etc/passwd 2>/dev/null || true\nawk -F: '{ printf \"G\\t%s\\t%s\\t%s\\n\", $1, $3, $4 }' /etc/group 2>/dev/null || true\nawk -F: '$3 >= 1000 && $7 !~ /(nologin|false)$/ { printf \"%s\\t%s\\n\", $1, $6 }' /etc/passwd 2>/dev/null | while IFS='\t' read -r name home; do\n  if test -d \"$home\"; then\n    meta=$(stat -c '%U:%G:%a' -- \"$home\" 2>/dev/null || true)\n  else\n    meta=\"\"\n  fi\n  owner=-\n  group=-\n  mode=-\n  if test -n \"$meta\"; then\n    IFS=: read -r owner group mode <<EOF\n$meta\nEOF\n    owner=${owner:--}\n    group=${group:--}\n    mode=${mode:--}\n  fi\n  if test -d \"$home\"; then\n    printf 'H\\t%s\\t1\\t%s\\t%s\\t%s\\n' \"$name\" \"$owner\" \"$group\" \"$mode\"\n  else\n    printf 'H\\t%s\\t0\\t-\\t-\\t-\\n' \"$name\"\n  fi\n  if test -d /data; then\n    data_path=\"/data/$name\"\n    if test -d \"$data_path\"; then\n      meta=$(stat -c '%U:%G:%a' -- \"$data_path\" 2>/dev/null || true)\n    else\n      meta=\"\"\n    fi\n    owner=-\n    group=-\n    mode=-\n    if test -n \"$meta\"; then\n      IFS=: read -r owner group mode <<EOF\n$meta\nEOF\n      owner=${owner:--}\n      group=${group:--}\n      mode=${mode:--}\n    fi\n    if test -d \"$data_path\"; then\n      printf 'D\\t%s\\t1\\t%s\\t%s\\t%s\\n' \"$name\" \"$owner\" \"$group\" \"$mode\"\n    else\n      printf 'D\\t%s\\t0\\t-\\t-\\t-\\n' \"$name\"\n    fi\n  fi\ndone\n"
+      }
+    },
+    "[{\"id\":\"s0\",\"op\":\"safe_usage_path\",\"path\":\"/home/alice\"},{\"id\":\"s1\",\"op\":\"safe_usage_path\",\"path\":\"/data/alice\"},{\"id\":\"s2\",\"op\":\"safe_usage_path\",\"path\":\"/home/alice/\"},{\"id\":\"s3\",\"op\":\"safe_usage_path\",\"path\":\"/home//alice\"},{\"id\":\"s4\",\"op\":\"safe_usage_path\",\"path\":\"/home/./alice\"},{\"id\":\"s5\",\"op\":\"safe_usage_path\",\"path\":\"/home/alice/../alice2\"},{\"id\":\"s6\",\"op\":\"safe_usage_path\",\"path\":\"/etc/passwd\"},{\"id\":\"s7\",\"op\":\"safe_usage_path\",\"path\":\"/dat\"},{\"id\":\"s8\",\"op\":\"safe_usage_path\",\"path\":\"/data\"},{\"id\":\"s9\",\"op\":\"safe_usage_path\",\"path\":\"/home/a\\nb\"},{\"id\":\"s10\",\"op\":\"safe_usage_path\",\"path\":\"/home/../etc\"},{\"id\":\"s11\",\"op\":\"safe_usage_path\",\"path\":\"/\"},{\"id\":\"s12\",\"op\":\"safe_usage_path\",\"path\":null},{\"id\":\"s13\",\"op\":\"safe_usage_path\",\"path\":123}]": {
+      "s0": {
+        "ok": true,
+        "value": "/home/alice"
+      },
+      "s1": {
+        "ok": true,
+        "value": "/data/alice"
+      },
+      "s10": {
+        "error": "路径不允许包含上级目录: '/home/../etc'",
+        "ok": false
+      },
+      "s11": {
+        "error": "不允许统计该路径的占用: '/'",
+        "ok": false
+      },
+      "s12": {
+        "error": "不允许统计该路径的占用: None",
+        "ok": false
+      },
+      "s13": {
+        "error": "不允许统计该路径的占用: 123",
+        "ok": false
+      },
+      "s2": {
+        "ok": true,
+        "value": "/home/alice"
+      },
+      "s3": {
+        "error": "路径不是规范形式: '/home//alice'",
+        "ok": false
+      },
+      "s4": {
+        "error": "路径不是规范形式: '/home/./alice'",
+        "ok": false
+      },
+      "s5": {
+        "error": "路径不允许包含上级目录: '/home/alice/../alice2'",
+        "ok": false
+      },
+      "s6": {
+        "error": "不允许统计该路径的占用: '/etc/passwd'",
+        "ok": false
+      },
+      "s7": {
+        "error": "不允许统计该路径的占用: '/dat'",
+        "ok": false
+      },
+      "s8": {
+        "error": "不允许统计该路径的占用: '/data'",
+        "ok": false
+      },
+      "s9": {
+        "error": "路径包含非法控制字符: '/home/a\\nb'",
+        "ok": false
+      }
+    },
+    "[{\"id\":\"u\",\"op\":\"parse_usage\",\"text\":\"4096\\t/home/alice\\n1048576\\t/data/alice\\n1.5M\\t/home/bob\\n-5\\t/home/neg\\n/home/notab\\n2048\\t/home/with space\\n0\\t/data/zero\\nabc\\t/home/x\\n4096\\t\\ndu: cannot read directory '/home/secret': Permission denied\\n8192\\t/data/alice\"}]": {
+      "u": {
+        "ok": true,
+        "value": {
+          "/data/alice": 8192,
+          "/data/zero": 0,
+          "/home/alice": 4096,
+          "/home/with space": 2048
+        }
+      }
+    },
+    "[{\"id\":\"valid\",\"op\":\"parse_scan_output\",\"text\":\"P\\t1\\nU\\talice\\t1001\\t1001\\t/home/alice\\t/bin/bash\\tAlice A\\nU\\tbob\\t1002\\t1002\\t/home/bob\\t/bin/zsh\\tBob\\nU\\tdaemon\\t1\\t1\\t/usr/sbin\\t/usr/sbin/nologin\\tdaemon\\nG\\talice\\t1001\\t\\nG\\tbob\\t1002\\t\\nG\\tsudo\\t27\\talice\\nG\\tdocker\\t999\\talice,bob\\nH\\talice\\t1\\troot\\troot\\t755\\nH\\tbob\\t1\\t-\\t-\\t-\\nD\\talice\\t1\\troot\\troot\\t700\\nD\\tbob\\t0\\t-\\t-\\t-\"},{\"id\":\"noMarker\",\"op\":\"parse_scan_output\",\"text\":\"U\\talice\\t1001\\t1001\\t/home/alice\\t/bin/bash\\t\\nG\\talice\\t1001\\t\"},{\"id\":\"noUserLine\",\"op\":\"parse_scan_output\",\"text\":\"P\\t1\\nG\\talice\\t1001\\t\"},{\"id\":\"unparseable\",\"op\":\"parse_scan_output\",\"text\":\"P\\t1\\nU\\tbroken-row\"},{\"id\":\"noGroups\",\"op\":\"parse_scan_output\",\"text\":\"P\\t1\\nU\\talice\\t1001\\t1001\\t/home/alice\\t/bin/bash\\t\"},{\"id\":\"shortUser\",\"op\":\"parse_scan_output\",\"text\":\"P\\t1\\nG\\talice\\t1001\\t\\nU\\talice\\t1001\\t1001\\t/home/alice\"}]": {
+      "noGroups": {
+        "error": "用户扫描输出缺少组信息，已保留上次结果",
+        "ok": false
+      },
+      "noMarker": {
+        "error": "用户扫描输出缺少结束标记，已保留上次结果",
+        "ok": false
+      },
+      "noUserLine": {
+        "error": "用户扫描输出缺少账号数据，已保留上次结果",
+        "ok": false
+      },
+      "shortUser": {
+        "error": "用户扫描输出无法解析，已保留上次结果",
+        "ok": false
+      },
+      "unparseable": {
+        "error": "用户扫描输出无法解析，已保留上次结果",
+        "ok": false
+      },
+      "valid": {
+        "ok": true,
+        "value": {
+          "dataDirs": {
+            "alice": {
+              "exists": true,
+              "group": "root",
+              "mode": "700",
+              "owner": "root"
+            },
+            "bob": {
+              "exists": false,
+              "group": null,
+              "mode": null,
+              "owner": null
+            }
+          },
+          "dataSupported": true,
+          "gidNames": {
+            "27": "sudo",
+            "999": "docker",
+            "1001": "alice",
+            "1002": "bob"
+          },
+          "groupMembers": {
+            "alice": [],
+            "bob": [],
+            "docker": [
+              "alice",
+              "bob"
+            ],
+            "sudo": [
+              "alice"
+            ]
+          },
+          "homes": {
+            "alice": {
+              "exists": true,
+              "group": "root",
+              "mode": "755",
+              "owner": "root"
+            },
+            "bob": {
+              "exists": true,
+              "group": null,
+              "mode": null,
+              "owner": null
+            }
+          },
+          "users": [
+            {
+              "gecos": "Alice A",
+              "gid": 1001,
+              "home": "/home/alice",
+              "shell": "/bin/bash",
+              "uid": 1001,
+              "username": "alice"
+            },
+            {
+              "gecos": "Bob",
+              "gid": 1002,
+              "home": "/home/bob",
+              "shell": "/bin/zsh",
+              "uid": 1002,
+              "username": "bob"
+            }
+          ]
+        }
+      }
+    }
+  }
+}

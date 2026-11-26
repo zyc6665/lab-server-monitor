@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+{% block title %}主机 - 服务器监控{% endblock %}
+
+{% macro pct(value) -%}
+{%- if value is undefined or value is none -%}—{%- elif value is string -%}{{ value }}{%- else -%}{{ '%.1f'|format(value) }}%{%- endif -%}
+{%- endmacro %}
+
+{% macro pctbar(value) -%}
+{%- if value is undefined or value is none -%}<span class="pct-value">—</span>{%- else -%}{%- set num = value|float -%}<span class="pct-meter" aria-hidden="true"><span class="pct-meter-fill" style="width: {{ 0 if num < 0 else (100 if num > 100 else num) }}%"></span></span><span class="pct-value">{{ '%.1f'|format(num) }}%</span>{%- endif -%}
+{%- endmacro %}
+
+{% macro checkbadge(checks) -%}
+{%- if checks and checks.total -%}
+<span class="check-summary{% if checks.failed %} check-failed{% elif checks.unknown %} check-unknown{% endif %}">{{ checks.ok }}/{{ checks.total }}</span>
+{%- else -%}
+<span class="check-summary check-empty">—</span>
+{%- endif -%}
+{%- endmacro %}
+
+{% block content %}
+<div class="page-head">
+  <div class="page-head-main">
+    <h1 class="page-title">主机</h1>
+    <p class="page-subtitle muted">共 {{ hosts|length }} 台 · 在线 {{ summary.online }} · 离线 {{ summary.offline }}</p>
+  </div>
+</div>
+
+<section class="card filter-bar" id="host-filter">
+  <label class="filter-field">分组
+    <select id="filter-group">
+      <option value="">全部分组</option>
+      {% for group in meta.groups %}
+      <option value="{{ group }}">{{ group }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  {% if meta.has_tags %}
+  <label class="filter-field">标签
+    <select id="filter-tag">
+      <option value="">全部标签</option>
+      {% for tag in meta.tags %}
+      <option value="{{ tag|lower }}">{{ tag }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  {% endif %}
+  {% if not meta.has_groups %}
+  <p class="group-hint">还没有配置分组：在<a href="/settings#hosts">设置 → 主机与 SSH</a>里给主机填上分组，就能按组筛选和汇总。</p>
+  {% endif %}
+  <label class="filter-field">状态
+    <select id="filter-status">
+      <option value="">全部</option>
+      <option value="online">在线</option>
+      <option value="offline">离线</option>
+      <option value="alert">有告警</option>
+      <option value="silenced">静默</option>
+      <option value="stale">采集不足</option>
+    </select>
+  </label>
+  <label class="filter-field filter-keyword">关键字
+    <input type="search" id="filter-keyword" placeholder="名称 / 地址 / 负责人" />
+  </label>
+  <span class="muted" id="filter-count"></span>
+</section>
+
+<section class="card">
+  <div class="section-head">
+    <h2>主机列表</h2>
+    <div class="host-bulk-actions">
+      <span class="muted" id="host-count">共 {{ hosts|length }} 台</span>
+      <button type="button" class="btn-link" id="collect-abnormal-hosts">采集异常</button>
+      <button type="button" class="btn-link" id="collect-all-hosts">采集全部</button>
+      <a class="btn-link button-link" id="export-fleet-report" href="{{ url_for('api_overview_report') }}">巡检报告</a>
+      <button type="button" class="btn-link" id="export-hosts">导出 CSV</button>
+    </div>
+  </div>
+  <p class="empty" id="empty-state"{% if hosts %} hidden{% endif %}>还没有主机。到<a href="{{ url_for('settings_page') }}#hosts">设置页</a>添加，或从 <code>~/.ssh/config</code> 批量导入。</p>
+  <div class="table-wrap">
+    <table class="data-table" id="host-table"{% if not hosts %} hidden{% endif %}>
+      <thead>
+        <tr>
+          <th data-sort-key="name">名称</th><th data-sort-key="host">地址</th><th data-sort-key="group">分组</th><th data-sort-key="owner">负责人</th><th data-sort-key="status">状态</th><th data-sort-key="alerts" class="col-alerts" title="该主机当前未确认的告警数">告警</th>
+          <th data-sort-key="cpu">CPU</th><th data-sort-key="memory">内存</th><th data-sort-key="disk" title="根分区等挂载点里最高的使用率">磁盘使用率</th><th data-sort-key="gpu">GPU 显存</th><th data-sort-key="users">登录用户</th>
+          <th data-sort-key="checks">检查</th><th data-sort-key="health" title="storcli 读到的物理盘与阵列健康">阵列健康</th><th data-sort-key="collected">采集时间</th><th>操作</th>
+        </tr>
+      </thead>
+      <tbody id="host-table-body">
+        {% for host in hosts %}
+        <tr data-host="{{ host.name }}"
+            data-group="{{ host.group }}"
+            data-owner="{{ host.owner }}"
+            data-online="{{ '1' if host.online else '0' }}"
+            data-silenced="{{ '1' if host.silenced else '0' }}"
+            data-alert-count="{{ host.active_alert_count }}"
+            data-tags="{{ (host.tags or [])|join('|')|lower }}"
+            data-search="{{ (host.name ~ ' ' ~ (host.host or '') ~ ' ' ~ host.group ~ ' ' ~ host.owner ~ ' ' ~ host.location ~ ' ' ~ (host.tags or [])|join(' '))|lower }}">
+          <td><a href="{{ url_for('host_page', name=host.name) }}">{{ host.name }}</a></td>
+          <td class="mono">{{ host.host or '—' }}</td>
+          <td>{{ host.group or '—' }}</td>
+          <td>{{ host.owner or '—' }}</td>
+          <td>
+            <span class="badge {{ 'badge-online' if host.online else 'badge-offline' }}">{{ '在线' if host.online else '离线' }}</span>
+            {% if host.silenced %}<span class="badge badge-silenced" title="静默至 {{ host.silenced_until or '—' }}">静默</span>{% endif %}
+          </td>
+          <td class="pct-cell">{{ pctbar(host.cpu_percent) }}</td>
+          <td class="pct-cell">{{ pctbar(host.memory_percent) }}</td>
+          <td class="pct-cell">{{ pctbar(host.disk_percent) }}</td>
+          <td class="pct-cell">{{ pctbar(host.gpu_memory_percent) }}</td>
+          <td>{{ host.logged_in_user_count }}</td>
+          <td class="check-cell">{{ checkbadge(host.checks) }}</td>
+          <td>
+            <span class="health health-{{ host.disk_health.status }}">{{ host.disk_health.status }}</span>
+            <span class="health-counts">健康 {{ host.disk_health.healthy }} · 告警 {{ host.disk_health.warning }} · 严重 {{ host.disk_health.critical }}</span>
+          </td>
+          <td class="mono"{% if host.collected_at %} title="{{ host.collected_at }}"{% endif %}>{{ host.collected_at|stamp }}</td>
+          <td class="host-actions">
+            <button type="button" class="btn-link host-collect" data-host-name="{{ host.name }}">采集</button>
+            <a class="btn-link terminal-link" href="/terminal?host={{ host.name|urlencode }}">终端</a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

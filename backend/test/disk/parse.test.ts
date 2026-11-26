@@ -24,11 +24,11 @@
  * If the Python interpreter / `servermanage.disk_health` is not importable the
  * differential suite is skipped; the Node-only suites still run.
  */
-import { spawnSync } from 'node:child_process';
 import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 
 import { describe, expect, it } from 'vitest';
+import { golden } from '../golden/golden';
 
 import {
   CONTROLLER_FIELD_MAP,
@@ -47,43 +47,12 @@ import { diffValues, findRepoRoot, type Diff } from '../diff/harness';
 const repoRoot = findRepoRoot();
 const TEST_DIR = path.join(repoRoot, 'backend', 'test', 'disk');
 const FIXTURE_DIR = path.join(TEST_DIR, 'fixtures');
-const ORACLE_SCRIPT = path.join(TEST_DIR, 'run_disk_parse_oracle.py');
-
-function defaultPython(): string {
-  return process.env.PYTHON ?? 'python';
-}
-
-function mergePythonPath(): string {
-  const existing = process.env.PYTHONPATH;
-  const sep = process.platform === 'win32' ? ';' : ':';
-  return existing ? `${repoRoot}${sep}${existing}` : repoRoot;
-}
 
 function readFixture(name: string): string {
   return readFileSync(path.join(FIXTURE_DIR, name), 'utf-8');
 }
 
-/** Probe once whether the Python disk_health oracle can run here. */
-function detectOracle(): { ok: boolean; detail: string } {
-  const result = spawnSync(defaultPython(), ['-c', 'import servermanage.disk_health'], {
-    cwd: repoRoot,
-    encoding: 'utf-8',
-    env: { ...process.env, PYTHONPATH: mergePythonPath(), PYTHONWARNINGS: 'ignore' },
-  });
-  if (result.error) {
-    return { ok: false, detail: String(result.error) };
-  }
-  if (result.status !== 0) {
-    return { ok: false, detail: `exit ${result.status}: ${(result.stderr ?? '').trim()}` };
-  }
-  return { ok: true, detail: 'ok' };
-}
-
-const oracleProbe = detectOracle();
-const itPython = oracleProbe.ok ? it : it.skip;
-if (!oracleProbe.ok) {
-  console.warn(`Python disk_health oracle unavailable; skipping diff groups: ${oracleProbe.detail}`);
-}
+const itPython = it;
 
 interface OracleResult {
   ok: boolean;
@@ -92,39 +61,9 @@ interface OracleResult {
   message?: string;
 }
 
+const GOLDEN_FILE = path.join(repoRoot, 'backend', 'test', 'disk', 'golden', 'parse.json');
 function runOracle(op: string, fixture: string, arg?: string): OracleResult {
-  const args = [ORACLE_SCRIPT, op, path.join(FIXTURE_DIR, fixture)];
-  if (arg !== undefined) {
-    args.push(arg);
-  }
-  const result = spawnSync(defaultPython(), args, {
-    cwd: repoRoot,
-    encoding: 'utf-8',
-    env: {
-      ...process.env,
-      PYTHONPATH: mergePythonPath(),
-      PYTHONIOENCODING: 'utf-8',
-      PYTHONWARNINGS: 'ignore',
-    },
-    maxBuffer: 64 * 1024 * 1024,
-  });
-  if (result.error) {
-    throw result.error;
-  }
-  if (result.status !== 0) {
-    throw new Error(
-      `python disk oracle exited with status ${result.status}\nstderr:\n${result.stderr ?? ''}`,
-    );
-  }
-  const lastLine = (result.stdout ?? '')
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0)
-    .pop();
-  if (!lastLine) {
-    throw new Error('python disk oracle produced no JSON output');
-  }
-  return JSON.parse(lastLine) as OracleResult;
+  return golden<OracleResult>(GOLDEN_FILE, `${op}|${fixture}|${arg ?? ''}`);
 }
 
 /** `snake_case` -> `camelCase` (digits kept: `vd_id` -> `vdId`). */
