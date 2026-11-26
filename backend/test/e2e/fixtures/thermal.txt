@@ -1,0 +1,2 @@
+x86_pkg_temp	72000
+acpitz	45000

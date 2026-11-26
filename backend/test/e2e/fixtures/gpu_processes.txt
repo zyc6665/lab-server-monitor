@@ -1,0 +1,2 @@
+GPU-aaaa-0000, 4242, 45000, python
+GPU-bbbb-1111, 5151, 1900, python
