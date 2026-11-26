@@ -38,7 +38,7 @@
  */
 import type { AppConfig, HostConfig } from '../config/config';
 import { loadEffectiveSettings } from '../config/service';
-import type { HostUserAccount } from '../collect/types';
+import type { CommandResult, HostUserAccount } from '../collect/types';
 import { hostToSshConnectConfig } from '../collect/collectors';
 import { SshClient } from '../collect/ssh-client';
 import { nowIsoUtc } from '../storage/time';
@@ -257,15 +257,26 @@ function readSshSettings(raw: Record<string, unknown>): SshRuntimeSettings {
 // ---------------------------------------------------------------------------
 
 /** Builds the production runner factory over a fresh {@link SshClient}. */
-function buildRunnerFactory(ssh: SshRuntimeSettings): UserScanRunnerFactory {
+type UserScanClientLike = {
+  run(command: string, timeoutMs: number): Promise<CommandResult>;
+  runSudo(command: string, password: string, timeoutMs: number): Promise<CommandResult>;
+  close(): void;
+};
+
+export function createUserScanRunnerFactory(
+  ssh: SshRuntimeSettings,
+  makeClient: (cfg: ReturnType<typeof hostToSshConnectConfig>) => UserScanClientLike = (cfg) => new SshClient(cfg),
+): UserScanRunnerFactory {
   return (host, connectTimeoutSec) => {
     const cfg = hostToSshConnectConfig(host, connectTimeoutSec, ssh.hostKeyPolicy);
-    const client = new SshClient(cfg);
+    const client = makeClient(cfg);
     const sudo = host.sudo_password;
     return {
-      run: (command, timeoutMs) => client.run(command, timeoutMs),
-      runSudo: (command, timeoutMs) =>
-        client.runSudo(command, typeof sudo === 'string' ? sudo : '', timeoutMs),
+      // The user-scan/admin protocol passes timeouts in whole seconds (Python
+      // oracle semantics); the SSH client expects milliseconds.
+      run: (command, timeoutSeconds) => client.run(command, timeoutSeconds * 1000),
+      runSudo: (command, timeoutSeconds) =>
+        client.runSudo(command, typeof sudo === 'string' ? sudo : '', timeoutSeconds * 1000),
       close: () => {
         client.close();
       },
@@ -566,7 +577,7 @@ export async function runUserScan(options: RunUserScanOptions): Promise<ScanSumm
   const settings = loadEffectiveSettings(db);
   const monitoring = readUserMonitoringConfig(settings.user_monitoring);
   const ssh = readSshSettings(settings.ssh);
-  const runnerFactory = options.runnerFactory ?? buildRunnerFactory(ssh);
+  const runnerFactory = options.runnerFactory ?? createUserScanRunnerFactory(ssh);
 
   const monitoringSnapshot = { user_monitoring: { enabled: monitoring.enabled } };
   const candidates = options.hosts ? [...options.hosts] : [...options.config.servers];
