@@ -127,6 +127,36 @@
   {% endif %}
 </section>
 
+<section class="card" id="host-stage-timings" data-host-panel="overview">
+  <details class="stage-timings">
+    <summary class="section-head">
+      <h2>采集耗时</h2>
+      <span class="muted">{% if detail.stage_timings and detail.stage_timings|length %}{{ detail.stage_timings|length }} 个阶段{% else %}暂无{% endif %}</span>
+    </summary>
+    {% if detail.stage_timings and detail.stage_timings|length %}
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead>
+          <tr><th>阶段</th><th>耗时</th><th>状态</th><th>错误</th></tr>
+        </thead>
+        <tbody>
+          {% for row in detail.stage_timings %}
+          <tr>
+            <td class="mono">{{ row.stage or '—' }}</td>
+            <td class="mono">{{ '%.0f'|format(row.ms) }} ms</td>
+            <td>{% if row.ok %}<span class="status status-ok">正常</span>{% else %}<span class="status status-failed">失败</span>{% endif %}</td>
+            <td class="mono">{{ row.error or '—' }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <p class="muted">暂无采集耗时数据。</p>
+    {% endif %}
+  </details>
+</section>
+
 <section class="card" id="host-diagnostics" data-host-panel="overview" data-host-name="{{ detail.name }}" data-host-address="{{ detail.host or '' }}" data-host-status="{{ detail.status }}" data-attention="{{ (detail.diagnostics_summary or {}).get('attention', 0) }}">
   <div class="section-head">
     <h2>健康诊断</h2>

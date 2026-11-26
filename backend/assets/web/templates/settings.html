@@ -65,6 +65,9 @@
       <label class="field"><span>并发数</span>
         <input type="number" min="1" max="32" data-field="concurrency" value="{{ settings.monitoring.concurrency }}">
       </label>
+      <label class="field"><span>采集阶段重试次数</span>
+        <input type="number" min="0" max="3" data-field="stage_retries" value="{{ settings.monitoring.stage_retries }}">
+      </label>
       <label class="field"><span>每台状态曲线保留点数</span>
         <input type="number" min="10" max="10000" data-field="host_metrics_max_points" value="{{ settings.monitoring.host_metrics_max_points }}">
       </label>

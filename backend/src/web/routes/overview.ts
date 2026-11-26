@@ -1012,6 +1012,14 @@ interface CollectionUptime {
   expected: number;
 }
 
+/** One row of the Node-only `stage_timings` slice (P1-1). */
+export interface StageTimingRow {
+  stage: string;
+  ms: number;
+  ok: boolean;
+  error?: string;
+}
+
 interface HostDetail {
   name: string;
   host: string | undefined;
@@ -1031,6 +1039,7 @@ interface HostDetail {
   users: Obj[];
   collection_uptime: CollectionUptime;
   uptime_strip: UptimeStrip;
+  stage_timings: StageTimingRow[];
   diagnostics: DiagnosticRow[];
   diagnostics_summary: DiagnosticsSummary;
   alert_days: AlertDay[];
@@ -1288,6 +1297,67 @@ export interface HostDetailPrecomputed {
   users?: Obj[];
   sampleCount?: number;
   uptimeStrip?: UptimeStrip;
+  stageTimings?: StageTimingRow[];
+}
+
+/**
+ * Normalises one raw `stageTimings` entry list into the page shape (P1-1).
+ * Malformed entries are dropped rather than rendered as blanks.
+ */
+function parseStageTimings(raw: unknown): StageTimingRow[] {
+  const rows: StageTimingRow[] = [];
+  for (const entry of asArray(raw)) {
+    const row = asObj(entry);
+    const ms = asFloat(row.ms);
+    if (typeof row.stage !== 'string' || row.stage === '' || ms === null) {
+      continue;
+    }
+    const timing: StageTimingRow = { stage: row.stage, ms, ok: row.ok === true };
+    if (typeof row.error === 'string' && row.error !== '') {
+      timing.error = row.error;
+    }
+    rows.push(timing);
+  }
+  return rows;
+}
+
+/**
+ * Reads the Node-only stage-timing extension out of a stored snapshot's raw
+ * JSON payload. `decodeSnapshot` intentionally drops unknown keys, so the raw
+ * row is read directly. Accepts both the `HostReport` camelCase spelling
+ * (`stageTimings`) and the snake_case storage spelling (`stage_timings`).
+ * Legacy snapshots / invalid JSON yield `[]`.
+ */
+function stageTimingsFromRawJson(rawJson: string | null | undefined): StageTimingRow[] {
+  if (!rawJson) {
+    return [];
+  }
+  try {
+    const payload = asObj(JSON.parse(rawJson));
+    return parseStageTimings(payload.stageTimings ?? payload.stage_timings);
+  } catch {
+    return [];
+  }
+}
+
+/** Per-host `stage_timings` for the single-host detail path. */
+function readHostStageTimings(db: SqliteDatabase, hostName: string): StageTimingRow[] {
+  const row = db
+    .prepare('SELECT raw_json FROM host_latest_snapshot WHERE host_name = ?')
+    .get(hostName) as { raw_json: string | null } | undefined;
+  return row ? stageTimingsFromRawJson(row.raw_json) : [];
+}
+
+/** One batched read for every host, mirroring the fleet-report batching. */
+function fetchAllHostStageTimings(db: SqliteDatabase): Map<string, StageTimingRow[]> {
+  const rows = db
+    .prepare('SELECT host_name, raw_json FROM host_latest_snapshot')
+    .all() as Array<{ host_name: string; raw_json: string | null }>;
+  const grouped = new Map<string, StageTimingRow[]>();
+  for (const row of rows) {
+    grouped.set(row.host_name, stageTimingsFromRawJson(row.raw_json));
+  }
+  return grouped;
 }
 
 /**
@@ -1323,6 +1393,8 @@ export function buildHostDetail(
   const samples = precomputed.sampleCount ?? countRecentSamples(db, name, { hours: 24 });
   const uptimeStrip =
     precomputed.uptimeStrip ?? fetchHostUptimeStrip(db, name, { hours: 24, bucketMinutes: 15 });
+  // P1-1: Node-only per-stage collection timings; legacy snapshots → [].
+  const stageTimings = precomputed.stageTimings ?? readHostStageTimings(db, name);
 
   const detail: HostDetail = {
     name,
@@ -1346,6 +1418,7 @@ export function buildHostDetail(
       expected: Math.max(1, Math.trunc((24 * 3600) / pollSeconds)),
     },
     uptime_strip: uptimeStrip,
+    stage_timings: stageTimings,
     diagnostics: [],
     diagnostics_summary: { crit: 0, warn: 0, ok: 0, attention: 0 },
     alert_days: [],
@@ -1382,6 +1455,7 @@ function buildFleetReport(
   const networkGrouped = fetchAllHostNetworkRates(db);
   const sampleCounts = countRecentSamplesByHost(db, { hours: 24 });
   const uptimeStrips = fetchAllHostUptimeStrips(db, { hours: 24, bucketMinutes: 15 });
+  const stageTimingsGrouped = fetchAllHostStageTimings(db);
   const userSnapshots = getAllHostUserSnapshots(db);
   const userBaselines = getAllUserBaselines(db);
   const userDeltas = getAllUserUsageDeltas(db, { days: USAGE_DELTA_DAYS });
@@ -1416,6 +1490,7 @@ function buildFleetReport(
           users,
           sampleCount: sampleCounts[server.name] ?? 0,
           uptimeStrip: uptimeStrips[server.name],
+          stageTimings: stageTimingsGrouped.get(server.name) ?? [],
         },
       ),
     );

@@ -33,10 +33,16 @@ import {
   computeWeeklyFire,
   currentPeriodTarget,
   isReportDue,
+  normalizeDt,
   parseIsoOrNull,
   shouldRun,
   toLocalWall,
 } from './schedule-time';
+import {
+  recordTaskRunFinish,
+  recordTaskRunStart,
+  type TaskRunTrigger,
+} from '../storage/task-runs';
 import { getTaskState, setTaskState } from '../storage/tasks';
 import { nowIsoUtc } from '../storage/time';
 
@@ -85,6 +91,65 @@ export interface SchedulerOptions {
   tickMs?: number;
 }
 
+/** Thrown by {@link Scheduler.runTaskNow} when the task is already in flight. */
+export class TaskRunningError extends Error {
+  /** Name of the task that is currently running. */
+  readonly task: string;
+
+  constructor(task: string) {
+    super(`task already running: ${task}`);
+    this.name = 'TaskRunningError';
+    this.task = task;
+  }
+}
+
+/** Thrown by {@link Scheduler.runTaskNow} for a name the scheduler does not know. */
+export class TaskNotFoundError extends Error {
+  /** The unknown task name. */
+  readonly task: string;
+
+  constructor(task: string) {
+    super(`unknown task: ${task}`);
+    this.name = 'TaskNotFoundError';
+    this.task = task;
+  }
+}
+
+/**
+ * Public description of one scheduled task, consumed by the task-center API
+ * (`GET /api/system/tasks`).
+ *
+ * `schedule` is display text; the structured fields (`kind`, `interval_seconds`,
+ * `hhmm`, `weekday`) let a client format it differently if needed.
+ */
+export interface ScheduledTaskInfo {
+  name: string;
+  /** Human-readable cadence, e.g. `每 5 分钟`, `每天 09:00`, `每周五 16:00`. */
+  schedule: string;
+  /** Which cadence source is set: bare interval, daily or weekly calendar. */
+  kind: 'interval' | 'daily' | 'weekly';
+  /** Interval length in seconds (null for calendar tasks). */
+  interval_seconds: number | null;
+  /** Local wall-clock `HH:MM` (null for interval tasks). */
+  hhmm: string | null;
+  /** Python weekday, Monday = 0 (null unless weekly). */
+  weekday: number | null;
+  /** Whether a run is in flight right now. */
+  running: boolean;
+  /**
+   * Best-effort next due instant (UTC ISO string, `null` when the schedule is
+   * malformed or cannot be projected). Approximation: when the task is already
+   * overdue this returns "now" because the next tick will pick it up.
+   */
+  next_run_at: string | null;
+}
+
+/** A started run: its row id plus the promise that settles when it finishes. */
+interface StartedRun {
+  runId: number;
+  done: Promise<void>;
+}
+
 /** Clamp a tick value into the allowed 1…60 s window. */
 function clampTick(ms: number): number {
   return Math.max(MIN_TICK_MS, Math.min(ms, MAX_TICK_MS));
@@ -125,6 +190,10 @@ export class Scheduler {
   private readonly _tickMs: number;
   private timer: ReturnType<typeof setInterval> | null = null;
   private ticking = false;
+  /** Names whose task body is currently executing (single-flight guard). */
+  private readonly running = new Set<string>();
+  /** Detached run promises (manual triggers) awaited by {@link waitForIdle}. */
+  private readonly pending = new Set<Promise<void>>();
 
   constructor(tasks: ScheduledTask[], options: SchedulerOptions) {
     this.tasks = [...tasks];
@@ -152,6 +221,11 @@ export class Scheduler {
     const nowLocal = toLocalWall(instant, this.tz);
 
     for (const task of this.tasks) {
+      // Single-flight: a manual trigger (or an overlapping cycle) already owns
+      // this task; skip it without consuming its slot.
+      if (this.running.has(task.name)) {
+        continue;
+      }
       const lastRunAt = this.readLastRunAt(task.name);
       try {
         // The due check itself is guarded: a malformed schedule (e.g. "25:99")
@@ -159,10 +233,6 @@ export class Scheduler {
         if (!this.isDue(task, nowLocal, lastRunAt)) {
           continue;
         }
-        if (!invoked.includes(task.name)) {
-          invoked.push(task.name);
-        }
-        await task.run();
       } catch (exc) {
         if (!invoked.includes(task.name)) {
           invoked.push(task.name);
@@ -170,10 +240,92 @@ export class Scheduler {
         this.record(task.name, instant, describeError(exc));
         continue;
       }
-      this.record(task.name, instant, 'ok');
+
+      let started: StartedRun;
+      try {
+        started = this.startTask(task, 'schedule', instant);
+      } catch {
+        // Bookkeeping failure (e.g. an uninitialised task_runs table): leave
+        // the slot unconsumed so the next tick retries instead of silently
+        // marking the task as run.
+        continue;
+      }
+      if (!invoked.includes(task.name)) {
+        invoked.push(task.name);
+      }
+      await started.done;
     }
 
     return invoked;
+  }
+
+  /**
+   * Whether `name` currently has a run in flight.
+   *
+   * The set is in-process only: it covers the background loop and manual
+   * triggers in this Node process (single-process deployment).
+   */
+  isRunning(name: string): boolean {
+    return this.running.has(name);
+  }
+
+  /** Names with a run in flight right now (insertion order). */
+  runningTasks(): string[] {
+    return [...this.running];
+  }
+
+  /**
+   * Public description of every registered task for the task-center API.
+   *
+   * `next_run_at` is a best-effort projection (see {@link ScheduledTaskInfo}).
+   */
+  taskInfos(): ScheduledTaskInfo[] {
+    const instant = this.now();
+    const nowLocal = toLocalWall(instant, this.tz);
+    return this.tasks.map((task) => {
+      const lastRunAt = this.readLastRunAt(task.name);
+      return {
+        name: task.name,
+        schedule: describeSchedule(task),
+        kind: task.calendar?.kind ?? 'interval',
+        interval_seconds: task.calendar === undefined ? task.intervalSeconds ?? 0 : null,
+        hhmm: task.calendar?.hhmm ?? null,
+        weekday: task.calendar?.weekday ?? null,
+        running: this.running.has(task.name),
+        next_run_at: this.nextRunAt(task, instant, nowLocal, lastRunAt),
+      };
+    });
+  }
+
+  /**
+   * Trigger `name` immediately, recording a `manual` run row.
+   *
+   * Resolves as soon as the run row exists and the task body has been started;
+   * completion is recorded asynchronously in `task_runs` / `task_state` (use
+   * {@link waitForIdle} to await it). Rejects with {@link TaskRunningError} when
+   * the task is already in flight and {@link TaskNotFoundError} for an unknown
+   * name.
+   */
+  async runTaskNow(name: string): Promise<{ runId: number }> {
+    const task = this.tasks.find((candidate) => candidate.name === name);
+    if (task === undefined) {
+      throw new TaskNotFoundError(name);
+    }
+    const { runId, done } = this.startTask(task, 'manual', this.now());
+    this.track(done);
+    return { runId };
+  }
+
+  /**
+   * Resolves once no detached (manual) run is in flight.
+   *
+   * Intended for tests and orderly shutdown; the background tick is awaited by
+   * {@link stop} only through its own timer clearing.
+   */
+  async waitForIdle(): Promise<void> {
+    while (this.pending.size > 0) {
+      await Promise.all([...this.pending]);
+    }
   }
 
   /**
@@ -291,6 +443,169 @@ export class Scheduler {
       this.ticking = false;
     }
   }
+
+  /**
+   * Start one run: enforce single-flight, insert the `task_runs` row, then
+   * invoke the body.
+   *
+   * Throws {@link TaskRunningError} for a duplicate start. A `task_runs` insert
+   * failure propagates before the body executes (the caller decides whether to
+   * skip or surface it).
+   */
+  private startTask(
+    task: ScheduledTask,
+    trigger: TaskRunTrigger,
+    instant: Date,
+  ): StartedRun {
+    if (this.running.has(task.name)) {
+      throw new TaskRunningError(task.name);
+    }
+    const runId = recordTaskRunStart(this.db, {
+      task: task.name,
+      trigger,
+      startedAt: nowIsoUtc(this.now()),
+    });
+    this.running.add(task.name);
+    return { runId, done: this.completeTask(task, runId, instant) };
+  }
+
+  /** Run the body, persist the outcome, release the single-flight slot. */
+  private completeTask(
+    task: ScheduledTask,
+    runId: number,
+    instant: Date,
+  ): Promise<void> {
+    return (async () => {
+      try {
+        let failed = false;
+        let result = 'ok';
+        try {
+          await task.run();
+        } catch (exc) {
+          failed = true;
+          result = describeError(exc);
+        }
+        this.finishRun(
+          runId,
+          failed
+            ? { status: 'error', error: result.slice(0, MAX_RESULT_LENGTH) }
+            : { status: 'ok' },
+        );
+        this.record(task.name, instant, result);
+      } finally {
+        this.running.delete(task.name);
+      }
+    })();
+  }
+
+  /** Complete the `task_runs` row; recording failures are swallowed. */
+  private finishRun(
+    runId: number,
+    input: { status: 'ok' | 'error'; error?: string },
+  ): void {
+    try {
+      recordTaskRunFinish(this.db, runId, {
+        ...input,
+        finishedAt: nowIsoUtc(this.now()),
+      });
+    } catch {
+      // ignore — run bookkeeping must never abort the scheduler loop
+    }
+  }
+
+  /** Track a detached run so {@link waitForIdle} can await it. */
+  private track(done: Promise<void>): void {
+    const entry: Promise<void> = done.then(
+      () => {
+        this.pending.delete(entry);
+      },
+      () => {
+        this.pending.delete(entry);
+      },
+    );
+    this.pending.add(entry);
+  }
+
+  /**
+   * Best-effort next due projection, as a UTC ISO string.
+   *
+   * Interval tasks fire at `last_run_at + interval`; calendar tasks at the
+   * first occurrence after the last run (or the current period's occurrence
+   * when they never ran). A task that is already overdue reports "now" because
+   * the next tick will pick it up. Malformed schedules yield `null` instead of
+   * failing the listing API.
+   */
+  private nextRunAt(
+    task: ScheduledTask,
+    instant: Date,
+    nowLocal: Date,
+    lastRunAt: Date | null,
+  ): string | null {
+    try {
+      let target: Date;
+      if (task.calendar !== undefined) {
+        const { kind, hhmm, weekday } = task.calendar;
+        if (lastRunAt !== null) {
+          target =
+            kind === 'daily'
+              ? computeDailyFire(lastRunAt, hhmm)
+              : computeWeeklyFire(lastRunAt, requireWeekday(weekday), hhmm);
+        } else {
+          target = currentPeriodTarget(
+            nowLocal,
+            kind === 'daily' ? 1 : 7,
+            hhmm,
+            weekday,
+          );
+        }
+      } else {
+        const intervalSeconds = task.intervalSeconds ?? 0;
+        if (!(intervalSeconds > 0) || lastRunAt === null) {
+          return nowIsoUtc(instant);
+        }
+        target = new Date(lastRunAt.getTime() + intervalSeconds * 1_000);
+      }
+      if (target.getTime() <= nowLocal.getTime()) {
+        return nowIsoUtc(instant);
+      }
+      return nowIsoUtc(normalizeDt(target, this.tz));
+    } catch {
+      return null;
+    }
+  }
+}
+
+/** Chinese weekday labels indexed by Python weekday (Monday = 0). */
+const WEEKDAY_LABELS = ['一', '二', '三', '四', '五', '六', '日'] as const;
+
+/** Display text for an interval task's cadence. */
+function describeInterval(seconds: number): string {
+  if (!(seconds > 0)) {
+    return '不定时';
+  }
+  if (seconds % 3_600 === 0) {
+    return `每 ${seconds / 3_600} 小时`;
+  }
+  if (seconds % 60 === 0) {
+    return `每 ${seconds / 60} 分钟`;
+  }
+  return `每 ${seconds} 秒`;
+}
+
+/** Display text for a task's cadence (`每 5 分钟` / `每天 09:00` / `每周五 16:00`). */
+function describeSchedule(task: ScheduledTask): string {
+  if (task.calendar !== undefined) {
+    const { kind, hhmm, weekday } = task.calendar;
+    if (kind === 'weekly') {
+      const label =
+        weekday !== undefined && Number.isInteger(weekday) && weekday >= 0 && weekday <= 6
+          ? WEEKDAY_LABELS[weekday]
+          : '?';
+      return `每周${label} ${hhmm}`;
+    }
+    return `每天 ${hhmm}`;
+  }
+  return describeInterval(task.intervalSeconds ?? 0);
 }
 
 /** Require a weekday for weekly calendars; throw the same shape as the Python oracle. */

@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}任务 - 服务器监控{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div class="page-head-main">
+    <h1 class="page-title">任务</h1>
+    <p class="page-subtitle muted">查看后台定时任务的调度、最近一次结果与耗时，并手动触发一次运行。页面每 5 秒自动刷新。</p>
+  </div>
+</div>
+
+<section class="card" id="tasks-card">
+  <div class="section-head">
+    <h2>定时任务</h2>
+    <span class="muted small" id="tasks-updated">正在加载…</span>
+    <button type="button" class="btn-secondary" id="tasks-refresh">刷新</button>
+  </div>
+  <div class="table-wrap">
+    <table class="data-table" id="tasks-table">
+      <thead>
+        <tr>
+          <th>任务</th>
+          <th>调度</th>
+          <th>下次执行</th>
+          <th>上次运行</th>
+          <th>上次结果</th>
+          <th>状态</th>
+          <th>耗时</th>
+          <th>操作</th>
+        </tr>
+      </thead>
+      <tbody id="task-rows">
+        <tr><td colspan="8" class="empty">正在加载任务…</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="muted small">手动触发只会在后台启动一次运行，不会中断正在执行的任务；任务正在运行时请稍后再试。</p>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script type="module" src="{{ asset_url('pages/tasks.js') }}"></script>
+{% endblock %}

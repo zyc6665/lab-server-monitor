@@ -243,9 +243,28 @@ export interface HostCheckResult {
 }
 
 /**
+ * Node-side additive extension (P1-1 采集耗时), not part of the Python model.
+ *
+ * One entry per collection stage the collector actually ran, in execution
+ * order. `ms` is the wall-clock cost including any retry of that stage, `ok` is
+ * false when the stage reported a failure (or was abandoned), and `error`
+ * carries the failure text (remote `stderr` / `command exited N` / SSH-layer
+ * exception message) for failed stages only.
+ */
+export interface StageTiming {
+  stage: string;
+  ms: number;
+  ok: boolean;
+  error?: string;
+}
+
+/**
  * `servermanage/models.py:478-486` — `HostReport`.
  * `metrics` defaults to `HostMetrics()`; `errors` / `checks` / `users`
  * default to empty arrays.
+ *
+ * `stageTimings` is a Node-only additive field (P1-1): optional so every
+ * pre-existing report / snapshot / fixture that predates it stays valid.
  */
 export interface HostReport {
   hostName: string;
@@ -255,6 +274,7 @@ export interface HostReport {
   errors: HostCollectionError[];
   checks: HostCheckResult[];
   users: HostUserAccount[];
+  stageTimings?: StageTiming[];
 }
 
 /** `servermanage/models.py:568-571` — `CommandResult` (camelCase `exitStatus`). */

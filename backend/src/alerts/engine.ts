@@ -58,6 +58,7 @@ import {
   updateAlert,
   type AlertRow,
 } from '../storage/alerts';
+import { recordDeliveryFailure } from '../storage/alert-delivery';
 import { buildMessage, sendReport, type SendReportOptions, type SmtpConfig } from './mailer';
 import {
   sendWebhook,
@@ -102,13 +103,54 @@ export interface AlertsConfig {
  * event (e.g. `["desktop", "email"]`). `dispatchBatch` merges several same-host
  * events into one message; it is optional so legacy `dispatch`-only doubles
  * keep working (and, like Python, do not get automatic recovery notifications).
+ *
+ * Both methods accept an optional {@link DispatchHooks} third argument. It is
+ * purely additive: existing implementations and callers that omit it behave
+ * exactly as before. The engine uses it to learn about per-channel throws
+ * (`onChannelFailure`) and the resend route uses it to restrict delivery to a
+ * subset of channels (`only`).
  */
 export interface NotifierProtocol {
-  dispatch(event: AlertEvent, config: AlertsConfig): string[] | Promise<string[]>;
+  dispatch(
+    event: AlertEvent,
+    config: AlertsConfig,
+    hooks?: DispatchHooks,
+  ): string[] | Promise<string[]>;
   dispatchBatch?(
     events: AlertEvent[],
     config: AlertsConfig,
+    hooks?: DispatchHooks,
   ): string[] | Promise<string[]>;
+}
+
+/** One channel that threw while delivering an alert. */
+export interface ChannelFailure {
+  /** Channel name (`desktop` / `email` / `webhook`). */
+  channel: string;
+  /** Destination the notifier attempted, when known. */
+  target?: string | null;
+  /** The thrown error's message. */
+  error: string;
+}
+
+/**
+ * Optional per-dispatch hooks. `only` limits delivery to the named channels
+ * (manual resend); `onChannelFailure` observes each isolated channel throw
+ * without changing the dispatch result.
+ */
+export interface DispatchHooks {
+  onChannelFailure?: (failure: ChannelFailure) => void;
+  only?: readonly string[];
+}
+
+/** Derives a best-effort destination label for a channel from the config. */
+function channelTarget(name: string, config: AlertsConfig): string | null {
+  if (name === 'webhook') {
+    const webhook = config.webhook;
+    const url = webhook?.url ?? webhook?.urlEnv ?? webhook?.url_env;
+    return typeof url === 'string' && url ? url : null;
+  }
+  return null;
 }
 
 /** A per-channel send function: resolves `true` when the channel accepted it. */
@@ -321,15 +363,24 @@ export function _severity_rank(severity: string | null | undefined): number {
  */
 export class Notifier implements NotifierProtocol {
   private readonly channels: NotifierChannels;
+  private readonly onChannelFailure?: (failure: ChannelFailure) => void;
 
-  constructor(channels: NotifierChannels = {}) {
+  constructor(
+    channels: NotifierChannels = {},
+    options: { onChannelFailure?: (failure: ChannelFailure) => void } = {},
+  ) {
     this.channels = channels;
+    this.onChannelFailure = options.onChannelFailure;
   }
 
-  async dispatch(event: AlertEvent, config: AlertsConfig): Promise<string[]> {
+  async dispatch(
+    event: AlertEvent,
+    config: AlertsConfig,
+    hooks?: DispatchHooks,
+  ): Promise<string[]> {
     const accepted: string[] = [];
-    await this.runChannel(accepted, 'desktop', config.desktop_notification, this.channels.desktop, event, config);
-    await this.runChannel(accepted, 'email', config.email, this.channels.email, event, config);
+    await this.runChannel(accepted, 'desktop', config.desktop_notification, this.channels.desktop, event, config, hooks);
+    await this.runChannel(accepted, 'email', config.email, this.channels.email, event, config, hooks);
     await this.runChannel(
       accepted,
       'webhook',
@@ -337,19 +388,24 @@ export class Notifier implements NotifierProtocol {
       this.channels.webhook,
       event,
       config,
+      hooks,
     );
     return accepted;
   }
 
-  async dispatchBatch(events: AlertEvent[], config: AlertsConfig): Promise<string[]> {
+  async dispatchBatch(
+    events: AlertEvent[],
+    config: AlertsConfig,
+    hooks?: DispatchHooks,
+  ): Promise<string[]> {
     const list = [...events];
     if (list.length === 0) {
       return [];
     }
     if (list.length === 1) {
-      return this.dispatch(list[0], config);
+      return this.dispatch(list[0], config, hooks);
     }
-    return this.dispatch(_batch_event(list), config);
+    return this.dispatch(_batch_event(list), config, hooks);
   }
 
   private async runChannel(
@@ -359,7 +415,11 @@ export class Notifier implements NotifierProtocol {
     adapter: ChannelAdapter | null | undefined,
     event: AlertEvent,
     config: AlertsConfig,
+    hooks?: DispatchHooks,
   ): Promise<void> {
+    if (hooks?.only && !hooks.only.includes(name)) {
+      return;
+    }
     if (!enabled || typeof adapter !== 'function') {
       return;
     }
@@ -368,8 +428,22 @@ export class Notifier implements NotifierProtocol {
       if (ok) {
         accepted.push(name);
       }
-    } catch {
+    } catch (err) {
       // One channel must never break the others (`_dispatch_*` isolation).
+      // Surface the throw to an observer (engine failure trail / tests) without
+      // changing the dispatch result.
+      const handler = hooks?.onChannelFailure ?? this.onChannelFailure;
+      if (typeof handler === 'function') {
+        try {
+          handler({
+            channel: name,
+            target: channelTarget(name, config),
+            error: err instanceof Error ? err.message : String(err),
+          });
+        } catch {
+          // Observers must never break dispatch either.
+        }
+      }
     }
   }
 }
@@ -553,7 +627,7 @@ export class AlertEngine {
       if (alertId === null) {
         continue;
       }
-      const channels = await this._dispatch(event);
+      const channels = await this._dispatch(event, alertId);
       this._record_channels(alertId, channels);
       if (channels.length > 0) {
         notified.push(event);
@@ -582,7 +656,7 @@ export class AlertEngine {
         if (alertId === null) {
           continue;
         }
-        const channels = await this._dispatch(event);
+        const channels = await this._dispatch(event, alertId);
         this._record_channels(alertId, channels);
         if (channels.length > 0) {
           notified.push(event);
@@ -602,7 +676,10 @@ export class AlertEngine {
       }
 
       const batchEvents = persisted.map((item) => item.event);
-      const channels = await this._dispatch_batch(batchEvents);
+      const channels = await this._dispatch_batch(
+        batchEvents,
+        persisted.map((item) => item.alertId),
+      );
       for (const item of persisted) {
         this._record_channels(item.alertId, channels);
       }
@@ -938,9 +1015,13 @@ export class AlertEngine {
   }
 
   /** `_dispatch`: notify one event; notifier errors -> empty channel list. */
-  private async _dispatch(event: AlertEvent): Promise<string[]> {
+  private async _dispatch(event: AlertEvent, alertId: number | null = null): Promise<string[]> {
     try {
-      const channels = await this.notifier.dispatch(event, this.config);
+      const channels = await this.notifier.dispatch(
+        event,
+        this.config,
+        this._failureHook(alertId === null ? [] : [alertId]),
+      );
       return Array.isArray(channels) ? [...channels] : [];
     } catch {
       return [];
@@ -951,18 +1032,22 @@ export class AlertEngine {
    * `_dispatch_batch`: dispatch a same-host batch, tolerating notifiers without
    * `dispatchBatch` (fall back to per-event dispatch and union the channels).
    */
-  private async _dispatch_batch(events: AlertEvent[]): Promise<string[]> {
+  private async _dispatch_batch(
+    events: AlertEvent[],
+    alertIds: readonly number[] = [],
+  ): Promise<string[]> {
     if (events.length === 0) {
       return [];
     }
     if (events.length === 1) {
-      return this._dispatch(events[0]);
+      return this._dispatch(events[0], alertIds[0] ?? null);
     }
 
+    const hooks = this._failureHook(alertIds);
     const batch = this.notifier.dispatchBatch;
     if (typeof batch === 'function') {
       try {
-        const channels = await batch.call(this.notifier, events, this.config);
+        const channels = await batch.call(this.notifier, events, this.config, hooks);
         return Array.isArray(channels) ? [...channels] : [];
       } catch {
         return [];
@@ -970,14 +1055,53 @@ export class AlertEngine {
     }
 
     const accepted: string[] = [];
-    for (const event of events) {
-      for (const channel of await this._dispatch(event)) {
+    for (let index = 0; index < events.length; index += 1) {
+      for (const channel of await this._dispatch(events[index], alertIds[index] ?? null)) {
         if (!accepted.includes(channel)) {
           accepted.push(channel);
         }
       }
     }
     return accepted;
+  }
+
+  /**
+   * Builds the {@link DispatchHooks} that persist every observed channel throw
+   * against each alert id in `alertIds`. Duplicate failures (same alert +
+   * channel + message) within one dispatch are coalesced so a batch that merges
+   * N events does not write N identical rows per alert.
+   */
+  private _failureHook(alertIds: readonly number[]): DispatchHooks {
+    if (alertIds.length === 0) {
+      return {};
+    }
+    const seen = new Set<string>();
+    return {
+      onChannelFailure: (failure) => {
+        for (const alertId of alertIds) {
+          const key = `${alertId}\u0000${failure.channel}\u0000${failure.error}`;
+          if (seen.has(key)) {
+            continue;
+          }
+          seen.add(key);
+          this._record_failure(alertId, failure);
+        }
+      },
+    };
+  }
+
+  /** Persists one delivery failure; DB errors are swallowed (degradation). */
+  private _record_failure(alertId: number, failure: ChannelFailure): void {
+    try {
+      recordDeliveryFailure(this.db, {
+        alertId,
+        channel: failure.channel,
+        target: failure.target ?? null,
+        error: failure.error,
+      });
+    } catch {
+      // Visibility is best-effort; never break the polling cycle.
+    }
   }
 
   /** `_record_channels`: write the comma-joined accepted channels back. */

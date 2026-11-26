@@ -57,9 +57,12 @@ export const ALLOWED_DIFFS: Record<string, string[]> = {
     // `report.executive` sub-section (管理层摘要版日报: enabled / subject_prefix /
     // to_addrs) after the Python oracle was frozen, so the Node payload carries
     // one extra object under `report` that the golden response cannot contain.
-    // No existing field changed shape or value; the extension is covered by
-    // test/config/report-executive.test.ts and test/web/settings.test.ts.
-    'additive key: Node-only `report.executive` settings block (executive daily report) absent from the frozen Python oracle',
+    // P1-1 adds a second additive key: `monitoring.stage_retries` (collect-stage
+    // retry count, 0..3, default 1), also absent from the frozen oracle.
+    // No existing field changed shape or value; the extensions are covered by
+    // test/config/report-executive.test.ts, test/config/defaults.test.ts,
+    // test/config/schema.test.ts and test/web/settings.test.ts.
+    'additive keys: Node-only `report.executive` settings block (executive daily report) + P1-1 `monitoring.stage_retries` absent from the frozen Python oracle',
   ],
 };
 

@@ -114,6 +114,8 @@ export interface HostReportInput {
   errors?: unknown[] | null;
   checks?: HostCheckResultInput[] | null;
   users?: unknown[] | null;
+  /** P1 采集阶段耗时（可选；旧快照不含）。 */
+  stage_timings?: unknown[] | null;
 }
 
 /** `DailyReport` (`models.py:468`). */

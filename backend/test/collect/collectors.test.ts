@@ -532,3 +532,193 @@ describe('hostToSshConnectConfig', () => {
     expect(hostToSshConnectConfig(host, 1, undefined).hostKeyPolicy).toBe('tofu');
   });
 });
+
+// ---------------------------------------------------------------------------
+// P1-1: per-stage timings and bounded retries
+// ---------------------------------------------------------------------------
+
+/** A manually advanced clock so tests can pin the elapsed time per stage. */
+class ManualClock {
+  private current = 0;
+
+  readonly now = (): number => this.current;
+
+  advance(ms: number): void {
+    this.current += ms;
+  }
+}
+
+describe('collectHostReport — stage timings (P1-1)', () => {
+  it('records one ok timing per stage in command-map order', async () => {
+    const clock = new ManualClock();
+    const report = await collectHostReport(
+      makeHost(),
+      makeRunner((command) => {
+        clock.advance(5);
+        return command === 'hostname' ? ok('web-1') : ok('');
+      }),
+      {
+        connectTimeout: 5,
+        commandTimeout: 10,
+        buildCommandMap: () => onlyStages({ hostname: 'hostname', kernel: 'uname -r' }),
+        now: clock.now,
+      },
+    );
+
+    expect(report.stageTimings).toEqual([
+      { stage: 'hostname', ms: 5, ok: true },
+      { stage: 'kernel', ms: 5, ok: true },
+    ]);
+  });
+
+  it('retries a failed stage once by default and sums both attempts into ms', async () => {
+    const clock = new ManualClock();
+    let kernelCalls = 0;
+    const report = await collectHostReport(
+      makeHost(),
+      makeRunner((command) => {
+        clock.advance(5);
+        if (command === 'uname -r') {
+          kernelCalls += 1;
+          return bad(2, 'kernel boom');
+        }
+        return ok('');
+      }),
+      {
+        connectTimeout: 5,
+        commandTimeout: 10,
+        buildCommandMap: () => onlyStages({ kernel: 'uname -r' }),
+        now: clock.now,
+      },
+    );
+
+    expect(kernelCalls).toBe(2);
+    expect(report.errors).toEqual([{ stage: 'kernel', message: 'kernel boom' }]);
+    expect(report.stageTimings).toEqual([
+      { stage: 'kernel', ms: 10, ok: false, error: 'kernel boom' },
+    ]);
+  });
+
+  it('treats a retry that succeeds as ok without an error entry', async () => {
+    const clock = new ManualClock();
+    let calls = 0;
+    const report = await collectHostReport(
+      makeHost(),
+      makeRunner((command) => {
+        clock.advance(5);
+        if (command === 'uptime -p') {
+          calls += 1;
+          return calls === 1 ? bad(1, 'transient') : ok('up 1 day');
+        }
+        return ok('');
+      }),
+      {
+        connectTimeout: 5,
+        commandTimeout: 10,
+        buildCommandMap: () => onlyStages({ uptime: 'uptime -p' }),
+        now: clock.now,
+      },
+    );
+
+    expect(calls).toBe(2);
+    expect(report.errors).toEqual([]);
+    expect(report.stageTimings).toEqual([{ stage: 'uptime', ms: 10, ok: true }]);
+  });
+
+  it('does not retry when stageRetries is 0', async () => {
+    let calls = 0;
+    const report = await collectHostReport(
+      makeHost(),
+      makeRunner(() => {
+        calls += 1;
+        return bad(2, 'nope');
+      }),
+      {
+        connectTimeout: 5,
+        commandTimeout: 10,
+        buildCommandMap: () => onlyStages({ kernel: 'uname -r' }),
+        stageRetries: 0,
+      },
+    );
+
+    expect(calls).toBe(1);
+    expect(report.errors).toEqual([{ stage: 'kernel', message: 'nope' }]);
+    expect(report.stageTimings).toHaveLength(1);
+    expect(report.stageTimings?.[0]).toMatchObject({ stage: 'kernel', ok: false, error: 'nope' });
+  });
+
+  it('records an ssh exception as a failed timing and still aborts immediately', async () => {
+    const clock = new ManualClock();
+    const runner = makeRunner((command) => {
+      clock.advance(5);
+      if (command === 'uname -r') {
+        throw new Error('connect refused');
+      }
+      return ok('');
+    });
+
+    const report = await collectHostReport(makeHost(), runner, {
+      connectTimeout: 5,
+      commandTimeout: 10,
+      buildCommandMap: () => onlyStages({ hostname: 'hostname', kernel: 'uname -r' }),
+      now: clock.now,
+    });
+
+    expect(runner.calls).toHaveLength(2);
+    expect(report.success).toBe(false);
+    expect(report.errors).toEqual([{ stage: 'ssh', message: 'connect refused' }]);
+    expect(report.stageTimings).toEqual([
+      { stage: 'hostname', ms: 5, ok: true },
+      { stage: 'ssh', ms: 5, ok: false, error: 'connect refused' },
+    ]);
+  });
+});
+
+describe('collectAllHosts — stage_retries resolution (P1-1)', () => {
+  it('honours monitoring.stage_retries from the collector config', async () => {
+    const config = makeConfig([makeHost()]);
+    config.monitoring = { stage_retries: 0 };
+    let kernelCalls = 0;
+
+    const reports = await collectAllHosts(config, {
+      buildRunner: () =>
+        makeRunner((command) => {
+          if (command === 'uname -r') {
+            kernelCalls += 1;
+            return bad(3, 'boom');
+          }
+          return ok('');
+        }),
+      buildCommandMap: () => onlyStages({ hostname: 'hostname', kernel: 'uname -r' }),
+    });
+
+    expect(kernelCalls).toBe(1);
+    expect(reports[0].errors).toEqual([{ stage: 'kernel', message: 'boom' }]);
+    expect(reports[0].stageTimings).toEqual([
+      { stage: 'hostname', ms: expect.any(Number), ok: true },
+      { stage: 'kernel', ms: expect.any(Number), ok: false, error: 'boom' },
+    ]);
+  });
+
+  it('lets CollectAllOptions.stageRetries override the config value', async () => {
+    const config = makeConfig([makeHost()]);
+    config.monitoring = { stage_retries: 0 };
+    let kernelCalls = 0;
+
+    const reports = await collectAllHosts(config, {
+      stageRetries: 1,
+      buildRunner: () =>
+        makeRunner((command) => {
+          if (command === 'uname -r') {
+            kernelCalls += 1;
+            return bad(3, 'boom');
+          }
+          return ok('');
+        }),
+      buildCommandMap: () => onlyStages({ kernel: 'uname -r' }),
+    });
+
+    expect(kernelCalls).toBe(2);
+    expect(reports[0].errors).toEqual([{ stage: 'kernel', message: 'boom' }]);
+  });
+});

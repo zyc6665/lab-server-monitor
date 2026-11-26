@@ -25,6 +25,7 @@ export const ENDPOINTS = {
   users_page: '/users',
   settings_page: '/settings',
   terminal_page: '/terminal',
+  tasks_page: '/tasks',
 
   // --- auth ----------------------------------------------------------------
   setup: '/setup',
@@ -90,6 +91,8 @@ export const ENDPOINTS = {
   api_system_backup: '/api/system/backup',
   api_system_restore: '/api/system/restore',
   api_system_config_export: '/api/system/config-export',
+  api_system_tasks: '/api/system/tasks',
+  api_run_system_task: '/api/system/tasks/{name}/run',
   api_logs: '/api/logs',
   api_logs_download: '/api/logs/download',
   api_runtime: '/api/runtime',

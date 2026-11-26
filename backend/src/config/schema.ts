@@ -350,6 +350,13 @@ function monitoringFields(): Record<string, FieldSpec> {
   fields.open_browser_on_start = monField('boolean', true);
   fields.mode = monField('string', 'admin');
   fields.member_account = monField('string', '');
+  // P1-1 采集耗时: 单个采集阶段失败后的重试次数 (0-3, 默认 1)。
+  fields.stage_retries = monField('integer', 1, {
+    label: '采集阶段重试次数',
+    min: 0,
+    max: 3,
+    strictInt: true,
+  });
   return fields;
 }
 

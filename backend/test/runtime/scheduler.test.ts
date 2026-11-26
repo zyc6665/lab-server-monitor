@@ -10,6 +10,18 @@ const TASK_STATE_DDL = `
     last_run_at TEXT NOT NULL,
     last_result TEXT
   );
+  CREATE TABLE task_runs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    task TEXT NOT NULL,
+    trigger TEXT NOT NULL,
+    started_at TEXT NOT NULL,
+    finished_at TEXT,
+    status TEXT NOT NULL,
+    error TEXT,
+    duration_ms INTEGER
+  );
+  CREATE INDEX idx_task_runs_task_started ON task_runs (task, started_at);
+  CREATE INDEX idx_task_runs_started ON task_runs (started_at);
 `;
 
 const openDbs: Array<InstanceType<typeof Database>> = [];

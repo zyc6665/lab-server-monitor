@@ -93,8 +93,15 @@
         <label><input type="checkbox" data-alert-col="message" checked> 内容</label>
       </div>
     </details>
-    <button type="button" class="btn-secondary" id="alert-bulk-ack" disabled>批量确认</button>
   </div>
+  </div>
+  <div class="alert-toolbar alert-bulk-bar" id="alert-bulk-bar" hidden>
+    <span class="muted">已选 <strong id="alert-bulk-count">0</strong> 条</span>
+    <button type="button" class="btn-secondary" id="alert-bulk-ack" disabled>批量确认</button>
+    <label class="muted" for="alert-bulk-hours">静默
+      <input id="alert-bulk-hours" type="number" min="1" max="720" step="1" value="24" aria-label="批量静默小时数"> 小时
+    </label>
+    <button type="button" class="btn-secondary" id="alert-bulk-silence" disabled>批量静默</button>
   </div>
   <p class="muted" id="alert-count">共 {{ alerts|length }} 条</p>
   <div class="alert-pagination" id="alert-pagination">
@@ -183,4 +190,8 @@
     <button type="button" class="btn-primary" id="silence-confirm">开始静默</button>
   </div>
 </dialog>
+{% endblock %}
+
+{% block scripts %}
+<script type="module" src="{{ asset_url('pages/alerts.js') }}"></script>
 {% endblock %}

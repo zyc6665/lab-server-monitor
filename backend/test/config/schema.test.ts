@@ -68,6 +68,25 @@ describe('validateSection - monitoring', () => {
     expect(value.retention_days).toBe(1);
   });
 
+  it('clamps stage_retries to the documented 0..3 range (P1-1)', () => {
+    expect(validateSection('monitoring', { stage_retries: -1 }).errors).toEqual([
+      '采集阶段重试次数 必须在 0 到 3 之间',
+    ]);
+    expect(validateSection('monitoring', { stage_retries: 4 }).errors).toEqual([
+      '采集阶段重试次数 必须在 0 到 3 之间',
+    ]);
+    expect(validateSection('monitoring', { stage_retries: 2.5 }).errors).toEqual([
+      '采集阶段重试次数 必须是整数',
+    ]);
+    expect(validateSection('monitoring', { stage_retries: '2' }).errors).toEqual([
+      '采集阶段重试次数 必须是整数',
+    ]);
+    const ok = validateSection('monitoring', { stage_retries: 2 });
+    expect(ok.errors).toEqual([]);
+    expect(ok.value.stage_retries).toBe(2);
+    expect(validateSection('monitoring', {}).value.stage_retries).toBe(1);
+  });
+
   it('validates and normalises the usage mode', () => {
     expect(validateSection('monitoring', { mode: 'user' }).errors).toEqual([
       '用户模式需要填写自己的服务器账号名',

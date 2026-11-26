@@ -32,6 +32,8 @@ import type { Express, NextFunction, Request, RequestHandler, Response } from 'e
 
 import type { AppConfig } from '../../config/config';
 import { loadEffectiveSettings } from '../../config/service';
+import { readSecretText } from '../../config/admin';
+import { SECRET_SMTP_PASSWORD } from '../../config/secrets';
 import {
   addSilence,
   deleteSilence,
@@ -40,11 +42,23 @@ import {
   type SilenceHost,
 } from '../../config/silences';
 import {
+  createNotifierFromTask5,
+  type AlertsConfig,
+  type DispatchHooks,
+  type NotifierProtocol,
+} from '../../alerts/engine';
+import type { AlertEvent } from '../../alerts/rules';
+import type { SmtpConfig } from '../../alerts/mailer';
+import {
   countAlertsByStatus,
   listAlerts,
   updateAlert,
   type AlertRow,
 } from '../../storage/alerts';
+import {
+  listDeliveryFailures,
+  recordDeliveryFailure,
+} from '../../storage/alert-delivery';
 import { dpapiAvailable } from '../../storage/dpapi';
 import { nowIsoUtc } from '../../storage/time';
 import { createTemplating, type Templating } from '../templating';
@@ -84,6 +98,12 @@ export interface AlertsRouteDeps {
    * `dpapiAvailable()`. A function is re-evaluated per request.
    */
   writable?: boolean | (() => boolean);
+  /**
+   * Notifier used by the manual "resend failed channels" action. When absent a
+   * notifier is built lazily from the effective SMTP settings; tests inject a
+   * fake here. Existing behaviour (the six original endpoints) never uses it.
+   */
+  notifier?: NotifierProtocol;
 }
 
 /** Converts an `ENDPOINTS` template (`/x/{name}`) into an Express path. */
@@ -186,6 +206,85 @@ export function registerAlertsRoutes(app: Express, deps: AlertsRouteDeps): void 
   const hosts = (): SilenceHost[] =>
     config.servers.map((server) => ({ name: server.name, group: server.group }));
 
+  // --- Delivery-failure helpers -----------------------------------------
+
+  /** Reads one alert row by id, or `null` (storage has no get-by-id helper). */
+  const alertRowById = (alertId: number): AlertRow | null => {
+    const row = db.prepare('SELECT * FROM alerts WHERE id = ?').get(alertId) as
+      | AlertRow
+      | undefined;
+    return row ?? null;
+  };
+
+  /** Rebuilds the notifier event shape from a persisted alert row. */
+  const buildAlertEvent = (row: AlertRow): AlertEvent => ({
+    host_name: row.host_name ?? '',
+    category: row.category ?? '',
+    severity: row.severity ?? '',
+    title: row.title ?? '',
+    message: row.message ?? '',
+    fingerprint: row.fingerprint ?? '',
+    reasons: [],
+  });
+
+  /** Effective `AlertsConfig` (from `settings.alerts`) for manual resend. */
+  const alertsConfigFor = (): AlertsConfig => {
+    const settings = loadEffectiveSettings(db) as unknown as Obj;
+    const raw = asObj(settings.alerts);
+    return { enabled: true, ...raw } as unknown as AlertsConfig;
+  };
+
+  /** Effective SMTP config (mirrors the runtime wiring's resolver). */
+  const smtpConfigFor = (): SmtpConfig | null => {
+    const settings = loadEffectiveSettings(db) as unknown as Obj;
+    const smtp = asObj(settings.smtp);
+    const host = typeof smtp.host === 'string' ? smtp.host.trim() : '';
+    if (!host) return null;
+    const rawPort = smtp.port;
+    const port = typeof rawPort === 'number' ? rawPort : Number(rawPort) || 587;
+    const rawToList = smtp.to_addrs;
+    const toAddrs = Array.isArray(rawToList)
+      ? rawToList.map((item) => String(item)).filter((item) => item !== '')
+      : typeof rawToList === 'string'
+        ? rawToList.split(/[,\s]+/).filter((item) => item !== '')
+        : [];
+    const useSsl = smtp.use_ssl === true || smtp.use_ssl === 'true';
+    return {
+      host,
+      port,
+      username: typeof smtp.username === 'string' ? smtp.username : '',
+      password: readSecretText(db, SECRET_SMTP_PASSWORD) ?? '',
+      useSsl,
+      fromAddr: typeof smtp.from_addr === 'string' ? smtp.from_addr : '',
+      toAddrs,
+    };
+  };
+
+  /** Lazily resolved notifier for manual resend (injectable in tests). */
+  let cachedNotifier: NotifierProtocol | null | undefined;
+  const resolveNotifier = (): NotifierProtocol | null => {
+    if (deps.notifier) return deps.notifier;
+    if (cachedNotifier !== undefined) return cachedNotifier;
+    try {
+      cachedNotifier = createNotifierFromTask5({ smtp: smtpConfigFor() });
+    } catch {
+      cachedNotifier = null;
+    }
+    return cachedNotifier;
+  };
+
+  /** Validates a bulk `{ids: number[]}` payload (1..200 unique integers). */
+  const parseAlertIds = (payload: Obj): number[] | null => {
+    const raw = payload.ids;
+    if (!Array.isArray(raw) || raw.length < 1 || raw.length > 200) return null;
+    const ids: number[] = [];
+    for (const item of raw) {
+      if (typeof item !== 'number' || !Number.isInteger(item) || item <= 0) return null;
+      if (!ids.includes(item)) ids.push(item);
+    }
+    return ids;
+  };
+
   // --- Alerts page -------------------------------------------------------
 
   app.get(
@@ -227,6 +326,168 @@ export function registerAlertsRoutes(app: Express, deps: AlertsRouteDeps): void 
       const timeZone = readTimezone(db);
       const alerts = localizeAlerts(listAlerts(db, { status, since }), timeZone);
       res.json({ alerts, counts: countAlertsByStatus(db, { since }) });
+    }),
+  );
+
+  // --- Bulk actions (must precede `/api/alerts/:alert_id/...`) -----------
+
+  app.post(
+    '/api/alerts/bulk/ack',
+    wrap((req, res) => {
+      const payload = jsonBody(req);
+      if (!isPlainObject(payload)) {
+        res.status(400).json({ error: 'invalid_payload' });
+        return;
+      }
+      const ids = parseAlertIds(payload);
+      if (!ids) {
+        res.status(400).json({ error: 'invalid_payload' });
+        return;
+      }
+      const ackAt = nowIsoUtc();
+      for (const alertId of ids) {
+        updateAlert(db, alertId, { status: 'acknowledged', ackAt });
+      }
+      res.json({ ok: true, acknowledged: ids.length });
+    }),
+  );
+
+  app.post(
+    '/api/alerts/bulk/silence',
+    wrap((req, res) => {
+      if (!isWritable()) {
+        res.status(409).json({ error: 'settings_not_writable' });
+        return;
+      }
+      const payload = jsonBody(req);
+      if (!isPlainObject(payload)) {
+        res.status(400).json({ error: 'invalid_payload' });
+        return;
+      }
+      const ids = parseAlertIds(payload);
+      const hours = payload.hours;
+      if (
+        !ids ||
+        typeof hours !== 'number' ||
+        !Number.isInteger(hours) ||
+        hours < 1 ||
+        hours > 720
+      ) {
+        res.status(400).json({ error: 'invalid_payload' });
+        return;
+      }
+      const now = new Date();
+      const startsAt = nowIsoUtc(now);
+      const endsAt = nowIsoUtc(new Date(now.getTime() + hours * 3600 * 1000));
+      const reason = `批量静默 ${hours} 小时`;
+      try {
+        let silenced = 0;
+        for (const alertId of ids) {
+          const row = alertRowById(alertId);
+          if (!row) continue;
+          addSilence(db, 'host', row.host_name, reason, startsAt, endsAt, currentUser(req), {
+            writable: true,
+            hosts: hosts(),
+          });
+          silenced += 1;
+        }
+        res.json({ ok: true, silenced });
+      } catch (err) {
+        if (err instanceof SilencesError) {
+          res.status(400).json({ error: err.message });
+          return;
+        }
+        throw err;
+      }
+    }),
+  );
+
+  // --- Delivery failures -------------------------------------------------
+
+  app.get(
+    '/api/alerts/delivery-failures',
+    wrap((req, res) => {
+      const raw = firstQuery(req.query.alert_id);
+      let alertId: number | undefined;
+      if (raw !== undefined) {
+        const parsed = Number(raw);
+        if (!Number.isInteger(parsed) || parsed <= 0) {
+          res.status(400).json({ error: 'invalid_payload' });
+          return;
+        }
+        alertId = parsed;
+      }
+      const failures = listDeliveryFailures(db, alertId === undefined ? {} : { alertId });
+      res.json({ failures });
+    }),
+  );
+
+  app.post(
+    '/api/alerts/:alert_id/resend',
+    wrap(async (req, res) => {
+      const alertId = intParam(req.params.alert_id);
+      if (alertId === null) {
+        res.status(404).json({ error: 'not_found' });
+        return;
+      }
+      const row = alertRowById(alertId);
+      if (!row) {
+        res.status(404).json({ error: 'not_found' });
+        return;
+      }
+
+      const failedChannels: string[] = [];
+      for (const failure of listDeliveryFailures(db, { alertId })) {
+        if (!failedChannels.includes(failure.channel)) failedChannels.push(failure.channel);
+      }
+      if (failedChannels.length === 0) {
+        res.json({ ok: true, resent: [] });
+        return;
+      }
+
+      const notifier = resolveNotifier();
+      if (!notifier) {
+        res.status(502).json({ error: 'resend_failed', message: '通知通道未配置' });
+        return;
+      }
+
+      let lastError = '';
+      const hooks: DispatchHooks = {
+        only: failedChannels,
+        onChannelFailure: (failure) => {
+          lastError = failure.error;
+          try {
+            recordDeliveryFailure(db, {
+              alertId,
+              channel: failure.channel,
+              target: failure.target ?? null,
+              error: failure.error,
+            });
+          } catch {
+            // Visibility is best-effort.
+          }
+        },
+      };
+
+      let accepted: string[] = [];
+      try {
+        accepted = await notifier.dispatch(buildAlertEvent(row), alertsConfigFor(), hooks);
+      } catch (err) {
+        res.status(502).json({
+          error: 'resend_failed',
+          message: err instanceof Error ? err.message : String(err),
+        });
+        return;
+      }
+
+      if (accepted.length === 0) {
+        res.status(502).json({
+          error: 'resend_failed',
+          message: lastError || '所有通道仍然发送失败',
+        });
+        return;
+      }
+      res.json({ ok: true, resent: [...accepted] });
     }),
   );
 

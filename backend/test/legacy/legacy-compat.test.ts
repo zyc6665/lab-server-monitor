@@ -228,8 +228,8 @@ describe('migrateLegacy: fixture copy', () => {
     expect(columns(db, 'host_user_snapshot')).toContain('usage_readable');
     expect(columns(db, 'host_daily_summary')).toContain('tz');
 
-    // The full 20-table schema now exists.
-    expect(userTables(db)).toHaveLength(20);
+    // The full schema now exists: 20 oracle tables + 2 Node-only P1 tables.
+    expect(userTables(db)).toHaveLength(22);
 
     // No rows gained or lost in any pre-existing table (incl. rebuilt summary).
     expect(countSnapshot(db, LEGACY_TABLES)).toEqual(before);
@@ -369,7 +369,8 @@ describe.skipIf(!existsSync(REAL_DB_PATH))('real data/servermonitor.db copy', ()
     ]);
     expect(journalMode(db)).toBe('wal');
     expect(userVersion(db)).toBe(SCHEMA_VERSION);
-    expect(userTables(db)).toHaveLength(20);
+    // 20 oracle tables + 2 Node-only P1 tables (task_runs, alert_delivery_failures).
+    expect(userTables(db)).toHaveLength(22);
 
     // Existing rows untouched by the migration.
     expect(countSnapshot(db, watched)).toEqual(before);

@@ -76,13 +76,12 @@ export async function startServer(opts: StartServerOptions = {}): Promise<Starte
   let app: Express;
   let stopScheduler: (() => void) | null = null;
   if (opts.db && opts.config) {
-    const { createServerApp } = await import('./web/composition');
-    app = createServerApp({ db: opts.db, config: opts.config });
-
-    // Start the background scheduler on the same db/config assembly path. The
+    // Start the background scheduler before composing the web app so the task
+    // center routes can see the live scheduler instance (late binding). The
     // wiring module is imported lazily so the health-only bundle never loads
     // the collector/storage stack. Scheduler failures must never prevent the
     // HTTP server from coming up.
+    let schedulerForTasks: import('./runtime/scheduler').Scheduler | null = null;
     const shouldStartScheduler = opts.scheduler ?? !isTestEnvironment();
     if (shouldStartScheduler) {
       try {
@@ -90,11 +89,19 @@ export async function startServer(opts: StartServerOptions = {}): Promise<Starte
         const handle = startSchedulerIfConfigured({ db: opts.db, config: opts.config });
         if (handle) {
           stopScheduler = handle.stop;
+          schedulerForTasks = handle.scheduler;
         }
       } catch (err) {
         console.error('[server] failed to start scheduler:', err);
       }
     }
+
+    const { createServerApp } = await import('./web/composition');
+    app = createServerApp({
+      db: opts.db,
+      config: opts.config,
+      deps: schedulerForTasks ? { tasks: { scheduler: schedulerForTasks } } : undefined,
+    });
   } else {
     app = createApp();
   }

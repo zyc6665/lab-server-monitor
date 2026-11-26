@@ -36,6 +36,7 @@ describe('DEFAULT_SETTINGS', () => {
       open_browser_on_start: true,
       mode: 'admin',
       member_account: '',
+      stage_retries: 1,
     });
   });
 

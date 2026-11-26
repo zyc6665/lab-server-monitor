@@ -287,6 +287,7 @@ export function buildCollectorConfig(
       ...(hostKeyPolicy !== '' ? { host_key_policy: hostKeyPolicy } : {}),
     },
     app: { concurrency: readNumber(monitoring, 'concurrency') ?? null },
+    monitoring: { stage_retries: readNumber(monitoring, 'stage_retries') ?? 1 },
   };
 }
 
@@ -378,6 +379,7 @@ export function toStorageReport(report: HostReport): HostReportInput {
     errors: report.errors ?? [],
     checks: (report.checks ?? []).map(toStorageCheck),
     users: report.users ?? [],
+    stage_timings: report.stageTimings ?? [],
   };
 }
 

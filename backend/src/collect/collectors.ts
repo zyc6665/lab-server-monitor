@@ -19,6 +19,13 @@
  * - `runHostChecks` is an injectable dependency. Availability checks live in a
  *   later migration (P4); when the dependency is not supplied this layer returns
  *   `checks: []` instead of importing `availability`.
+ * - Per-stage wall-clock timing (`HostReport.stageTimings`, P1-1) is a Node-only
+ *   additive extension: each command stage is timed around
+ *   `sshRunner.run`, and a failed stage is retried up to
+ *   `monitoring.stage_retries` times (0–3, default 1) while its `ms` accumulates
+ *   across attempts. An ssh-layer exception is recorded once as `stage: 'ssh'`
+ *   and still aborts the host; parse/checks failures keep their prior behaviour
+ *   and carry no timing entry.
  * - Timeout units: the config `ssh.command_timeout` is in seconds (as in the
  *   Python config), while the ported `SshClient.run` takes **milliseconds**, so
  *   {@link collectAllHosts} converts it (`* 1000`) before calling a runner.
@@ -39,6 +46,7 @@ import type {
   HostCollectionError,
   HostMetrics,
   HostReport,
+  StageTiming,
 } from './types';
 
 // ---------------------------------------------------------------------------
@@ -47,6 +55,10 @@ import type {
 
 const DEFAULT_CONNECT_TIMEOUT_SEC = 10;
 const DEFAULT_COMMAND_TIMEOUT_SEC = 20;
+
+/** `monitoring.stage_retries` default (P1-1) and the clamp enforced on read. */
+const DEFAULT_STAGE_RETRIES = 1;
+const MAX_STAGE_RETRIES = 3;
 
 /**
  * Structural view of the `ssh` settings section (`config/service.ts`
@@ -65,15 +77,24 @@ export interface CollectorAppConfig {
 }
 
 /**
+ * Structural view of the `monitoring` settings section — only the knobs the
+ * collector itself honours (P1-1 `stage_retries`).
+ */
+export interface CollectorMonitoringConfig {
+  stage_retries?: number | null;
+}
+
+/**
  * The subset of the application config `collectAllHosts` needs. Mirrors the
  * Python `AppConfig` fields used by `collect_all_hosts`
  * (`config.servers`, `config.ssh.connect_timeout/command_timeout`,
- * `config.app.concurrency`).
+ * `config.app.concurrency`); `monitoring` is a Node-only additive section.
  */
 export interface CollectorConfig {
   servers: HostConfig[];
   ssh?: CollectorSshConfig | null;
   app?: CollectorAppConfig | null;
+  monitoring?: CollectorMonitoringConfig | null;
 }
 
 /** Minimal runner surface a host is collected through (real or fake). */
@@ -99,6 +120,10 @@ export interface CollectHostOptions {
   buildCommandMap?: () => Record<Stage, string>;
   parseResults?: (raw: Partial<Record<Stage, string>>) => HostMetrics;
   runHostChecks?: RunHostChecks;
+  /** Retries per failed command stage (`monitoring.stage_retries`, clamped 0..3). */
+  stageRetries?: number;
+  /** Monotonic clock seam for `stageTimings`; defaults to `Date.now`. */
+  now?: () => number;
 }
 
 /** Builds a runner for one host; receives the config connect timeout (seconds). */
@@ -113,6 +138,10 @@ export interface CollectAllOptions {
   buildCommandMap?: () => Record<Stage, string>;
   parseResults?: (raw: Partial<Record<Stage, string>>) => HostMetrics;
   runHostChecks?: RunHostChecks;
+  /** Overrides `config.monitoring.stage_retries` when supplied. */
+  stageRetries?: number;
+  /** Monotonic clock seam for `stageTimings`; defaults to `Date.now`. */
+  now?: () => number;
 }
 
 // ---------------------------------------------------------------------------
@@ -129,8 +158,17 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+/** Non-negative elapsed milliseconds between two `now()` samples. */
+function elapsedMs(now: () => number, startedAt: number): number {
+  return Math.max(0, now() - startedAt);
+}
+
 /** A failure `HostReport` that keeps the exact errors accumulated so far. */
-function reportWithErrors(host: HostConfig, errors: HostCollectionError[]): HostReport {
+function reportWithErrors(
+  host: HostConfig,
+  errors: HostCollectionError[],
+  stageTimings: StageTiming[] = [],
+): HostReport {
   return {
     hostName: host.name,
     host: host.host,
@@ -139,12 +177,27 @@ function reportWithErrors(host: HostConfig, errors: HostCollectionError[]): Host
     errors,
     checks: [],
     users: [],
+    stageTimings,
   };
 }
 
 /** Convenience wrapper for a single-stage failure report. */
-function failureReport(host: HostConfig, stage: string, message: string): HostReport {
-  return reportWithErrors(host, [{ stage, message }]);
+function failureReport(
+  host: HostConfig,
+  stage: string,
+  message: string,
+  stageTimings: StageTiming[] = [],
+): HostReport {
+  return reportWithErrors(host, [{ stage, message }], stageTimings);
+}
+
+/** `monitoring.stage_retries` clamped to integers in `[0, 3]` (default 1). */
+function clampStageRetries(value: number | null | undefined): number {
+  const integer = Math.trunc(value ?? DEFAULT_STAGE_RETRIES);
+  if (!Number.isFinite(integer)) {
+    return DEFAULT_STAGE_RETRIES;
+  }
+  return Math.min(MAX_STAGE_RETRIES, Math.max(0, integer));
 }
 
 /**
@@ -221,6 +274,11 @@ function resolveConcurrency(config: CollectorConfig): number {
  * Port of `collect_host_report`. Runs every stage sequentially over
  * `sshRunner`, records per-stage failures, parses the successful stdout, and
  * applies checks when injected.
+ *
+ * Every command stage is timed (`stageTimings`, P1-1) and a failed stage is
+ * retried up to `opts.stageRetries` extra times with the elapsed time of all
+ * attempts summed into one entry. An ssh-layer exception aborts the host and is
+ * recorded as a single `stage: 'ssh'` timing.
  */
 export async function collectHostReport(
   host: HostConfig,
@@ -231,23 +289,45 @@ export async function collectHostReport(
 
   const commandMap = (opts.buildCommandMap ?? defaultBuildCommandMap)();
   const parseResults = opts.parseResults ?? defaultParseHostMetrics;
+  const retries = clampStageRetries(opts.stageRetries);
+  const now = opts.now ?? Date.now;
 
   const results = new Map<Stage, CommandResult>();
   const errors: HostCollectionError[] = [];
+  const stageTimings: StageTiming[] = [];
 
   for (const [stage, command] of Object.entries(commandMap) as Array<[Stage, string]>) {
-    let result: CommandResult;
-    try {
-      result = await sshRunner.run(command, opts.commandTimeout);
-    } catch (error) {
-      // An ssh-layer exception aborts the whole host immediately.
-      errors.push({ stage: 'ssh', message: errorMessage(error) });
-      return reportWithErrors(host, errors);
+    const startedAt = now();
+    let result: CommandResult | undefined;
+    let attempts = 0;
+
+    for (;;) {
+      try {
+        result = await sshRunner.run(command, opts.commandTimeout);
+      } catch (error) {
+        // An ssh-layer exception aborts the whole host immediately.
+        const message = errorMessage(error);
+        errors.push({ stage: 'ssh', message });
+        stageTimings.push({ stage: 'ssh', ms: elapsedMs(now, startedAt), ok: false, error: message });
+        return reportWithErrors(host, errors, stageTimings);
+      }
+
+      attempts += 1;
+      if (!resultFailed(result) || attempts > retries) {
+        break;
+      }
     }
 
-    results.set(stage, result);
+    const ms = elapsedMs(now, startedAt);
     if (resultFailed(result)) {
-      errors.push({ stage, message: result?.stderr || `command exited ${result?.exitStatus}` });
+      const message = result?.stderr || `command exited ${result?.exitStatus}`;
+      errors.push({ stage, message });
+      stageTimings.push({ stage, ms, ok: false, error: message });
+    } else {
+      stageTimings.push({ stage, ms, ok: true });
+    }
+    if (result !== undefined) {
+      results.set(stage, result);
     }
   }
 
@@ -264,7 +344,7 @@ export async function collectHostReport(
     metrics = parseResults(raw);
   } catch (error) {
     errors.push({ stage: 'parse', message: errorMessage(error) });
-    return reportWithErrors(host, errors);
+    return reportWithErrors(host, errors, stageTimings);
   }
 
   if (!metrics.hostname) {
@@ -293,6 +373,7 @@ export async function collectHostReport(
     errors,
     checks,
     users: [],
+    stageTimings,
   };
 }
 
@@ -351,6 +432,10 @@ export async function collectAllHosts(
   const connectTimeout = ssh?.connect_timeout ?? DEFAULT_CONNECT_TIMEOUT_SEC;
   // Config is seconds; the runner contract (`SshClient.run`) is milliseconds.
   const commandTimeout = (ssh?.command_timeout ?? DEFAULT_COMMAND_TIMEOUT_SEC) * 1000;
+  // P1-1: `monitoring.stage_retries`, overridable per call, clamped 0..3.
+  const stageRetries = clampStageRetries(
+    opts.stageRetries ?? config.monitoring?.stage_retries ?? undefined,
+  );
 
   const buildRunner: RunnerFactory =
     opts.buildRunner ??
@@ -359,6 +444,7 @@ export async function collectAllHosts(
   const buildCommandMap = opts.buildCommandMap ?? defaultBuildCommandMap;
   const parseResults = opts.parseResults ?? defaultParseHostMetrics;
   const runHostChecks = opts.runHostChecks;
+  const now = opts.now ?? Date.now;
 
   const collectOne = async (host: HostConfig): Promise<HostReport> => {
     let runner: CollectorRunner | undefined;
@@ -370,9 +456,11 @@ export async function collectAllHosts(
         buildCommandMap,
         parseResults,
         runHostChecks,
+        stageRetries,
+        now,
       });
     } catch (error) {
-      return failureReport(host, 'ssh', errorMessage(error));
+      return failureReport(host, 'ssh', errorMessage(error), []);
     } finally {
       if (runner) {
         try {
