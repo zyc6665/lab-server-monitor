@@ -216,6 +216,12 @@ function createWindow(): BrowserWindow {
     width: 1200,
     height: 800,
     show: false,
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.cjs'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: false,
+    },
   });
   w.once('ready-to-show', () => {
     // `--start-hidden` keeps the window invisible (tray only); the tray

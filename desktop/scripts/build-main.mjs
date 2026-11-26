@@ -18,3 +18,16 @@ await build({
   outfile: 'dist/main.cjs',
   sourcemap: false,
 });
+
+// Renderer preload: exposes window.desktopBridge (update:* IPC) to the web UI.
+await build({
+  absWorkingDir: desktopDir,
+  platform: 'node',
+  format: 'cjs',
+  target: 'node22',
+  bundle: true,
+  external: ['electron'],
+  entryPoints: ['src/main/preload.ts'],
+  outfile: 'dist/preload.cjs',
+  sourcemap: false,
+});
