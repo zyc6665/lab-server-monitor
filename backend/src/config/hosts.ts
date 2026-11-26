@@ -653,7 +653,8 @@ function entryFromConfig(host: HostConfig): StoredHostEntry {
     name: check.name,
     type: check.type,
     target: check.target,
-    timeout_seconds: check.timeout_seconds,
+    // Python materializes the default (servermanage/models.py:35, config.py:369).
+    timeout_seconds: check.timeout_seconds ?? 5,
     expected: check.expected ?? null,
     enabled: Boolean(check.enabled),
   }));

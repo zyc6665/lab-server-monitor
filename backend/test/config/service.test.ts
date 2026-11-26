@@ -88,14 +88,38 @@ describe('saveSection', () => {
     }
   });
 
-  it('keeps previously saved fields when saving a partial section', () => {
+  it('persists only the submitted fields of a partial section (oracle save_section)', () => {
     const { db } = freshDb();
     saveSection(db, 'monitoring', { concurrency: 4 });
-    saveSection(db, 'monitoring', { poll_interval_seconds: 100 });
+    saveSection(db, 'monitoring', { poll_interval_seconds: '100' });
 
+    // Row holds exactly the last payload (coerced), no defaults / prior values.
+    expect(loadAppSettings(db).monitoring).toEqual({ poll_interval_seconds: 100 });
     const monitoring = loadEffectiveSettings(db).monitoring;
-    expect(monitoring.concurrency).toBe(4);
+    expect(monitoring.concurrency).toBe(DEFAULT_SETTINGS.monitoring.concurrency);
     expect(monitoring.poll_interval_seconds).toBe(100);
+  });
+
+  it('persists a partial nested alerts payload without defaults', () => {
+    const { db } = freshDb();
+    saveSection(db, 'alerts', { thresholds: { cpu_percent: 77 } });
+    expect(loadAppSettings(db).alerts).toEqual({ thresholds: { cpu_percent: 77 } });
+  });
+
+  it('merges user_monitoring over the raw stored row', () => {
+    const { db } = freshDb();
+    saveSection(db, 'user_monitoring', { scan_interval_seconds: 1200 });
+    saveSection(db, 'user_monitoring', { enabled: false });
+    expect(loadAppSettings(db).user_monitoring).toEqual({
+      scan_interval_seconds: 1200,
+      enabled: false,
+    });
+  });
+
+  it('smtp partial save stores only submitted public fields', () => {
+    const { db } = freshDb();
+    saveSection(db, 'smtp', { host: 'smtp.local', password: 'hunter2' });
+    expect(loadAppSettings(db).smtp).toEqual({ host: 'smtp.local' });
   });
 
   it('never writes plaintext secrets into app_settings', () => {

@@ -206,7 +206,16 @@ export function saveSection(
 
   let persisted: SectionPayload;
   try {
-    persisted = sanitizeSection(section, value, { secrets, writable });
+    // Persist only the submitted fields (servermanage/settings/sections.py:71-110
+    // save_section): validation uses the merged value, storage does not merge
+    // defaults/stored values — except user_monitoring, merged over raw stored.
+    // Keep validated/coerced values, but only for keys the payload submitted.
+    let toStore: Record<string, unknown> = projectSubmitted(value, payload);
+    if (section === 'user_monitoring') {
+      const stored = loadAppSettings(db)[section];
+      if (isPlainObject(stored)) toStore = { ...stored, ...payload };
+    }
+    persisted = sanitizeSection(section, toStore, { secrets, writable });
   } catch (err) {
     if (err instanceof SectionsError) {
       throw new SettingsServiceError(err.message, { status: err.status, code: 'validation_failed' });
@@ -251,6 +260,27 @@ function setupRequired(db: SqliteDatabase, writable: boolean): boolean {
     return true;
   }
   return getSecret(db, SECRET_ADMIN) === null;
+}
+
+/**
+ * Restrict the validated `value` to the key shape of the submitted `payload`
+ * (recursing into nested objects). Keys absent from `value` (e.g. secrets the
+ * validator drops) fall back to the raw submitted value so sanitize still sees them.
+ */
+function projectSubmitted(
+  value: Record<string, unknown>,
+  payload: Record<string, unknown>,
+): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [key, raw] of Object.entries(payload)) {
+    if (!(key in value)) {
+      out[key] = raw;
+      continue;
+    }
+    const coerced = value[key];
+    out[key] = isPlainObject(raw) && isPlainObject(coerced) ? projectSubmitted(coerced, raw) : coerced;
+  }
+  return out;
 }
 
 function objectOrEmpty(value: unknown): Record<string, unknown> {
