@@ -80,3 +80,38 @@ describe('page-status under a real DOM', () => {
     expect(fresh.getAttribute('data-updated-at')).toBeTruthy();
   });
 });
+
+describe('alert-row under a real DOM', () => {
+  const deps = () => ({
+    selectedIds: { 7: true },
+    textCell: (text: string, cls?: string) => {
+      const td = document.createElement('td');
+      td.textContent = text == null ? '' : String(text);
+      if (cls) cls.split(' ').forEach((c) => c && td.classList.add(c));
+      return td;
+    },
+    formatRelative: () => '1 分钟前',
+    formatStamp: () => '2026-01-01 00:00:00',
+    statusText: { active: '未处理', resolved: '已恢复' },
+  });
+
+  it('renders active row with checkbox, host link and action buttons', async () => {
+    installDom('<table><tbody></tbody></table>');
+    const m = await loadModule('pages/alert-row.js');
+    const tr = m.buildAlertRow({ id: 7, severity: 'critical', status: 'active', host_name: 'a b', title: 'T', message: 'M' }, deps());
+    expect(tr.getAttribute('data-alert-row')).toBe('7');
+    expect(tr.querySelector('input.alert-select')!.checked).toBe(true);
+    expect(tr.querySelector('a.host-link')!.getAttribute('href')).toBe('/host/a%20b');
+    expect(tr.querySelectorAll('button.ack-btn').length).toBe(1);
+    expect(tr.querySelectorAll('button.silence-btn').length).toBe(1);
+  });
+
+  it('renders resolved rows without checkbox or action buttons', async () => {
+    installDom('<div></div>');
+    const m = await loadModule('pages/alert-row.js');
+    const tr = m.buildAlertRow({ id: 9, severity: 'info', status: 'resolved', host_name: null }, deps());
+    expect(tr.querySelector('input.alert-select')).toBeNull();
+    expect(tr.querySelectorAll('button').length).toBe(0);
+    expect(tr.textContent).toContain('已恢复');
+  });
+});

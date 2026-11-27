@@ -27,6 +27,7 @@ import {
 import { buildCsv, downloadTextFile } from './pages/csv-export.js';
 import { buildAlertsQuery, matchAlerts, sortAlerts } from './pages/alert-filter.js';
 import { hideLoadBanner, hideSkeleton, markFreshness, showLoadBanner } from './pages/page-status.js';
+import { buildAlertRow as buildAlertRowBase } from './pages/alert-row.js';
 import {
   applyDensity,
   applyHostFilters,
@@ -1102,94 +1103,6 @@ import {
   }
 
   // 告警表的列显示偏好：只影响阅读，不改数据。
-  function buildAlertRow(alert) {
-    var tr = document.createElement('tr');
-    if (alert.id != null) { tr.setAttribute('data-alert-row', alert.id); }
-    tr.setAttribute('data-severity', alert.severity || 'info');
-    tr.setAttribute('data-status', alert.status || 'active');
-
-    var checkCell = document.createElement('td');
-    checkCell.className = 'check-col';
-    if (alert.status === 'active' && alert.id != null) {
-      var checkbox = document.createElement('input');
-      checkbox.type = 'checkbox';
-      checkbox.className = 'alert-select';
-      checkbox.setAttribute('data-alert-id', alert.id);
-      checkbox.checked = Boolean(selectedAlertIds[alert.id]);
-      checkCell.appendChild(checkbox);
-    }
-    tr.appendChild(checkCell);
-
-    var severityCell = document.createElement('td');
-    var severity = document.createElement('span');
-    severity.className = 'severity severity-' + (alert.severity || 'info');
-    severity.textContent = alert.severity || '—';
-    severityCell.appendChild(severity);
-    tr.appendChild(severityCell);
-
-    var categoryCell = textCell(alert.category);
-    categoryCell.classList.add('col-secondary', 'col-category');
-    tr.appendChild(categoryCell);
-    var hostCell = document.createElement('td');
-    hostCell.className = 'mono col-host';
-    if (alert.host_name) {
-      var hostLink = document.createElement('a');
-      hostLink.className = 'host-link';
-      hostLink.setAttribute('href', '/host/' + encodeURIComponent(alert.host_name));
-      hostLink.textContent = alert.host_name;
-      hostCell.appendChild(hostLink);
-    } else {
-      hostCell.textContent = '—';
-    }
-    tr.appendChild(hostCell);
-
-    var titleCell = document.createElement('td');
-    titleCell.className = 'alert-title';
-    titleCell.textContent = alert.title || '—';
-    tr.appendChild(titleCell);
-
-    var messageCell = document.createElement('td');
-    messageCell.className = 'alert-message col-wide col-message';
-    messageCell.textContent = alert.message || '—';
-    if (alert.message) {
-      messageCell.title = String(alert.message);
-      if (String(alert.message).length > 48) { messageCell.classList.add('is-clamped'); }
-    }
-    tr.appendChild(messageCell);
-
-    var timeCell = textCell(formatRelative(alert.created_at), 'mono alert-time');
-    if (alert.created_at) { timeCell.title = formatStamp(alert.created_at); }
-    tr.appendChild(timeCell);
-    var stateCell = textCell(STATUS_TEXT[alert.status] || alert.status || '—', 'alert-state');
-    stateCell.setAttribute('data-state', alert.status || 'active');
-    tr.appendChild(stateCell);
-
-    var actionCell = document.createElement('td');
-    actionCell.className = 'alert-actions';
-    if (alert.status === 'active') {
-      var button = document.createElement('button');
-      button.type = 'button';
-      button.className = 'ack-btn';
-      button.setAttribute('data-alert-id', alert.id);
-      button.textContent = '确认';
-      actionCell.appendChild(button);
-      var silenceButton = document.createElement('button');
-      silenceButton.type = 'button';
-      silenceButton.className = 'silence-btn';
-      silenceButton.setAttribute('data-alert-id', alert.id);
-      silenceButton.setAttribute('data-host-name', alert.host_name || '');
-      silenceButton.textContent = '静默';
-      actionCell.appendChild(silenceButton);
-    } else {
-      var dash = document.createElement('span');
-      dash.className = 'muted';
-      dash.textContent = '—';
-      actionCell.appendChild(dash);
-    }
-    tr.appendChild(actionCell);
-    return tr;
-  }
-
   var FOCUS_SEVERITY_WEIGHT = { critical: 3, warning: 2, info: 1 };
 
   function focusRank(alert) {
@@ -1574,6 +1487,16 @@ import {
     }).catch(function () { /* 概览不可用时保持「全部分组」 */ });
   }
 
+  function alertRowDeps() {
+    return {
+      selectedIds: selectedAlertIds,
+      textCell: textCell,
+      formatRelative: formatRelative,
+      formatStamp: formatStamp,
+      statusText: STATUS_TEXT,
+    };
+  }
+
   function syncAlertFiltersToUrl() {
     if (!window.history || !window.history.replaceState) { return; }
     var query = buildAlertsQuery(Object.assign(alertFilters(), { status: alertStatus }));
@@ -1605,7 +1528,7 @@ import {
         body.appendChild(buildAlertGroupRow(group));
         if (collapsedHosts[group.host]) { continue; }
         for (var j = 0; j < group.alerts.length; j += 1) {
-          var subRow = buildAlertRow(group.alerts[j] || {});
+          var subRow = buildAlertRowBase(group.alerts[j] || {}, alertRowDeps());
           if (subRow && subRow.getAttribute('data-alert-row')) {
             subRow.classList.add('alert-row', 'alert-subrow');
             subRow.tabIndex = 0;
@@ -1616,7 +1539,7 @@ import {
       }
     } else {
       for (var i = 0; i < visible.length; i += 1) {
-        var row = buildAlertRow(visible[i] || {});
+        var row = buildAlertRowBase(visible[i] || {}, alertRowDeps());
         if (row && row.getAttribute('data-alert-row')) {
           row.classList.add('alert-row');
           row.tabIndex = 0;

@@ -1,5 +1,10 @@
 # 更新日志
 
+## v0.3.9 前端拆分（第六批：告警表格行）
+
+- 新增 `pages/alert-row.js`：把告警表格行 `<tr>` 构建（勾选框、级别、类别、主机链接、标题、内容、时间、状态、确认/静默按钮）从 `app.js` 抽为可注入依赖的 DOM 工厂。
+- `app.js` 降至约 2940 行；jsdom 测试覆盖「活动行（含勾选框/按钮/主机链接）」与「已恢复行（无操作）」两种结构。
+
 ## v0.3.8 前端拆分（第五批：页面状态工具）
 
 - 新增 `pages/page-status.js`（加载横幅 `showLoadBanner`/`hideLoadBanner`、骨架屏 `hideSkeleton`、数据新鲜度 `markFreshness(now?)` 可注入时间），
