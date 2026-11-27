@@ -26,6 +26,7 @@ import {
 } from './pages/host-views.js';
 import { buildCsv, downloadTextFile } from './pages/csv-export.js';
 import { buildAlertsQuery, matchAlerts, sortAlerts } from './pages/alert-filter.js';
+import { hideLoadBanner, hideSkeleton, markFreshness, showLoadBanner } from './pages/page-status.js';
 import {
   applyDensity,
   applyHostFilters,
@@ -2101,33 +2102,6 @@ import {
     var built = buildCsv(headers, body);
     downloadTextFile('alerts-' + new Date().toISOString().slice(0, 10) + '.csv', built.text);
     showToast('已导出 ' + built.count + ' 条告警', 'success');
-  }
-
-  function showLoadBanner(id, text) {
-    var banner = document.getElementById(id);
-    if (!banner) { return; }
-    var label = banner.querySelector('.load-banner-text');
-    if (label && text) { label.textContent = text; }
-    banner.hidden = false;
-  }
-
-  function hideLoadBanner(id) {
-    var banner = document.getElementById(id);
-    if (banner) { banner.hidden = true; }
-  }
-
-  function hideSkeleton(id) {
-    var skeleton = document.getElementById(id);
-    if (skeleton) { skeleton.hidden = true; }
-  }
-
-  function markFreshness() {
-    var el = document.getElementById('data-freshness');
-    if (!el) { return; }
-    var now = new Date();
-    var pad = function (value) { return value < 10 ? '0' + value : '' + value; };
-    el.textContent = '更新于 ' + pad(now.getHours()) + ':' + pad(now.getMinutes()) + ':' + pad(now.getSeconds());
-    el.setAttribute('data-updated-at', now.toISOString());
   }
 
   function refreshOverview() {

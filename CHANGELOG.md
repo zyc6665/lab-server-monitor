@@ -1,5 +1,10 @@
 # 更新日志
 
+## v0.3.8 前端拆分（第五批：页面状态工具）
+
+- 新增 `pages/page-status.js`（加载横幅 `showLoadBanner`/`hideLoadBanner`、骨架屏 `hideSkeleton`、数据新鲜度 `markFreshness(now?)` 可注入时间），
+  从 `app.js` 移出，`app.js` 降至约 3020 行；jsdom 测试覆盖横幅显隐与时间戳格式。
+
 ## v0.3.7 前端拆分（第四批：告警筛选逻辑 + DOM 测试基线）
 
 - 新增 `pages/alert-filter.js`：把告警的筛选（级别/主机/分组/类别/关键字/时间桶）与排序从 `app.js` 抽为纯函数

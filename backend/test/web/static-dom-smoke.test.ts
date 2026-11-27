@@ -58,3 +58,25 @@ describe('host-prefs under a real DOM', () => {
     expect(grid.hidden).toBe(false);
   });
 });
+
+describe('page-status under a real DOM', () => {
+  it('shows/hides banner and writes freshness stamp', async () => {
+    installDom(`
+      <div id="banner" hidden><span class="load-banner-text"></span></div>
+      <div id="skel"></div>
+      <div id="data-freshness"></div>`);
+    const m = await loadModule('pages/page-status.js');
+    m.showLoadBanner('banner', '加载失败');
+    const banner = document.getElementById('banner') as HTMLElement;
+    expect(banner.hidden).toBe(false);
+    expect(banner.querySelector('.load-banner-text')!.textContent).toBe('加载失败');
+    m.hideLoadBanner('banner');
+    expect(banner.hidden).toBe(true);
+    m.hideSkeleton('skel');
+    expect((document.getElementById('skel') as HTMLElement).hidden).toBe(true);
+    m.markFreshness(new Date('2026-01-02T03:04:05'));
+    const fresh = document.getElementById('data-freshness') as HTMLElement;
+    expect(fresh.textContent).toBe('更新于 03:04:05');
+    expect(fresh.getAttribute('data-updated-at')).toBeTruthy();
+  });
+});
