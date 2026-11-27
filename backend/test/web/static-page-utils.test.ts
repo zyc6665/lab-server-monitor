@@ -111,3 +111,31 @@ describe('host-prefs', () => {
     expect(m.hostRowMatches(tr, '', '', 'beta', '')).toBe(false);
   });
 });
+
+describe('csv-export', () => {
+  it('quotes cells and counts rows', async () => {
+    const m = await loadModule('pages/csv-export.js');
+    expect(m.csvCell('a"b')).toBe('"a""b"');
+    expect(m.csvCell(null)).toBe('""');
+    const built = m.buildCsv(['a', 'b'], [['1', 'x"y'], ['2', null]]);
+    expect(built.count).toBe(2);
+    expect(built.text).toBe('"a","b"\r\n"1","x""y"\r\n"2",""');
+  });
+
+  it('triggers a download through injected DOM/Blob/URL', async () => {
+    const m = await loadModule('pages/csv-export.js');
+    const created: any[] = [];
+    const doc = {
+      body: { appendChild: (n: any) => created.push(n), removeChild: () => {} },
+      createElement: () => ({ href: '', download: '', click() { this.clicked = true; } }),
+    };
+    let revoked = false;
+    const URLstub = { createObjectURL: () => 'blob:x', revokeObjectURL: () => { revoked = true; } };
+    const Blobstub = class { parts: any[]; opts: any; constructor(parts: any[], opts: any) { this.parts = parts; this.opts = opts; } };
+    m.downloadTextFile('t.csv', 'a,b', 'text/csv', { document: doc, URL: URLstub, Blob: Blobstub });
+    expect(created.length).toBe(1);
+    expect(created[0].download).toBe('t.csv');
+    expect(created[0].clicked).toBe(true);
+    expect(revoked).toBe(true);
+  });
+});

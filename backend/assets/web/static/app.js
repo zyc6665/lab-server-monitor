@@ -24,6 +24,7 @@ import {
   uptimeChip,
   uptimeRatio,
 } from './pages/host-views.js';
+import { buildCsv, downloadTextFile } from './pages/csv-export.js';
 import {
   applyDensity,
   applyHostFilters,
@@ -990,35 +991,24 @@ import {
     for (var h = 0; h < headerCells.length - 1; h += 1) {
       headers.push(headerCells[h].textContent.trim());
     }
-    var lines = [headers.map(function (value) {
-      return '"' + String(value).replace(/"/g, '""') + '"';
-    }).join(',')];
-    var rows = tbody.querySelectorAll('tr');
-    for (var i = 0; i < rows.length; i += 1) {
-      if (rows[i].hidden) { continue; }
-      var cells = rows[i].querySelectorAll('td');
+    var rows = [];
+    var trs = tbody.querySelectorAll('tr');
+    for (var i = 0; i < trs.length; i += 1) {
+      if (trs[i].hidden) { continue; }
+      var cells = trs[i].querySelectorAll('td');
       var values = [];
       for (var c = 0; c < cells.length - 1; c += 1) {
         values.push((cells[c].textContent || '').replace(/\s+/g, ' ').trim());
       }
-      lines.push(values.map(function (value) {
-        return '"' + String(value).replace(/"/g, '""') + '"';
-      }).join(','));
+      rows.push(values);
     }
-    if (lines.length <= 1) {
+    if (!rows.length) {
       showToast('没有可导出的主机', 'error');
       return;
     }
-    var blob = new Blob(['\ufeff' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
-    var url = URL.createObjectURL(blob);
-    var link = document.createElement('a');
-    link.href = url;
-    link.download = 'hosts-' + new Date().toISOString().slice(0, 10) + '.csv';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-    showToast('已导出 ' + (lines.length - 1) + ' 台主机', 'success');
+    var built = buildCsv(headers, rows);
+    downloadTextFile('hosts-' + new Date().toISOString().slice(0, 10) + '.csv', built.text);
+    showToast('已导出 ' + built.count + ' 台主机', 'success');
   }
 
   function pollHostsCollection(names, button, original) {
@@ -2108,27 +2098,15 @@ import {
     var rows = filteredAlerts();
     if (!rows.length) { showToast('没有可导出的告警', 'error'); return; }
     var headers = ['级别', '类别', '主机', '标题', '内容', '时间', '状态'];
-    var lines = [headers.join(',')];
-    rows.forEach(function (alert) {
-      var cells = [SEVERITY_TEXT[alert.severity] || alert.severity,
+    var body = rows.map(function (alert) {
+      return [SEVERITY_TEXT[alert.severity] || alert.severity,
         alertCategoryLabel(alert.category), alert.host_name, alert.title,
         alert.message, formatStamp(alert.created_at),
-        STATUS_TEXT[alert.status] || alert.status].map(function (value) {
-        var text = value === null || value === undefined ? '' : String(value);
-        return '"' + text.replace(/"/g, '""') + '"';
-      });
-      lines.push(cells.join(','));
+        STATUS_TEXT[alert.status] || alert.status];
     });
-    var blob = new Blob(['\ufeff' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
-    var url = URL.createObjectURL(blob);
-    var link = document.createElement('a');
-    link.href = url;
-    link.download = 'alerts-' + new Date().toISOString().slice(0, 10) + '.csv';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-    showToast('已导出 ' + rows.length + ' 条告警', 'success');
+    var built = buildCsv(headers, body);
+    downloadTextFile('alerts-' + new Date().toISOString().slice(0, 10) + '.csv', built.text);
+    showToast('已导出 ' + built.count + ' 条告警', 'success');
   }
 
   function showLoadBanner(id, text) {
