@@ -65,9 +65,12 @@ describe('GET /api/settings/history', () => {
     const keys: string[] = entry.changed_keys;
     expect(keys).toContain('command_timeout');
     expect(keys).toContain('connect_timeout');
-    // key names only — the raw body must not contain the numeric values
-    expect(JSON.stringify(entry)).not.toContain('15');
-    expect(JSON.stringify(entry)).not.toContain('30');
+    // key names only — no submitted values are stored
+    expect(keys.every((key) => /^[a-z_]+$/.test(key))).toBe(true);
+    const serializedKeys = JSON.stringify(entry.changed_keys);
+    expect(serializedKeys).not.toContain('15');
+    expect(serializedKeys).not.toContain('30');
+    expect(entry).not.toHaveProperty('values');
   });
 
   it('requires authentication', async () => {
