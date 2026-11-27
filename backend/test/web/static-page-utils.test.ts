@@ -84,3 +84,30 @@ describe('alert-table-prefs', () => {
     expect(() => m.applyTableWidths('alerts-table', 'alerts:colwidths')).not.toThrow();
   });
 });
+
+describe('host-prefs', () => {
+  it('round-trips filters and matches rows by status/keyword', async () => {
+    const store = new Map<string, string>();
+    (globalThis as any).window = {
+      localStorage: {
+        getItem: (k: string) => (store.has(k) ? store.get(k) : null),
+        setItem: (k: string, v: string) => { store.set(k, v); },
+        removeItem: (k: string) => { store.delete(k); },
+      },
+    };
+    (globalThis as any).localStorage = (globalThis as any).window.localStorage;
+    (globalThis as any).document = { documentElement: { setAttribute() {}, removeAttribute() {}, getAttribute() { return null; } }, querySelectorAll: () => [] };
+    const m = await loadModule('pages/host-prefs.js');
+    m.saveHostFilters('group-a', 'online', '');
+    expect(m.readHostFilters()).toEqual({ group: 'group-a', status: 'online', tag: '' });
+    m.saveHostFilters('', '', '');
+    expect(m.readHostFilters()).toEqual({});
+
+    const attrs: Record<string, string> = { 'data-group': 'g1', 'data-online': '1', 'data-alert-count': '0', 'data-attention': '0', 'data-silenced': '0', 'data-uptime': '0.99', 'data-search': 'alpha host' };
+    const tr = { getAttribute: (k: string) => (k in attrs ? attrs[k] : null), textContent: 'alpha host' };
+    expect(m.hostRowMatches(tr, 'g1', 'online', 'alpha', '')).toBe(true);
+    expect(m.hostRowMatches(tr, 'g2', '', '', '')).toBe(false);
+    expect(m.hostRowMatches(tr, '', 'offline', '', '')).toBe(false);
+    expect(m.hostRowMatches(tr, '', '', 'beta', '')).toBe(false);
+  });
+});
