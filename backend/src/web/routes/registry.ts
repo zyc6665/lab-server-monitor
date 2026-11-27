@@ -58,6 +58,7 @@ export const ENDPOINTS = {
   api_host: '/api/host/{name}',
   api_host_report: '/api/host/{name}/report',
   api_host_history: '/api/host/{name}/history',
+  api_disk_health_history: '/api/disk-health/history',
   api_host_collection_status: '/api/settings/hosts/collection-status',
   api_list_hosts: '/api/settings/hosts',
   api_upsert_host: '/api/settings/hosts/{name}',

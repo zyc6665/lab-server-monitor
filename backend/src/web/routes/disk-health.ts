@@ -20,7 +20,7 @@ import type { Express } from 'express';
 
 import type { AppConfig, HostConfig } from '../../config/config';
 import { loadEffectiveSettings } from '../../config/service';
-import { getAllDiskHealth, type DiskHealthSnapshot } from '../../storage/disk';
+import { getAllDiskHealth, fetchDiskHealthHistory, type DiskHealthSnapshot, type DiskHealthHistoryPoint } from '../../storage/disk';
 import { aggregateDiskHealth, diskReportFromSnapshot } from '../../disk/report';
 import { anchor as anchorSlug, createTemplating, type Templating } from '../templating';
 import { ENDPOINTS } from './registry';
@@ -297,6 +297,29 @@ export function buildDiskHealthContext(
   };
 }
 
+/**
+ * Builds the per-host disk-health trend points returned by
+ * `GET /api/disk-health/history`: newest-first storage rows are mapped to
+ * display-timezone ISO strings for the chart.
+ */
+export function buildDiskHistoryPoints(
+  db: SqliteDatabase,
+  hostName: string,
+  options: { days?: number; limit?: number } = {},
+): Array<{ t: string | null; status: string; message: string | null; drives: number; healthy: number; warning: number; critical: number; max_temp: number | null }> {
+  const tz = readTimezone(db);
+  return fetchDiskHealthHistory(db, hostName, options).map((point: DiskHealthHistoryPoint) => ({
+    t: toLocalIso(point.collected_at, tz),
+    status: point.status,
+    message: point.message,
+    drives: point.drives,
+    healthy: point.healthy,
+    warning: point.warning,
+    critical: point.critical,
+    max_temp: point.max_temperature_c,
+  }));
+}
+
 /** Injected dependencies. Only `db` + `config` are required. */
 export interface DiskHealthRouteDeps {
   /** Open SQLite handle (disk-health snapshots + settings). */
@@ -309,7 +332,11 @@ export interface DiskHealthRouteDeps {
   appVersion?: string;
 }
 
-/** Registers the disk-health page on `app`. */
+/** Default look-back window and cap for the trend endpoint. */
+const TREND_DEFAULT_DAYS = 30;
+const TREND_MAX_DAYS = 90;
+
+/** Registers the disk-health page (and its trend endpoint) on `app`. */
 export function registerDiskHealthRoutes(app: Express, deps: DiskHealthRouteDeps): void {
   const { db, config } = deps;
   const templating = deps.templating ?? createTemplating({ appVersion: deps.appVersion });
@@ -320,5 +347,23 @@ export function registerDiskHealthRoutes(app: Express, deps: DiskHealthRouteDeps
       active_page: 'disk_health',
       ...context,
     });
+  });
+
+  app.get(ENDPOINTS.api_disk_health_history, (req, res) => {
+    const rawHost = typeof req.query.host === 'string' ? req.query.host.trim() : '';
+    if (!rawHost) {
+      res.status(400).json({ error: 'invalid_host', message: '缺少主机名称' });
+      return;
+    }
+    const rawDays = Number(req.query.days ?? TREND_DEFAULT_DAYS);
+    if (!Number.isInteger(rawDays) || rawDays < 1 || rawDays > TREND_MAX_DAYS) {
+      res.status(400).json({
+        error: 'invalid_days',
+        message: `days 必须是 1-${TREND_MAX_DAYS} 的整数`,
+      });
+      return;
+    }
+    const points = buildDiskHistoryPoints(db, rawHost, { days: rawDays });
+    res.json({ host: rawHost, days: rawDays, points });
   });
 }

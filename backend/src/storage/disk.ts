@@ -612,6 +612,96 @@ export function getAllDiskHealth(db: SqliteDatabase): DiskHealthSnapshot[] {
   return [...results.keys()].sort().map((name) => results.get(name)!);
 }
 
+// --- disk-health history (trend) -------------------------------------------
+
+/** One point in a host's disk-health history, used by the disk trend chart. */
+export interface DiskHealthHistoryPoint {
+  /** Stored batch timestamp (ISO-8601 UTC, same form as the snapshot rows). */
+  collected_at: string;
+  /** Overall batch status from `disk_health_snapshot.status`. */
+  status: string;
+  message: string | null;
+  /** Total physical drives reported in this batch. */
+  drives: number;
+  healthy: number;
+  warning: number;
+  critical: number;
+  /** Hottest physical-drive temperature in this batch (`null` when unknown). */
+  max_temperature_c: number | null;
+}
+
+/**
+ * Reads a host's recent disk-health batches for the trend chart.
+ *
+ * `days` filters by a cutoff on `collected_at` (rendered with the same ISO-8601
+ * format as the stored rows, so the lexicographic string comparison matches
+ * Python's); `limit` caps how many batches are returned. Results are ordered
+ * oldest-first so a caller can plot them left-to-right. Per-batch drive counts
+ * are aggregated from `disk_pd_snapshot` using the same healthy/warning/
+ * critical vocabulary as {@link aggregateDiskHealth} (`disk/report.ts`).
+ */
+export function fetchDiskHealthHistory(
+  db: SqliteDatabase,
+  hostName: string,
+  options: { days?: number; limit?: number; now?: Date } = {},
+): DiskHealthHistoryPoint[] {
+  const days = Math.max(1, Math.trunc(options.days ?? 30));
+  const limit = Math.min(200, Math.max(1, Math.trunc(options.limit ?? 100)));
+  const now = options.now ?? new Date();
+  const cutoff = nowIsoUtc(new Date(now.getTime() - days * 86_400_000));
+
+  const headers = db
+    .prepare(
+      'SELECT collected_at, status, message FROM disk_health_snapshot'
+        + ' WHERE host_name = ? AND collected_at >= ?'
+        + ' ORDER BY collected_at DESC LIMIT ?',
+    )
+    .all(hostName, cutoff, limit) as Array<{
+    collected_at: string;
+    status: string;
+    message: string | null;
+  }>;
+  if (headers.length === 0) {
+    return [];
+  }
+
+  const aggregates = db
+    .prepare(
+      'SELECT collected_at,'
+        + ' COUNT(*) AS drives,'
+        + " SUM(CASE WHEN lower(health) = 'healthy' THEN 1 ELSE 0 END) AS healthy,"
+        + " SUM(CASE WHEN lower(health) = 'warning' THEN 1 ELSE 0 END) AS warning,"
+        + " SUM(CASE WHEN lower(health) = 'critical' THEN 1 ELSE 0 END) AS critical,"
+        + ' MAX(temperature_c) AS max_temperature_c'
+        + ' FROM disk_pd_snapshot WHERE host_name = ? GROUP BY collected_at',
+    )
+    .all(hostName) as Array<{
+    collected_at: string;
+    drives: number;
+    healthy: number;
+    warning: number;
+    critical: number;
+    max_temperature_c: number | null;
+  }>;
+  const byTime = new Map(aggregates.map((row) => [row.collected_at, row]));
+
+  const points: DiskHealthHistoryPoint[] = headers.map((header) => {
+    const agg = byTime.get(header.collected_at);
+    return {
+      collected_at: header.collected_at,
+      status: header.status,
+      message: header.message,
+      drives: agg ? Number(agg.drives) || 0 : 0,
+      healthy: agg ? Number(agg.healthy) || 0 : 0,
+      warning: agg ? Number(agg.warning) || 0 : 0,
+      critical: agg ? Number(agg.critical) || 0 : 0,
+      max_temperature_c: agg ? agg.max_temperature_c : null,
+    };
+  });
+  points.reverse();
+  return points;
+}
+
 // --- prune_disk_health ------------------------------------------------------
 
 /**

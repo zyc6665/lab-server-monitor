@@ -114,9 +114,11 @@
         <span class="muted">控制器 {{ host.controller_count }} · VD {{ host.vd_count }}</span>
         {% if host.temperature_max is not none %}<span class="muted disk-temp-max{% if host.temperature_max >= 65 %} is-critical{% elif host.temperature_max >= 55 %} is-hot{% endif %}">最高 {{ host.temperature_max }} °C</span>{% endif %}
         <span class="muted mono"{% if host.collected_at %} title="{{ host.collected_at }}"{% endif %}>{{ host.collected_at|stamp }}</span>
+        <button type="button" class="btn-link disk-trend-toggle" data-disk-trend-toggle data-host="{{ host.name }}" aria-expanded="false" aria-controls="disk-trend-{{ host.anchor }}">趋势</button>
         <a class="btn-link" href="{{ url_for('host_page', name=host.name) }}#disk-array">主机详情</a>
       </div>
     </header>
+    <div class="disk-trend" id="disk-trend-{{ host.anchor }}" data-disk-trend hidden></div>
     {% if host.drives %}
     <div class="table-wrap">
       <table class="data-table disk-table">
@@ -168,5 +170,5 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="{{ asset_url('disk-health.js') }}"></script>
+<script type="module" src="{{ asset_url('disk-health.js') }}"></script>
 {% endblock %}

@@ -1,3 +1,5 @@
+import { renderDiskTrend } from './pages/disk-trend.js';
+
 /* 磁盘健康：只看异常主机。
  * 状态记在 localStorage，刷新和轮询后保持；隐藏的是主机区块和对应跳转芯片。 */
 (function () {
@@ -683,4 +685,43 @@
     dialog.addEventListener('click', function (event) {
         if (event.target === dialog) { dialog.close(); }
     });
+
+    // 趋势：按需拉取某台主机最近 30 天的采集状态与最高温度。
+    function setupDiskTrends() {
+        var toggles = Array.prototype.slice.call(
+            document.querySelectorAll('[data-disk-trend-toggle]')
+        );
+        toggles.forEach(function (button) {
+            button.addEventListener('click', function () {
+                var hostName = button.getAttribute('data-host');
+                var hostEl = button.closest('.disk-host');
+                var panel = hostEl ? hostEl.querySelector('[data-disk-trend]') : null;
+                if (!panel || !hostName) { return; }
+                var expanded = button.getAttribute('aria-expanded') === 'true';
+                if (expanded) {
+                    button.setAttribute('aria-expanded', 'false');
+                    panel.hidden = true;
+                    return;
+                }
+                button.setAttribute('aria-expanded', 'true');
+                panel.hidden = false;
+                if (panel.getAttribute('data-loaded') === '1') { return; }
+                panel.textContent = '加载中…';
+                window.fetch(
+                    '/api/disk-health/history?host=' + encodeURIComponent(hostName) + '&days=30',
+                    { credentials: 'same-origin' }
+                ).then(function (response) {
+                    if (!response.ok) { throw new Error('HTTP ' + response.status); }
+                    return response.json();
+                }).then(function (data) {
+                    panel.setAttribute('data-loaded', '1');
+                    renderDiskTrend(panel, (data && data.points) || []);
+                }).catch(function () {
+                    panel.textContent = '趋势数据加载失败，请重试。';
+                });
+            });
+        });
+    }
+
+    setupDiskTrends();
 })();
