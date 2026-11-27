@@ -115,3 +115,39 @@ describe('alert-row under a real DOM', () => {
     expect(tr.textContent).toContain('已恢复');
   });
 });
+
+describe('alert page render regression', () => {
+  it('renders exactly the rows that pass the filter, with encoded host links', async () => {
+    installDom(`<table id="alerts-table"><thead><tr><th>级别</th></tr></thead><tbody id="alerts-body"></tbody></table>`);
+    const filter = await loadModule('pages/alert-filter.js');
+    const row = await loadModule('pages/alert-row.js');
+    const alerts = [
+      { id: 1, severity: 'critical', status: 'active', host_name: '测试机-01', title: 'CPU 过高', message: 'm', created_at: '2026-01-01T00:00:00+00:00', category: 'system' },
+      { id: 2, severity: 'warning', status: 'resolved', host_name: 'gpu-02', title: '内存偏高', message: 'm', created_at: '2026-01-01T01:00:00+00:00', category: 'system' },
+      { id: 3, severity: 'info', status: 'active', host_name: 'gpu-02', title: '恢复', message: 'm', created_at: '2026-01-01T02:00:00+00:00', category: 'availability' },
+    ];
+    const matched = filter.matchAlerts(alerts, { host: 'gpu-02' });
+    expect(matched.map((a: any) => a.id)).toEqual([2, 3]);
+
+    const tbody = document.getElementById('alerts-body') as HTMLElement;
+    const deps = {
+      selectedIds: { 3: true },
+      textCell: (text: any, cls?: string) => {
+        const td = document.createElement('td');
+        if (cls) { td.className = cls; }
+        td.textContent = text == null ? '' : String(text);
+        return td;
+      },
+      formatRelative: () => '刚刚',
+      formatStamp: () => '2026-01-01 00:00:00',
+      statusText: { active: '活动', resolved: '已恢复' } as Record<string, string>,
+    };
+    matched.forEach((alert: any) => tbody.appendChild(row.buildAlertRow(alert, deps)));
+    expect(tbody.querySelectorAll('tr').length).toBe(2);
+    const checked = tbody.querySelector('input.alert-select:checked') as HTMLInputElement;
+    expect(checked.getAttribute('data-alert-id')).toBe('3');
+    const link = tbody.querySelector('a.host-link') as HTMLAnchorElement;
+    expect(link.getAttribute('href')).toBe('/host/' + encodeURIComponent('gpu-02'));
+    expect(tbody.querySelectorAll('tr')[0].getAttribute('data-status')).toBe('resolved');
+  });
+});

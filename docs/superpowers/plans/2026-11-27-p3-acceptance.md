@@ -37,7 +37,7 @@
 1. **P3-1 前端 `app.js` 继续拆分**（v0.3.4 已完成第一批：`alert-utils.js` / `view-utils.js` / `alert-table-prefs.js`，`app.js` 由 3460 行降至 3270 行；后续批次继续）：`app.js` 已抽出 `lib/{api,format,ui,debounce}.js`、`pages/{host-views,trend-chart,overview-trends}.js` 等模块，
    剩余约 3.4k 行是单个 IIFE 的页面装配逻辑。继续拆分需要同步迁移事件绑定与状态，回归面大；
    本轮以静态模块守卫测试（`test/web/static-modules.test.ts`、`static-host-views.test.ts`）锁定现有边界，拆分作为独立变更推进。
-2. **覆盖率阈值门禁**：需要引入 `@vitest/coverage-v8` 并按文件设阈值；先以 `lint + typecheck + 全量单测` 作为合并门禁。
+2. **覆盖率阈值门禁**（v0.3.11 已完成）：引入 `@vitest/coverage-v8`，阈值 语句 84% / 分支 72% / 函数 90% / 行 85%，CI 执行 `test:coverage`。
 3. **Playwright GUI E2E**：当前 E2E 以 `backend/test/e2e`（ssh2 桩）+ CDP 脚本覆盖；独立 Playwright 套件待 CI 具备 Electron 图形环境后再接入。
 
 以上三项均记录在案，不阻塞本次发布。

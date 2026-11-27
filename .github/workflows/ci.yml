@@ -48,7 +48,7 @@ jobs:
         shell: pwsh
 
       - name: Test
-        run: pnpm --filter servermonitor-backend test
+        run: pnpm --filter servermonitor-backend test:coverage
         shell: pwsh
 
       - name: Build bundle
