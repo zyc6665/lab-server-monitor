@@ -25,6 +25,7 @@ import {
   uptimeRatio,
 } from './pages/host-views.js';
 import { buildCsv, downloadTextFile } from './pages/csv-export.js';
+import { buildAlertsQuery, matchAlerts, sortAlerts } from './pages/alert-filter.js';
 import {
   applyDensity,
   applyHostFilters,
@@ -1331,30 +1332,30 @@ import {
     select.value = alertCategory;
   }
 
+  function alertFilters() {
+    return {
+      status: alertStatus,
+      severity: alertSeverity,
+      keyword: alertKeyword,
+      host: alertHost,
+      group: alertGroup,
+      category: alertCategory,
+      bucket: alertBucket,
+    };
+  }
+
   function matchingAlerts(ignoreSeverity, ignoreBucket) {
-    var keyword = (alertKeyword || '').trim().toLowerCase();
-    return lastAlerts.filter(function (alert) {
-      if (!ignoreBucket && alertBucket && bucketStartFor(alert.created_at, timelineRange) !== alertBucket) { return false; }
-      if (!ignoreSeverity && alertSeverity && (alert.severity || '') !== alertSeverity) { return false; }
-      if (alertHost && (alert.host_name || '') !== alertHost) { return false; }
-      if (alertGroup && (alertHostGroups[alert.host_name] || '未分组') !== alertGroup) { return false; }
-      if (alertCategory && (alert.category || '') !== alertCategory) { return false; }
-      if (!keyword) { return true; }
-      return [alert.host_name, alert.title, alert.message, alert.category]
-        .filter(function (part) { return part; })
-        .join(' ').toLowerCase().indexOf(keyword) >= 0;
+    return matchAlerts(lastAlerts, alertFilters(), {
+      ignoreSeverity: ignoreSeverity,
+      ignoreBucket: ignoreBucket,
+      timelineRange: timelineRange,
+      hostGroups: alertHostGroups,
+      bucketStartFor: bucketStartFor,
     });
   }
 
   function filteredAlerts(ignoreBucket) {
-    var rows = matchingAlerts(false, ignoreBucket);
-    rows.sort(function (left, right) {
-      var a = String(left.created_at || '');
-      var b = String(right.created_at || '');
-      var order = a.localeCompare(b);
-      return alertSortOrder === 'asc' ? order : -order;
-    });
-    return rows;
+    return sortAlerts(matchingAlerts(false, ignoreBucket), alertSortOrder);
   }
 
   function renderAlertStatusCounts(counts) {
@@ -1574,14 +1575,7 @@ import {
 
   function syncAlertFiltersToUrl() {
     if (!window.history || !window.history.replaceState) { return; }
-    var params = new URLSearchParams();
-    if (alertStatus && alertStatus !== 'active') { params.set('status', alertStatus); }
-    if (alertSeverity) { params.set('severity', alertSeverity); }
-    if (alertHost) { params.set('host', alertHost); }
-    if (alertGroup) { params.set('group', alertGroup); }
-    if (alertCategory) { params.set('category', alertCategory); }
-    if (alertKeyword) { params.set('q', alertKeyword); }
-    var query = params.toString();
+    var query = buildAlertsQuery(Object.assign(alertFilters(), { status: alertStatus }));
     var next = window.location.pathname + (query ? '?' + query : '') + window.location.hash;
     if (next !== window.location.pathname + window.location.search + window.location.hash) {
       window.history.replaceState(null, '', next);

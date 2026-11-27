@@ -139,3 +139,35 @@ describe('csv-export', () => {
     expect(revoked).toBe(true);
   });
 });
+
+describe('alert-filter', () => {
+  const alerts = [
+    { id: 1, severity: 'critical', host_name: 'h1', title: 'A', message: 'disk full', category: 'system', created_at: '2026-01-01T10:00:00+00:00' },
+    { id: 2, severity: 'warning', host_name: 'h2', title: 'B', message: 'cpu high', category: 'system', created_at: '2026-01-01T11:00:00+00:00' },
+    { id: 3, severity: 'warning', host_name: 'h1', title: 'C', message: 'mem', category: 'user', created_at: '2026-01-01T09:00:00+00:00' },
+  ];
+
+  it('filters by severity/host/group/category/keyword', async () => {
+    const m = await loadModule('pages/alert-filter.js');
+    const keys = (rows: any[]) => rows.map((r) => r.id).join(',');
+    expect(keys(m.matchAlerts(alerts, { severity: 'warning' }))).toBe('2,3');
+    expect(keys(m.matchAlerts(alerts, { host: 'h1' }))).toBe('1,3');
+    expect(keys(m.matchAlerts(alerts, { category: 'user' }))).toBe('3');
+    expect(keys(m.matchAlerts(alerts, { keyword: 'CPU' }))).toBe('2');
+    expect(keys(m.matchAlerts(alerts, { group: 'g1' }, { hostGroups: { h2: 'g1' } }))).toBe('2');
+    expect(keys(m.matchAlerts(alerts, { group: '未分组' }, { hostGroups: {} }))).toBe('1,2,3');
+  });
+
+  it('sorts by created_at in requested order', async () => {
+    const m = await loadModule('pages/alert-filter.js');
+    expect(m.sortAlerts(alerts, 'desc').map((r: any) => r.id)).toEqual([2, 1, 3]);
+    expect(m.sortAlerts(alerts, 'asc').map((r: any) => r.id)).toEqual([3, 1, 2]);
+  });
+
+  it('builds a query string, omitting default status', async () => {
+    const m = await loadModule('pages/alert-filter.js');
+    expect(m.buildAlertsQuery({ status: 'active' })).toBe('');
+    expect(m.buildAlertsQuery({ status: 'resolved', severity: 'critical', keyword: 'x y' }))
+      .toBe('status=resolved&severity=critical&q=x+y');
+  });
+});

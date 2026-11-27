@@ -1,5 +1,12 @@
 # 更新日志
 
+## v0.3.7 前端拆分（第四批：告警筛选逻辑 + DOM 测试基线）
+
+- 新增 `pages/alert-filter.js`：把告警的筛选（级别/主机/分组/类别/关键字/时间桶）与排序从 `app.js` 抽为纯函数
+  `matchAlerts` / `sortAlerts` / `buildAlertsQuery`，URL 同步也改用它（分桶函数由调用方注入，模块零依赖）。
+- 新增 **jsdom DOM 级测试基线** `backend/test/web/static-dom-smoke.test.ts`：在真实 DOM 里验证列宽应用与主机视图切换，
+  为后续拆分告警页渲染/概览轮询提供可复用脚手架；`static-page-utils` 纯函数测试增至 15 例。
+
 ## v0.3.6 前端拆分（第三批：CSV 导出）
 
 - 新增 `pages/csv-export.js`（`csvCell` / `buildCsv` / `downloadTextFile`），主机与告警导出改为「取数 → 纯函数拼 CSV → 触发下载」三步；

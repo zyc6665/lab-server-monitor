@@ -1,6 +1,6 @@
 {
   "name": "servermonitor-backend",
-  "version": "0.3.6",
+  "version": "0.3.7",
   "private": true,
   "type": "commonjs",
   "main": "dist/server.js",
@@ -29,6 +29,7 @@
     "@types/ssh2": "^1.15.6",
     "@types/supertest": "^7.2.1",
     "esbuild": "^0.28.2",
+    "jsdom": "25.0.1",
     "supertest": "^7.3.2",
     "typescript": "^5.9.3",
     "vitest": "^5.1.1"
