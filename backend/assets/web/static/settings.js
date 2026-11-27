@@ -209,8 +209,8 @@
     report: "report",
     user_monitoring: "user_monitoring",
     disk_health: "disk_health",
-    dashboard: "dashboard",
-    logs: "logs",
+    dashboard: "health",
+    logs: "health",
     health: "health"
   };
 

@@ -718,6 +718,44 @@ html[data-theme="dark"] #alert-page-size { background: var(--surface-deep); colo
 .settings-card .field input,
 .settings-card .field select,
 .settings-card .field textarea { min-height: 36px; }
+
+/* Settings left sidebar layout */
+.settings-layout { display: flex; align-items: flex-start; gap: 20px; }
+.settings-sidebar {
+  position: sticky;
+  top: 12px;
+  z-index: 5;
+  flex: 0 0 200px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 14px 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--card-bg);
+}
+.settings-nav-group { display: flex; flex-direction: column; gap: 4px; }
+.settings-nav-title {
+  margin: 0 0 4px;
+  padding: 0 8px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+.settings-sidebar .settings-tab { text-align: left; width: 100%; }
+.settings-content { flex: 1 1 auto; min-width: 0; }
+.settings-content .settings-card { max-width: none; }
+.settings-logs { margin-top: 18px; border-top: 1px solid var(--border-soft); padding-top: 12px; }
+.settings-logs > summary { cursor: pointer; font-weight: 600; color: var(--text); }
+.settings-logs[open] > summary { margin-bottom: 10px; }
+@media (max-width: 900px) {
+  .settings-layout { flex-direction: column; }
+  .settings-sidebar { position: static; flex: none; width: 100%; flex-direction: row; flex-wrap: wrap; gap: 8px; }
+  .settings-nav-group { flex-direction: row; flex-wrap: wrap; align-items: center; gap: 6px; }
+  .settings-nav-title { width: 100%; margin: 0; }
+  .settings-sidebar .settings-tab { width: auto; }
+}
 .settings-empty { padding: 18px; text-align: center; color: var(--text-muted); }
 
 .update-notes {
