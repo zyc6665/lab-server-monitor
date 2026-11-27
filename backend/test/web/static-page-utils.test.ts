@@ -171,3 +171,39 @@ describe('alert-filter', () => {
       .toBe('status=resolved&severity=critical&q=x+y');
   });
 });
+
+describe('poll helpers', () => {
+  it('starts and stops polling, swallowing callback errors', async () => {
+    const m = await loadModule('pages/poll.js');
+    let ticks = 0;
+    const cleared: any[] = [];
+    const win = {
+      setInterval: (fn: () => void, ms: number) => { (win as any).fn = fn; (win as any).ms = ms; return 42; },
+      clearInterval: (id: any) => cleared.push(id),
+    };
+    const stop = m.startPolling(() => { ticks += 1; throw new Error('boom'); }, 1000, { window: win });
+    expect((win as any).ms).toBe(1000);
+    (win as any).fn();
+    expect(ticks).toBe(1);
+    stop();
+    expect(cleared).toEqual([42]);
+  });
+
+  it('refreshes only when the document is visible', async () => {
+    const m = await loadModule('pages/poll.js');
+    let calls = 0;
+    const handlers: Record<string, () => void> = {};
+    const doc: any = {
+      hidden: false,
+      addEventListener: (type: string, fn: () => void) => { handlers[type] = fn; },
+      removeEventListener: (type: string, fn: () => void) => { delete handlers[type]; },
+    };
+    const stop = m.refreshWhenVisible(doc, () => { calls += 1; });
+    handlers.visibilitychange();
+    doc.hidden = true;
+    handlers.visibilitychange();
+    expect(calls).toBe(1);
+    stop();
+    expect(handlers.visibilitychange).toBeUndefined();
+  });
+});

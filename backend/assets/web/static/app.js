@@ -28,6 +28,7 @@ import { buildCsv, downloadTextFile } from './pages/csv-export.js';
 import { buildAlertsQuery, matchAlerts, sortAlerts } from './pages/alert-filter.js';
 import { hideLoadBanner, hideSkeleton, markFreshness, showLoadBanner } from './pages/page-status.js';
 import { buildAlertRow as buildAlertRowBase } from './pages/alert-row.js';
+import { refreshWhenVisible, startPolling } from './pages/poll.js';
 import {
   applyDensity,
   applyHostFilters,
@@ -2929,11 +2930,8 @@ import {
   bindAlertCopy();
     bindResourceRankTabs();
     refreshAll();
-    window.setInterval(refreshAll, REFRESH_MS);
-
-    document.addEventListener('visibilitychange', function () {
-      if (!document.hidden) { refreshAll(); }
-    });
+    startPolling(refreshAll, REFRESH_MS);
+    refreshWhenVisible(document, refreshAll);
   }
 
   if (document.readyState === 'loading') {
