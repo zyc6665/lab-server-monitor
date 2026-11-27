@@ -1,5 +1,12 @@
 # 更新日志
 
+## v0.3.4 前端拆分（第一批）
+
+- 将 `app.js` 中的告警时间分桶/类别标签、主机排序键、结构指纹、告警表格列宽与列显示偏好拆为独立模块：
+  `pages/alert-utils.js`、`pages/view-utils.js`、`pages/alert-table-prefs.js`，`app.js` 减少约 200 行、只保留装配逻辑。
+- 新增浏览器侧纯函数运行时测试 `backend/test/web/static-page-utils.test.ts`（通过 data: URL 直接执行模块），
+  并把跨模块导入约束纳入 `static-modules` 守卫测试，防止再次出现“拆分后漏 import”的运行时错误。
+
 ## v0.3.3 模块优化 P3（工程化 / 可运维性）
 
 - **请求审计**：新增 `audit_log` 表与全局中间件，自动记录所有写操作（POST/PUT/PATCH/DELETE）的操作者、动作、目标、IP 与结果，保留 180 天；只记键名与结果，**不记录任何值**。新增 `GET /api/system/audit` 查询接口。

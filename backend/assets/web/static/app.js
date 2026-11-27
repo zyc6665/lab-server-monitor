@@ -26,6 +26,24 @@ import {
 } from './pages/host-views.js';
 import { overviewNumbers, overviewPathIndexed, overviewTrendText } from './pages/overview-trends.js';
 import {
+  ALERT_CATEGORY_LABELS,
+  TIMELINE_RANGES,
+  alertCategoryLabel,
+  bucketStartFor,
+  buildAlertTimeline,
+  timelineLabel,
+} from './pages/alert-utils.js';
+import { hostSortValue, payloadSignature } from './pages/view-utils.js';
+import {
+  HOST_WIDTHS_KEY,
+  applyAlertColumns,
+  applyAlertWidths,
+  applyTableWidths,
+  bindAlertColumns,
+  bindAlertResizers,
+  bindTableResizers,
+} from './pages/alert-table-prefs.js';
+import {
   csvEscape,
   formatBytesShared,
   formatPercent,
@@ -883,23 +901,6 @@ import {
     }
   }
 
-  function hostSortValue(host, key) {
-    if (key === 'cpu') { return Number(host.cpu_percent); }
-    if (key === 'memory') { return Number(host.memory_percent); }
-    if (key === 'disk') { return Number(host.disk_percent); }
-    if (key === 'gpu') { return Number(host.gpu_memory_percent); }
-    if (key === 'users') { return Number(host.logged_in_user_count); }
-    if (key === 'status') { return host.online ? 1 : 0; }
-    if (key === 'alerts') { return Number(host.active_alert_count || 0); }
-    if (key === 'health') {
-      var status = (host.disk_health || {}).status || '';
-      return status === 'critical' ? 3 : (status === 'warning' ? 2 : (status === 'ok' ? 1 : 0));
-    }
-    if (key === 'group') { return String(host.group || '未分组').toLowerCase(); }
-    if (key === 'collected') { return String(host.collected_at || ''); }
-    return String(host[key] || '').toLowerCase();
-  }
-
   function sortedHosts() {
     var rows = lastHosts.slice();
     if (!hostSortKey) { return rows; }
@@ -1042,10 +1043,6 @@ import {
       }
       grid.appendChild(button);
     });
-  }
-
-  function payloadSignature(value) {
-    try { return JSON.stringify(value); } catch (err) { return ''; }
   }
 
   function updateHosts(hosts) {
@@ -1308,121 +1305,6 @@ import {
   }
 
   // 告警表的列显示偏好：只影响阅读，不改数据。
-  var ALERT_COLUMNS = ['category', 'host', 'message'];
-  var ALERT_COLUMNS_STORE = 'alerts:columns';
-
-  function readAlertColumns() {
-    try {
-      var parsed = JSON.parse(localStorage.getItem(ALERT_COLUMNS_STORE) || 'null');
-      if (!parsed || typeof parsed !== 'object') { return {}; }
-      return parsed;
-    } catch (err) {
-      return {};
-    }
-  }
-
-  var HOST_WIDTHS_KEY = 'overview:colwidths';
-
-  function readTableWidths(key) {
-    try {
-      var raw = window.localStorage.getItem(key);
-      var parsed = raw ? JSON.parse(raw) : null;
-      return Array.isArray(parsed) ? parsed : [];
-    } catch (err) {
-      return [];
-    }
-  }
-
-  function applyTableWidths(tableId, key) {
-    var table = document.getElementById(tableId);
-    if (!table) { return; }
-    var widths = readTableWidths(key);
-    var heads = table.querySelectorAll('thead th');
-    table.style.tableLayout = widths.length ? 'fixed' : '';
-    for (var i = 0; i < heads.length; i += 1) {
-      var width = Number(widths[i]);
-      heads[i].style.width = width > 0 ? width + 'px' : '';
-    }
-  }
-
-  function bindTableResizers(tableId, key) {
-    var table = document.getElementById(tableId);
-    if (!table) { return; }
-    var heads = table.querySelectorAll('thead th');
-    Array.prototype.forEach.call(heads, function (head, index) {
-      if (index === heads.length - 1) { return; }
-      if (head.querySelector('.col-resizer')) { return; }
-      var grip = document.createElement('span');
-      grip.className = 'col-resizer';
-      grip.setAttribute('aria-hidden', 'true');
-      head.appendChild(grip);
-      grip.addEventListener('mousedown', function (event) {
-        event.preventDefault();
-        var startX = event.clientX;
-        var startWidth = head.getBoundingClientRect().width;
-        function onMove(moveEvent) {
-          var width = Math.max(48, Math.round(startWidth + moveEvent.clientX - startX));
-          table.style.tableLayout = 'fixed';
-          head.style.width = width + 'px';
-        }
-        function onUp() {
-          document.removeEventListener('mousemove', onMove);
-          document.removeEventListener('mouseup', onUp);
-          var next = [];
-          var headsNow = table.querySelectorAll('thead th');
-          for (var i = 0; i < headsNow.length; i += 1) {
-            next.push(Math.round(headsNow[i].getBoundingClientRect().width));
-          }
-          try { window.localStorage.setItem(key, JSON.stringify(next)); } catch (err) { /* ignore */ }
-          applyTableWidths(tableId, key);
-        }
-        document.addEventListener('mousemove', onMove);
-        document.addEventListener('mouseup', onUp);
-      });
-    });
-  }
-
-  var ALERT_WIDTHS_KEY = 'alerts:colwidths';
-
-  function applyAlertWidths() {
-    applyTableWidths('alerts-table', ALERT_WIDTHS_KEY);
-  }
-
-  function bindAlertResizers() {
-    bindTableResizers('alerts-table', ALERT_WIDTHS_KEY);
-  }
-
-  function applyAlertColumns(hidden) {
-    var table = document.getElementById('alerts-table');
-    if (!table) { return; }
-    for (var i = 0; i < ALERT_COLUMNS.length; i += 1) {
-      var name = ALERT_COLUMNS[i];
-      table.classList.toggle('hide-' + name, Boolean(hidden && hidden[name]));
-    }
-  }
-
-  function bindAlertColumns() {
-    var menu = document.getElementById('alert-columns');
-    var table = document.getElementById('alerts-table');
-    if (!menu || !table) { return; }
-    var hidden = readAlertColumns();
-    var boxes = menu.querySelectorAll('[data-alert-col]');
-    for (var i = 0; i < boxes.length; i += 1) {
-      var name = boxes[i].getAttribute('data-alert-col');
-      boxes[i].checked = !hidden[name];
-    }
-    applyAlertColumns(hidden);
-    menu.addEventListener('change', function (event) {
-      var box = event.target.closest('[data-alert-col]');
-      if (!box) { return; }
-      var key = box.getAttribute('data-alert-col');
-      var next = readAlertColumns();
-      if (box.checked) { delete next[key]; } else { next[key] = true; }
-      try { localStorage.setItem(ALERT_COLUMNS_STORE, JSON.stringify(next)); } catch (err) {}
-      applyAlertColumns(next);
-    });
-  }
-
   function buildAlertRow(alert) {
     var tr = document.createElement('tr');
     if (alert.id != null) { tr.setAttribute('data-alert-row', alert.id); }
@@ -1627,32 +1509,6 @@ import {
         : '';
       hint.hidden = visible.length === 0;
     }
-  }
-
-  function bucketStartFor(value, range) {
-    var when = typeof value === 'number' ? value : Date.parse(value || '');
-    if (isNaN(when)) { return 0; }
-    var spec = TIMELINE_RANGES[range] || TIMELINE_RANGES['24h'];
-    var stepMs = spec.stepHours * 3600 * 1000;
-    return Math.floor(when / stepMs) * stepMs;
-  }
-
-  var ALERT_CATEGORY_LABELS = {
-    cpu: 'CPU',
-    memory: '内存',
-    disk: '磁盘',
-    gpu: 'GPU',
-    offline: '主机离线',
-    host: '主机',
-    system: '系统',
-    user: '服务器账号',
-    availability: '服务检查',
-    batch: '批量采集',
-    storage: '存储'
-  };
-
-  function alertCategoryLabel(category) {
-    return ALERT_CATEGORY_LABELS[category] || category;
   }
 
   function populateAlertCategories(alerts) {
@@ -2133,55 +1989,8 @@ import {
   }
 
   // ---- v0.1.91 告警时间分布 ----
-  var TIMELINE_RANGES = {
-    '24h': { hours: 24, stepHours: 1, label: '24 小时' },
-    '7d': { hours: 24 * 7, stepHours: 24, label: '7 天' },
-    '30d': { hours: 24 * 30, stepHours: 24, label: '30 天' },
-    '90d': { hours: 24 * 90, stepHours: 24, label: '90 天' }
-  };
   var timelineRange = '7d';
   var alertBucket = 0;
-
-  function timelineBuckets(range) {
-    var spec = TIMELINE_RANGES[range] || TIMELINE_RANGES['24h'];
-    var stepMs = spec.stepHours * 3600 * 1000;
-    var now = Date.now();
-    var end = Math.floor(now / stepMs) * stepMs;
-    var start = end - (spec.hours / spec.stepHours - 1) * stepMs;
-    var buckets = [];
-    for (var t = start; t <= end; t += stepMs) {
-      buckets.push({ start: t, end: t + stepMs, critical: 0, warning: 0, info: 0, total: 0 });
-    }
-    return buckets;
-  }
-
-  function buildAlertTimeline(alerts, range) {
-    var buckets = timelineBuckets(range);
-    if (!buckets.length) { return buckets; }
-    var first = buckets[0].start;
-    var step = buckets[0].end - buckets[0].start;
-    (alerts || []).forEach(function (alert) {
-      var when = Date.parse(alert.created_at || '');
-      if (isNaN(when) || when < first) { return; }
-      var index = Math.floor((when - first) / step);
-      if (index < 0 || index >= buckets.length) { return; }
-      var bucket = buckets[index];
-      var level = alert.severity === 'critical' || alert.severity === 'warning' ? alert.severity : 'info';
-      bucket[level] += 1;
-      bucket.total += 1;
-    });
-    return buckets;
-  }
-
-  function timelineLabel(bucket, range) {
-    var date = new Date(bucket.start);
-    var pad = function (value) { return value < 10 ? '0' + value : String(value); };
-    var day = (date.getMonth() + 1) + '-' + pad(date.getDate());
-    if ((TIMELINE_RANGES[range] || {}).stepHours === 1) {
-      return day + ' ' + pad(date.getHours()) + ':00';
-    }
-    return day;
-  }
 
   function renderAlertTimeline(alerts) {
     var container = document.getElementById('alert-timeline');
